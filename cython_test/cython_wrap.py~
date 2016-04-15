@@ -1,0 +1,4 @@
+
+import pyximport; pyximport.install()
+
+import cython_test

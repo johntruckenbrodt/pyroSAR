@@ -1,0 +1,3 @@
+LIBRARY          provmeans1
+DESCRIPTION      'provisional means'
+EXPORTS          provmeans            @1
