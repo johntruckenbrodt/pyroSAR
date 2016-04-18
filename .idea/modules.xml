@@ -2,7 +2,6 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/../export/.idea/export.iml" filepath="$PROJECT_DIR$/../export/.idea/export.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/pythonland.iml" filepath="$PROJECT_DIR$/.idea/pythonland.iml" />
     </modules>
   </component>

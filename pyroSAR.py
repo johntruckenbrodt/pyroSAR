@@ -431,6 +431,7 @@ class SAFE(ID):
 
 
 class ERS(object):
+    # todo: add a pattern to check if the scene could be handled
     def __init__(self, scene):
         try:
             lea = finder(scene, ["LEA_01.001"])[0]
