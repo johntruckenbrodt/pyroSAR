@@ -22,6 +22,7 @@ import xml.etree.ElementTree as ElementTree
 
 
 def identify(scene):
+    """Return a metadata handler of the given scene."""
     for handler in ID.__subclasses__():
         try:
             return handler(scene)
@@ -31,12 +32,14 @@ def identify(scene):
 
 
 class ID(object):
+    """Abstract class for SAR meta data handlers."""
 
     def bbox(self, outname=None, overwrite=True):
+        """Return the bounding box."""
         if outname is None:
             return spatial.bbox(self.getCorners(), self.projection)
         else:
-            spatial.bbox(self.getCorners(), self.projection, outname=outname, format="ESRI Shapefile", overwrite=overwrite)
+            return spatial.bbox(self.getCorners(), self.projection, outname=outname, format="ESRI Shapefile", overwrite=overwrite)
 
     @abc.abstractmethod
     def calibrate(self, replace=False):
@@ -169,6 +172,8 @@ class ID(object):
 
 
 class CEOS(ID):
+    # todo: What sensors other than ERS1, ERS2 should be included?
+    # todo: add a pattern to check if the scene could be handled by CEOS
     def __init__(self, scene):
         self.gdalinfo(scene)
         self.sensor = self.CEOS_MISSION_ID
