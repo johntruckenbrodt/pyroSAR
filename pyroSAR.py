@@ -39,7 +39,7 @@ class ID(object):
         if outname is None:
             return spatial.bbox(self.getCorners(), self.projection)
         else:
-            return spatial.bbox(self.getCorners(), self.projection, outname=outname, format="ESRI Shapefile", overwrite=overwrite)
+            spatial.bbox(self.getCorners(), self.projection, outname=outname, format="ESRI Shapefile", overwrite=overwrite)
 
     @abc.abstractmethod
     def calibrate(self, replace=False):
