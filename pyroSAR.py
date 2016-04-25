@@ -187,6 +187,7 @@ class CEOS(ID):
         self.sc_db = {"ERS1": 59.61, "ERS2": 60}[self.sensor]
         self.outname_base = "{0}______{1}".format(*[self.sensor, self.start])
 
+    #todo: should define a calibrate function
     def getCorners(self):
         lat = [x[1][1] for x in self.gcps]
         lon = [x[1][0] for x in self.gcps]
@@ -213,6 +214,7 @@ class CEOS(ID):
 
 
 class ESA(ID):
+    """Handle SAR data of the ESA format."""
     def __init__(self, scene):
 
         self.pattern = r"(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_))_[012B][CP])" \
@@ -326,6 +328,7 @@ class RS2(ID):
 
 # id = identify("/geonfs01_vol1/ve39vem/RS2/RS2_OK53107_PK504800_DK448361_FQ1_20140606_055403_HH_VV_HV_VH_SLC.zip")
 
+    #todo: add a calibrate function
 
 # todo: check self.file and self.scene assignment after unpacking
 class SAFE(ID):
