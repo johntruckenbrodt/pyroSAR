@@ -328,6 +328,7 @@ class RS2(ID):
 
 # id = identify("/geonfs01_vol1/ve39vem/RS2/RS2_OK53107_PK504800_DK448361_FQ1_20140606_055403_HH_VV_HV_VH_SLC.zip")
 
+    #todo: add a calibrate function
 
 # todo: check self.file and self.scene assignment after unpacking
 class SAFE(ID):

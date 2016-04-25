@@ -10,6 +10,8 @@ by the GDAL python binding.
 Several functions are provided along with this module to directly modify the raster object in memory or directly write a newly created file to disk (without modifying the raster
 object itself). Upon initializing a Raster object only metadata is loaded, the actual data can be, for example, loaded to memory by calling functions matrix or load.
 """
+#todo: function to write data with the same metadata as a given file
+#todo: documentation
 
 import os
 import re
@@ -29,6 +31,7 @@ gdal.UseExceptions()
 
 
 class Raster(object):
+    #todo: init a Raster object from array data not only from a filename
     def __init__(self, filename):
         if os.path.isfile(filename):
             self.filename = filename if os.path.isabs(filename) else os.path.join(os.getcwd(), filename)
