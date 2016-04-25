@@ -134,7 +134,8 @@ class ID(object):
             archive = tf.open(self.scene, "r")
             names = archive.getnames()
             header = os.path.commonprefix(names)
-            if len(header) > 0:
+
+            if header in names:
                 if archive.getmember(header).isdir():
                     for item in sorted(names):
                         if item != header:
@@ -146,33 +147,32 @@ class ID(object):
                                 with open(outname, "w") as outfile:
                                     outfile.write(member.tobuf())
                     archive.close()
-                    return
-            archive.extractall(directory)
-            archive.close()
+                else:
+                    archive.extractall(directory)
+                    archive.close()
         elif zf.is_zipfile(self.scene):
             archive = zf.ZipFile(self.scene, "r")
             names = archive.namelist()
             header = os.path.commonprefix(names)
-            if len(header) > 0:
-                if header.endswith("/"):
-                    for item in sorted(names):
-                        if item != header:
-                            outname = os.path.join(directory, item.replace(header, ""))
-                            if item.endswith("/"):
-                                os.makedirs(outname)
-                            else:
-                                with open(outname, "w") as outfile:
-                                    outfile.write(archive.read(item))
-                    archive.close()
-                    return
-            archive.extractall(directory)
-            archive.close()
+            if header.endswith("/"):
+                for item in sorted(names):
+                    if item != header:
+                        outname = os.path.join(directory, item.replace(header, ""))
+                        if item.endswith("/"):
+                            os.makedirs(outname)
+                        else:
+                            with open(outname, "w") as outfile:
+                                outfile.write(archive.read(item))
+                archive.close()
+            else:
+                archive.extractall(directory)
+                archive.close()
         self.scene = directory
         self.file = os.path.join(self.scene, os.path.basename(self.file))
 
 
 class CEOS(ID):
-    # todo: What sensors other than ERS1, ERS2 should be included?
+    # todo: What sensors other than ERS1, ERS2 and Envisat ASAR should be included?
     # todo: add a pattern to check if the scene could be handled by CEOS
     def __init__(self, scene):
         self.gdalinfo(scene)
@@ -236,7 +236,7 @@ class ESA(ID):
         self.stop = self.MPH_SENSING_STOP
         self.spacing = [self.SPH_RANGE_SPACING, self.SPH_AZIMUTH_SPACING]
         self.looks = [self.SPH_RANGE_LOOKS, self.SPH_AZIMUTH_LOOKS]
-        self.outname_base = "{0}______{1}".format(*[self.sensor, self.start])
+        self.outname_base = "{0}_____{1}".format(*[self.sensor, self.start])
 
     def getCorners(self):
         lon = [getattr(self, x) for x in self.__dict__.keys() if re.search("LONG", x)]
@@ -271,7 +271,7 @@ class ESA(ID):
                 os.remove(image+".par")
 
     def unpack(self, directory):
-        outdir = os.path.join(directory, os.path.splitext(os.path.basename(self.file))[0])
+        outdir = os.path.join(directory, os.path.basename(self.file).strip("\.zip|\.tar(?:\.gz|)"))
         self._unpack(outdir)
 # id = identify("/geonfs01_vol1/ve39vem/swos/ASA_APP_1PTDPA20040102_102928_000000162023_00051_09624_0240.N1")
 # id = identify("/geonfs01_vol1/ve39vem/swos/SAR_IMP_1PXASI19920419_110159_00000017C083_00323_03975_8482.E1")
@@ -385,9 +385,9 @@ class SAFE(ID):
         if self.category == "A":
             raise IOError("Sentinel-1 annotation-only products are not supported")
 
-        for xml_ann in finder(os.path.join(self.scene, "annotation"), [self.pattern_ds]):
+        for xml_ann in finder(os.path.join(self.scene, "annotation"), [self.pattern_ds], regex=True):
             base = os.path.basename(xml_ann)
-            match = re.compile(self.pattern_ds).match(os.path.basename(base))
+            match = re.compile(self.pattern_ds).match(base)
 
             tiff = os.path.join(self.scene, "measurement", base.replace(".xml", ".tiff"))
             xml_cal = os.path.join(self.scene, "annotation", "calibration", "calibration-" + base)
@@ -396,14 +396,18 @@ class SAFE(ID):
             # xml_noise = os.path.join(self.scene, "annotation", "calibration", "noise-" + base)
             xml_noise = "-"
             fields = (self.sensor, match.group("swath"), self.start, match.group("pol").upper())
-            if match.group("prod") == "SLC":
+            if match.group("product") == "slc":
                 name = os.path.join(directory, "{0}_{1}__{2}_{3}_slc".format(*fields))
-                # print ["par_S1_SLC", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name, name + ".tops_par"]
-                run(["par_S1_SLC", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name, name + ".tops_par"])
+                try:
+                    run(["par_S1_SLC", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name, name + ".tops_par"])
+                except ImportWarning:
+                    pass
             else:
                 name = os.path.join(directory, "{0}______{2}_{3}_mli".format(*fields))
-                # print ["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name]
-                run(["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name])
+                try:
+                    run(["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name])
+                except ImportWarning:
+                    pass
 
     def getCorners(self):
         if self.compression == "zip":
