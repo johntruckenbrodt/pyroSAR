@@ -5,7 +5,6 @@
 ##############################################################
 """
 this script is intended to contain several SAR scene identifier classes to read basic metadata from the scene folders/files, convert to GAMMA format and do simple pre-processing
-srfhdfh
 """
 
 import os
@@ -96,7 +95,7 @@ class ID(object):
         meta = img.GetMetadata()
         self.cols, self.rows, self.bands = img.RasterXSize, img.RasterYSize, img.RasterCount
         self.projection = img.GetGCPProjection()
-        self.gcps = [[[x.GCPPixel, x.GCPLine], [x.GCPX, x.GCPY, x.GCPZ]] for x in img.GetGCPs()]
+        self.gcps = [((x.GCPPixel, x.GCPLine), (x.GCPX, x.GCPY, x.GCPZ)) for x in img.GetGCPs()]
         img = None
 
         for item in meta:
@@ -128,6 +127,7 @@ class ID(object):
     def unpack(self, directory):
         return
 
+    # todo: prevent unpacking if target files already exist
     def _unpack(self, directory):
         if not os.path.isdir(directory):
             os.makedirs(directory)
@@ -188,6 +188,7 @@ class CEOS(ID):
         self.sc_db = {"ERS1": 59.61, "ERS2": 60}[self.sensor]
         self.outname_base = "{0}______{1}".format(*[self.sensor, self.start])
 
+    # todo: change this to the exact boundaries of the image (not outer pixel center points)
     def getCorners(self):
         lat = [x[1][1] for x in self.gcps]
         lon = [x[1][0] for x in self.gcps]
@@ -244,6 +245,7 @@ class ESA(ID):
         lat = [getattr(self, x) for x in self.__dict__.keys() if re.search("LAT", x)]
         return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
 
+    # todo: prevent conversion if target files already exist
     def convert2gamma(self, directory):
         self.gammadir = directory
         outname = os.path.join(directory, self.outname_base)
@@ -272,7 +274,11 @@ class ESA(ID):
                 os.remove(image+".par")
 
     def unpack(self, directory):
-        outdir = os.path.join(directory, os.path.basename(self.file).strip("\.zip|\.tar(?:\.gz|)"))
+        base_file = os.path.basename(self.file).strip("\.zip|\.tar(?:\.gz|)")
+        base_dir = os.path.basename(directory.strip("/"))
+
+        outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
+
         self._unpack(outdir)
 # id = identify("/geonfs01_vol1/ve39vem/swos/ASA_APP_1PTDPA20040102_102928_000000162023_00051_09624_0240.N1")
 # id = identify("/geonfs01_vol1/ve39vem/swos/SAR_IMP_1PXASI19920419_110159_00000017C083_00323_03975_8482.E1")
@@ -386,6 +392,9 @@ class SAFE(ID):
         if self.category == "A":
             raise IOError("Sentinel-1 annotation-only products are not supported")
 
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
+
         for xml_ann in finder(os.path.join(self.scene, "annotation"), [self.pattern_ds], regex=True):
             base = os.path.basename(xml_ann)
             match = re.compile(self.pattern_ds).match(base)
@@ -399,16 +408,14 @@ class SAFE(ID):
             fields = (self.sensor, match.group("swath"), self.start, match.group("pol").upper())
             if match.group("product") == "slc":
                 name = os.path.join(directory, "{0}_{1}__{2}_{3}_slc".format(*fields))
-                try:
-                    run(["par_S1_SLC", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name, name + ".tops_par"])
-                except ImportWarning:
-                    pass
+                cmd = ["par_S1_SLC", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name, name + ".tops_par"]
             else:
                 name = os.path.join(directory, "{0}______{2}_{3}_mli".format(*fields))
-                try:
-                    run(["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name])
-                except ImportWarning:
-                    pass
+                cmd = ["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name]
+            try:
+                run(cmd)
+            except ImportWarning:
+                pass
 
     def getCorners(self):
         if self.compression == "zip":
@@ -435,8 +442,8 @@ class SAFE(ID):
 # id = identify("/geonfs01_vol1/ve39vem/S1/archive/S1A_EW_GRDM_1SDH_20150408T053103_20150408T053203_005388_006D8D_5FAC.zip")
 
 
+# todo: remove class and change dependencies to class CEOS (scripts: gammaGUI/reader_ers.py)
 class ERS(object):
-    # todo: add a pattern to check if the scene could be handled
     def __init__(self, scene):
         try:
             lea = finder(scene, ["LEA_01.001"])[0]
