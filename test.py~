@@ -1,6 +1,0 @@
-from readDEMpar import ReadDEMpar
-
-
-par=ReadDEMpar("/media/Data/Dokumente/Skripte/python/scripts/GEO410/parameterfileDEM.txt")
-
-print par.np_max/par.np_min
