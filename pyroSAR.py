@@ -5,6 +5,7 @@
 ##############################################################
 """
 this script is intended to contain several SAR scene identifier classes to read basic metadata from the scene folders/files, convert to GAMMA format and do simple pre-processing
+srfhdfh
 """
 
 import os
