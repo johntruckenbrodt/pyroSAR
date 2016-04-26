@@ -26,7 +26,7 @@ def identify(scene):
     for handler in ID.__subclasses__():
         try:
             return handler(scene)
-        except:
+        except IOError:
             pass
     raise IOError("data format not supported")
 
@@ -56,6 +56,19 @@ class ID(object):
         else:
             return None
 
+    @abc.abstractmethod
+    def convert2gamma(self, directory):
+        return
+
+    def examine(self):
+        files = self.findfiles(self.pattern)
+        if len(files) == 1:
+            self.file = files[0]
+        elif len(files) == 0:
+            raise IOError("folder does not match {} scene naming convention".format(type(self).__name__))
+        else:
+            raise IOError("file ambiguity detected")
+
     def findfiles(self, pattern):
         if os.path.isdir(self.scene):
             files = [self.scene] if re.search(pattern, os.path.basename(self.scene)) else finder(self.scene, [pattern], regex=True)
@@ -69,10 +82,6 @@ class ID(object):
         else:
             files = [self.scene] if re.search(pattern, self.scene) else []
         return files
-
-    @abc.abstractmethod
-    def convert2gamma(self, directory):
-        return
 
     def gdalinfo(self, scene):
         self.scene = os.path.realpath(scene)
@@ -176,6 +185,9 @@ class CEOS(ID):
     # todo: What sensors other than ERS1, ERS2 and Envisat ASAR should be included?
     # todo: add a pattern to check if the scene could be handled by CEOS
     def __init__(self, scene):
+
+        raise IOError
+
         self.gdalinfo(scene)
         self.sensor = self.CEOS_MISSION_ID
         self.start = self.CEOS_ACQUISITION_TIME
@@ -188,7 +200,7 @@ class CEOS(ID):
         self.sc_db = {"ERS1": 59.61, "ERS2": 60}[self.sensor]
         self.outname_base = "{0}______{1}".format(*[self.sensor, self.start])
 
-    # todo: change this to the exact boundaries of the image (not outer pixel center points)
+    # todo: change coordinate extraction to the exact boundaries of the image (not outer pixel center points)
     def getCorners(self):
         lat = [x[1][1] for x in self.gcps]
         lon = [x[1][0] for x in self.gcps]
@@ -232,6 +244,13 @@ class ESA(ID):
                        r"(?P<extension>(?:\.zip|\.tar\.gz|))$"
 
         self.scene = os.path.realpath(scene)
+
+        self.examine()
+
+        match = re.match(re.compile(self.pattern), os.path.basename(self.file))
+        if re.search("IM__0", match.group("product_id")):
+            raise IOError("product level 0 not supported (yet)")
+
         self.gdalinfo(self.scene)
         self.orbit = self.SPH_PASS[0]
         self.start = self.MPH_SENSING_START
@@ -311,6 +330,8 @@ class ESA(ID):
 class RS2(ID):
     def __init__(self, scene):
 
+        raise IOError
+
         self.pattern = r'^(?:RS2|RSAT2)_(?:OK[0-9]+)_(?:PK[0-9]+)_(?:DK[0-9]+)_' \
                        r'(?P<beam>[0-9A-Z]+)_' \
                        r'(?P<date>[0-9]{8})_' \
@@ -363,13 +384,7 @@ class SAFE(ID):
                           r"(?P<id>[0-9]{3})" \
                           r"\.xml$"
 
-        files = self.findfiles(self.pattern)
-        if len(files) == 1:
-            self.file = files[0]
-        elif len(files) == 0:
-            raise IOError("folder does not match S1 scene naming convention")
-        else:
-            raise IOError("file ambiguity detected")
+        self.examine()
 
         match = re.match(re.compile(self.pattern), os.path.basename(self.file))
 
@@ -445,6 +460,9 @@ class SAFE(ID):
 # todo: remove class and change dependencies to class CEOS (scripts: gammaGUI/reader_ers.py)
 class ERS(object):
     def __init__(self, scene):
+
+        raise IOError
+
         try:
             lea = finder(scene, ["LEA_01.001"])[0]
         except IndexError:
