@@ -128,6 +128,24 @@ class ID(object):
     def getGammaImages(self, directory):
         return [x for x in finder(directory, [self.outname_base], regex=True) if not x.endswith(".par")]
 
+    def getHGT(self):
+
+        corners = self.getCorners()
+
+        # generate sequence of integer coordinates marking the tie points of the overlapping hgt tiles
+        lat = range(int(float(corners["ymin"])//1), int(float(corners["ymax"])//1)+1)
+        lon = range(int(float(corners["xmin"])//1), int(float(corners["xmax"])//1)+1)
+
+        # convert coordinates to string with leading zeros and hemisphere identification letter
+        lat = [str(x).zfill(2+len(str(x))-len(str(x).strip("-"))) for x in lat]
+        lat = [x.replace("-", "S") if "-" in x else "N"+x for x in lat]
+
+        lon = [str(x).zfill(3+len(str(x))-len(str(x).strip("-"))) for x in lon]
+        lon = [x.replace("-", "W") if "-" in x else "E"+x for x in lon]
+
+        # concatenate all formatted latitudes and longitudes with each other as final product
+        return [x+y+".hgt" for x in lat for y in lon]
+
     def summary(self):
         for item in sorted(self.__dict__.keys()):
             print "{0}: {1}".format(item, getattr(self, item))
