@@ -24,6 +24,7 @@ import shutil
 import zipfile
 import subprocess as sp
 from urllib2 import urlopen
+from pyroSAR import ID
 
 import raster
 
@@ -227,15 +228,22 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
 def hgt(parfiles):
     lat = []
     lon = []
-    for parfile in parfiles:
-        out, err = sp.Popen(["SLC_corners", parfile], stdout=sp.PIPE).communicate()
-        for line in out.split("\n"):
-            # note: upper left and lower right, as computed by SLC_corners, define the bounding box coordinates and not those of the actual SAR image
-            if line.startswith("upper left") or line.startswith("lower right"):
-                items = filter(None, re.split("[\t\s]", line))
-                # compute lower right coordinates of intersecting hgt tile
-                lat.append(int(float(items[-2])//1))
-                lon.append(int(float(items[-1])//1))
+
+    if bool([type(x) in ID.__subclasses__() for x in parfiles]):
+        corners = [x.getCorners() for x in parfiles]
+        lat = list(set([int(float(y[x])//1) for x in ["ymin", "ymax"] for y in corners]))
+        lon = list(set([int(float(y[x])//1) for x in ["xmin", "xmax"] for y in corners]))
+
+    else:
+        for parfile in parfiles:
+            out, err = sp.Popen(["SLC_corners", parfile], stdout=sp.PIPE).communicate()
+            for line in out.split("\n"):
+                # note: upper left and lower right, as computed by SLC_corners, define the bounding box coordinates and not those of the actual SAR image
+                if line.startswith("upper left") or line.startswith("lower right"):
+                    items = filter(None, re.split("[\t\s]", line))
+                    # compute lower right coordinates of intersecting hgt tile
+                    lat.append(int(float(items[-2])//1))
+                    lon.append(int(float(items[-1])//1))
 
     # add missing lat/lon values (and add an extra buffer of one degree)
     # lat = range(min(lat)-1, max(lat)+2)
