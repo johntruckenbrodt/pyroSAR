@@ -18,6 +18,8 @@ with open(scenelist, "r") as infile:
 
 scenes = [identify(x) for x in files]
 
+scenes = [x for x in scenes if "VV" in x.polarisations]
+
 # srtm_mosaic = os.path.join(tempdir, "srtm")
 #
 # srtm.makeSRTM(scenes, srtmdir, srtm_mosaic)
