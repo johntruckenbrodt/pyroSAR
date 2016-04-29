@@ -111,8 +111,13 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
 
     images = [x for x in scene.getGammaImages(scene.scene) if x.endswith("_grd")]
 
+    rlks = int(targetres//scene.spacing[0])
+    azlks = int(targetres//scene.spacing[1])
+    rlks = 1 if rlks == 0 else rlks
+    azlks = 1 if azlks == 0 else azlks
+
     for image in images:
-        run(["multi_look_MLI", image, image+".par", image+"_mli", image+"_mli.par", 1, 1])
+        run(["multi_look_MLI", image, image+".par", image+"_mli", image+"_mli.par", rlks, azlks])
 
     images = [x+"_mli" for x in images]
 
