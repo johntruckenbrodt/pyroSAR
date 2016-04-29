@@ -131,7 +131,7 @@ class ID(object):
                 directory = self.gammadir
             else:
                 raise IOError("directory missing; please provide directory to function or define object attribute 'gammadir'")
-        return [x for x in finder(directory, [self.outname_base], regex=True) if not re.search("\.(?:par|hdr|aux\.xml)$", x)]
+        return [x for x in finder(directory, [self.outname_base()], regex=True) if not re.search("\.(?:par|hdr|aux\.xml)$", x)]
 
     def getHGT(self):
 
@@ -150,6 +150,10 @@ class ID(object):
 
         # concatenate all formatted latitudes and longitudes with each other as final product
         return [x+y+".hgt" for x in lat for y in lon]
+
+    @abc.abstractmethod
+    def outname_base(self):
+        return
 
     def summary(self):
         for item in sorted(self.__dict__.keys()):
@@ -204,46 +208,46 @@ class ID(object):
         self.file = os.path.join(self.scene, os.path.basename(self.file))
 
 
-class CEOS(ID):
-    # todo: What sensors other than ERS1, ERS2 and Envisat ASAR should be included?
-    # todo: add a pattern to check if the scene could be handled by CEOS
-    def __init__(self, scene):
-
-        raise IOError
-
-        self.gdalinfo(scene)
-        self.sensor = self.CEOS_MISSION_ID
-        self.start = self.CEOS_ACQUISITION_TIME
-        self.incidence = self.CEOS_INC_ANGLE
-        self.spacing = [self.CEOS_PIXEL_SPACING_METERS, self.CEOS_LINE_SPACING_METERS]
-
-        # todo: check whether this is correct:
-        self.orbit = "D" if self.CEOS_PLATFORM_HEADING > 180 else "A"
-        self.k_db = -10*math.log(self.CEOS_CALIBRATION_CONSTANT_K, 10)
-        self.sc_db = {"ERS1": 59.61, "ERS2": 60}[self.sensor]
-        self.outname_base = "{0}______{1}".format(*[self.sensor, self.start])
-
-    # todo: change coordinate extraction to the exact boundaries of the image (not outer pixel center points)
-    def getCorners(self):
-        lat = [x[1][1] for x in self.gcps]
-        lon = [x[1][0] for x in self.gcps]
-        return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
-
-    def convert2gamma(self, directory):
-        if self.sensor in ["ERS1", "ERS2"]:
-            outname = os.path.join(directory, self.outname_base+"_VV_slc")
-            lea = os.path.join(self.scene, "LEA_01.001")
-            title = os.path.basename(self.findfiles("\.PS$")[0]).replace(".PS", "")
-            run(["par_ESA_ERS", lea, outname+".par", self.file, outname], inlist=[title])
-        else:
-            raise NotImplementedError("sensor {} not implemented yet".format(self.sensor))
-
-    def unpack(self, directory):
-        if self.sensor in ["ERS1", "ERS2"]:
-            outdir = os.path.join(directory, re.sub("\.[EN][12]\.PS$", "", os.path.basename(self.findfiles("\.PS$")[0])))
-            self._unpack(outdir)
-        else:
-            raise NotImplementedError("sensor {} not implemented yet".format(self.sensor))
+# class CEOS(ID):
+#     # todo: What sensors other than ERS1, ERS2 and Envisat ASAR should be included?
+#     # todo: add a pattern to check if the scene could be handled by CEOS
+#     def __init__(self, scene):
+#
+#         raise IOError
+#
+#         self.gdalinfo(scene)
+#         self.sensor = self.CEOS_MISSION_ID
+#         self.start = self.CEOS_ACQUISITION_TIME
+#         self.incidence = self.CEOS_INC_ANGLE
+#         self.spacing = (self.CEOS_PIXEL_SPACING_METERS, self.CEOS_LINE_SPACING_METERS)
+#
+#         # todo: check whether this is correct:
+#         self.orbit = "D" if self.CEOS_PLATFORM_HEADING > 180 else "A"
+#         self.k_db = -10*math.log(self.CEOS_CALIBRATION_CONSTANT_K, 10)
+#         self.sc_db = {"ERS1": 59.61, "ERS2": 60}[self.sensor]
+#         self.outname_base = "{0}______{1}".format(*[self.sensor, self.start])
+#
+#     # todo: change coordinate extraction to the exact boundaries of the image (not outer pixel center points)
+#     def getCorners(self):
+#         lat = [x[1][1] for x in self.gcps]
+#         lon = [x[1][0] for x in self.gcps]
+#         return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
+#
+#     def convert2gamma(self, directory):
+#         if self.sensor in ["ERS1", "ERS2"]:
+#             outname = os.path.join(directory, self.outname_base+"_VV_slc")
+#             lea = os.path.join(self.scene, "LEA_01.001")
+#             title = os.path.basename(self.findfiles("\.PS$")[0]).replace(".PS", "")
+#             run(["par_ESA_ERS", lea, outname+".par", self.file, outname], inlist=[title])
+#         else:
+#             raise NotImplementedError("sensor {} not implemented yet".format(self.sensor))
+#
+#     def unpack(self, directory):
+#         if self.sensor in ["ERS1", "ERS2"]:
+#             outdir = os.path.join(directory, re.sub("\.[EN][12]\.PS$", "", os.path.basename(self.findfiles("\.PS$")[0])))
+#             self._unpack(outdir)
+#         else:
+#             raise NotImplementedError("sensor {} not implemented yet".format(self.sensor))
 
 # id = identify("/geonfs01_vol1/ve39vem/ERS/ERS1_0132_2529_20dec95")
 # id = identify("/geonfs01_vol1/ve39vem/ERS/ERS1_0132_2529_20dec95.zip")
@@ -266,6 +270,10 @@ class ESA(ID):
                        r"(?P<satellite_ID>[EN][12])" \
                        r"(?P<extension>(?:\.zip|\.tar\.gz|))$"
 
+        self.pattern_pid = r"(?P<sat_id>(?:SAR|ASA))_" \
+                           r"(?P<image_mode>(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)))_" \
+                           r"(?P<processing_level>[012B][CP])"
+
         self.scene = os.path.realpath(scene)
 
         self.examine()
@@ -284,9 +292,17 @@ class ESA(ID):
         self.orbit = self.SPH_PASS[0]
         self.start = self.MPH_SENSING_START
         self.stop = self.MPH_SENSING_STOP
-        self.spacing = [self.SPH_RANGE_SPACING, self.SPH_AZIMUTH_SPACING]
+        self.spacing = (self.SPH_RANGE_SPACING, self.SPH_AZIMUTH_SPACING)
         self.looks = [self.SPH_RANGE_LOOKS, self.SPH_AZIMUTH_LOOKS]
-        self.outname_base = "{0}_____{1}".format(*[self.sensor, self.start])
+
+    def outname_base(self):
+        match1 = re.match(re.compile(self.pattern), os.path.basename(self.scene))
+        match2 = re.match(re.compile(self.pattern_pid), match1.group("product_id"))
+        fields = ("{:_<4}".format(self.sensor),
+                  "{:_<4}".format(match2.group("image_mode")),
+                  self.orbit,
+                  self.start)
+        return "_".join(fields)
 
     def getCorners(self):
         lon = [getattr(self, x) for x in self.__dict__.keys() if re.search("LONG", x)]
@@ -296,7 +312,7 @@ class ESA(ID):
     # todo: prevent conversion if target files already exist
     def convert2gamma(self, directory):
         self.gammadir = directory
-        outname = os.path.join(directory, self.outname_base)
+        outname = os.path.join(directory, self.outname_base())
         if len(self.getGammaImages(directory)) == 0:
             run(["par_ASAR", self.file, outname])
             os.remove(outname+".hdr")
@@ -331,9 +347,8 @@ class ESA(ID):
         outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
 
         self._unpack(outdir)
-# id = identify("/geonfs01_vol1/ve39vem/swos/ASA_APP_1PTDPA20040102_102928_000000162023_00051_09624_0240.N1")
-# id = identify("/geonfs01_vol1/ve39vem/swos/SAR_IMP_1PXASI19920419_110159_00000017C083_00323_03975_8482.E1")
-# id = identify("/geonfs01_vol1/ve39vem/swos/ER01_SAR_IMP_1P_19920419T110159_19920419T110216_IPA_03975_0000.ESA.tar.gz")
+# id = identify("/geonfs01_vol1/ve39vem/swos/ASA_APP_1PTDPA20040102_102928_000000162023_00051_09624_0240.N1.zip")
+# id = identify("/geonfs01_vol1/ve39vem/swos/SAR_IMP_1PXASI19920419_110159_00000017C083_00323_03975_8482.E1.zip")
 
 # scenes = finder("/geonfs01_vol1/ve39vem/swos", ["*"])
 # counter = 0
@@ -359,30 +374,30 @@ class ESA(ID):
 #     print scene
 
 
-class RS2(ID):
-    def __init__(self, scene):
-
-        raise IOError
-
-        self.pattern = r'^(?:RS2|RSAT2)_(?:OK[0-9]+)_(?:PK[0-9]+)_(?:DK[0-9]+)_' \
-                       r'(?P<beam>[0-9A-Z]+)_' \
-                       r'(?P<date>[0-9]{8})_' \
-                       r'(?P<time>[0-9]{6})_' \
-                       r'(?P<pols>[HV]{2}_' \
-                       r'(?P<level>SLC|SGX|SGF|SCN|SCW|SSG|SPG)$'
-
-        self.sensor = "RS2"
-        self.scene = os.path.realpath(scene)
-        self.gdalinfo(self.scene)
-        self.start = self.ACQUISITION_START_TIME
-        self.incidence = (self.FAR_RANGE_INCIDENCE_ANGLE + self.NEAR_RANGE_INCIDENCE_ANGLE)/2
-        self.spacing = [self.PIXEL_SPACING, self.LINE_SPACING]
-        self.orbit = self.ORBIT_DIRECTION[0]
-
-    def getCorners(self):
-        lat = [x[1][1] for x in self.gcps]
-        lon = [x[1][0] for x in self.gcps]
-        return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
+# class RS2(ID):
+#     def __init__(self, scene):
+#
+#         raise IOError
+#
+#         self.pattern = r'^(?:RS2|RSAT2)_(?:OK[0-9]+)_(?:PK[0-9]+)_(?:DK[0-9]+)_' \
+#                        r'(?P<beam>[0-9A-Z]+)_' \
+#                        r'(?P<date>[0-9]{8})_' \
+#                        r'(?P<time>[0-9]{6})_' \
+#                        r'(?P<pols>[HV]{2}_' \
+#                        r'(?P<level>SLC|SGX|SGF|SCN|SCW|SSG|SPG)$'
+#
+#         self.sensor = "RS2"
+#         self.scene = os.path.realpath(scene)
+#         self.gdalinfo(self.scene)
+#         self.start = self.ACQUISITION_START_TIME
+#         self.incidence = (self.FAR_RANGE_INCIDENCE_ANGLE + self.NEAR_RANGE_INCIDENCE_ANGLE)/2
+#         self.spacing = (self.PIXEL_SPACING, self.LINE_SPACING)
+#         self.orbit = self.ORBIT_DIRECTION[0]
+#
+#     def getCorners(self):
+#         lat = [x[1][1] for x in self.gcps]
+#         lon = [x[1][0] for x in self.gcps]
+#         return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
 
 # id = identify("/geonfs01_vol1/ve39vem/RS2/RS2_OK53107_PK504800_DK448361_FQ1_20140606_055403_HH_VV_HV_VH_SLC.zip")
 
@@ -450,15 +465,18 @@ class SAFE(ID):
 
             tiff = os.path.join(self.scene, "measurement", base.replace(".xml", ".tiff"))
             xml_cal = os.path.join(self.scene, "annotation", "calibration", "calibration-" + base)
+            # todo: investigate what the noise file is for
             # the use of the noise xml file has been found to occasionally cause severe image artifacts of manifold nature and is thus excluded
-            # the reason (GAMMA command error vs. bad ESA xml file entry) is yet to be discovered
+            # the reason (GAMMA command error vs. bad SAFE xml file entry) is yet to be discovered
             # xml_noise = os.path.join(self.scene, "annotation", "calibration", "noise-" + base)
             xml_noise = "-"
             fields = ("{:_<4}".format(self.sensor),
-                      "{:_<3}".format(match.group("swath").upper()),
-                      self.start, match.group("pol").upper(),
+                      "{:_<4}".format(match.group("swath").upper()),
+                      self.orbit,
+                      self.start,
+                      match.group("pol").upper(),
                       match.group("product"))
-            name = os.path.join(directory, "{0}_{1}_{2}_{3}_{4}".format(*fields))
+            name = os.path.join(directory, "_".join(fields))
 
             if match.group("product") == "slc":
                 cmd = ["par_S1_SLC", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name, name + ".tops_par"]
