@@ -53,8 +53,6 @@ for i in range(1, len(scenes)):
     print scenes[i].file, seconds(scenes[i])-seconds(scenes[i-1])
 
 
-
-
 # print "started:", asctime()
 # print "processing a total of {} scenes".format(len(selection))
 # tempdir = "/geonfs01_vol1/ve39vem/S1/test_camarque/test_in"
