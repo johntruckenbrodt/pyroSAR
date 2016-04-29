@@ -28,7 +28,7 @@ from pyroSAR import ID
 
 import raster
 
-from gamma.util import ISPPar, UTM
+from gamma.auxil import ISPPar, UTM
 
 from ancillary import finder, run, dissolve, ReadPar
 
