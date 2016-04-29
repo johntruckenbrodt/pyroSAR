@@ -398,7 +398,7 @@ class SAFE(ID):
                        r"(?P<product>SLC|GRD|OCN)(?:F|H|M|_)_" \
                        r"(?:1|2)" \
                        r"(?P<category>S|A)" \
-                       r"(?P<pols>SH|SV|DH|DV|HH|HV|VV|VH)_" \
+                       r"(?P<pols>SH|SV|DH|DV)_" \
                        r"(?P<start>[0-9]{8}T[0-9]{6})_" \
                        r"(?P<stop>[0-9]{8}T[0-9]{6})_" \
                        r"(?:[0-9]{6})_" \
@@ -424,6 +424,8 @@ class SAFE(ID):
             raise IOError("folder does not match S1 scene naming convention")
         for key in re.compile(self.pattern).groupindex:
             setattr(self, key, match.group(key))
+
+        self.polarisations = {"SH": ["HH"], "SV": ["VV"], "DH": ["HH", "HV"], "DV": ["VV", "VH"]}[self.pols]
 
         self.orbit = "D" if float(re.findall("[0-9]{6}", self.start)[1]) < 120000 else "A"
         self.projection = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
@@ -452,12 +454,15 @@ class SAFE(ID):
             # the reason (GAMMA command error vs. bad ESA xml file entry) is yet to be discovered
             # xml_noise = os.path.join(self.scene, "annotation", "calibration", "noise-" + base)
             xml_noise = "-"
-            fields = (self.sensor, match.group("swath"), self.start, match.group("pol").upper())
+            fields = ("{:_<4}".format(self.sensor),
+                      "{:_<3}".format(match.group("swath").upper()),
+                      self.start, match.group("pol").upper(),
+                      match.group("product"))
+            name = os.path.join(directory, "{0}_{1}_{2}_{3}_{4}".format(*fields))
+
             if match.group("product") == "slc":
-                name = os.path.join(directory, "{0}_{1}__{2}_{3}_slc".format(*fields))
                 cmd = ["par_S1_SLC", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name, name + ".tops_par"]
             else:
-                name = os.path.join(directory, "{0}______{2}_{3}_mli".format(*fields))
                 cmd = ["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name]
             try:
                 run(cmd)
