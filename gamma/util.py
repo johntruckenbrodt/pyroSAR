@@ -11,10 +11,11 @@ core parameters are iterated over a set of values in order to find the one best 
 The approach of the single routines is likely to still have drawbacks and might fail in certain situations. Testing and suggestions on improvements are very welcome.
 """
 import os
-import re
 import math
+from envi import hdr
 import subprocess as sp
-from ancillary import run, Stack, parse_literal, haversine
+from auxil import ISPPar
+from ancillary import run, Stack, haversine, union
 
 
 # iterated cross-correlation offset and polynomial estimation
@@ -92,6 +93,93 @@ def correlate(master, slave, off, offs, snr, offsets="-", coffs="-", coffsets="-
         raise RuntimeError("cross-correlation failed; consider verifying scene overlap or choice of polarization")
 
 
+def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoback=2, func_interp=0):
+    """
+    scaling can be either 'linear', 'db' or a list of both (i.e. ['linear', 'db'])
+    """
+
+    scaling = [scaling] if isinstance(scaling, str) else scaling if isinstance(scaling, list) else []
+    scaling = union(scaling, ["db", "linear"])
+    if len(scaling) == 0:
+        raise IOError("wrong input type for parameter scaling")
+
+    scene.unpack(tempdir)
+
+    scene.convert2gamma(scene.scene)
+
+    scene.calibrate()
+
+    images = [x for x in scene.getGammaImages(scene.scene) if x.endswith("_grd")]
+
+    for image in images:
+        run(["multi_look_MLI", image, image+".par", image+"_mli", image+"_mli.par", 1, 1])
+
+    images = [x+"_mli" for x in images]
+
+    master = images[0]
+
+    dem_seg = master+"_dem"
+    lut = master+"_lut"
+    lut_fine = master+"_lut_fine"
+    sim_sar = master+"_sim_sar"
+    u = master+"_u"
+    v = master+"_v"
+    inc = master+"_inc"
+    psi = master+"_psi"
+    pix = master+"_pix"
+    ls_map = master+"_ls_map"
+    offs = master+"_offs"
+    coffs = master+"_coffs"
+    coffsets = master+"_coffsets"
+    snr = master+"_snr"
+
+    ovs_lat, ovs_lon = ovs(dem+".par", targetres)
+
+    path_log = os.path.join(scene.scene, "logfiles")
+    if not os.path.isdir(path_log):
+        os.makedirs(path_log)
+
+    master_par = ISPPar(master+".par")
+
+    if master_par.image_geometry == "GROUND_RANGE":
+        run(["gc_map_grd", master+".par", dem+".par", dem, dem_seg+".par", dem_seg, lut, ovs_lat, ovs_lon, sim_sar, u, v, inc, psi, pix, ls_map, 8, func_interp], logpath=path_log)
+    else:
+        run(["gc_map", master+".par", "-", dem+".par", dem, dem_seg+".par", dem_seg, lut, ovs_lat, ovs_lon, sim_sar, u, v, inc, psi, pix, ls_map, 8, func_interp], logpath=path_log)
+
+    for item in [dem_seg, sim_sar, u, v, psi, pix, inc]:
+        hdr(dem_seg+".par", item+".hdr")
+
+    correlate(master, sim_sar, master+"_diff.par", offs, snr, coffs=coffs, coffsets=coffsets, offsets=offs+".txt", path_log=path_log, maxwin=256)
+
+    try:
+        sim_width = ISPPar(dem_seg+".par").width
+        run(["gc_map_fine", lut, sim_width, master+"_diff.par", lut_fine, 0], logpath=path_log)
+    except sp.CalledProcessError:
+        print "...failed"
+        return
+
+    for image in images:
+        run(["geocode_back", image, master_par.range_samples, lut_fine, image+"_geo", sim_width, 0, func_geoback], logpath=path_log)
+        run(["product", image+"_geo", pix, image+"_geo_pix", sim_width, 1, 1, 0], logpath=path_log)
+        run(["lin_comb", 1, image+"_geo_pix", 0, math.cos(math.radians(master_par.incidence_angle)), image+"_geo_pix_flat", sim_width], logpath=path_log)
+        run(["sigma2gamma", image+"_geo_pix_flat", inc, image+"_geo_norm", sim_width], logpath=path_log)
+        hdr(dem_seg+".par", image+"_geo_norm.hdr")
+
+        for scale in scaling:
+            suffix = {"linear": "", "db": "_db"}[scale]
+
+            if scale == "db":
+                run(["linear_to_dB", image+"_geo_norm", image+"_geo_norm_db", sim_width, 0, -99], logpath=path_log)
+                hdr(dem_seg+".par", image+"_geo_norm_db.hdr")
+
+            try:
+                infile = image+"_geo_norm{}".format(suffix)
+                outfile = os.path.join(outdir, os.path.basename(image)+"_geo_norm{}.tif".format(suffix))
+                run(["data2geotiff", dem_seg+".par", infile, 2, outfile], logpath=path_log)
+            except ImportWarning:
+                pass
+
+
 # wrapper for iterated initial offset estimation between two SLCs or MLIs
 # from a starting search window size of 128x128, initial offsets are search for; if this fails, the window size is increased up to a maximum size of 1024x1024
 # once a sufficient number of offsets is found, the window size is again decreased down to 128 and offset search repeated to refine the results on finer levels
@@ -142,64 +230,6 @@ def init_offset(master, slave, off, path_log, thres=7.0):
         raise RuntimeError("no initial offset found; consider verifying scene overlap or choice of polarization")
 
 
-class ISPPar(object):
-    """Reader for ISP parameter files of the GAMMA software package.
-
-    This class allows to read all information from filed in GAMMA's parameter file format. Each key-value pair is parsed
-    and added as attributes. For instance if the parameter file contains the pair 'sensor:    TSX-1' a attribute named
-    'sensor' with the value 'TSX-1' will be available.
-
-    The values are converted to native Python types, while unit identifiers like 'dB' or 'Hz' are removed. Please see
-    the GAMMA reference manual for further information on the actual file format.
-    """
-
-    _re_kv_pair = re.compile(r'^(\w+):\s*(.+)\s*')
-    _re_float_literal = re.compile(r'^[+-]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[Ee][+-]?\d+)?')
-
-    def __init__(self, filename):
-        """Parses a ISP parameter file from disk.
-
-        Args:
-            filename: The filename or file object representing the ISP parameter file.
-        """
-        if isinstance(filename, basestring):
-            par_file = open(filename, 'r')
-        else:
-            par_file = filename
-        try:
-            par_file.readline()  # Skip header line
-            for line in par_file:
-                match = ISPPar._re_kv_pair.match(line)
-                if not match:
-                    continue  # Skip malformed lines with no key-value pairs
-                key = match.group(1)
-                items = match.group(2).split()
-                if len(items) == 0:
-                    value = None
-                elif len(items) == 1:
-                    value = parse_literal(items[0])
-                else:
-                    if not ISPPar._re_float_literal.match(items[0]):
-                        # Value is a string literal containing whitespace characters
-                        value = match.group(2)
-                    else:
-                        # Evaluate each item and stop at the first non-float literal
-                        value = []
-                        for i in items:
-                            match = ISPPar._re_float_literal.match(i)
-                            if match:
-                                value.append(parse_literal(match.group()))
-                            else:
-                                # If the first float literal is immediately followed by a non-float literal handle the
-                                # first one as singular value, e.g. in '20.0970 dB'
-                                if len(value) == 1:
-                                    value = value[0]
-                                break
-                setattr(self, key, value)
-        finally:
-            par_file.close()
-
-
 # compute DEM oversampling factors for a target resolution in meters
 def ovs(parfile, targetres):
     # read DEM parameter file
@@ -244,24 +274,3 @@ class Spacing(object):
         else:
             self.rlks = int(round(float(targetres)/self.groundRangePS))
             self.azlks = int(round(float(targetres)/par.azimuth_pixel_spacing))
-
-
-# convert a gamma parameter file corner coordinate from EQA to UTM
-class UTM(object):
-    def __init__(self, parfile):
-        par = ISPPar(parfile)
-        inlist = [str(x) for x in ["WGS84", 1, "EQA", par.corner_lon, par.corner_lat, "", "WGS84", 1, "UTM", ""]]
-        proc = sp.Popen(["coord_trans"], stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True, shell=False).communicate("".join([x + "\n" for x in inlist]))
-        proc = [x for x in filter(None, proc[0].split("\n")) if ":" in x]
-        self.index = []
-        for item in proc:
-            entry = item.split(": ")
-            entry = [entry[0].replace(" ", "_"), entry[1].split()]
-            if len(entry[1]) > 1:
-                setattr(self, entry[0], entry[1])
-            else:
-                setattr(self, entry[0], entry[1][0])
-            self.index.append(entry[0])
-            if "UTM" in entry[0]:
-                self.zone, self.northing, self.easting = entry[1]
-                self.index = list(set(self.index+["zone", "northing", "easting"]))
