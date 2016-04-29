@@ -125,8 +125,13 @@ class ID(object):
     def getCorners(self):
         return
 
-    def getGammaImages(self, directory):
-        return [x for x in finder(directory, [self.outname_base], regex=True) if not x.endswith(".par")]
+    def getGammaImages(self, directory=None):
+        if directory is None:
+            if hasattr(self, "gammadir"):
+                directory = self.gammadir
+            else:
+                raise IOError("directory missing; please provide directory to function or define object attribute 'gammadir'")
+        return [x for x in finder(directory, [self.outname_base], regex=True) if not re.search("\.(?:par|hdr|aux\.xml)$", x)]
 
     def getHGT(self):
 
@@ -270,6 +275,12 @@ class ESA(ID):
             raise IOError("product level 0 not supported (yet)")
 
         self.gdalinfo(self.scene)
+
+        if self.sensor == "ASAR":
+            self.polarisations = [getattr(self, x).replace("/", "") for x in self.__dict__.keys() if re.search("TX_RX_POLAR", x)]
+        elif self.sensor in ["ERS1", "ERS2"]:
+            self.polarisations = ["VV"]
+
         self.orbit = self.SPH_PASS[0]
         self.start = self.MPH_SENSING_START
         self.stop = self.MPH_SENSING_STOP
@@ -293,7 +304,8 @@ class ESA(ID):
                 ext = ".par" if item.endswith(".par") else ""
                 base = os.path.basename(item).strip(ext)
                 base = base.replace(".", "_")
-                base = base.replace("PRI", "mli")
+                base = base.replace("PRI", "pri")
+                base = base.replace("GRD", "grd")
                 base = base.replace("SLC", "slc")
                 newname = os.path.join(directory, base+ext)
                 os.rename(item, newname)
@@ -302,10 +314,12 @@ class ESA(ID):
 
     def calibrate(self, replace=False):
         k_db = {"ASAR": 55., "ERS1": 58.24, "ERS2": 59.75}[self.sensor]
-        inc_ref = 90. if self. sensor == "ASAR" else 23.
-        candidates = [x for x in self.getGammaImages(self.gammadir) if not x.endswith("_cal") and not os.path.isfile(x+"_cal")]
+        inc_ref = 90. if self.sensor == "ASAR" else 23.
+        # candidates = [x for x in self.getGammaImages(self.gammadir) if not re.search("_(?:cal|grd)$", x)]
+        candidates = [x for x in self.getGammaImages(self.gammadir) if re.search("_pri$", x)]
         for image in candidates:
-            run(["radcal_PRI", image, image+".par", image+"_cal", image+"_cal.par", k_db, inc_ref])
+            out = image.replace("pri", "grd")
+            run(["radcal_PRI", image, image+".par", out, out+".par", k_db, inc_ref])
             if replace:
                 os.remove(image)
                 os.remove(image+".par")
