@@ -85,7 +85,7 @@ class ID(object):
 
     def gdalinfo(self, scene):
         self.scene = os.path.realpath(scene)
-        files = self.findfiles("(?:\.[NE][12]$|DAT_01\.001$|product\.xml$)")
+        files = self.findfiles("(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)")
 
         if len(files) == 1:
             prefix = {"zip": "/vsizip/", "tar": "/vsitar/", None: ""}[self.compression]
@@ -442,8 +442,10 @@ class SAFE(ID):
 
         self.polarisations = {"SH": ["HH"], "SV": ["VV"], "DH": ["HH", "HV"], "DV": ["VV", "VH"]}[self.pols]
 
-        self.orbit = "D" if float(re.findall("[0-9]{6}", self.start)[1]) < 120000 else "A"
-        self.projection = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+        self.gdalinfo(self.scene)
+
+        self.spacing = (self.PIXEL_SPACING, self.LINE_SPACING)
+        self.orbit = self.ORBIT_DIRECTION[0]
 
     def calibrate(self, replace=False):
         print "calibration already performed during import"
@@ -488,21 +490,8 @@ class SAFE(ID):
                 pass
 
     def getCorners(self):
-        if self.compression == "zip":
-            with zf.ZipFile(self.scene, "r") as z:
-                kml = z.open([x for x in z.namelist() if re.search("map-overlay\.kml", x)][0], "r").read()
-        elif self.compression == "tar":
-            tar = tf.open(self.scene, "r")
-            kml = tar.extractfile().read()
-            tar.close()
-        else:
-            with open(finder(self.scene, ["*map-overlay.kml"])[0], "r") as infile:
-                kml = infile.read()
-        elements = ElementTree.fromstring(kml).findall(".//coordinates")
-
-        coordinates = [x.split(",") for x in elements[0].text.split()]
-        lat = [float(x[1]) for x in coordinates]
-        lon = [float(x[0]) for x in coordinates]
+        lat = [x[1][1] for x in self.gcps]
+        lon = [x[1][0] for x in self.gcps]
         return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
 
     def unpack(self, directory):
