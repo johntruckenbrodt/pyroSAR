@@ -17,7 +17,7 @@ for dir in [root, downloaddir, packagedir, installdir]:
 
 modules = ["gdal", "geos", "hdf4", "hdf5", "netcdf", "kml", "kea"]
 
-versions = {"gdal": "2.0.2",
+versions = {"gdal": "2.1.0",
             "geos": "3.5.0",
             "kea": "1.4.4",
             "kml": "1.2.0",
