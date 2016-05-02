@@ -18,12 +18,6 @@ from auxil import ISPPar
 from ancillary import run, Stack, haversine, union
 
 
-# iterated cross-correlation offset and polynomial estimation
-# this function is suited for SLCs (i.e. coregistration) as well as MLIs (i.e. geocoding); the procedure is selected based on the data type of the input data (complex for SLCs but not MLIs)
-# starting from a user-defined size, the square offset search window is reduced until a sufficient number of offsets is found or a minimum size is reached
-# the number of image kernels for offset search is computed based on the defined percentage of kernel overlap for range and azimuth respectively
-# note: the implemented procedure is likely to be overly accurate for many applications; the procedure was chosen based on experience in extremely flat terrain where geocoding is
-# problematic due to a lack of image contrast along topographic features and has proven to succeed even in those situations
 # INPUT FILES:
 # -master: master image
 # -slave: image coregistered to the master
@@ -44,6 +38,34 @@ from ancillary import run, Stack, haversine, union
 # -thres: offset estimation SNR quality threshold
 # the default value "-" will result in no output file written
 def correlate(master, slave, off, offs, snr, offsets="-", coffs="-", coffsets="-", path_log=None, maxwin=2048, minwin=128, overlap=.3, poly=4, ovs=2, thres=7.0):
+    """
+    iterated cross-correlation offset and polynomial estimation
+    this function is suited for SLCs (i.e. coregistration) as well as MLIs (i.e. geocoding); the procedure is selected based on the data type of the input data (complex for SLCs but not MLIs)
+    starting from a user-defined size, the square offset search window is reduced until a sufficient number of offsets is found or a minimum size is reached
+    the number of image kernels for offset search is computed based on the defined percentage of kernel overlap for range and azimuth respectively
+    note: the implemented procedure is likely to be overly accurate for many applications; the procedure was chosen based on experience in extremely flat terrain where geocoding is
+    problematic due to a lack of image contrast along topographic features and has proven to succeed even in those situations
+    Args:
+        master: master image
+        slave: image coregistered to the master
+        off: diffpar parameter file
+        offs: offset estimates (fcomplex)
+        snr: offset estimation SNR (float)
+        offsets: range and azimuth offsets and SNR data (text format)
+        coffs: culled range and azimuth offset estimates (fcomplex)
+        coffsets: culled offset estimates and SNR values (text format)
+        path_log: directory for created logfiles (e.g. offset_pwr will create file path_log/offset_pwr.log)
+        maxwin: maximum (initial) window size for offset search (will be iteratively divided by 2 until the minwin is reached)
+        minwin: minimum (final) window size
+        overlap: percentage overlap of the search windows (the number of search windows is computed based on their windows size and the overlap)
+        poly: the polynomial order for range and azimuth offset fitting
+        ovs: image oversampling factor for offset estimation
+        thres: offset estimation SNR quality threshold
+
+    Returns:
+
+    """
+
     path_out = os.path.dirname(off)
     par = ISPPar(master+".par")
 
@@ -96,6 +118,23 @@ def correlate(master, slave, off, offs, snr, offsets="-", coffs="-", coffsets="-
 def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoback=2, func_interp=0):
     """
     scaling can be either 'linear', 'db' or a list of both (i.e. ['linear', 'db'])
+
+    intermediate output files (named <master_MLI>_<suffix>):
+    dem: dem subsetted to the extent of the SAR image
+    lut: rough geocoding lookup table
+    lut_fine: fine geocoding lookup table
+    sim_sar: simulated SAR backscatter image in DEM geometry
+    u: zenith angle of surface normal vector n (angle between z and n)
+    v: orientation angle of n (between x and projection of n in xy plane)
+    inc: local incidence angle (between surface normal and look vector)
+    psi: projection angle (between surface normal and image plane normal)
+    pix: pixel area normalization factor
+    ls_map: layover and shadow map (in map projection)
+    off.par: ISP offset/interferogram parameter file
+    offs: offset estimates (fcomplex)
+    coffs: culled range and azimuth offset estimates (fcomplex)
+    coffsets: culled offset estimates and SNR values (text format)
+    snr: offset estimation SNR (float)
     """
 
     scaling = [scaling] if isinstance(scaling, str) else scaling if isinstance(scaling, list) else []
@@ -133,6 +172,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
     psi = master+"_psi"
     pix = master+"_pix"
     ls_map = master+"_ls_map"
+    off_par = master+"_off.par"
     offs = master+"_offs"
     coffs = master+"_coffs"
     coffsets = master+"_coffsets"
@@ -154,11 +194,11 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
     for item in [dem_seg, sim_sar, u, v, psi, pix, inc]:
         hdr(dem_seg+".par", item+".hdr")
 
-    correlate(master, sim_sar, master+"_diff.par", offs, snr, coffs=coffs, coffsets=coffsets, offsets=offs+".txt", path_log=path_log, maxwin=256)
+    correlate(master, sim_sar, off_par, offs, snr, coffs=coffs, coffsets=coffsets, offsets=offs+".txt", path_log=path_log, maxwin=256)
 
     try:
         sim_width = ISPPar(dem_seg+".par").width
-        run(["gc_map_fine", lut, sim_width, master+"_diff.par", lut_fine, 0], logpath=path_log)
+        run(["gc_map_fine", lut, sim_width, off_par, lut_fine, 0], logpath=path_log)
     except sp.CalledProcessError:
         print "...failed"
         return
@@ -176,22 +216,32 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
             if scale == "db":
                 run(["linear_to_dB", image+"_geo_norm", image+"_geo_norm_db", sim_width, 0, -99], logpath=path_log)
                 hdr(dem_seg+".par", image+"_geo_norm_db.hdr")
-
+            infile = image+"_geo_norm{}".format(suffix)
+            outfile = os.path.join(outdir, os.path.basename(image)+"_geo_norm{}.tif".format(suffix))
             try:
-                infile = image+"_geo_norm{}".format(suffix)
-                outfile = os.path.join(outdir, os.path.basename(image)+"_geo_norm{}.tif".format(suffix))
                 run(["data2geotiff", dem_seg+".par", infile, 2, outfile], logpath=path_log)
             except ImportWarning:
                 pass
 
 
-# wrapper for iterated initial offset estimation between two SLCs or MLIs
-# from a starting search window size of 128x128, initial offsets are search for; if this fails, the window size is increased up to a maximum size of 1024x1024
-# once a sufficient number of offsets is found, the window size is again decreased down to 128 and offset search repeated to refine the results on finer levels
-# in case too few/no offsets were found on any window size, the routine will throw an error
-# additionally, for each window size, the offset search is performed on three different levels of multilooking (factor 3, 2, 1) as this is reported to refine the results;
-# if the routine fails on any level of multilooking, the routine will proceed with the next window size
 def init_offset(master, slave, off, path_log, thres=7.0):
+    """
+    wrapper for iterated initial offset estimation between two SLCs or MLIs
+    from a starting search window size of 128x128, initial offsets are search for; if this fails, the window size is increased up to a maximum size of 1024x1024
+    once a sufficient number of offsets is found, the window size is again decreased down to 128 and offset search repeated to refine the results on finer levels
+    in case too few/no offsets were found on any window size, the routine will throw an error
+    additionally, for each window size, the offset search is performed on three different levels of multilooking (factor 3, 2, 1) as this is reported to refine the results;
+    if the routine fails on any level of multilooking, the routine will proceed with the next window size
+    Args:
+        master:
+        slave:
+        off:
+        path_log:
+        thres:
+
+    Returns:
+
+    """
     path_out = os.path.dirname(off)
 
     if not os.path.isfile(off):
@@ -235,8 +285,16 @@ def init_offset(master, slave, off, path_log, thres=7.0):
         raise RuntimeError("no initial offset found; consider verifying scene overlap or choice of polarization")
 
 
-# compute DEM oversampling factors for a target resolution in meters
 def ovs(parfile, targetres):
+    """
+    compute DEM oversampling factors for a target resolution in meters
+    Args:
+        parfile:
+        targetres:
+
+    Returns:
+
+    """
     # read DEM parameter file
     dempar = ISPPar(parfile)
 
@@ -260,9 +318,17 @@ def ovs(parfile, targetres):
     return ovs_lat, ovs_lon
 
 
-# compute ground multilooking factors and pixel spacings from an ISPPar object for a defined target resolution
 class Spacing(object):
     def __init__(self, par, targetres="automatic"):
+        """
+        compute ground multilooking factors and pixel spacings from an ISPPar object for a defined target resolution
+        Args:
+            par:
+            targetres:
+
+        Returns:
+
+        """
         # compute ground range pixel spacing
         par = par if isinstance(par, ISPPar) else ISPPar(par)
         self.groundRangePS = par.range_pixel_spacing/(math.sin(math.radians(par.incidence_angle)))
