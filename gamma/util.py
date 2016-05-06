@@ -172,11 +172,15 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
     psi = master+"_psi"
     pix = master+"_pix"
     ls_map = master+"_ls_map"
+    pixel_area = master+"_pixel_area"
+    pixel_area2 = master+"_pixel_area2"
     off_par = master+"_off.par"
     offs = master+"_offs"
     coffs = master+"_coffs"
     coffsets = master+"_coffsets"
     snr = master+"_snr"
+    ellipse_pixel_area = master+"_ellipse_pixel_area"
+    ratio_sigma0 = master+"_ratio_sigma0"
 
     ovs_lat, ovs_lon = ovs(dem+".par", targetres)
 
@@ -194,7 +198,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
     for item in [dem_seg, sim_sar, u, v, psi, pix, inc]:
         hdr(dem_seg+".par", item+".hdr")
 
-    correlate(master, sim_sar, off_par, offs, snr, coffs=coffs, coffsets=coffsets, offsets=offs+".txt", path_log=path_log, maxwin=256)
+    run(["pixel_area", master+".par", dem_seg+".par", dem_seg, lut, ls_map, inc, pixel_area], logpath=path_log)
+
+    correlate(master, pixel_area, off_par, offs, snr, coffs=coffs, coffsets=coffsets, offsets=offs+".txt", path_log=path_log, maxwin=256)
 
     try:
         sim_width = ISPPar(dem_seg+".par").width
@@ -203,6 +209,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
         print "...failed"
         return
 
+    ######################################################################
+    # approach 1 #########################################################
+    ######################################################################
     for image in images:
         run(["geocode_back", image, master_par.range_samples, lut_fine, image+"_geo", sim_width, 0, func_geoback], logpath=path_log)
         run(["product", image+"_geo", pix, image+"_geo_pix", sim_width, 1, 1, 0], logpath=path_log)
@@ -211,17 +220,49 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
         hdr(dem_seg+".par", image+"_geo_norm.hdr")
 
         for scale in scaling:
-            suffix = {"linear": "", "db": "_db"}[scale]
-
             if scale == "db":
                 run(["linear_to_dB", image+"_geo_norm", image+"_geo_norm_db", sim_width, 0, -99], logpath=path_log)
                 hdr(dem_seg+".par", image+"_geo_norm_db.hdr")
+            suffix = {"linear": "", "db": "_db"}[scale]
             infile = image+"_geo_norm{}".format(suffix)
             outfile = os.path.join(outdir, os.path.basename(image)+"_geo_norm{}.tif".format(suffix))
             try:
                 run(["data2geotiff", dem_seg+".par", infile, 2, outfile], logpath=path_log)
             except ImportWarning:
                 pass
+    ######################################################################
+    # approach 2 #########################################################
+    ######################################################################
+    # try:
+    #     run(["pixel_area", master+".par", dem_seg+".par", dem_seg, lut_fine, ls_map, inc, pixel_area2], logpath=path_log)
+    # except sp.CalledProcessError:
+    #     print "...failed"
+    #     return
+    # run(["radcal_MLI", master, master+".par", "-", master+"_cal", "-", 0, 0, 1, 0.0, "-", ellipse_pixel_area], logpath=path_log)
+    # run(["ratio", ellipse_pixel_area, pixel_area2, ratio_sigma0, master_par.range_samples, 1, 1], logpath=path_log)
+    #
+    # for image in images:
+    #     run(["product", image, ratio_sigma0, image+"_pixcal", master_par.range_samples, 1, 1], logpath=path_log)
+    #     run(["geocode_back", image+"_pixcal", master_par.range_samples, lut_fine, image+"_geo", sim_width, 0, func_geoback], logpath=path_log)
+    #     run(["lin_comb", 1, image+"_geo", 0, math.cos(math.radians(master_par.incidence_angle)), image+"_geo_flat", sim_width], logpath=path_log)
+    #     run(["sigma2gamma", image+"_geo_flat", inc, image+"_geo_norm", sim_width], logpath=path_log)
+    #     hdr(dem_seg+".par", image+"_geo_norm.hdr")
+    #
+    #     for scale in scaling:
+    #         suffix = {"linear": "", "db": "_db"}[scale]
+    #
+    #         if scale == "db":
+    #             run(["linear_to_dB", image+"_geo_norm", image+"_geo_norm_db", sim_width, 0, -99], logpath=path_log)
+    #             hdr(dem_seg+".par", image+"_geo_norm_db.hdr")
+    #         infile = image+"_geo_norm{}".format(suffix)
+    #         outfile = os.path.join(outdir, os.path.basename(image)+"_geo_norm{}.tif".format(suffix))
+    #         try:
+    #             run(["data2geotiff", dem_seg+".par", infile, 2, outfile], logpath=path_log)
+    #         except ImportWarning:
+    #             pass
+    ######################################################################
+    ######################################################################
+    ######################################################################
 
 
 def init_offset(master, slave, off, path_log, thres=7.0):
