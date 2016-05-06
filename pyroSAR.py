@@ -21,11 +21,11 @@ from time import strptime, strftime
 import xml.etree.ElementTree as ElementTree
 
 
-def identify(scene):
+def identify(scene, mode="full"):
     """Return a metadata handler of the given scene."""
     for handler in ID.__subclasses__():
         try:
-            return handler(scene)
+            return handler(scene, mode)
         except IOError:
             pass
     raise IOError("data format not supported")
@@ -84,23 +84,31 @@ class ID(object):
         return files
 
     def gdalinfo(self, scene):
+        """
+
+        Args:
+            scene: an archive containing a SAR scene
+
+        sets object attributes
+
+        """
         self.scene = os.path.realpath(scene)
         files = self.findfiles("(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)")
 
         if len(files) == 1:
             prefix = {"zip": "/vsizip/", "tar": "/vsitar/", None: ""}[self.compression]
-            self.file = files[0]
+            header = files[0]
         elif len(files) > 1:
             raise IOError("file ambiguity detected")
         else:
             raise IOError("file type not supported")
 
         ext_lookup = {".N1": "ASAR", ".E1": "ERS1", ".E2": "ERS2"}
-        extension = os.path.splitext(self.file)[1]
+        extension = os.path.splitext(header)[1]
         if extension in ext_lookup:
             self.sensor = ext_lookup[extension]
 
-        img = gdal.Open(prefix+self.file, GA_ReadOnly)
+        img = gdal.Open(prefix+header, GA_ReadOnly)
         meta = img.GetMetadata()
         self.cols, self.rows, self.bands = img.RasterXSize, img.RasterYSize, img.RasterCount
         self.projection = img.GetGCPProjection()
@@ -111,7 +119,7 @@ class ID(object):
             entry = [item, parse_literal(meta[item].strip())]
 
             # todo: check module time for more general approaches
-            for timeformat in ["%d-%b-%Y %H:%M:%S.%f", "%Y%m%d%H%M%S%f", "%Y-%m-%dT%H:%M:%S.%fZ"]:
+            for timeformat in ["%d-%b-%Y %H:%M:%S.%f", "%Y%m%d%H%M%S%f", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S.%fZ"]:
                 try:
                     entry[1] = strftime("%Y%m%dT%H%M%S", strptime(entry[1], timeformat))
                 except (TypeError, ValueError):
@@ -254,7 +262,7 @@ class ID(object):
 
 
 class ESA(ID):
-    def __init__(self, scene):
+    def __init__(self, scene, mode="full"):
 
         self.pattern = r"(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_))_[012B][CP])" \
                        r"(?P<processing_stage_flag>[A-Z])" \
@@ -404,7 +412,7 @@ class ESA(ID):
 
 # todo: check self.file and self.scene assignment after unpacking
 class SAFE(ID):
-    def __init__(self, scene):
+    def __init__(self, scene, mode="full"):
 
         self.scene = os.path.realpath(scene)
 
@@ -442,10 +450,13 @@ class SAFE(ID):
 
         self.polarisations = {"SH": ["HH"], "SV": ["VV"], "DH": ["HH", "HV"], "DV": ["VV", "VH"]}[self.pols]
 
-        self.gdalinfo(self.scene)
+        self.orbit = "D" if float(re.findall("[0-9]{6}", self.start)[1]) < 120000 else "A"
+        self.projection = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 
-        self.spacing = (self.PIXEL_SPACING, self.LINE_SPACING)
-        self.orbit = self.ORBIT_DIRECTION[0]
+        if mode == "full":
+            self.gdalinfo(self.scene)
+            self.spacing = (self.PIXEL_SPACING, self.LINE_SPACING)
+            # self.orbit = self.ORBIT_DIRECTION[0]
 
     def calibrate(self, replace=False):
         print "calibration already performed during import"
@@ -490,9 +501,34 @@ class SAFE(ID):
                 pass
 
     def getCorners(self):
-        lat = [x[1][1] for x in self.gcps]
-        lon = [x[1][0] for x in self.gcps]
+        if self.compression == "zip":
+            with zf.ZipFile(self.scene, "r") as z:
+                kml = z.open([x for x in z.namelist() if re.search("map-overlay\.kml", x)][0], "r").read()
+        elif self.compression == "tar":
+            tar = tf.open(self.scene, "r")
+            kml = tar.extractfile().read()
+            tar.close()
+        else:
+            with open(finder(self.scene, ["*map-overlay.kml"])[0], "r") as infile:
+                kml = infile.read()
+        elements = ElementTree.fromstring(kml).findall(".//coordinates")
+
+        coordinates = [x.split(",") for x in elements[0].text.split()]
+        lat = [float(x[1]) for x in coordinates]
+        lon = [float(x[0]) for x in coordinates]
         return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
+
+    # def getCorners(self):
+    #     lat = [x[1][1] for x in self.gcps]
+    #     lon = [x[1][0] for x in self.gcps]
+    #     return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
+
+    def outname_base(self):
+        fields = ("{:_<4}".format(self.sensor),
+                  "{:_<4}".format(self.beam),
+                  self.orbit,
+                  self.start)
+        return "_".join(fields)
 
     def unpack(self, directory):
         outdir = os.path.join(directory, os.path.basename(self.file))

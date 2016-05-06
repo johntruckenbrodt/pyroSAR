@@ -46,27 +46,33 @@ from time import asctime
 from gamma.util import correlate, ovs, ISPPar
 from S1_auxil import Identifier, unpack, init_parser, OSV
 from ancillary import run, finder, blockPrint, enablePrint
-
+from pyroSAR import identify
 
 def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermediates=False, res_target=20, func_geoback=2, func_interp=0, poedir=None, resdir=None):
 
     print "##########################################\n{0}\n-------------\nprocessing started: {1}\n".format(zipfile[:-4], asctime())
 
-    # scan the scene folder name for key acquisition attributes and concatenate the base output file name
-    id = Identifier(zipfile)
-    outname_base = "_".join([os.path.join(outdir, id.sat), id.beam, id.start, id.orbit])
+    id = identify(zipfile)
+    outname_base = "_".join([os.path.join(outdir, id.sensor), id.beam, id.start, id.orbit])
 
-    # unpack the zipped scene archive (if no processed files exist)
-    if len(finder(outdir, [os.path.basename(outname_base)], regex=True)) == 0:
-        try:
-            unpack(zipfile, tempdir)
-            tempdir = os.path.join(tempdir, id.scene)
-        except IOError as e:
-            print "{}: {}".format(str(e), id.scene)
-            return
-    else:
-        print "scene already processed"
-        return
+    id.unpack(tempdir)
+
+
+    # # scan the scene folder name for key acquisition attributes and concatenate the base output file name
+    # id = Identifier(zipfile)
+    # outname_base = "_".join([os.path.join(outdir, id.sat), id.beam, id.start, id.orbit])
+    #
+    # # unpack the zipped scene archive (if no processed files exist)
+    # if len(finder(outdir, [os.path.basename(outname_base)], regex=True)) == 0:
+    #     try:
+    #         unpack(zipfile, tempdir)
+    #         tempdir = os.path.join(tempdir, id.scene)
+    #     except IOError as e:
+    #         print "{}: {}".format(str(e), id.scene)
+    #         return
+    # else:
+    #     print "scene already processed"
+    #     return
 
     # create logfile folder if this option was selected
     if logfiles:
@@ -79,16 +85,19 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
 
     ######################################################################
     print "converting to GAMMA format..."
-    try:
-        run(["reader_old.py", tempdir], outdir=tempdir, logpath=path_log)
-    except ImportWarning:
-        pass
-    except ImportError:
-        print "...failed"
-        return
+
+    id.convert2gamma(id.scene)
+    # try:
+    #     run(["reader_old.py", tempdir], outdir=tempdir, logpath=path_log)
+    # except ImportWarning:
+    #     pass
+    # except ImportError:
+    #     print "...failed"
+    #     return
 
     # collect all imported files
-    files_mli = finder(tempdir, ["*_mli"])
+    # files_mli = finder(tempdir, ["*_mli"])
+    files_mli = finder(tempdir, ["*_grd"])
 
     # correcting orbit state vectors
     if (poedir is not None and resdir is None) or (poedir is None and resdir is not None):
