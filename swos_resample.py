@@ -4,8 +4,8 @@ from raster import stack
 from ancillary import finder
 from time import mktime, strptime
 
-srcfiles = finder("/geonfs01_vol1/ve39vem/S1/test_camarque/test_out", ["*_vh_*.tif"])
-dstfile = "/geonfs01_vol1/ve39vem/S1/test_camarque/Camarque_VH"
+srcfiles = finder("/geonfs01_vol1/ve39vem/out", ["*_VV_*db.tif"])
+dstfile = "/geonfs01_vol1/ve39vem/Camarque_VV_dB_update"
 shp = "/geonfs01_vol1/ve39vem/S1/test_camarque/boundary/Test_Sites_project_v11_Camarque.shp"
 
 
@@ -26,4 +26,4 @@ for item in srcfiles:
             groups.append(temp) if len(temp) > 1 else groups.append(temp[0])
             temp = [item]
 
-stack(groups, dstfile, "bilinear", [20, 20], 0, 0, shp, sortfun=seconds)
+stack(groups, dstfile, "bilinear", [20, 20], srcnodata=-99, dstnodata=-99, shapefile=shp, sortfun=seconds)
