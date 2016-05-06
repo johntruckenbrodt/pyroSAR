@@ -146,6 +146,7 @@ def transform(infile, outfile, posting=90):
 
     # transform dem
     run(["dem_trans", infile+".par", infile, outfile+".par", outfile, "-", "-", "-", 1])
+    hdr(outfile+".par")
 
 
 # create GAMMA parameter text files for DEM files
@@ -288,8 +289,9 @@ def makeSRTM(scenes, srtmdir, outname):
     dempar(srtm_mosaic)
 
     fill(srtm_mosaic, outname, replace=True)
+    hdr(outname+".par")
 
-    # shutil.rmtree(tempdir)
+    shutil.rmtree(tempdir)
 
 # automatic downloading and unpacking of srtm tiles
 # base directory must contain SLC files in GAMMA format including their parameter files for reading coordinates
