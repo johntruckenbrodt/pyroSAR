@@ -165,7 +165,8 @@ class ID(object):
 
     def summary(self):
         for item in sorted(self.__dict__.keys()):
-            print "{0}: {1}".format(item, getattr(self, item))
+            if item != "gcps":
+                print "{0}: {1}".format(item, getattr(self, item))
 
     @abc.abstractmethod
     def unpack(self, directory):
