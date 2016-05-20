@@ -11,14 +11,15 @@ import os
 import re
 import abc
 import math
-from osgeo import gdal
+from osgeo import gdal, ogr, osr
 from osgeo.gdalconst import GA_ReadOnly
 import spatial
 import zipfile as zf
 import tarfile as tf
-from ancillary import finder, parse_literal, run
+from ancillary import finder, parse_literal, run, crsConvert
 from time import strptime, strftime
 import xml.etree.ElementTree as ElementTree
+import sqlite3
 
 
 def identify(scene):
@@ -55,6 +56,76 @@ class ID(object):
             return "tar"
         else:
             return None
+
+    def export2sqlite(self):
+        '''Export the most important metadata in a sqlite database which is located in the same folder as the source
+        file.
+        '''
+        print 'Begin export'
+        if self.compression is None:
+            raise RuntimeError('Uncompressed data is not suitable for the metadata base')
+
+        database = os.path.join(os.path.dirname(self.scene), 'data.db')
+        conn = sqlite3.connect(database)
+        conn.enable_load_extension(True)
+        conn.execute("SELECT load_extension('libspatialite')")
+        conn.execute("SELECT InitSpatialMetaData();")
+        cursor =conn.cursor()
+        create_string = '''CREATE TABLE if not exists data (
+                            title TEXT NOT NULL,
+                            file TEXT NOT NULL,
+                            scene TEXT,
+                            sensor TEXT,
+                            projection TEXT,
+                            orbit TEXT,
+                            polarisation TEXT,
+                            acquisition_mode TEXT,
+                            start TEXT,
+                            stop TEXT,
+                            CONSTRAINT pk_data
+                            PRIMARY KEY(file, scene)
+                            )'''
+
+        cursor.execute(create_string)
+        cursor.execute("SELECT AddGeometryColumn('data','bbox' , 4326, 'POLYGON', 'XY', 0)")
+        conn.commit()
+        insert_string = '''
+                        INSERT INTO data
+                        (title, file, scene, sensor, projection, bbox, orbit, polarisation, acquisition_mode, start, stop)
+                        VALUES( ?,?,?,?,?,GeomFromText(?, 4326),?,?,?,?,?)
+
+                        '''
+        # This should not be here but there should be an bbox.wkt() function to get the bbox as a wkt
+        ring = ogr.Geometry(ogr.wkbLinearRing)
+        coordinates = self.getCorners()
+        ring.AddPoint(coordinates["xmin"], coordinates["ymin"])
+        ring.AddPoint(coordinates["xmin"], coordinates["ymax"])
+        ring.AddPoint(coordinates["xmax"], coordinates["ymax"])
+        ring.AddPoint(coordinates["xmax"], coordinates["ymin"])
+        ring.CloseRings()
+
+        geom = ogr.Geometry(ogr.wkbPolygon)
+        geom.AddGeometry(ring)
+
+        geom.FlattenTo2D()
+
+        #todo ersetzen durch ancillary.crsConvert(self.projection, 'ogr')
+        srs = osr.SpatialReference()
+        srs.ImportFromProj4(self.projection)
+
+
+        geom.AssignSpatialReference(srs)
+        sq_file = os.path.basename(self.file )
+        title = os.path.splitext(sq_file)[0]
+        input = (title, sq_file, self.scene, self.sensor, crsConvert(self.projection, 'wkt'), geom.ExportToWkt(), self.orbit, 'polarisation', 'acquisition', self.start, self.stop)
+        try:
+            cursor.execute(insert_string, input)
+        except sqlite3.IntegrityError as e:
+            print 'SQL error:', e
+
+        conn.commit()
+        conn.close()
+
 
     def findfiles(self, pattern):
         if os.path.isdir(self.scene):
@@ -375,6 +446,7 @@ class SAFE(ID):
             setattr(self, key, match.group(key))
 
         self.orbit = "D" if float(re.findall("[0-9]{6}", self.start)[1]) < 120000 else "A"
+        # todo Shouldn't the projection be a osr.SpatialReference Object?
         self.projection = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 
     def calibrate(self, replace=False):
