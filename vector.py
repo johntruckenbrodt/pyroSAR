@@ -17,6 +17,7 @@ ogr.UseExceptions()
 
 
 class Vector(object):
+    #todo Define get_projection which returns the projection in a given format
     def __init__(self, filename=None, driver="ESRI Shapefile"):
 
         if driver not in ["ESRI Shapefile", "Memory"]:
@@ -85,6 +86,7 @@ class Vector(object):
     def srs(self):
         return self.layer.GetSpatialRef()
 
+    # todo Should return the wkt of the object, not of the projection
     @property
     def wkt(self):
         return self.srs.ExportToWkt()
