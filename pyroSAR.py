@@ -142,6 +142,9 @@ class ID(object):
         return [x for x in finder(directory, [self.outname_base()], regex=True) if not re.search("\.(?:par|hdr|aux\.xml)$", x)]
 
     def getHGT(self):
+        """
+        Returns: names of all SRTM hgt tile names overlapping with the SAR scene
+        """
 
         corners = self.getCorners()
 
