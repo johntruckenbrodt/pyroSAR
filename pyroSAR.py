@@ -13,11 +13,13 @@ import math
 from osgeo import gdal, ogr, osr
 from osgeo.gdalconst import GA_ReadOnly
 import spatial
+import StringIO
 import zipfile as zf
 import tarfile as tf
 from ancillary import finder, parse_literal, run, crsConvert
 from time import strptime, strftime
-import xml.etree.ElementTree as ElementTree
+import xml.etree.ElementTree as ET
+from xml_util import getNamespaces
 import sqlite3
 
 
@@ -202,13 +204,22 @@ class ID(object):
         return
 
     def getFileObj(self, filename):
+        """
+        load a file into a readable file object
+        if scene is unpacked this will be a regular 'file'
+        for a tarfile this is an obvject of type 'ExtFile'
+        for a zipfile this is an StringIO.StringIO object (the zipfile.ExtFile object does not support setting file pointers via function seek)
+        """
         membername = filename.replace(self.scene, "").strip("/")
 
         if os.path.isdir(self.scene):
             obj = open(filename)
         elif zf.is_zipfile(self.scene):
+            obj = StringIO.StringIO()
             with zf.ZipFile(self.scene, "r") as zip:
-                obj = zip.open(membername)
+                obj.write(zip.open(membername).read())
+            obj.seek(0)
+
         elif tf.is_tarfile(self.scene):
             tar = tf.open(self.scene)
             obj = tar.extractfile(membername)
@@ -599,28 +610,10 @@ class SAFE(ID):
                 pass
 
     def getCorners(self):
-        if self.compression == "zip":
-            with zf.ZipFile(self.scene, "r") as z:
-                kml = z.open([x for x in z.namelist() if re.search("map-overlay\.kml", x)][0], "r").read()
-        # todo: this looks wrong; check whether it's correct
-        # elif self.compression == "tar":
-        #     tar = tf.open(self.scene, "r")
-        #     kml = tar.extractfile().read()
-        #     tar.close()
-        else:
-            with open(finder(self.scene, ["*map-overlay.kml"])[0], "r") as infile:
-                kml = infile.read()
-        elements = ElementTree.fromstring(kml).findall(".//coordinates")
-
-        coordinates = [x.split(",") for x in elements[0].text.split()]
-        lat = [float(x[1]) for x in coordinates]
-        lon = [float(x[0]) for x in coordinates]
+        coordinates = self.scanManifest()["coordinates"]
+        lat = [float(x[0]) for x in coordinates]
+        lon = [float(x[1]) for x in coordinates]
         return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
-
-    # def getCorners(self):
-    #     lat = [x[1][1] for x in self.gcps]
-    #     lon = [x[1][0] for x in self.gcps]
-    #     return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
 
     def outname_base(self):
         fields = ("{:_<4}".format(self.sensor),
@@ -628,6 +621,30 @@ class SAFE(ID):
                   self.orbit,
                   self.start)
         return "_".join(fields)
+
+    def scanManifest(self):
+        """
+        read the manifest.safe file and extract relevant metadata
+        """
+        manifest = self.getFileObj(self.findfiles("manifest.safe")[0])
+        namespaces = getNamespaces(manifest)
+
+        tree = ET.fromstring(manifest.read())
+
+        manifest.close()
+
+        meta = dict()
+        meta["acquisition_mode"] = tree.find('.//s1sarl1:mode', namespaces).text
+        meta["acquisition_time"] = dict([(x, tree.find('.//safe:{}Time'.format(x), namespaces).text) for x in ["start", "stop"]])
+        meta["coordinates"] = [tuple([float(y) for y in x.split(",")]) for x in tree.find('.//gml:coordinates', namespaces).text.split()]
+        meta["orbit"] = tree.find('.//s1:pass', namespaces).text
+        meta["orbitNumbers_abs"] = dict([(x, int(tree.find('.//safe:orbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in ["start", "stop"]])
+        meta["orbitNumbers_rel"] = dict([(x, int(tree.find('.//safe:relativeOrbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in ["start", "stop"]])
+        meta["polarizations"] = [x.text for x in tree.findall('.//s1sarl1:transmitterReceiverPolarisation', namespaces)]
+        meta["productType"] = tree.find('.//s1sarl1:productType', namespaces).text
+        meta["sensor"] = tree.find('.//safe:familyName', namespaces).text.replace("ENTINEL-", "") + tree.find('.//safe:number', namespaces).text
+
+        return meta
 
     def unpack(self, directory):
         outdir = os.path.join(directory, os.path.basename(self.file))
