@@ -505,10 +505,11 @@ class SAFE(ID):
         if self.compression == "zip":
             with zf.ZipFile(self.scene, "r") as z:
                 kml = z.open([x for x in z.namelist() if re.search("map-overlay\.kml", x)][0], "r").read()
-        elif self.compression == "tar":
-            tar = tf.open(self.scene, "r")
-            kml = tar.extractfile().read()
-            tar.close()
+        # todo: this looks wrong; check whether it's correct
+        # elif self.compression == "tar":
+        #     tar = tf.open(self.scene, "r")
+        #     kml = tar.extractfile().read()
+        #     tar.close()
         else:
             with open(finder(self.scene, ["*map-overlay.kml"])[0], "r") as infile:
                 kml = infile.read()
@@ -539,30 +540,28 @@ class SAFE(ID):
 
 
 # todo: remove class and change dependencies to class CEOS (scripts: gammaGUI/reader_ers.py)
-class ERS(object):
-    def __init__(self, scene):
-
-        raise IOError
-
-        try:
-            lea = finder(scene, ["LEA_01.001"])[0]
-        except IndexError:
-            raise IOError("wrong input format; no leader file found")
-        with open(lea, "r") as infile:
-            text = infile.read()
-        # extract frame id
-        frame_index = re.search("FRAME=", text).end()
-        self.frame = text[frame_index:frame_index+4]
-        # extract calibration meta information
-        stripper = " \t\r\n\0"
-        self.sensor = text[(720+395):(720+411)].strip(stripper)
-        self.date = int(text[(720+67):(720+99)].strip(stripper)[:8])
-        self.proc_fac = text[(720+1045):(720+1061)].strip(stripper)
-        self.proc_sys = text[(720+1061):(720+1069)].strip(stripper)
-        self.proc_vrs = text[(720+1069):(720+1077)].strip(stripper)
-        text_subset = text[re.search("FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]", text).start()-13:]
-        self.cal = -10*math.log(float(text_subset[663:679].strip(stripper)), 10)
-        self.antenna_flag = text_subset[659:663].strip(stripper)
+# class ERS(object):
+#     def __init__(self, scene):
+#
+#         try:
+#             lea = finder(scene, ["LEA_01.001"])[0]
+#         except IndexError:
+#             raise IOError("wrong input format; no leader file found")
+#         with open(lea, "r") as infile:
+#             text = infile.read()
+#         # extract frame id
+#         frame_index = re.search("FRAME=", text).end()
+#         self.frame = text[frame_index:frame_index+4]
+#         # extract calibration meta information
+#         stripper = " \t\r\n\0"
+#         self.sensor = text[(720+395):(720+411)].strip(stripper)
+#         self.date = int(text[(720+67):(720+99)].strip(stripper)[:8])
+#         self.proc_fac = text[(720+1045):(720+1061)].strip(stripper)
+#         self.proc_sys = text[(720+1061):(720+1069)].strip(stripper)
+#         self.proc_vrs = text[(720+1069):(720+1077)].strip(stripper)
+#         text_subset = text[re.search("FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]", text).start()-13:]
+#         self.cal = -10*math.log(float(text_subset[663:679].strip(stripper)), 10)
+#         self.antenna_flag = text_subset[659:663].strip(stripper)
 
         # the following section is only relevant for PRI products and can be considered future work
         # select antenna gain correction lookup file from extracted meta information
