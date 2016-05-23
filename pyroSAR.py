@@ -201,6 +201,22 @@ class ID(object):
     def getCorners(self):
         return
 
+    def getFileObj(self, filename):
+        membername = filename.replace(self.scene, "").strip("/")
+
+        if os.path.isdir(self.scene):
+            obj = open(filename)
+        elif zf.is_zipfile(self.scene):
+            with zf.ZipFile(self.scene, "r") as zip:
+                obj = zip.open(membername)
+        elif tf.is_tarfile(self.scene):
+            tar = tf.open(self.scene)
+            obj = tar.extractfile(membername)
+            tar.close()
+        else:
+            raise IOError("input must be either a file name or a location in an zip or tar archive")
+        return obj
+
     def getGammaImages(self, directory=None):
         if directory is None:
             if hasattr(self, "gammadir"):
