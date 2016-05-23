@@ -1,7 +1,6 @@
 ##############################################################
 # Reading and Organizing system for SAR images
-# John Truckenbrodt 2016
-# last update 2016-03-18
+# John Truckenbrodt, Felix Cremer 2016
 ##############################################################
 """
 this script is intended to contain several SAR scene identifier classes to read basic metadata from the scene folders/files, convert to GAMMA format and do simple pre-processing
@@ -58,9 +57,9 @@ class ID(object):
             return None
 
     def export2sqlite(self):
-        '''Export the most important metadata in a sqlite database which is located in the same folder as the source
-        file.
-        '''
+        """
+        Export the most important metadata in a sqlite database which is located in the same folder as the source file.
+        """
         print 'Begin export'
         if self.compression is None:
             raise RuntimeError('Uncompressed data is not suitable for the metadata base')
@@ -70,7 +69,7 @@ class ID(object):
         conn.enable_load_extension(True)
         conn.execute("SELECT load_extension('libspatialite')")
         conn.execute("SELECT InitSpatialMetaData();")
-        cursor =conn.cursor()
+        cursor = conn.cursor()
         create_string = '''CREATE TABLE if not exists data (
                             title TEXT NOT NULL,
                             file TEXT NOT NULL,
@@ -95,7 +94,7 @@ class ID(object):
                         VALUES( ?,?,?,?,?,GeomFromText(?, 4326),?,?,?,?,?)
 
                         '''
-        # This should not be here but there should be an bbox.wkt() function to get the bbox as a wkt
+        # todo: This should not be here but there should be an bbox.wkt() function to get the bbox as a wkt
         ring = ogr.Geometry(ogr.wkbLinearRing)
         coordinates = self.getCorners()
         ring.AddPoint(coordinates["xmin"], coordinates["ymin"])
@@ -109,13 +108,12 @@ class ID(object):
 
         geom.FlattenTo2D()
 
-        #todo ersetzen durch ancillary.crsConvert(self.projection, 'ogr')
+        # todo ersetzen durch ancillary.crsConvert(self.projection, 'ogr')
         srs = osr.SpatialReference()
         srs.ImportFromProj4(self.projection)
 
-
         geom.AssignSpatialReference(srs)
-        sq_file = os.path.basename(self.file )
+        sq_file = os.path.basename(self.file)
         title = os.path.splitext(sq_file)[0]
         input = (title, sq_file, self.scene, self.sensor, crsConvert(self.projection, 'wkt'), geom.ExportToWkt(), self.orbit, 'polarisation', 'acquisition', self.start, self.stop)
         try:
@@ -125,7 +123,6 @@ class ID(object):
 
         conn.commit()
         conn.close()
-
 
     @abc.abstractmethod
     def convert2gamma(self, directory):
@@ -227,7 +224,7 @@ class ID(object):
                     for item in sorted(names):
                         if item != header:
                             member = archive.getmember(item)
-                            outname = os.path.join(directory, item.replace(header+"/", ""))
+                            outname = os.path.join(directory, item.replace(header + "/", ""))
                             if member.isdir():
                                 os.makedirs(outname)
                             else:
@@ -306,6 +303,7 @@ class ID(object):
 
 class ESA(ID):
     """Handle SAR data of the ESA format."""
+
     def __init__(self, scene, mode="full"):
 
         self.pattern = r"(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_))_[012B][CP])" \
@@ -341,31 +339,33 @@ class ESA(ID):
         outname = os.path.join(directory, self.outname_base)
         if len(self.getGammaImages(directory)) == 0:
             run(["par_ASAR", self.file, outname])
-            os.remove(outname+".hdr")
+            os.remove(outname + ".hdr")
             for item in finder(directory, [os.path.basename(outname)], regex=True):
                 ext = ".par" if item.endswith(".par") else ""
                 base = os.path.basename(item).strip(ext)
                 base = base.replace(".", "_")
                 base = base.replace("PRI", "mli")
                 base = base.replace("SLC", "slc")
-                newname = os.path.join(directory, base+ext)
+                newname = os.path.join(directory, base + ext)
                 os.rename(item, newname)
         else:
             raise IOError("scene already processed")
 
     def calibrate(self, replace=False):
         k_db = {"ASAR": 55., "ERS1": 58.24, "ERS2": 59.75}[self.sensor]
-        inc_ref = 90. if self. sensor == "ASAR" else 23.
-        candidates = [x for x in self.getGammaImages(self.gammadir) if not x.endswith("_cal") and not os.path.isfile(x+"_cal")]
+        inc_ref = 90. if self.sensor == "ASAR" else 23.
+        candidates = [x for x in self.getGammaImages(self.gammadir) if not x.endswith("_cal") and not os.path.isfile(x + "_cal")]
         for image in candidates:
-            run(["radcal_PRI", image, image+".par", image+"_cal", image+"_cal.par", k_db, inc_ref])
+            run(["radcal_PRI", image, image + ".par", image + "_cal", image + "_cal.par", k_db, inc_ref])
             if replace:
                 os.remove(image)
-                os.remove(image+".par")
+                os.remove(image + ".par")
 
     def unpack(self, directory):
         outdir = os.path.join(directory, os.path.splitext(os.path.basename(self.file))[0])
         self._unpack(outdir)
+
+
 # id = identify("/geonfs01_vol1/ve39vem/swos/ASA_APP_1PTDPA20040102_102928_000000162023_00051_09624_0240.N1")
 # id = identify("/geonfs01_vol1/ve39vem/swos/SAR_IMP_1PXASI19920419_110159_00000017C083_00323_03975_8482.E1")
 # id = identify("/geonfs01_vol1/ve39vem/swos/ER01_SAR_IMP_1P_19920419T110159_19920419T110216_IPA_03975_0000.ESA.tar.gz")
@@ -396,7 +396,6 @@ class ESA(ID):
 
 class RS2(ID):
     def __init__(self, scene):
-
         self.pattern = r'^(?:RS2|RSAT2)_(?:OK[0-9]+)_(?:PK[0-9]+)_(?:DK[0-9]+)_' \
                        r'(?P<beam>[0-9A-Z]+)_' \
                        r'(?P<date>[0-9]{8})_' \
@@ -408,7 +407,7 @@ class RS2(ID):
         self.scene = os.path.realpath(scene)
         self.gdalinfo(self.scene)
         self.start = self.ACQUISITION_START_TIME
-        self.incidence = (self.FAR_RANGE_INCIDENCE_ANGLE + self.NEAR_RANGE_INCIDENCE_ANGLE)/2
+        self.incidence = (self.FAR_RANGE_INCIDENCE_ANGLE + self.NEAR_RANGE_INCIDENCE_ANGLE) / 2
         self.spacing = [self.PIXEL_SPACING, self.LINE_SPACING]
         self.orbit = self.ORBIT_DIRECTION[0]
 
@@ -417,9 +416,10 @@ class RS2(ID):
         lon = [x[1][0] for x in self.gcps]
         return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
 
-# id = identify("/geonfs01_vol1/ve39vem/RS2/RS2_OK53107_PK504800_DK448361_FQ1_20140606_055403_HH_VV_HV_VH_SLC.zip")
+    # id = identify("/geonfs01_vol1/ve39vem/RS2/RS2_OK53107_PK504800_DK448361_FQ1_20140606_055403_HH_VV_HV_VH_SLC.zip")
 
-    #todo: add a calibrate function
+    # todo: add a calibrate function
+
 
 # todo: check self.file and self.scene assignment after unpacking
 class SAFE(ID):
@@ -522,6 +522,7 @@ class SAFE(ID):
         outdir = os.path.join(directory, os.path.basename(self.file))
         self._unpack(outdir)
 
+
 # id = identify("/geonfs01_vol1/ve39vem/S1/archive/S1A_EW_GRDM_1SDH_20150408T053103_20150408T053203_005388_006D8D_5FAC.zip")
 
 
@@ -536,16 +537,16 @@ class ERS(object):
             text = infile.read()
         # extract frame id
         frame_index = re.search("FRAME=", text).end()
-        self.frame = text[frame_index:frame_index+4]
+        self.frame = text[frame_index:frame_index + 4]
         # extract calibration meta information
         stripper = " \t\r\n\0"
-        self.sensor = text[(720+395):(720+411)].strip(stripper)
-        self.date = int(text[(720+67):(720+99)].strip(stripper)[:8])
-        self.proc_fac = text[(720+1045):(720+1061)].strip(stripper)
-        self.proc_sys = text[(720+1061):(720+1069)].strip(stripper)
-        self.proc_vrs = text[(720+1069):(720+1077)].strip(stripper)
-        text_subset = text[re.search("FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]", text).start()-13:]
-        self.cal = -10*math.log(float(text_subset[663:679].strip(stripper)), 10)
+        self.sensor = text[(720 + 395):(720 + 411)].strip(stripper)
+        self.date = int(text[(720 + 67):(720 + 99)].strip(stripper)[:8])
+        self.proc_fac = text[(720 + 1045):(720 + 1061)].strip(stripper)
+        self.proc_sys = text[(720 + 1061):(720 + 1069)].strip(stripper)
+        self.proc_vrs = text[(720 + 1069):(720 + 1077)].strip(stripper)
+        text_subset = text[re.search("FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]", text).start() - 13:]
+        self.cal = -10 * math.log(float(text_subset[663:679].strip(stripper)), 10)
         self.antenna_flag = text_subset[659:663].strip(stripper)
 
         # the following section is only relevant for PRI products and can be considered future work
