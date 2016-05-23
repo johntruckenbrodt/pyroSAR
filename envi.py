@@ -16,7 +16,7 @@ obj.write()
 """
 
 import re
-from gamma.util import ISPPar
+from gamma.auxil import ISPPar
 from ancillary import union
 
 
@@ -62,7 +62,8 @@ class HDRobject(object):
                 self.lines = getattr(par, union(["nlines", "azimuth_lines", "lines"], par.__dict__.keys())[0])
                 for arg in args:
                     setattr(self, arg, args[arg])
-                dtypes = {"FCOMPLEX": 6, "FLOAT": 4, "REAL*4": 4, "INTEGER*2": 2}
+                # todo: is this all really correct?
+                dtypes = {"FCOMPLEX": 6, "FLOAT": 4, "REAL*4": 4, "INTEGER*2": 2, "SHORT": 12}
                 self.data_type = dtypes[getattr(par, union(["data_format", "image_format"], par.__dict__.keys())[0])]
                 if self.data_type == 6:
                     self.complex_function = "Power"

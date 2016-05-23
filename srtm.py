@@ -24,10 +24,11 @@ import shutil
 import zipfile
 import subprocess as sp
 from urllib2 import urlopen
+from pyroSAR import ID
 
 import raster
 
-from gamma.util import ISPPar, UTM
+from gamma.auxil import ISPPar, UTM
 
 from ancillary import finder, run, dissolve, ReadPar
 
@@ -83,7 +84,7 @@ def main():
     print "...done"
 
 
-def fill(dem, dem_out, logpath, replace=False):
+def fill(dem, dem_out, logpath=None, replace=False):
 
     width = ISPPar(dem+".par").width
 
@@ -145,6 +146,7 @@ def transform(infile, outfile, posting=90):
 
     # transform dem
     run(["dem_trans", infile+".par", infile, outfile+".par", outfile, "-", "-", "-", 1])
+    hdr(outfile+".par")
 
 
 # create GAMMA parameter text files for DEM files
@@ -195,7 +197,7 @@ def swap(data, outname):
         raise IOError("only ENVI format supported")
     dtype_lookup = {"Int16": 2, "CInt16": 2, "Int32": 4, "Float32": 4, "CFloat32": 4, "Float64": 8}
     if dtype not in dtype_lookup:
-        raise IOError("data type " + dtype + " not supported")
+        raise IOError("data type {} not supported".format(dtype))
     sp.check_call(["swap_bytes", data, outname, str(dtype_lookup[dtype])], stdout=sp.PIPE)
     header = HDRobject(data+".hdr")
     header.byte_order = 1
@@ -225,17 +227,24 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
 # For north and east hemisphere the respective absolute latitude and longitude values are smaller than the lower left coordinate of the SAR image
 # west and south coordinates are negative and hence the nearest lower left integer absolute value is going to be larger
 def hgt(parfiles):
-    lat = []
-    lon = []
-    for parfile in parfiles:
-        out, err = sp.Popen(["SLC_corners", parfile], stdout=sp.PIPE).communicate()
-        for line in out.split("\n"):
-            # note: upper left and lower right, as computed by SLC_corners, define the bounding box coordinates and not those of the actual SAR image
-            if line.startswith("upper left") or line.startswith("lower right"):
-                items = filter(None, re.split("[\t\s]", line))
-                # compute lower right coordinates of intersecting hgt tile
-                lat.append(int(float(items[-2])//1))
-                lon.append(int(float(items[-1])//1))
+
+    if bool([type(x) in ID.__subclasses__() for x in parfiles]):
+        corners = [x.getCorners() for x in parfiles]
+        lat = list(set([int(float(y[x])//1) for x in ["ymin", "ymax"] for y in corners]))
+        lon = list(set([int(float(y[x])//1) for x in ["xmin", "xmax"] for y in corners]))
+
+    else:
+        lat = []
+        lon = []
+        for parfile in parfiles:
+            out, err = sp.Popen(["SLC_corners", parfile], stdout=sp.PIPE).communicate()
+            for line in out.split("\n"):
+                # note: upper left and lower right, as computed by SLC_corners, define the bounding box coordinates and not those of the actual SAR image
+                if line.startswith("upper left") or line.startswith("lower right"):
+                    items = filter(None, re.split("[\t\s]", line))
+                    # compute lower right coordinates of intersecting hgt tile
+                    lat.append(int(float(items[-2])//1))
+                    lon.append(int(float(items[-1])//1))
 
     # add missing lat/lon values (and add an extra buffer of one degree)
     # lat = range(min(lat)-1, max(lat)+2)
@@ -254,6 +263,35 @@ def hgt(parfiles):
     # concatenate all formatted latitudes and longitudes with each other as final product
     return [x+y+".hgt" for x in lat for y in lon]
 
+
+def makeSRTM(scenes, srtmdir, outname):
+
+    tempdir = outname+"___temp"
+    os.makedirs(tempdir)
+
+    hgt_options = hgt(scenes)
+
+    hgt_files = finder(srtmdir, hgt_options)
+
+    nodatas = [str(int(raster.Raster(x).nodata)) for x in hgt_files]
+
+    srtm_vrt = os.path.join(tempdir, "srtm.vrt")
+    srtm_mosaic = srtm_vrt.replace(".vrt", "")
+
+    run(["gdalbuildvrt", "-overwrite", "-srcnodata", ' '.join(nodatas), srtm_vrt, hgt_files])
+
+    run(["gdal_translate", "-of", "ENVI", "-a_nodata", -32768, srtm_vrt, srtm_mosaic])
+
+    swap(srtm_mosaic, srtm_mosaic+"_swap")
+
+    srtm_mosaic += "_swap"
+
+    dempar(srtm_mosaic)
+
+    fill(srtm_mosaic, outname, replace=True)
+    hdr(outname+".par")
+
+    shutil.rmtree(tempdir)
 
 # automatic downloading and unpacking of srtm tiles
 # base directory must contain SLC files in GAMMA format including their parameter files for reading coordinates

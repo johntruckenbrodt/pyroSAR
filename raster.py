@@ -484,19 +484,6 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     else:
         arg_ext = []
 
-    # create VRT files for mosaicing
-    vrtlist = []
-    for i in range(len(srcfiles)):
-        if isinstance(srcfiles[i], list):
-            vrt = os.path.join(os.path.dirname(dstfile), os.path.splitext(os.path.basename(srcfiles[i][0]))[0]+".vrt")
-            run(["gdalbuildvrt", "-overwrite", arg_ext, vrt, srcfiles[i]])
-            srcfiles[i] = vrt
-            vrtlist.append(vrt)
-
-    # if no specific layernames are defined and sortfun is not set to None, sort files by custom function or, by default, the basename of the raster/VRT file
-    if layernames is None and sortfun is not None:
-        srcfiles = sorted(srcfiles, key=sortfun if sortfun else os.path.basename)
-
     # define warping arguments
     arg_targetres = dissolve(["-tr", targetres]) if targetres is not None else []
     arg_srcnodata = ["-srcnodata", srcnodata] if srcnodata is not None else []
@@ -504,9 +491,23 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     arg_resampling = ["-r", resampling] if resampling is not None else []
     arg_format = ["-of", "ENVI"]
 
+    # create VRT files for mosaicing
+    # todo: ask Max about nodata values
+    vrtlist = []
+    for i in range(len(srcfiles)):
+        if isinstance(srcfiles[i], list):
+            vrt = os.path.join(os.path.dirname(dstfile), os.path.splitext(os.path.basename(srcfiles[i][0]))[0]+".vrt")
+            run(["gdalbuildvrt", "-overwrite", arg_srcnodata, arg_ext, vrt, srcfiles[i]])
+            srcfiles[i] = vrt
+            vrtlist.append(vrt)
+
+    # if no specific layernames are defined and sortfun is not set to None, sort files by custom function or, by default, the basename of the raster/VRT file
+    if layernames is None and sortfun is not None:
+        srcfiles = sorted(srcfiles, key=sortfun if sortfun else os.path.basename)
+
     # create VRT for stacking
     vrt = os.path.splitext(dstfile)[0]+".vrt"
-    run(["gdalbuildvrt", "-q", "-overwrite", "-separate", arg_ext, vrt, srcfiles])
+    run(["gdalbuildvrt", "-q", "-overwrite", "-separate", arg_srcnodata, arg_ext, vrt, srcfiles])
     vrtlist.append(vrt)
 
     # warp files

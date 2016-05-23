@@ -11,22 +11,23 @@ import os
 import re
 import abc
 import math
-from osgeo import gdal
+from osgeo import gdal, ogr, osr
 from osgeo.gdalconst import GA_ReadOnly
 import spatial
 import zipfile as zf
 import tarfile as tf
-from ancillary import finder, parse_literal, run
+from ancillary import finder, parse_literal, run, crsConvert
 from time import strptime, strftime
 import xml.etree.ElementTree as ElementTree
+import sqlite3
 
 
-def identify(scene):
+def identify(scene, mode="full"):
     """Return a metadata handler of the given scene."""
     for handler in ID.__subclasses__():
         try:
-            return handler(scene)
-        except:
+            return handler(scene, mode)
+        except IOError:
             pass
     raise IOError("data format not supported")
 
@@ -56,6 +57,89 @@ class ID(object):
         else:
             return None
 
+    def export2sqlite(self):
+        '''Export the most important metadata in a sqlite database which is located in the same folder as the source
+        file.
+        '''
+        print 'Begin export'
+        if self.compression is None:
+            raise RuntimeError('Uncompressed data is not suitable for the metadata base')
+
+        database = os.path.join(os.path.dirname(self.scene), 'data.db')
+        conn = sqlite3.connect(database)
+        conn.enable_load_extension(True)
+        conn.execute("SELECT load_extension('libspatialite')")
+        conn.execute("SELECT InitSpatialMetaData();")
+        cursor =conn.cursor()
+        create_string = '''CREATE TABLE if not exists data (
+                            title TEXT NOT NULL,
+                            file TEXT NOT NULL,
+                            scene TEXT,
+                            sensor TEXT,
+                            projection TEXT,
+                            orbit TEXT,
+                            polarisation TEXT,
+                            acquisition_mode TEXT,
+                            start TEXT,
+                            stop TEXT,
+                            CONSTRAINT pk_data
+                            PRIMARY KEY(file, scene)
+                            )'''
+
+        cursor.execute(create_string)
+        cursor.execute("SELECT AddGeometryColumn('data','bbox' , 4326, 'POLYGON', 'XY', 0)")
+        conn.commit()
+        insert_string = '''
+                        INSERT INTO data
+                        (title, file, scene, sensor, projection, bbox, orbit, polarisation, acquisition_mode, start, stop)
+                        VALUES( ?,?,?,?,?,GeomFromText(?, 4326),?,?,?,?,?)
+
+                        '''
+        # This should not be here but there should be an bbox.wkt() function to get the bbox as a wkt
+        ring = ogr.Geometry(ogr.wkbLinearRing)
+        coordinates = self.getCorners()
+        ring.AddPoint(coordinates["xmin"], coordinates["ymin"])
+        ring.AddPoint(coordinates["xmin"], coordinates["ymax"])
+        ring.AddPoint(coordinates["xmax"], coordinates["ymax"])
+        ring.AddPoint(coordinates["xmax"], coordinates["ymin"])
+        ring.CloseRings()
+
+        geom = ogr.Geometry(ogr.wkbPolygon)
+        geom.AddGeometry(ring)
+
+        geom.FlattenTo2D()
+
+        #todo ersetzen durch ancillary.crsConvert(self.projection, 'ogr')
+        srs = osr.SpatialReference()
+        srs.ImportFromProj4(self.projection)
+
+
+        geom.AssignSpatialReference(srs)
+        sq_file = os.path.basename(self.file )
+        title = os.path.splitext(sq_file)[0]
+        input = (title, sq_file, self.scene, self.sensor, crsConvert(self.projection, 'wkt'), geom.ExportToWkt(), self.orbit, 'polarisation', 'acquisition', self.start, self.stop)
+        try:
+            cursor.execute(insert_string, input)
+        except sqlite3.IntegrityError as e:
+            print 'SQL error:', e
+
+        conn.commit()
+        conn.close()
+
+
+    @abc.abstractmethod
+    def convert2gamma(self, directory):
+        return
+
+    def examine(self):
+        files = self.findfiles(self.pattern)
+        if len(files) == 1:
+            self.file = files[0]
+        elif len(files) == 0:
+            raise IOError("folder does not match {} scene naming convention".format(type(self).__name__))
+        else:
+            raise IOError("file ambiguity detected")
+
     def findfiles(self, pattern):
         if os.path.isdir(self.scene):
             files = [self.scene] if re.search(pattern, os.path.basename(self.scene)) else finder(self.scene, [pattern], regex=True)
@@ -70,39 +154,43 @@ class ID(object):
             files = [self.scene] if re.search(pattern, self.scene) else []
         return files
 
-    @abc.abstractmethod
-    def convert2gamma(self, directory):
-        return
-
     def gdalinfo(self, scene):
+        """
+
+        Args:
+            scene: an archive containing a SAR scene
+
+        sets object attributes
+
+        """
         self.scene = os.path.realpath(scene)
-        files = self.findfiles("(?:\.[NE][12]$|DAT_01\.001$|product\.xml$)")
+        files = self.findfiles("(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)")
 
         if len(files) == 1:
             prefix = {"zip": "/vsizip/", "tar": "/vsitar/", None: ""}[self.compression]
-            self.file = files[0]
+            header = files[0]
         elif len(files) > 1:
             raise IOError("file ambiguity detected")
         else:
             raise IOError("file type not supported")
 
         ext_lookup = {".N1": "ASAR", ".E1": "ERS1", ".E2": "ERS2"}
-        extension = os.path.splitext(self.file)[1]
+        extension = os.path.splitext(header)[1]
         if extension in ext_lookup:
             self.sensor = ext_lookup[extension]
 
-        img = gdal.Open(prefix+self.file, GA_ReadOnly)
+        img = gdal.Open(prefix + header, GA_ReadOnly)
         meta = img.GetMetadata()
         self.cols, self.rows, self.bands = img.RasterXSize, img.RasterYSize, img.RasterCount
         self.projection = img.GetGCPProjection()
-        self.gcps = [[[x.GCPPixel, x.GCPLine], [x.GCPX, x.GCPY, x.GCPZ]] for x in img.GetGCPs()]
+        self.gcps = [((x.GCPPixel, x.GCPLine), (x.GCPX, x.GCPY, x.GCPZ)) for x in img.GetGCPs()]
         img = None
 
         for item in meta:
             entry = [item, parse_literal(meta[item].strip())]
 
             # todo: check module time for more general approaches
-            for timeformat in ["%d-%b-%Y %H:%M:%S.%f", "%Y%m%d%H%M%S%f", "%Y-%m-%dT%H:%M:%S.%fZ"]:
+            for timeformat in ["%d-%b-%Y %H:%M:%S.%f", "%Y%m%d%H%M%S%f", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S.%fZ"]:
                 try:
                     entry[1] = strftime("%Y%m%dT%H%M%S", strptime(entry[1], timeformat))
                 except (TypeError, ValueError):
@@ -134,8 +222,7 @@ class ID(object):
             archive = tf.open(self.scene, "r")
             names = archive.getnames()
             header = os.path.commonprefix(names)
-
-            if header in names:
+            if len(header) > 0:
                 if archive.getmember(header).isdir():
                     for item in sorted(names):
                         if item != header:
@@ -147,67 +234,71 @@ class ID(object):
                                 with open(outname, "w") as outfile:
                                     outfile.write(member.tobuf())
                     archive.close()
-                else:
-                    archive.extractall(directory)
-                    archive.close()
+                    return
+            archive.extractall(directory)
+            archive.close()
         elif zf.is_zipfile(self.scene):
             archive = zf.ZipFile(self.scene, "r")
             names = archive.namelist()
             header = os.path.commonprefix(names)
-            if header.endswith("/"):
-                for item in sorted(names):
-                    if item != header:
-                        outname = os.path.join(directory, item.replace(header, ""))
-                        if item.endswith("/"):
-                            os.makedirs(outname)
-                        else:
-                            with open(outname, "w") as outfile:
-                                outfile.write(archive.read(item))
-                archive.close()
-            else:
-                archive.extractall(directory)
-                archive.close()
+            if len(header) > 0:
+                if header.endswith("/"):
+                    for item in sorted(names):
+                        if item != header:
+                            outname = os.path.join(directory, item.replace(header, ""))
+                            if item.endswith("/"):
+                                os.makedirs(outname)
+                            else:
+                                with open(outname, "w") as outfile:
+                                    outfile.write(archive.read(item))
+                    archive.close()
+                    return
+            archive.extractall(directory)
+            archive.close()
         self.scene = directory
         self.file = os.path.join(self.scene, os.path.basename(self.file))
 
 
-class CEOS(ID):
-    # todo: What sensors other than ERS1, ERS2 and Envisat ASAR should be included?
-    # todo: add a pattern to check if the scene could be handled by CEOS
-    def __init__(self, scene):
-        self.gdalinfo(scene)
-        self.sensor = self.CEOS_MISSION_ID
-        self.start = self.CEOS_ACQUISITION_TIME
-        self.incidence = self.CEOS_INC_ANGLE
-        self.spacing = [self.CEOS_PIXEL_SPACING_METERS, self.CEOS_LINE_SPACING_METERS]
-
-        # todo: check whether this is correct:
-        self.orbit = "D" if self.CEOS_PLATFORM_HEADING > 180 else "A"
-        self.k_db = -10*math.log(self.CEOS_CALIBRATION_CONSTANT_K, 10)
-        self.sc_db = {"ERS1": 59.61, "ERS2": 60}[self.sensor]
-        self.outname_base = "{0}______{1}".format(*[self.sensor, self.start])
-
-    #todo: should define a calibrate function
-    def getCorners(self):
-        lat = [x[1][1] for x in self.gcps]
-        lon = [x[1][0] for x in self.gcps]
-        return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
-
-    def convert2gamma(self, directory):
-        if self.sensor in ["ERS1", "ERS2"]:
-            outname = os.path.join(directory, self.outname_base+"_VV_slc")
-            lea = os.path.join(self.scene, "LEA_01.001")
-            title = os.path.basename(self.findfiles("\.PS$")[0]).replace(".PS", "")
-            run(["par_ESA_ERS", lea, outname+".par", self.file, outname], inlist=[title])
-        else:
-            raise NotImplementedError("sensor {} not implemented yet".format(self.sensor))
-
-    def unpack(self, directory):
-        if self.sensor in ["ERS1", "ERS2"]:
-            outdir = os.path.join(directory, re.sub("\.[EN][12]\.PS$", "", os.path.basename(self.findfiles("\.PS$")[0])))
-            self._unpack(outdir)
-        else:
-            raise NotImplementedError("sensor {} not implemented yet".format(self.sensor))
+# class CEOS(ID):
+#     # todo: What sensors other than ERS1, ERS2 and Envisat ASAR should be included?
+#     # todo: add a pattern to check if the scene could be handled by CEOS
+#     def __init__(self, scene):
+#
+#         raise IOError
+#
+#         self.gdalinfo(scene)
+#         self.sensor = self.CEOS_MISSION_ID
+#         self.start = self.CEOS_ACQUISITION_TIME
+#         self.incidence = self.CEOS_INC_ANGLE
+#         self.spacing = (self.CEOS_PIXEL_SPACING_METERS, self.CEOS_LINE_SPACING_METERS)
+#
+#         # todo: check whether this is correct:
+#         self.orbit = "D" if self.CEOS_PLATFORM_HEADING > 180 else "A"
+#         self.k_db = -10*math.log(self.CEOS_CALIBRATION_CONSTANT_K, 10)
+#         self.sc_db = {"ERS1": 59.61, "ERS2": 60}[self.sensor]
+#         self.outname_base = "{0}______{1}".format(*[self.sensor, self.start])
+#
+#     # todo: change coordinate extraction to the exact boundaries of the image (not outer pixel center points)
+#     def getCorners(self):
+#         lat = [x[1][1] for x in self.gcps]
+#         lon = [x[1][0] for x in self.gcps]
+#         return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
+#
+#     def convert2gamma(self, directory):
+#         if self.sensor in ["ERS1", "ERS2"]:
+#             outname = os.path.join(directory, self.outname_base+"_VV_slc")
+#             lea = os.path.join(self.scene, "LEA_01.001")
+#             title = os.path.basename(self.findfiles("\.PS$")[0]).replace(".PS", "")
+#             run(["par_ESA_ERS", lea, outname+".par", self.file, outname], inlist=[title])
+#         else:
+#             raise NotImplementedError("sensor {} not implemented yet".format(self.sensor))
+#
+#     def unpack(self, directory):
+#         if self.sensor in ["ERS1", "ERS2"]:
+#             outdir = os.path.join(directory, re.sub("\.[EN][12]\.PS$", "", os.path.basename(self.findfiles("\.PS$")[0])))
+#             self._unpack(outdir)
+#         else:
+#             raise NotImplementedError("sensor {} not implemented yet".format(self.sensor))
 
 # id = identify("/geonfs01_vol1/ve39vem/ERS/ERS1_0132_2529_20dec95")
 # id = identify("/geonfs01_vol1/ve39vem/ERS/ERS1_0132_2529_20dec95.zip")
@@ -215,7 +306,7 @@ class CEOS(ID):
 
 class ESA(ID):
     """Handle SAR data of the ESA format."""
-    def __init__(self, scene):
+    def __init__(self, scene, mode="full"):
 
         self.pattern = r"(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_))_[012B][CP])" \
                        r"(?P<processing_stage_flag>[A-Z])" \
@@ -238,7 +329,7 @@ class ESA(ID):
         self.stop = self.MPH_SENSING_STOP
         self.spacing = [self.SPH_RANGE_SPACING, self.SPH_AZIMUTH_SPACING]
         self.looks = [self.SPH_RANGE_LOOKS, self.SPH_AZIMUTH_LOOKS]
-        self.outname_base = "{0}_____{1}".format(*[self.sensor, self.start])
+        self.outname_base = "{0}______{1}".format(*[self.sensor, self.start])
 
     def getCorners(self):
         lon = [getattr(self, x) for x in self.__dict__.keys() if re.search("LONG", x)]
@@ -273,7 +364,7 @@ class ESA(ID):
                 os.remove(image+".par")
 
     def unpack(self, directory):
-        outdir = os.path.join(directory, os.path.basename(self.file).strip("\.zip|\.tar(?:\.gz|)"))
+        outdir = os.path.join(directory, os.path.splitext(os.path.basename(self.file))[0])
         self._unpack(outdir)
 # id = identify("/geonfs01_vol1/ve39vem/swos/ASA_APP_1PTDPA20040102_102928_000000162023_00051_09624_0240.N1")
 # id = identify("/geonfs01_vol1/ve39vem/swos/SAR_IMP_1PXASI19920419_110159_00000017C083_00323_03975_8482.E1")
@@ -375,6 +466,7 @@ class SAFE(ID):
             setattr(self, key, match.group(key))
 
         self.orbit = "D" if float(re.findall("[0-9]{6}", self.start)[1]) < 120000 else "A"
+        # todo Shouldn't the projection be a osr.SpatialReference Object?
         self.projection = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 
     def calibrate(self, replace=False):
@@ -388,9 +480,9 @@ class SAFE(ID):
         if self.category == "A":
             raise IOError("Sentinel-1 annotation-only products are not supported")
 
-        for xml_ann in finder(os.path.join(self.scene, "annotation"), [self.pattern_ds], regex=True):
+        for xml_ann in finder(os.path.join(self.scene, "annotation"), [self.pattern_ds]):
             base = os.path.basename(xml_ann)
-            match = re.compile(self.pattern_ds).match(base)
+            match = re.compile(self.pattern_ds).match(os.path.basename(base))
 
             tiff = os.path.join(self.scene, "measurement", base.replace(".xml", ".tiff"))
             xml_cal = os.path.join(self.scene, "annotation", "calibration", "calibration-" + base)
@@ -399,18 +491,14 @@ class SAFE(ID):
             # xml_noise = os.path.join(self.scene, "annotation", "calibration", "noise-" + base)
             xml_noise = "-"
             fields = (self.sensor, match.group("swath"), self.start, match.group("pol").upper())
-            if match.group("product") == "slc":
+            if match.group("prod") == "SLC":
                 name = os.path.join(directory, "{0}_{1}__{2}_{3}_slc".format(*fields))
-                try:
-                    run(["par_S1_SLC", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name, name + ".tops_par"])
-                except ImportWarning:
-                    pass
+                # print ["par_S1_SLC", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name, name + ".tops_par"]
+                run(["par_S1_SLC", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name, name + ".tops_par"])
             else:
                 name = os.path.join(directory, "{0}______{2}_{3}_mli".format(*fields))
-                try:
-                    run(["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name])
-                except ImportWarning:
-                    pass
+                # print ["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name]
+                run(["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name])
 
     def getCorners(self):
         if self.compression == "zip":

@@ -11,18 +11,13 @@ core parameters are iterated over a set of values in order to find the one best 
 The approach of the single routines is likely to still have drawbacks and might fail in certain situations. Testing and suggestions on improvements are very welcome.
 """
 import os
-import re
 import math
+from envi import hdr
 import subprocess as sp
-from ancillary import run, Stack, parse_literal, haversine
+from auxil import ISPPar
+from ancillary import run, Stack, haversine, union
 
 
-# iterated cross-correlation offset and polynomial estimation
-# this function is suited for SLCs (i.e. coregistration) as well as MLIs (i.e. geocoding); the procedure is selected based on the data type of the input data (complex for SLCs but not MLIs)
-# starting from a user-defined size, the square offset search window is reduced until a sufficient number of offsets is found or a minimum size is reached
-# the number of image kernels for offset search is computed based on the defined percentage of kernel overlap for range and azimuth respectively
-# note: the implemented procedure is likely to be overly accurate for many applications; the procedure was chosen based on experience in extremely flat terrain where geocoding is
-# problematic due to a lack of image contrast along topographic features and has proven to succeed even in those situations
 # INPUT FILES:
 # -master: master image
 # -slave: image coregistered to the master
@@ -43,6 +38,34 @@ from ancillary import run, Stack, parse_literal, haversine
 # -thres: offset estimation SNR quality threshold
 # the default value "-" will result in no output file written
 def correlate(master, slave, off, offs, snr, offsets="-", coffs="-", coffsets="-", path_log=None, maxwin=2048, minwin=128, overlap=.3, poly=4, ovs=2, thres=7.0):
+    """
+    iterated cross-correlation offset and polynomial estimation
+    this function is suited for SLCs (i.e. coregistration) as well as MLIs (i.e. geocoding); the procedure is selected based on the data type of the input data (complex for SLCs but not MLIs)
+    starting from a user-defined size, the square offset search window is reduced until a sufficient number of offsets is found or a minimum size is reached
+    the number of image kernels for offset search is computed based on the defined percentage of kernel overlap for range and azimuth respectively
+    note: the implemented procedure is likely to be overly accurate for many applications; the procedure was chosen based on experience in extremely flat terrain where geocoding is
+    problematic due to a lack of image contrast along topographic features and has proven to succeed even in those situations
+    Args:
+        master: master image
+        slave: image coregistered to the master
+        off: diffpar parameter file
+        offs: offset estimates (fcomplex)
+        snr: offset estimation SNR (float)
+        offsets: range and azimuth offsets and SNR data (text format)
+        coffs: culled range and azimuth offset estimates (fcomplex)
+        coffsets: culled offset estimates and SNR values (text format)
+        path_log: directory for created logfiles (e.g. offset_pwr will create file path_log/offset_pwr.log)
+        maxwin: maximum (initial) window size for offset search (will be iteratively divided by 2 until the minwin is reached)
+        minwin: minimum (final) window size
+        overlap: percentage overlap of the search windows (the number of search windows is computed based on their windows size and the overlap)
+        poly: the polynomial order for range and azimuth offset fitting
+        ovs: image oversampling factor for offset estimation
+        thres: offset estimation SNR quality threshold
+
+    Returns:
+
+    """
+
     path_out = os.path.dirname(off)
     par = ISPPar(master+".par")
 
@@ -92,13 +115,174 @@ def correlate(master, slave, off, offs, snr, offsets="-", coffs="-", coffsets="-
         raise RuntimeError("cross-correlation failed; consider verifying scene overlap or choice of polarization")
 
 
-# wrapper for iterated initial offset estimation between two SLCs or MLIs
-# from a starting search window size of 128x128, initial offsets are search for; if this fails, the window size is increased up to a maximum size of 1024x1024
-# once a sufficient number of offsets is found, the window size is again decreased down to 128 and offset search repeated to refine the results on finer levels
-# in case too few/no offsets were found on any window size, the routine will throw an error
-# additionally, for each window size, the offset search is performed on three different levels of multilooking (factor 3, 2, 1) as this is reported to refine the results;
-# if the routine fails on any level of multilooking, the routine will proceed with the next window size
+def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoback=2, func_interp=0):
+    """
+    scaling can be either 'linear', 'db' or a list of both (i.e. ['linear', 'db'])
+
+    intermediate output files (named <master_MLI>_<suffix>):
+    dem: dem subsetted to the extent of the SAR image
+    lut: rough geocoding lookup table
+    lut_fine: fine geocoding lookup table
+    sim_sar: simulated SAR backscatter image in DEM geometry
+    u: zenith angle of surface normal vector n (angle between z and n)
+    v: orientation angle of n (between x and projection of n in xy plane)
+    inc: local incidence angle (between surface normal and look vector)
+    psi: projection angle (between surface normal and image plane normal)
+    pix: pixel area normalization factor
+    ls_map: layover and shadow map (in map projection)
+    off.par: ISP offset/interferogram parameter file
+    offs: offset estimates (fcomplex)
+    coffs: culled range and azimuth offset estimates (fcomplex)
+    coffsets: culled offset estimates and SNR values (text format)
+    snr: offset estimation SNR (float)
+    """
+
+    scaling = [scaling] if isinstance(scaling, str) else scaling if isinstance(scaling, list) else []
+    scaling = union(scaling, ["db", "linear"])
+    if len(scaling) == 0:
+        raise IOError("wrong input type for parameter scaling")
+
+    scene.unpack(tempdir)
+
+    scene.convert2gamma(scene.scene)
+
+    scene.calibrate()
+
+    images = [x for x in scene.getGammaImages(scene.scene) if x.endswith("_grd")]
+
+    rlks = int(targetres//scene.spacing[0])
+    azlks = int(targetres//scene.spacing[1])
+    rlks = 1 if rlks == 0 else rlks
+    azlks = 1 if azlks == 0 else azlks
+
+    for image in images:
+        run(["multi_look_MLI", image, image+".par", image+"_mli", image+"_mli.par", rlks, azlks])
+
+    images = [x+"_mli" for x in images]
+
+    master = images[0]
+
+    dem_seg = master+"_dem"
+    lut = master+"_lut"
+    lut_fine = master+"_lut_fine"
+    sim_sar = master+"_sim_sar"
+    u = master+"_u"
+    v = master+"_v"
+    inc = master+"_inc"
+    psi = master+"_psi"
+    pix = master+"_pix"
+    ls_map = master+"_ls_map"
+    pixel_area = master+"_pixel_area"
+    pixel_area2 = master+"_pixel_area2"
+    off_par = master+"_off.par"
+    offs = master+"_offs"
+    coffs = master+"_coffs"
+    coffsets = master+"_coffsets"
+    snr = master+"_snr"
+    ellipse_pixel_area = master+"_ellipse_pixel_area"
+    ratio_sigma0 = master+"_ratio_sigma0"
+
+    ovs_lat, ovs_lon = ovs(dem+".par", targetres)
+
+    path_log = os.path.join(scene.scene, "logfiles")
+    if not os.path.isdir(path_log):
+        os.makedirs(path_log)
+
+    master_par = ISPPar(master+".par")
+
+    if master_par.image_geometry == "GROUND_RANGE":
+        run(["gc_map_grd", master+".par", dem+".par", dem, dem_seg+".par", dem_seg, lut, ovs_lat, ovs_lon, sim_sar, u, v, inc, psi, pix, ls_map, 8, func_interp], logpath=path_log)
+    else:
+        run(["gc_map", master+".par", "-", dem+".par", dem, dem_seg+".par", dem_seg, lut, ovs_lat, ovs_lon, sim_sar, u, v, inc, psi, pix, ls_map, 8, func_interp], logpath=path_log)
+
+    for item in [dem_seg, sim_sar, u, v, psi, pix, inc]:
+        hdr(dem_seg+".par", item+".hdr")
+
+    run(["pixel_area", master+".par", dem_seg+".par", dem_seg, lut, ls_map, inc, pixel_area], logpath=path_log)
+
+    correlate(master, pixel_area, off_par, offs, snr, coffs=coffs, coffsets=coffsets, offsets=offs+".txt", path_log=path_log, maxwin=256)
+
+    try:
+        sim_width = ISPPar(dem_seg+".par").width
+        run(["gc_map_fine", lut, sim_width, off_par, lut_fine, 0], logpath=path_log)
+    except sp.CalledProcessError:
+        print "...failed"
+        return
+
+    ######################################################################
+    # approach 1 #########################################################
+    ######################################################################
+    for image in images:
+        run(["geocode_back", image, master_par.range_samples, lut_fine, image+"_geo", sim_width, 0, func_geoback], logpath=path_log)
+        run(["product", image+"_geo", pix, image+"_geo_pix", sim_width, 1, 1, 0], logpath=path_log)
+        run(["lin_comb", 1, image+"_geo_pix", 0, math.cos(math.radians(master_par.incidence_angle)), image+"_geo_pix_flat", sim_width], logpath=path_log)
+        run(["sigma2gamma", image+"_geo_pix_flat", inc, image+"_geo_norm", sim_width], logpath=path_log)
+        hdr(dem_seg+".par", image+"_geo_norm.hdr")
+
+        for scale in scaling:
+            if scale == "db":
+                run(["linear_to_dB", image+"_geo_norm", image+"_geo_norm_db", sim_width, 0, -99], logpath=path_log)
+                hdr(dem_seg+".par", image+"_geo_norm_db.hdr")
+            suffix = {"linear": "", "db": "_db"}[scale]
+            infile = image+"_geo_norm{}".format(suffix)
+            outfile = os.path.join(outdir, os.path.basename(image)+"_geo_norm{}.tif".format(suffix))
+            try:
+                run(["data2geotiff", dem_seg+".par", infile, 2, outfile], logpath=path_log)
+            except ImportWarning:
+                pass
+    ######################################################################
+    # approach 2 #########################################################
+    ######################################################################
+    # try:
+    #     run(["pixel_area", master+".par", dem_seg+".par", dem_seg, lut_fine, ls_map, inc, pixel_area2], logpath=path_log)
+    # except sp.CalledProcessError:
+    #     print "...failed"
+    #     return
+    # run(["radcal_MLI", master, master+".par", "-", master+"_cal", "-", 0, 0, 1, 0.0, "-", ellipse_pixel_area], logpath=path_log)
+    # run(["ratio", ellipse_pixel_area, pixel_area2, ratio_sigma0, master_par.range_samples, 1, 1], logpath=path_log)
+    #
+    # for image in images:
+    #     run(["product", image, ratio_sigma0, image+"_pixcal", master_par.range_samples, 1, 1], logpath=path_log)
+    #     run(["geocode_back", image+"_pixcal", master_par.range_samples, lut_fine, image+"_geo", sim_width, 0, func_geoback], logpath=path_log)
+    #     run(["lin_comb", 1, image+"_geo", 0, math.cos(math.radians(master_par.incidence_angle)), image+"_geo_flat", sim_width], logpath=path_log)
+    #     run(["sigma2gamma", image+"_geo_flat", inc, image+"_geo_norm", sim_width], logpath=path_log)
+    #     hdr(dem_seg+".par", image+"_geo_norm.hdr")
+    #
+    #     for scale in scaling:
+    #         suffix = {"linear": "", "db": "_db"}[scale]
+    #
+    #         if scale == "db":
+    #             run(["linear_to_dB", image+"_geo_norm", image+"_geo_norm_db", sim_width, 0, -99], logpath=path_log)
+    #             hdr(dem_seg+".par", image+"_geo_norm_db.hdr")
+    #         infile = image+"_geo_norm{}".format(suffix)
+    #         outfile = os.path.join(outdir, os.path.basename(image)+"_geo_norm{}.tif".format(suffix))
+    #         try:
+    #             run(["data2geotiff", dem_seg+".par", infile, 2, outfile], logpath=path_log)
+    #         except ImportWarning:
+    #             pass
+    ######################################################################
+    ######################################################################
+    ######################################################################
+
+
 def init_offset(master, slave, off, path_log, thres=7.0):
+    """
+    wrapper for iterated initial offset estimation between two SLCs or MLIs
+    from a starting search window size of 128x128, initial offsets are search for; if this fails, the window size is increased up to a maximum size of 1024x1024
+    once a sufficient number of offsets is found, the window size is again decreased down to 128 and offset search repeated to refine the results on finer levels
+    in case too few/no offsets were found on any window size, the routine will throw an error
+    additionally, for each window size, the offset search is performed on three different levels of multilooking (factor 3, 2, 1) as this is reported to refine the results;
+    if the routine fails on any level of multilooking, the routine will proceed with the next window size
+    Args:
+        master:
+        slave:
+        off:
+        path_log:
+        thres:
+
+    Returns:
+
+    """
     path_out = os.path.dirname(off)
 
     if not os.path.isfile(off):
@@ -142,66 +326,16 @@ def init_offset(master, slave, off, path_log, thres=7.0):
         raise RuntimeError("no initial offset found; consider verifying scene overlap or choice of polarization")
 
 
-class ISPPar(object):
-    """Reader for ISP parameter files of the GAMMA software package.
-
-    This class allows to read all information from filed in GAMMA's parameter file format. Each key-value pair is parsed
-    and added as attributes. For instance if the parameter file contains the pair 'sensor:    TSX-1' a attribute named
-    'sensor' with the value 'TSX-1' will be available.
-
-    The values are converted to native Python types, while unit identifiers like 'dB' or 'Hz' are removed. Please see
-    the GAMMA reference manual for further information on the actual file format.
-    """
-
-    _re_kv_pair = re.compile(r'^(\w+):\s*(.+)\s*')
-    _re_float_literal = re.compile(r'^[+-]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[Ee][+-]?\d+)?')
-
-    def __init__(self, filename):
-        """Parses a ISP parameter file from disk.
-
-        Args:
-            filename: The filename or file object representing the ISP parameter file.
-        """
-        if isinstance(filename, basestring):
-            par_file = open(filename, 'r')
-        else:
-            par_file = filename
-        try:
-            par_file.readline()  # Skip header line
-            for line in par_file:
-                match = ISPPar._re_kv_pair.match(line)
-                if not match:
-                    continue  # Skip malformed lines with no key-value pairs
-                key = match.group(1)
-                items = match.group(2).split()
-                if len(items) == 0:
-                    value = None
-                elif len(items) == 1:
-                    value = parse_literal(items[0])
-                else:
-                    if not ISPPar._re_float_literal.match(items[0]):
-                        # Value is a string literal containing whitespace characters
-                        value = match.group(2)
-                    else:
-                        # Evaluate each item and stop at the first non-float literal
-                        value = []
-                        for i in items:
-                            match = ISPPar._re_float_literal.match(i)
-                            if match:
-                                value.append(parse_literal(match.group()))
-                            else:
-                                # If the first float literal is immediately followed by a non-float literal handle the
-                                # first one as singular value, e.g. in '20.0970 dB'
-                                if len(value) == 1:
-                                    value = value[0]
-                                break
-                setattr(self, key, value)
-        finally:
-            par_file.close()
-
-
-# compute DEM oversampling factors for a target resolution in meters
 def ovs(parfile, targetres):
+    """
+    compute DEM oversampling factors for a target resolution in meters
+    Args:
+        parfile:
+        targetres:
+
+    Returns:
+
+    """
     # read DEM parameter file
     dempar = ISPPar(parfile)
 
@@ -225,9 +359,17 @@ def ovs(parfile, targetres):
     return ovs_lat, ovs_lon
 
 
-# compute ground multilooking factors and pixel spacings from an ISPPar object for a defined target resolution
 class Spacing(object):
     def __init__(self, par, targetres="automatic"):
+        """
+        compute ground multilooking factors and pixel spacings from an ISPPar object for a defined target resolution
+        Args:
+            par:
+            targetres:
+
+        Returns:
+
+        """
         # compute ground range pixel spacing
         par = par if isinstance(par, ISPPar) else ISPPar(par)
         self.groundRangePS = par.range_pixel_spacing/(math.sin(math.radians(par.incidence_angle)))
@@ -244,24 +386,3 @@ class Spacing(object):
         else:
             self.rlks = int(round(float(targetres)/self.groundRangePS))
             self.azlks = int(round(float(targetres)/par.azimuth_pixel_spacing))
-
-
-# convert a gamma parameter file corner coordinate from EQA to UTM
-class UTM(object):
-    def __init__(self, parfile):
-        par = ISPPar(parfile)
-        inlist = [str(x) for x in ["WGS84", 1, "EQA", par.corner_lon, par.corner_lat, "", "WGS84", 1, "UTM", ""]]
-        proc = sp.Popen(["coord_trans"], stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True, shell=False).communicate("".join([x + "\n" for x in inlist]))
-        proc = [x for x in filter(None, proc[0].split("\n")) if ":" in x]
-        self.index = []
-        for item in proc:
-            entry = item.split(": ")
-            entry = [entry[0].replace(" ", "_"), entry[1].split()]
-            if len(entry[1]) > 1:
-                setattr(self, entry[0], entry[1])
-            else:
-                setattr(self, entry[0], entry[1][0])
-            self.index.append(entry[0])
-            if "UTM" in entry[0]:
-                self.zone, self.northing, self.easting = entry[1]
-                self.index = list(set(self.index+["zone", "northing", "easting"]))

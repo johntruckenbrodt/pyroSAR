@@ -16,7 +16,8 @@ def gammaErrorHandler(process):
                    "insufficient offset points to determine offset model parameters": RuntimeError,
                    "insufficient offset points left after culling to determine offset model parameters": RuntimeError,
                    "calloc_1d: number of elements <= 0": ValueError,
-                   "multi-look output line:": RuntimeError}
+                   "multi-look output line:": RuntimeError,
+                   "gc_map operates only with slant range geometry, image geometry in SLC_par: GROUND_RANGE": RuntimeError}
     if errormessage != "":
         for error in knownErrors:
             if re.search(error, errormessage):
