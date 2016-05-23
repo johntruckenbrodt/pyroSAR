@@ -108,7 +108,7 @@ class ID(object):
         if extension in ext_lookup:
             self.sensor = ext_lookup[extension]
 
-        img = gdal.Open(prefix+header, GA_ReadOnly)
+        img = gdal.Open(prefix + header, GA_ReadOnly)
         meta = img.GetMetadata()
         self.cols, self.rows, self.bands = img.RasterXSize, img.RasterYSize, img.RasterCount
         self.projection = img.GetGCPProjection()
@@ -149,18 +149,18 @@ class ID(object):
         corners = self.getCorners()
 
         # generate sequence of integer coordinates marking the tie points of the overlapping hgt tiles
-        lat = range(int(float(corners["ymin"])//1), int(float(corners["ymax"])//1)+1)
-        lon = range(int(float(corners["xmin"])//1), int(float(corners["xmax"])//1)+1)
+        lat = range(int(float(corners["ymin"]) // 1), int(float(corners["ymax"]) // 1) + 1)
+        lon = range(int(float(corners["xmin"]) // 1), int(float(corners["xmax"]) // 1) + 1)
 
         # convert coordinates to string with leading zeros and hemisphere identification letter
-        lat = [str(x).zfill(2+len(str(x))-len(str(x).strip("-"))) for x in lat]
-        lat = [x.replace("-", "S") if "-" in x else "N"+x for x in lat]
+        lat = [str(x).zfill(2 + len(str(x)) - len(str(x).strip("-"))) for x in lat]
+        lat = [x.replace("-", "S") if "-" in x else "N" + x for x in lat]
 
-        lon = [str(x).zfill(3+len(str(x))-len(str(x).strip("-"))) for x in lon]
-        lon = [x.replace("-", "W") if "-" in x else "E"+x for x in lon]
+        lon = [str(x).zfill(3 + len(str(x)) - len(str(x).strip("-"))) for x in lon]
+        lon = [x.replace("-", "W") if "-" in x else "E" + x for x in lon]
 
         # concatenate all formatted latitudes and longitudes with each other as final product
-        return [x+y+".hgt" for x in lat for y in lon]
+        return [x + y + ".hgt" for x in lat for y in lon]
 
     @abc.abstractmethod
     def outname_base(self):
@@ -189,7 +189,7 @@ class ID(object):
                     for item in sorted(names):
                         if item != header:
                             member = archive.getmember(item)
-                            outname = os.path.join(directory, item.replace(header+"/", ""))
+                            outname = os.path.join(directory, item.replace(header + "/", ""))
                             if member.isdir():
                                 os.makedirs(outname)
                             else:
@@ -327,7 +327,7 @@ class ESA(ID):
         outname = os.path.join(directory, self.outname_base())
         if len(self.getGammaImages(directory)) == 0:
             run(["par_ASAR", self.file, outname])
-            os.remove(outname+".hdr")
+            os.remove(outname + ".hdr")
             for item in finder(directory, [os.path.basename(outname)], regex=True):
                 ext = ".par" if item.endswith(".par") else ""
                 base = os.path.basename(item).strip(ext)
@@ -335,7 +335,7 @@ class ESA(ID):
                 base = base.replace("PRI", "pri")
                 base = base.replace("GRD", "grd")
                 base = base.replace("SLC", "slc")
-                newname = os.path.join(directory, base+ext)
+                newname = os.path.join(directory, base + ext)
                 os.rename(item, newname)
         else:
             raise IOError("scene already processed")
@@ -347,10 +347,10 @@ class ESA(ID):
         candidates = [x for x in self.getGammaImages(self.gammadir) if re.search("_pri$", x)]
         for image in candidates:
             out = image.replace("pri", "grd")
-            run(["radcal_PRI", image, image+".par", out, out+".par", k_db, inc_ref])
+            run(["radcal_PRI", image, image + ".par", out, out + ".par", k_db, inc_ref])
             if replace:
                 os.remove(image)
-                os.remove(image+".par")
+                os.remove(image + ".par")
 
     def unpack(self, directory):
         base_file = os.path.basename(self.file).strip("\.zip|\.tar(?:\.gz|)")
@@ -359,6 +359,8 @@ class ESA(ID):
         outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
 
         self._unpack(outdir)
+
+
 # id = identify("/geonfs01_vol1/ve39vem/swos/ASA_APP_1PTDPA20040102_102928_000000162023_00051_09624_0240.N1.zip")
 # id = identify("/geonfs01_vol1/ve39vem/swos/SAR_IMP_1PXASI19920419_110159_00000017C083_00323_03975_8482.E1.zip")
 
@@ -455,7 +457,13 @@ class SAFE(ID):
         self.polarisations = {"SH": ["HH"], "SV": ["VV"], "DH": ["HH", "HV"], "DV": ["VV", "VH"]}[self.pols]
 
         self.orbit = "D" if float(re.findall("[0-9]{6}", self.start)[1]) < 120000 else "A"
-        self.projection = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+
+        self.projection = 'GEOGCS["WGS 84",' \
+                          'DATUM["WGS_1984",' \
+                          'SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
+                          'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
+                          'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
+                          'AUTHORITY["EPSG","4326"]]'
 
         if mode == "full":
             self.gdalinfo(self.scene)
@@ -539,50 +547,50 @@ class SAFE(ID):
         outdir = os.path.join(directory, os.path.basename(self.file))
         self._unpack(outdir)
 
-# id = identify("/geonfs01_vol1/ve39vem/S1/archive/S1A_EW_GRDM_1SDH_20150408T053103_20150408T053203_005388_006D8D_5FAC.zip")
+    # id = identify("/geonfs01_vol1/ve39vem/S1/archive/S1A_EW_GRDM_1SDH_20150408T053103_20150408T053203_005388_006D8D_5FAC.zip")
 
 
-# todo: remove class and change dependencies to class CEOS (scripts: gammaGUI/reader_ers.py)
-# class ERS(object):
-#     def __init__(self, scene):
-#
-#         try:
-#             lea = finder(scene, ["LEA_01.001"])[0]
-#         except IndexError:
-#             raise IOError("wrong input format; no leader file found")
-#         with open(lea, "r") as infile:
-#             text = infile.read()
-#         # extract frame id
-#         frame_index = re.search("FRAME=", text).end()
-#         self.frame = text[frame_index:frame_index+4]
-#         # extract calibration meta information
-#         stripper = " \t\r\n\0"
-#         self.sensor = text[(720+395):(720+411)].strip(stripper)
-#         self.date = int(text[(720+67):(720+99)].strip(stripper)[:8])
-#         self.proc_fac = text[(720+1045):(720+1061)].strip(stripper)
-#         self.proc_sys = text[(720+1061):(720+1069)].strip(stripper)
-#         self.proc_vrs = text[(720+1069):(720+1077)].strip(stripper)
-#         text_subset = text[re.search("FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]", text).start()-13:]
-#         self.cal = -10*math.log(float(text_subset[663:679].strip(stripper)), 10)
-#         self.antenna_flag = text_subset[659:663].strip(stripper)
+    # todo: remove class and change dependencies to class CEOS (scripts: gammaGUI/reader_ers.py)
+    # class ERS(object):
+    #     def __init__(self, scene):
+    #
+    #         try:
+    #             lea = finder(scene, ["LEA_01.001"])[0]
+    #         except IndexError:
+    #             raise IOError("wrong input format; no leader file found")
+    #         with open(lea, "r") as infile:
+    #             text = infile.read()
+    #         # extract frame id
+    #         frame_index = re.search("FRAME=", text).end()
+    #         self.frame = text[frame_index:frame_index+4]
+    #         # extract calibration meta information
+    #         stripper = " \t\r\n\0"
+    #         self.sensor = text[(720+395):(720+411)].strip(stripper)
+    #         self.date = int(text[(720+67):(720+99)].strip(stripper)[:8])
+    #         self.proc_fac = text[(720+1045):(720+1061)].strip(stripper)
+    #         self.proc_sys = text[(720+1061):(720+1069)].strip(stripper)
+    #         self.proc_vrs = text[(720+1069):(720+1077)].strip(stripper)
+    #         text_subset = text[re.search("FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]", text).start()-13:]
+    #         self.cal = -10*math.log(float(text_subset[663:679].strip(stripper)), 10)
+    #         self.antenna_flag = text_subset[659:663].strip(stripper)
 
-        # the following section is only relevant for PRI products and can be considered future work
-        # select antenna gain correction lookup file from extracted meta information
-        # the lookup files are stored in a subfolder CAL which is included in the pythonland software package
-        # if sensor == "ERS1":
-        #     if date < 19950717:
-        #         antenna = "antenna_ERS1_x_x_19950716"
-        #     else:
-        #         if proc_sys == "VMP":
-        #             antenna = "antenna_ERS2_VMP_v68_x" if proc_vrs >= 6.8 else "antenna_ERS2_VMP_x_v67"
-        #         elif proc_fac == "UKPAF" and date < 19970121:
-        #             antenna = "antenna_ERS1_UKPAF_19950717_19970120"
-        #         else:
-        #             antenna = "antenna_ERS1"
-        # else:
-        #     if proc_sys == "VMP":
-        #         antenna = "antenna_ERS2_VMP_v68_x" if proc_vrs >= 6.8 else "antenna_ERS2_VMP_x_v67"
-        #     elif proc_fac == "UKPAF" and date < 19970121:
-        #         antenna = "antenna_ERS2_UKPAF_x_19970120"
-        #     else:
-        #         antenna = "antenna_ERS2"
+    # the following section is only relevant for PRI products and can be considered future work
+    # select antenna gain correction lookup file from extracted meta information
+    # the lookup files are stored in a subfolder CAL which is included in the pythonland software package
+    # if sensor == "ERS1":
+    #     if date < 19950717:
+    #         antenna = "antenna_ERS1_x_x_19950716"
+    #     else:
+    #         if proc_sys == "VMP":
+    #             antenna = "antenna_ERS2_VMP_v68_x" if proc_vrs >= 6.8 else "antenna_ERS2_VMP_x_v67"
+    #         elif proc_fac == "UKPAF" and date < 19970121:
+    #             antenna = "antenna_ERS1_UKPAF_19950717_19970120"
+    #         else:
+    #             antenna = "antenna_ERS1"
+    # else:
+    #     if proc_sys == "VMP":
+    #         antenna = "antenna_ERS2_VMP_v68_x" if proc_vrs >= 6.8 else "antenna_ERS2_VMP_x_v67"
+    #     elif proc_fac == "UKPAF" and date < 19970121:
+    #         antenna = "antenna_ERS2_UKPAF_x_19970120"
+    #     else:
+    #         antenna = "antenna_ERS2"
