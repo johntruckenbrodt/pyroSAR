@@ -177,20 +177,22 @@ class ID(object):
         else:
             raise IOError("file type not supported")
 
+        meta = {}
+
         ext_lookup = {".N1": "ASAR", ".E1": "ERS1", ".E2": "ERS2"}
         extension = os.path.splitext(header)[1]
         if extension in ext_lookup:
-            self.sensor = ext_lookup[extension]
+            meta["sensor"] = ext_lookup[extension]
 
         img = gdal.Open(prefix + header, GA_ReadOnly)
-        meta = img.GetMetadata()
-        self.cols, self.rows, self.bands = img.RasterXSize, img.RasterYSize, img.RasterCount
-        self.projection = img.GetGCPProjection()
-        self.gcps = [((x.GCPPixel, x.GCPLine), (x.GCPX, x.GCPY, x.GCPZ)) for x in img.GetGCPs()]
+        gdalmeta = img.GetMetadata()
+        meta["cols"], meta["rows"], meta["bands"] = img.RasterXSize, img.RasterYSize, img.RasterCount
+        meta["projection"] = img.GetGCPProjection()
+        meta["gcps"] = [((x.GCPPixel, x.GCPLine), (x.GCPX, x.GCPY, x.GCPZ)) for x in img.GetGCPs()]
         img = None
 
-        for item in meta:
-            entry = [item, parse_literal(meta[item].strip())]
+        for item in gdalmeta:
+            entry = [item, parse_literal(gdalmeta[item].strip())]
 
             try:
                 entry[1] = self.parse_date(entry[1])
@@ -199,20 +201,8 @@ class ID(object):
 
             if re.search("(?:LAT|LONG)", entry[0]):
                 entry[1] /= 1000000.
-            setattr(self, entry[0], entry[1])
-
-    @staticmethod
-    def parse_date(x):
-        """
-        this function gathers known time formats provided in the different SAR products and converts them to a common standard of the form YYYYMMDDTHHMMSS
-        """
-        # todo: check module time for more general approaches
-        for timeformat in ["%d-%b-%Y %H:%M:%S.%f", "%Y%m%d%H%M%S%f", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S.%fZ"]:
-            try:
-                return strftime("%Y%m%dT%H%M%S", strptime(x, timeformat))
-            except (TypeError, ValueError):
-                continue
-        raise ValueError("unknown time format; check function ID.parse_date")
+            meta[entry[0]] = entry[1]
+        return meta
 
     @abc.abstractmethod
     def getCorners(self):
@@ -279,9 +269,22 @@ class ID(object):
                   self.start)
         return "_".join(fields)
 
+    @staticmethod
+    def parse_date(x):
+        """
+        this function gathers known time formats provided in the different SAR products and converts them to a common standard of the form YYYYMMDDTHHMMSS
+        """
+        # todo: check module time for more general approaches
+        for timeformat in ["%d-%b-%Y %H:%M:%S.%f", "%Y%m%d%H%M%S%f", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S.%fZ"]:
+            try:
+                return strftime("%Y%m%dT%H%M%S", strptime(x, timeformat))
+            except (TypeError, ValueError):
+                continue
+        raise ValueError("unknown time format; check function ID.parse_date")
+
     def summary(self):
         for item in sorted(self.__dict__.keys()):
-            if item != "gcps":
+            if item != "meta":
                 print "{0}: {1}".format(item, getattr(self, item))
 
     @abc.abstractmethod
@@ -406,38 +409,42 @@ class ESA(ID):
         self.examine()
 
         match = re.match(re.compile(self.pattern), os.path.basename(self.file))
+        match2 = re.match(re.compile(self.pattern_pid), match.group("product_id"))
+
         if re.search("IM__0", match.group("product_id")):
             raise IOError("product level 0 not supported (yet)")
 
-        self.gdalinfo(self.scene)
+        self.meta = self.gdalinfo(self.scene)
 
-        if self.sensor == "ASAR":
-            self.polarizations = [getattr(self, x).replace("/", "") for x in self.__dict__.keys() if re.search("TX_RX_POLAR", x)]
-        elif self.sensor in ["ERS1", "ERS2"]:
-            self.polarizations = ["VV"]
+        self.meta["acquisition_mode"] = match2.group("image_mode")
 
-        self.orbit = self.SPH_PASS[0]
-        self.start = self.MPH_SENSING_START
-        self.stop = self.MPH_SENSING_STOP
-        self.spacing = (self.SPH_RANGE_SPACING, self.SPH_AZIMUTH_SPACING)
-        self.looks = [self.SPH_RANGE_LOOKS, self.SPH_AZIMUTH_LOOKS]
+        self.meta["product"] = "SLC" if self.meta["acquisition_mode"] in ["IMS", "APS", "WSS"] else "PRI"
 
-    def outname_base(self):
-        match1 = re.match(re.compile(self.pattern), os.path.basename(self.scene))
-        match2 = re.match(re.compile(self.pattern_pid), match1.group("product_id"))
-        fields = ("{:_<4}".format(self.sensor),
-                  "{:_<4}".format(match2.group("image_mode")),
-                  self.orbit,
-                  self.start)
-        return "_".join(fields)
+        if self.meta["sensor"] == "ASAR":
+            self.meta["polarizations"] = [self.meta[x].replace("/", "") for x in self.meta if re.search("TX_RX_POLAR", x)]
+        elif self.meta["sensor"] in ["ERS1", "ERS2"]:
+            self.meta["polarizations"] = ["VV"]
+
+        self.meta["orbit"] = self.meta["SPH_PASS"][0]
+        self.meta["start"] = self.meta["MPH_SENSING_START"]
+        self.meta["stop"] = self.meta["MPH_SENSING_STOP"]
+        self.meta["spacing"] = (self.meta["SPH_RANGE_SPACING"], self.meta["SPH_AZIMUTH_SPACING"])
+        self.meta["looks"] = [self.meta["SPH_RANGE_LOOKS"], self.meta["SPH_AZIMUTH_LOOKS"]]
+
+        # register the standardized meta attributes as object attributes
+        ID.__init__(self, self.meta)
 
     def getCorners(self):
-        lon = [getattr(self, x) for x in self.__dict__.keys() if re.search("LONG", x)]
-        lat = [getattr(self, x) for x in self.__dict__.keys() if re.search("LAT", x)]
+        lon = [self.meta[x] for x in self.meta if re.search("LONG", x)]
+        lat = [self.meta[x] for x in self.meta if re.search("LAT", x)]
         return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
 
     # todo: prevent conversion if target files already exist
     def convert2gamma(self, directory):
+        """
+        the command par_ASAR also accepts a K_dB argument in which case the resulting image names will carry the suffix GRD;
+        this is not implemented here but instead in function calibrate
+        """
         self.gammadir = directory
         outname = os.path.join(directory, self.outname_base())
         if len(self.getGammaImages(directory)) == 0:
@@ -448,7 +455,6 @@ class ESA(ID):
                 base = os.path.basename(item).strip(ext)
                 base = base.replace(".", "_")
                 base = base.replace("PRI", "pri")
-                base = base.replace("GRD", "grd")
                 base = base.replace("SLC", "slc")
                 newname = os.path.join(directory, base + ext)
                 os.rename(item, newname)
@@ -478,29 +484,6 @@ class ESA(ID):
 
 # id = identify("/geonfs01_vol1/ve39vem/swos/ASA_APP_1PTDPA20040102_102928_000000162023_00051_09624_0240.N1.zip")
 # id = identify("/geonfs01_vol1/ve39vem/swos/SAR_IMP_1PXASI19920419_110159_00000017C083_00323_03975_8482.E1.zip")
-
-# scenes = finder("/geonfs01_vol1/ve39vem/swos", ["*"])
-# counter = 0
-# for scene in scenes:
-#     counter += 1
-#     try:
-#         x = ESA(scene)
-#         if len(x.findfiles(x.pattern)) == 0:
-#             print scene
-#             print x.findfiles("[EN][12]$")[0]
-#             print "---------------------------------"
-#     except RuntimeError as rue:
-#         print scene
-#         print rue
-#         print"---------------------------------"
-#     # progress = float(counter)/len(scenes)*100
-#     # print progress
-#     # if progress % 10 == 0:
-#     #     print progress
-
-# scenes = finder("/geonfs01_vol1/ve39vem/swos", ["*.tar.gz"])
-# for scene in scenes:
-#     print scene
 
 
 # class RS2(ID):
