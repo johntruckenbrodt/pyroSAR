@@ -36,6 +36,10 @@ def identify(scene, mode="full"):
 class ID(object):
     """Abstract class for SAR meta data handlers."""
 
+    # # todo: implement this and call it via ID.__init__(self, **values) in the subclasses in order to force generalized attribute names
+    # def __init__(self, sensor):
+    #     self.sensor = sensor
+
     def bbox(self, outname=None, overwrite=True):
         """Return the bounding box."""
         if outname is None:
