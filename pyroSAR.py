@@ -206,9 +206,9 @@ class ID(object):
     def getFileObj(self, filename):
         """
         load a file into a readable file object
-        if scene is unpacked this will be a regular 'file'
-        for a tarfile this is an obvject of type 'ExtFile'
-        for a zipfile this is an StringIO.StringIO object (the zipfile.ExtFile object does not support setting file pointers via function seek)
+        if the scene is unpacked this will be a regular 'file' object
+        for a tarfile this is an object of type 'tarfile.ExtFile'
+        for a zipfile this is an StringIO.StringIO object (the zipfile.ExtFile object does not support setting file pointers via function seek, which is needed later on)
         """
         membername = filename.replace(self.scene, "").strip("/")
 
@@ -238,7 +238,7 @@ class ID(object):
 
     def getHGT(self):
         """
-        Returns: names of all SRTM hgt tile names overlapping with the SAR scene
+        Returns: names of all SRTM hgt tiles overlapping with the SAR scene
         """
 
         corners = self.getCorners()
@@ -592,10 +592,7 @@ class SAFE(ID):
             # the reason (GAMMA command error vs. bad SAFE xml file entry) is yet to be discovered
             # xml_noise = os.path.join(self.scene, "annotation", "calibration", "noise-" + base)
             xml_noise = "-"
-            fields = ("{:_<4}".format(self.sensor),
-                      "{:_<4}".format(match.group("swath").upper()),
-                      self.orbit,
-                      self.start,
+            fields = (self.outname_base(),
                       match.group("pol").upper(),
                       match.group("product"))
             name = os.path.join(directory, "_".join(fields))
@@ -651,7 +648,6 @@ class SAFE(ID):
         self._unpack(outdir)
 
     # id = identify("/geonfs01_vol1/ve39vem/S1/archive/S1A_EW_GRDM_1SDH_20150408T053103_20150408T053203_005388_006D8D_5FAC.zip")
-
 
     # todo: remove class and change dependencies to class CEOS (scripts: gammaGUI/reader_ers.py)
     # class ERS(object):
