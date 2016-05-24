@@ -394,9 +394,9 @@ class ESA(ID):
         self.gdalinfo(self.scene)
 
         if self.sensor == "ASAR":
-            self.polarisations = [getattr(self, x).replace("/", "") for x in self.__dict__.keys() if re.search("TX_RX_POLAR", x)]
+            self.polarizations = [getattr(self, x).replace("/", "") for x in self.__dict__.keys() if re.search("TX_RX_POLAR", x)]
         elif self.sensor in ["ERS1", "ERS2"]:
-            self.polarisations = ["VV"]
+            self.polarizations = ["VV"]
 
         self.orbit = self.SPH_PASS[0]
         self.start = self.MPH_SENSING_START
@@ -551,13 +551,14 @@ class SAFE(ID):
         for key in re.compile(self.pattern).groupindex:
             setattr(self, key, match.group(key))
 
-        self.polarisations = {"SH": ["HH"], "SV": ["VV"], "DH": ["HH", "HV"], "DV": ["VV", "VH"]}[self.pols]
+        self.acquisition_mode = self.beam
+
+        self.polarizations = {"SH": ["HH"], "SV": ["VV"], "DH": ["HH", "HV"], "DV": ["VV", "VH"]}[self.pols]
 
         self.orbit = "D" if float(re.findall("[0-9]{6}", self.start)[1]) < 120000 else "A"
 
         self.projection = 'GEOGCS["WGS 84",' \
-                          'DATUM["WGS_1984",' \
-                          'SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
+                          'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
                           'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
                           'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
                           'AUTHORITY["EPSG","4326"]]'
@@ -614,7 +615,7 @@ class SAFE(ID):
 
     def outname_base(self):
         fields = ("{:_<4}".format(self.sensor),
-                  "{:_<4}".format(self.beam),
+                  "{:_<4}".format(self.acquisition_mode),
                   self.orbit,
                   self.start)
         return "_".join(fields)
@@ -625,16 +626,14 @@ class SAFE(ID):
         """
         manifest = self.getFileObj(self.findfiles("manifest.safe")[0])
         namespaces = getNamespaces(manifest)
-
         tree = ET.fromstring(manifest.read())
-
         manifest.close()
 
         meta = dict()
         meta["acquisition_mode"] = tree.find('.//s1sarl1:mode', namespaces).text
         meta["acquisition_time"] = dict([(x, tree.find('.//safe:{}Time'.format(x), namespaces).text) for x in ["start", "stop"]])
         meta["coordinates"] = [tuple([float(y) for y in x.split(",")]) for x in tree.find('.//gml:coordinates', namespaces).text.split()]
-        meta["orbit"] = tree.find('.//s1:pass', namespaces).text
+        meta["orbit"] = tree.find('.//s1:pass', namespaces).text[0]
         meta["orbitNumbers_abs"] = dict([(x, int(tree.find('.//safe:orbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in ["start", "stop"]])
         meta["orbitNumbers_rel"] = dict([(x, int(tree.find('.//safe:relativeOrbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in ["start", "stop"]])
         meta["polarizations"] = [x.text for x in tree.findall('.//s1sarl1:transmitterReceiverPolarisation', namespaces)]
