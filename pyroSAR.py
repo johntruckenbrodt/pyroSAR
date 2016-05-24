@@ -23,11 +23,11 @@ from xml_util import getNamespaces
 import sqlite3
 
 
-def identify(scene, mode="full"):
+def identify(scene):
     """Return a metadata handler of the given scene."""
     for handler in ID.__subclasses__():
         try:
-            return handler(scene, mode)
+            return handler(scene)
         except IOError:
             pass
     raise IOError("data format not supported")
@@ -35,10 +35,10 @@ def identify(scene, mode="full"):
 
 class ID(object):
     """Abstract class for SAR meta data handlers."""
-
-    # # todo: implement this and call it via ID.__init__(self, **values) in the subclasses in order to force generalized attribute names
-    # def __init__(self, sensor):
-    #     self.sensor = sensor
+    def __init__(self, metadict):
+        locals = ["sensor", "projection", "orbit", "polarizations", "acquisition_mode", "start", "stop", "product"]
+        for item in locals:
+            setattr(self, item, metadict[item])
 
     def bbox(self, outname=None, overwrite=True):
         """Return the bounding box."""
@@ -192,16 +192,27 @@ class ID(object):
         for item in meta:
             entry = [item, parse_literal(meta[item].strip())]
 
-            # todo: check module time for more general approaches
-            for timeformat in ["%d-%b-%Y %H:%M:%S.%f", "%Y%m%d%H%M%S%f", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S.%fZ"]:
-                try:
-                    entry[1] = strftime("%Y%m%dT%H%M%S", strptime(entry[1], timeformat))
-                except (TypeError, ValueError):
-                    pass
+            try:
+                entry[1] = self.parse_date(entry[1])
+            except ValueError:
+                pass
 
             if re.search("(?:LAT|LONG)", entry[0]):
                 entry[1] /= 1000000.
             setattr(self, entry[0], entry[1])
+
+    @staticmethod
+    def parse_date(x):
+        """
+        this function gathers known time formats provided in the different SAR products and converts them to a common standard of the form YYYYMMDDTHHMMSS
+        """
+        # todo: check module time for more general approaches
+        for timeformat in ["%d-%b-%Y %H:%M:%S.%f", "%Y%m%d%H%M%S%f", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S.%fZ"]:
+            try:
+                return strftime("%Y%m%dT%H%M%S", strptime(x, timeformat))
+            except (TypeError, ValueError):
+                continue
+        raise ValueError("unknown time format; check function ID.parse_date")
 
     @abc.abstractmethod
     def getCorners(self):
@@ -261,9 +272,12 @@ class ID(object):
         # concatenate all formatted latitudes and longitudes with each other as final product
         return [x + y + ".hgt" for x in lat for y in lon]
 
-    @abc.abstractmethod
     def outname_base(self):
-        return
+        fields = ("{:_<4}".format(self.sensor),
+                  "{:_<4}".format(self.acquisition_mode),
+                  self.orbit,
+                  self.start)
+        return "_".join(fields)
 
     def summary(self):
         for item in sorted(self.__dict__.keys()):
@@ -367,7 +381,7 @@ class ID(object):
 class ESA(ID):
     """Handle SAR data of the ESA format."""
 
-    def __init__(self, scene, mode="full"):
+    def __init__(self, scene):
 
         self.pattern = r"(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_))_[012B][CP])" \
                        r"(?P<processing_stage_flag>[A-Z])" \
@@ -519,7 +533,7 @@ class ESA(ID):
 
 # todo: check self.file and self.scene assignment after unpacking
 class SAFE(ID):
-    def __init__(self, scene, mode="full"):
+    def __init__(self, scene):
 
         self.scene = os.path.realpath(scene)
 
@@ -548,29 +562,20 @@ class SAFE(ID):
 
         self.examine()
 
-        match = re.match(re.compile(self.pattern), os.path.basename(self.file))
-
-        if not match:
+        if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
             raise IOError("folder does not match S1 scene naming convention")
-        for key in re.compile(self.pattern).groupindex:
-            setattr(self, key, match.group(key))
 
-        self.acquisition_mode = self.beam
+        # scan the manifest.safe file and add selected attributes to a meta dictionary
+        self.meta = self.scanManifest()
 
-        self.polarizations = {"SH": ["HH"], "SV": ["VV"], "DH": ["HH", "HV"], "DV": ["VV", "VH"]}[self.pols]
+        self.meta["projection"] = 'GEOGCS["WGS 84",' \
+                                  'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
+                                  'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
+                                  'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
+                                  'AUTHORITY["EPSG","4326"]]'
 
-        self.orbit = "D" if float(re.findall("[0-9]{6}", self.start)[1]) < 120000 else "A"
-
-        self.projection = 'GEOGCS["WGS 84",' \
-                          'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
-                          'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
-                          'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
-                          'AUTHORITY["EPSG","4326"]]'
-
-        if mode == "full":
-            self.gdalinfo(self.scene)
-            self.spacing = (self.PIXEL_SPACING, self.LINE_SPACING)
-            # self.orbit = self.ORBIT_DIRECTION[0]
+        # register the standardized meta attributes as object attributes
+        ID.__init__(self, self.meta)
 
     def calibrate(self, replace=False):
         print "calibration already performed during import"
@@ -580,7 +585,7 @@ class SAFE(ID):
             raise RuntimeError("scene is not yet unpacked")
         if self.product == "OCN":
             raise IOError("Sentinel-1 OCN products are not supported")
-        if self.category == "A":
+        if self.meta["category"] == "A":
             raise IOError("Sentinel-1 annotation-only products are not supported")
 
         if not os.path.isdir(directory):
@@ -612,17 +617,10 @@ class SAFE(ID):
                 pass
 
     def getCorners(self):
-        coordinates = self.scanManifest()["coordinates"]
+        coordinates = self.meta["coordinates"]
         lat = [float(x[0]) for x in coordinates]
         lon = [float(x[1]) for x in coordinates]
         return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
-
-    def outname_base(self):
-        fields = ("{:_<4}".format(self.sensor),
-                  "{:_<4}".format(self.acquisition_mode),
-                  self.orbit,
-                  self.start)
-        return "_".join(fields)
 
     def scanManifest(self):
         """
@@ -636,12 +634,13 @@ class SAFE(ID):
         meta = dict()
         meta["acquisition_mode"] = tree.find('.//s1sarl1:mode', namespaces).text
         meta["acquisition_time"] = dict([(x, tree.find('.//safe:{}Time'.format(x), namespaces).text) for x in ["start", "stop"]])
+        meta["start"], meta["stop"] = (self.parse_date(meta["acquisition_time"][x]) for x in ["start", "stop"])
         meta["coordinates"] = [tuple([float(y) for y in x.split(",")]) for x in tree.find('.//gml:coordinates', namespaces).text.split()]
         meta["orbit"] = tree.find('.//s1:pass', namespaces).text[0]
         meta["orbitNumbers_abs"] = dict([(x, int(tree.find('.//safe:orbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in ["start", "stop"]])
         meta["orbitNumbers_rel"] = dict([(x, int(tree.find('.//safe:relativeOrbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in ["start", "stop"]])
         meta["polarizations"] = [x.text for x in tree.findall('.//s1sarl1:transmitterReceiverPolarisation', namespaces)]
-        meta["productType"] = tree.find('.//s1sarl1:productType', namespaces).text
+        meta["product"] = tree.find('.//s1sarl1:productType', namespaces).text
         meta["sensor"] = tree.find('.//safe:familyName', namespaces).text.replace("ENTINEL-", "") + tree.find('.//safe:number', namespaces).text
 
         return meta
@@ -650,49 +649,49 @@ class SAFE(ID):
         outdir = os.path.join(directory, os.path.basename(self.file))
         self._unpack(outdir)
 
-    # id = identify("/geonfs01_vol1/ve39vem/S1/archive/S1A_EW_GRDM_1SDH_20150408T053103_20150408T053203_005388_006D8D_5FAC.zip")
+        # id = identify("/geonfs01_vol1/ve39vem/S1/archive/S1A_EW_GRDM_1SDH_20150408T053103_20150408T053203_005388_006D8D_5FAC.zip")
 
-    # todo: remove class and change dependencies to class CEOS (scripts: gammaGUI/reader_ers.py)
-    # class ERS(object):
-    #     def __init__(self, scene):
-    #
-    #         try:
-    #             lea = finder(scene, ["LEA_01.001"])[0]
-    #         except IndexError:
-    #             raise IOError("wrong input format; no leader file found")
-    #         with open(lea, "r") as infile:
-    #             text = infile.read()
-    #         # extract frame id
-    #         frame_index = re.search("FRAME=", text).end()
-    #         self.frame = text[frame_index:frame_index+4]
-    #         # extract calibration meta information
-    #         stripper = " \t\r\n\0"
-    #         self.sensor = text[(720+395):(720+411)].strip(stripper)
-    #         self.date = int(text[(720+67):(720+99)].strip(stripper)[:8])
-    #         self.proc_fac = text[(720+1045):(720+1061)].strip(stripper)
-    #         self.proc_sys = text[(720+1061):(720+1069)].strip(stripper)
-    #         self.proc_vrs = text[(720+1069):(720+1077)].strip(stripper)
-    #         text_subset = text[re.search("FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]", text).start()-13:]
-    #         self.cal = -10*math.log(float(text_subset[663:679].strip(stripper)), 10)
-    #         self.antenna_flag = text_subset[659:663].strip(stripper)
-
-    # the following section is only relevant for PRI products and can be considered future work
-    # select antenna gain correction lookup file from extracted meta information
-    # the lookup files are stored in a subfolder CAL which is included in the pythonland software package
-    # if sensor == "ERS1":
-    #     if date < 19950717:
-    #         antenna = "antenna_ERS1_x_x_19950716"
-    #     else:
-    #         if proc_sys == "VMP":
-    #             antenna = "antenna_ERS2_VMP_v68_x" if proc_vrs >= 6.8 else "antenna_ERS2_VMP_x_v67"
-    #         elif proc_fac == "UKPAF" and date < 19970121:
-    #             antenna = "antenna_ERS1_UKPAF_19950717_19970120"
-    #         else:
-    #             antenna = "antenna_ERS1"
-    # else:
-    #     if proc_sys == "VMP":
-    #         antenna = "antenna_ERS2_VMP_v68_x" if proc_vrs >= 6.8 else "antenna_ERS2_VMP_x_v67"
-    #     elif proc_fac == "UKPAF" and date < 19970121:
-    #         antenna = "antenna_ERS2_UKPAF_x_19970120"
-    #     else:
-    #         antenna = "antenna_ERS2"
+# todo: remove class and change dependencies to class CEOS (scripts: gammaGUI/reader_ers.py)
+# class ERS(object):
+#     def __init__(self, scene):
+#
+#         try:
+#             lea = finder(scene, ["LEA_01.001"])[0]
+#         except IndexError:
+#             raise IOError("wrong input format; no leader file found")
+#         with open(lea, "r") as infile:
+#             text = infile.read()
+#         # extract frame id
+#         frame_index = re.search("FRAME=", text).end()
+#         self.frame = text[frame_index:frame_index+4]
+#         # extract calibration meta information
+#         stripper = " \t\r\n\0"
+#         self.sensor = text[(720+395):(720+411)].strip(stripper)
+#         self.date = int(text[(720+67):(720+99)].strip(stripper)[:8])
+#         self.proc_fac = text[(720+1045):(720+1061)].strip(stripper)
+#         self.proc_sys = text[(720+1061):(720+1069)].strip(stripper)
+#         self.proc_vrs = text[(720+1069):(720+1077)].strip(stripper)
+#         text_subset = text[re.search("FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]", text).start()-13:]
+#         self.cal = -10*math.log(float(text_subset[663:679].strip(stripper)), 10)
+#         self.antenna_flag = text_subset[659:663].strip(stripper)
+#
+# the following section is only relevant for PRI products and can be considered future work
+# select antenna gain correction lookup file from extracted meta information
+# the lookup files are stored in a subfolder CAL which is included in the pythonland software package
+# if sensor == "ERS1":
+#     if date < 19950717:
+#         antenna = "antenna_ERS1_x_x_19950716"
+#     else:
+#         if proc_sys == "VMP":
+#             antenna = "antenna_ERS2_VMP_v68_x" if proc_vrs >= 6.8 else "antenna_ERS2_VMP_x_v67"
+#         elif proc_fac == "UKPAF" and date < 19970121:
+#             antenna = "antenna_ERS1_UKPAF_19950717_19970120"
+#         else:
+#             antenna = "antenna_ERS1"
+# else:
+#     if proc_sys == "VMP":
+#         antenna = "antenna_ERS2_VMP_v68_x" if proc_vrs >= 6.8 else "antenna_ERS2_VMP_x_v67"
+#     elif proc_fac == "UKPAF" and date < 19970121:
+#         antenna = "antenna_ERS2_UKPAF_x_19970120"
+#     else:
+#         antenna = "antenna_ERS2"
