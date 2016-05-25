@@ -17,7 +17,6 @@ ogr.UseExceptions()
 
 
 class Vector(object):
-    #todo Define get_projection which returns the projection in a given format
     def __init__(self, filename=None, driver="ESRI Shapefile"):
 
         if driver not in ["ESRI Shapefile", "Memory"]:
@@ -78,6 +77,12 @@ class Vector(object):
     def nfields(self):
         return self.layerdef.GetFieldCount()
 
+    def getProjection(self, type):
+        """
+        type can be either "epsg", "wkt", "proj4" or "osr"
+        """
+        return crsConvert(self.layer.GetSpatialRef(), type)
+
     @property
     def proj4(self):
         return self.srs.ExportToProj4().strip()
@@ -113,6 +118,12 @@ class Vector(object):
         self.layer.CreateFeature(feature)
         feature.Destroy()
         self.init_features()
+
+    def convert2wkt(self):
+        """
+        export the geometry of each feature as a wkt string
+        """
+        return [feature.geometry().ExportToWkt() for feature in self.getfeatures()]
 
     def getArea(self):
         return sum([x.GetGeometryRef().GetArea() for x in self.getfeatures()])

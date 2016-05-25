@@ -492,7 +492,6 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     arg_format = ["-of", "ENVI"]
 
     # create VRT files for mosaicing
-    # todo: ask Max about nodata values
     vrtlist = []
     for i in range(len(srcfiles)):
         if isinstance(srcfiles[i], list):

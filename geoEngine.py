@@ -32,7 +32,7 @@ print datetime.now()
 print "collecting files"
 for scene in scenes:
     try:
-        id = identify(scene, mode="quick")
+        id = identify(scene)
         intersect = spatial.intersect(id.bbox(), camarque)
         if intersect is not None:
             if "VV" in id.polarisations and id.beam == "IW" and id.start > "20160302T054342":
@@ -40,7 +40,7 @@ for scene in scenes:
             # if intersect.GetArea()/camarque_area == 1:
             # if id.beam == "IW" and id.pols in ["SV", "DV"]:
                 print scene
-                selection.append(identify(scene))
+                selection.append(id)
     except IOError:
         continue
 print datetime.now()
