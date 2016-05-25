@@ -36,6 +36,7 @@ def identify(scene):
 class ID(object):
     """Abstract class for SAR meta data handlers."""
     def __init__(self, metadict):
+        # additional variables? spacing, looks, coordinates, ...
         locals = ["sensor", "projection", "orbit", "polarizations", "acquisition_mode", "start", "stop", "product"]
         for item in locals:
             setattr(self, item, metadict[item])
@@ -98,7 +99,6 @@ class ID(object):
                         INSERT INTO data
                         (title, file, scene, sensor, projection, bbox, orbit, polarisation, acquisition_mode, start, stop)
                         VALUES( ?,?,?,?,?,GeomFromText(?, 4326),?,?,?,?,?)
-
                         '''
         # todo: This should not be here but there should be an bbox.wkt() function to get the bbox as a wkt
         ring = ogr.Geometry(ogr.wkbLinearRing)
@@ -213,7 +213,7 @@ class ID(object):
         load a file into a readable file object
         if the scene is unpacked this will be a regular 'file' object
         for a tarfile this is an object of type 'tarfile.ExtFile'
-        for a zipfile this is an StringIO.StringIO object (the zipfile.ExtFile object does not support setting file pointers via function seek, which is needed later on)
+        for a zipfile this is an StringIO.StringIO object (the zipfile.ExtFile object does not support setting file pointers via function 'seek', which is needed later on)
         """
         membername = filename.replace(self.scene, "").strip("/")
 
@@ -292,6 +292,7 @@ class ID(object):
         return
 
     # todo: prevent unpacking if target files already exist
+    # todo: replace with functionality from module archivist
     def _unpack(self, directory):
         if not os.path.isdir(directory):
             os.makedirs(directory)
@@ -429,7 +430,7 @@ class ESA(ID):
         self.meta["start"] = self.meta["MPH_SENSING_START"]
         self.meta["stop"] = self.meta["MPH_SENSING_STOP"]
         self.meta["spacing"] = (self.meta["SPH_RANGE_SPACING"], self.meta["SPH_AZIMUTH_SPACING"])
-        self.meta["looks"] = [self.meta["SPH_RANGE_LOOKS"], self.meta["SPH_AZIMUTH_LOOKS"]]
+        self.meta["looks"] = (self.meta["SPH_RANGE_LOOKS"], self.meta["SPH_AZIMUTH_LOOKS"])
 
         # register the standardized meta attributes as object attributes
         ID.__init__(self, self.meta)
