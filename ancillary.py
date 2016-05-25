@@ -33,23 +33,26 @@ def blockPrint():
 
 
 # convert between epsg, wkt and proj4 spatial references
-# crsText must be of type WKT, PROJ4 or EPSG
+# crsText must be a osr.SpatialReference object or a string of type WKT, PROJ4 or EPSG
 # crsOut must be either "wkt", "proj4", "epsg" or "osr"
 # if type "osr" is selected the function will return a spatial reference object of type osr.SpatialReference()
-def crsConvert(crsText, crsOut):
-    srs = osr.SpatialReference()
-    check = None
-    for fun in [srs.ImportFromEPSG, srs.ImportFromWkt, srs.ImportFromProj4]:
-        try:
-            check = fun(crsText)
-            if check != 0:
-                raise TypeError
-            else:
-                break
-        except TypeError:
-            continue
-    if check is None:
-        raise ValueError("crsText not recognized; must be of type WKT, PROJ4 otr EPSG")
+def crsConvert(crsIn, crsOut):
+    if isinstance(crsIn, osr.SpatialReference):
+        srs = crsIn
+    else:
+        srs = osr.SpatialReference()
+        check = None
+        for fun in [srs.ImportFromEPSG, srs.ImportFromWkt, srs.ImportFromProj4]:
+            try:
+                check = fun(crsIn)
+                if check != 0:
+                    raise TypeError
+                else:
+                    break
+            except TypeError:
+                continue
+        if check is None:
+            raise ValueError("crsText not recognized; must be of type WKT, PROJ4 otr EPSG")
     if crsOut == "wkt":
         return srs.ExportToWkt()
     elif crsOut == "proj4":
