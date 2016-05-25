@@ -100,28 +100,12 @@ class ID(object):
                         (title, file, scene, sensor, projection, bbox, orbit, polarisation, acquisition_mode, start, stop)
                         VALUES( ?,?,?,?,?,GeomFromText(?, 4326),?,?,?,?,?)
                         '''
-        # todo: This should not be here but there should be an bbox.wkt() function to get the bbox as a wkt
-        ring = ogr.Geometry(ogr.wkbLinearRing)
-        coordinates = self.getCorners()
-        ring.AddPoint(coordinates["xmin"], coordinates["ymin"])
-        ring.AddPoint(coordinates["xmin"], coordinates["ymax"])
-        ring.AddPoint(coordinates["xmax"], coordinates["ymax"])
-        ring.AddPoint(coordinates["xmax"], coordinates["ymin"])
-        ring.CloseRings()
+        geom = self.bbox().convert2wkt()[0]
+        projection = crsConvert(self.projection, 'wkt')
 
-        geom = ogr.Geometry(ogr.wkbPolygon)
-        geom.AddGeometry(ring)
-
-        geom.FlattenTo2D()
-
-        # todo ersetzen durch ancillary.crsConvert(self.projection, 'ogr')
-        srs = osr.SpatialReference()
-        srs.ImportFromProj4(self.projection)
-
-        geom.AssignSpatialReference(srs)
         sq_file = os.path.basename(self.file)
         title = os.path.splitext(sq_file)[0]
-        input = (title, sq_file, self.scene, self.sensor, crsConvert(self.projection, 'wkt'), geom.ExportToWkt(), self.orbit, 'polarisation', 'acquisition', self.start, self.stop)
+        input = (title, sq_file, self.scene, self.sensor, projection, geom, self.orbit, 'polarisation', 'acquisition', self.start, self.stop)
         try:
             cursor.execute(insert_string, input)
         except sqlite3.IntegrityError as e:

@@ -4,12 +4,13 @@ from osgeo import ogr, osr
 from ancillary import crsConvert
 
 
-
 def bbox(coordinates, crs, outname=None, format="ESRI Shapefile", overwrite=True):
-    '''create a bounding box vector object or shapefile from coordinates and coordinate reference system
-        coordinates must provided in a dictionary containing numerical variables with names 'xmin', 'xmax', 'ymin' and 'ymax'
-        the coordinate reference system can be in either WKT, EPSG or PROJ4 format'''
-    srs = osr.SpatialReference(wkt=crsConvert(crs, "wkt"))
+    """
+    create a bounding box vector object or shapefile from coordinates and coordinate reference system
+    coordinates must provided in a dictionary containing numerical variables with names 'xmin', 'xmax', 'ymin' and 'ymax'
+    the coordinate reference system can be in either WKT, EPSG or PROJ4 format
+    """
+    srs = crsConvert(crs, "osr")
 
     ring = ogr.Geometry(ogr.wkbLinearRing)
 
@@ -21,6 +22,8 @@ def bbox(coordinates, crs, outname=None, format="ESRI Shapefile", overwrite=True
 
     geom = ogr.Geometry(ogr.wkbPolygon)
     geom.AddGeometry(ring)
+
+    geom.FlattenTo2D()
 
     bbox = vector.Vector(driver="Memory")
     bbox.addlayer("bbox", srs, ogr.wkbPolygon)
@@ -44,7 +47,6 @@ def init_vector(obj):
 
 
 def centerdist(obj1, obj2):
-
     shape1 = init_vector(obj1)
     shape2 = init_vector(obj2)
 
@@ -60,7 +62,6 @@ def centerdist(obj1, obj2):
 
 
 def intersect(obj1, obj2):
-
     shape1 = init_vector(obj1)
     shape2 = init_vector(obj2)
 
