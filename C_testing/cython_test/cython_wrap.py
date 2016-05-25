@@ -1,8 +1,9 @@
-import numpy as np
 from time import asctime
 
+import numpy as np
+
 import raster
-from cython_test import fancymath
+from C_testing.cython_test import fancymath
 
 filename = "/media/john/Data/DATA/Viterbo_Italy_test_layerstack_subset"
 
