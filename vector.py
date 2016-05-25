@@ -17,7 +17,6 @@ ogr.UseExceptions()
 
 
 class Vector(object):
-    #todo Define get_projection which returns the projection in a given format
     def __init__(self, filename=None, driver="ESRI Shapefile"):
 
         if driver not in ["ESRI Shapefile", "Memory"]:
@@ -77,6 +76,12 @@ class Vector(object):
     @property
     def nfields(self):
         return self.layerdef.GetFieldCount()
+
+    def getProjection(self, type):
+        """
+        type can be either "epsg", "wkt", "proj4" or "osr"
+        """
+        return crsConvert(self.layer.GetSpatialRef(), type)
 
     @property
     def proj4(self):
