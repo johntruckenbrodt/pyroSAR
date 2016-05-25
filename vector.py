@@ -119,6 +119,12 @@ class Vector(object):
         feature.Destroy()
         self.init_features()
 
+    def convert2wkt(self):
+        """
+        export the geometry of each feature as a wkt string
+        """
+        return [feature.geometry().ExportToWkt() for feature in self.getfeatures()]
+
     def getArea(self):
         return sum([x.GetGeometryRef().GetArea() for x in self.getfeatures()])
 
