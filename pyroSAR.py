@@ -36,8 +36,8 @@ def identify(scene):
 class ID(object):
     """Abstract class for SAR meta data handlers."""
     def __init__(self, metadict):
-        # additional variables? spacing, looks, coordinates, ...
-        locals = ["sensor", "projection", "orbit", "polarizations", "acquisition_mode", "start", "stop", "product"]
+        # additional variables? looks, coordinates, ...
+        locals = ["sensor", "projection", "orbit", "polarizations", "acquisition_mode", "start", "stop", "product", "spacing"]
         for item in locals:
             setattr(self, item, metadict[item])
 
@@ -132,10 +132,10 @@ class ID(object):
             files = [self.scene] if re.search(pattern, os.path.basename(self.scene)) else finder(self.scene, [pattern], regex=True)
         elif zf.is_zipfile(self.scene):
             with zf.ZipFile(self.scene, "r") as zip:
-                files = [os.path.join(self.scene, x.strip("/")) for x in zip.namelist() if re.search(pattern, x.strip("/"))]
+                files = [os.path.join(self.scene, x.strip("/")) for x in zip.namelist() if re.search(pattern, os.path.basename(x.strip("/")))]
         elif tf.is_tarfile(self.scene):
             tar = tf.open(self.scene)
-            files = [os.path.join(self.scene, x) for x in tar.getnames() if re.search(pattern, x)]
+            files = [os.path.join(self.scene, x) for x in tar.getnames() if re.search(pattern, os.path.basename(x))]
             tar.close()
         else:
             files = [self.scene] if re.search(pattern, self.scene) else []
@@ -307,7 +307,7 @@ class ID(object):
             if header.endswith("/"):
                 for item in sorted(names):
                     if item != header:
-                        outname = os.path.join(directory, item.replace(header, ""))
+                        outname = os.path.join(directory, item.replace(header, "", 1))
                         if item.endswith("/"):
                             os.makedirs(outname)
                         else:
@@ -536,6 +536,8 @@ class SAFE(ID):
         # scan the manifest.safe file and add selected attributes to a meta dictionary
         self.meta = self.scanManifest()
 
+        self.meta["spacing"] = self.getSpacing()
+
         self.meta["projection"] = 'GEOGCS["WGS 84",' \
                                   'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
                                   'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
@@ -586,9 +588,16 @@ class SAFE(ID):
 
     def getCorners(self):
         coordinates = self.meta["coordinates"]
-        lat = [float(x[0]) for x in coordinates]
-        lon = [float(x[1]) for x in coordinates]
+        lat = [x[0] for x in coordinates]
+        lon = [x[1] for x in coordinates]
         return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
+
+    def getSpacing(self):
+        annotations = self.findfiles(self.pattern_ds)
+        xml = self.getFileObj(annotations[0])
+        tree = ET.fromstring(xml.read())
+        xml.close()
+        return tuple([float(tree.find('.//{}PixelSpacing'.format(dim)).text) for dim in ["range", "azimuth"]])
 
     def scanManifest(self):
         """
@@ -609,6 +618,7 @@ class SAFE(ID):
         meta["orbitNumbers_rel"] = dict([(x, int(tree.find('.//safe:relativeOrbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in ["start", "stop"]])
         meta["polarizations"] = [x.text for x in tree.findall('.//s1sarl1:transmitterReceiverPolarisation', namespaces)]
         meta["product"] = tree.find('.//s1sarl1:productType', namespaces).text
+        meta["category"] = tree.find('.//s1sarl1:productClass', namespaces).text
         meta["sensor"] = tree.find('.//safe:familyName', namespaces).text.replace("ENTINEL-", "") + tree.find('.//safe:number', namespaces).text
 
         return meta
