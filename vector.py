@@ -14,6 +14,7 @@ from osgeo import ogr, osr
 from ancillary import crsConvert
 
 ogr.UseExceptions()
+osr.UseExceptions()
 
 
 class Vector(object):
@@ -154,8 +155,7 @@ class Vector(object):
         if isinstance(projection, osr.SpatialReference):
             srs_out = projection.Clone()
         else:
-            srs_out = osr.SpatialReference()
-            srs_out.ImportFromWkt(crsConvert(projection, "wkt"))
+            srs_out = crsConvert(projection, "osr")
 
         # create the CoordinateTransformation
         coordTrans = osr.CoordinateTransformation(self.srs, srs_out)
