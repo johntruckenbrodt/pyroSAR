@@ -62,7 +62,7 @@ def crsConvert(crsIn, crsOut):
     elif crsOut == "osr":
         return srs
     else:
-        raise ValueError("crsOut not recognized; must be either wkt, proj4 or epsg")
+        raise ValueError("crsOut not recognized; must be either wkt, proj4, epsg or osr")
 
 
 # merge two dictionaries
