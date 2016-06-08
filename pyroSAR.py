@@ -37,8 +37,8 @@ class ID(object):
     """Abstract class for SAR meta data handlers."""
     def __init__(self, metadict):
         # additional variables? spacing, looks, coordinates, ...
-        locals = ["sensor", "projection", "orbit", "polarizations", "acquisition_mode", "start", "stop", "product"]
-        for item in locals:
+        self.locals = ["sensor", "projection", "orbit", "polarizations", "acquisition_mode", "start", "stop", "product"]
+        for item in self.locals:
             setattr(self, item, metadict[item])
 
     def bbox(self, outname=None, overwrite=True):
@@ -62,6 +62,14 @@ class ID(object):
             return "tar"
         else:
             return None
+
+    def export2dict(self):
+        "Return the uuid and the metadata that is defined in self.locals as a dictionary"
+        metadata = {item:self.meta[item] for item in self.locals}
+        sq_file = os.path.basename(self.file)
+        title = os.path.splitext(sq_file)[0]
+        metadata['uuid'] = title
+        return metadata
 
     def export2sqlite(self):
         """
