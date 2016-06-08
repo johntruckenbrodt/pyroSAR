@@ -1,4 +1,3 @@
-
 #______________________________________________________________________________________________________________
 #|
 #|	NAME:
@@ -26,6 +25,7 @@ import numpy as np
 from gdalconst import *
 from astropy.convolution import convolve, Box2DKernel
 import argparse
+import pyhht.emd as hht
 
 
 #@profile
@@ -167,7 +167,7 @@ def quegan_cube(infile, outfile, kernel, time_kernel, is_list=False,
     ratio=[[]for i in range(band_count)]
     output=[[]for i in range(band_count)]
     maxlines = max_memory//(data.cols*band_count*3*4/1048576.)
-    print int(round(data.rows/(maxlines-kernel+1)+0.5))
+    print 'Anzahl Streifen:', int(round(data.rows/(maxlines-kernel+1)+0.5))
     box = Box2DKernel(kernel)
     driver = gdal.GetDriverByName("ENVI")
     out = driver.Create(outfile, data.cols, data.rows, data.bands, GDT_Float32)
@@ -266,6 +266,74 @@ def quegan_cube(infile, outfile, kernel, time_kernel, is_list=False,
     print "End:", asctime()
     print "##########################################"
 
+def emd(infile, outfile,nodata=0.0, max_memory=10000):
+    print "##########################################"
+    print "Start:", asctime()
+
+    if infile is not list:
+        data = raster.Raster(infile)
+        band_count = data.bands
+    else:
+       band_count = len(infile)
+       data=raster.Raster(infile[0])
+    decomposition=[]
+    print data.dim
+    things =  data.raster.ReadAsArray()
+    things[things==nodata] = np.nan
+    output = np.zeros_like(things)
+    print things.shape
+    decomposition = np.empty_like(things)
+    print data.rows, data.cols, data.bands
+    non_filtered = 0
+    for row in range(data.rows):
+        for col in range(data.cols):
+            print "Row and column:" row, col
+            timeseries = things[:, row, col]
+
+            timeseries_masked = timeseries[np.logical_not(np.isnan(timeseries))]
+
+            deco = hht.EMD(timeseries_masked)
+            try:
+                imfs = deco.decompose()
+            except ValueError:
+                imfs=[timeseries_masked]
+                non_filtered+=1
+            except TypeError:
+                imfs=[timeseries_masked]
+                non_filtered+=1
+            num_nan =0
+
+            for i in range(len(timeseries)):
+                if np.isnan(timeseries[i]):
+                    num_nan +=1
+                    output[i,row,col] = np.nan
+                else:
+                    output[i,row,col] = timeseries[i]-imfs[0][i-num_nan]
+
+            #hhtvis.plot_imfs(timeseries_masked, np.asarray(range(len(timeseries_masked))), imfs)
+    #return hht.EMD(timeseries).decompose()
+    print out
+    print non_filtered
+    driver = gdal.GetDriverByName("ENVI")
+    out = driver.Create(outfile, data.cols, data.rows, data.bands, GDT_Float32)
+
+
+    for band in range(band_count):
+        band+=1
+           # print band
+            #print i
+        maskout = out.GetRasterBand(band)
+        maskout.WriteArray(output[band-1,:,:])
+        maskout.FlushCache()
+    out.SetGeoTransform(data.raster.GetGeoTransform())
+    out.SetProjection(data.raster.GetProjection())
+
+    out = None
+
+    print "End:", asctime()
+    print "##########################################"
+    return None
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -278,11 +346,11 @@ if __name__ == '__main__':
     args = vars(parser.parse_args())
     
     infile = args['input']
-    kernel = args['kernel']
+    kernel = int(args['kernel'])
     outfile = infile+'mtf'+str(kernel)
-    
+    print infile
 
     if args['time']:
-        quegan_cube(infile, outfile, kernel, args['time'], False, args['nodata'], args['memory'])
+        quegan_cube(infile, outfile, kernel, int(args['time']), False, args['nodata'], args['memory'])
     else:
         quegan(infile,outfile,kernel, False, args['nodata'], args['memory'])
