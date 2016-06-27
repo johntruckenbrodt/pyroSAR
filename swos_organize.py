@@ -11,6 +11,7 @@ dir_scene = "/geonfs01_vol1/ve39vem/swos"
 areas = ['02_Spain_LagunaDeFuenteDePiedra',
          '04_Jordan_Azraq',
          '07_Sweden_StoreMosse-Kavsjon',
+         '13_Greece_Makedonia',
          '15_Egypt_LakeBurullus',
          '17_France_Carmargue',
          '18_Kenya_LakeVictoria',
