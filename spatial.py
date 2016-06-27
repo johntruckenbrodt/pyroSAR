@@ -7,7 +7,7 @@ from ancillary import crsConvert
 def bbox(coordinates, crs, outname=None, format="ESRI Shapefile", overwrite=True):
     """
     create a bounding box vector object or shapefile from coordinates and coordinate reference system
-    coordinates must provided in a dictionary containing numerical variables with names 'xmin', 'xmax', 'ymin' and 'ymax'
+    coordinates must be provided in a dictionary containing numerical variables with names 'xmin', 'xmax', 'ymin' and 'ymax'
     the coordinate reference system can be in either WKT, EPSG or PROJ4 format
     """
     srs = crsConvert(crs, "osr")
