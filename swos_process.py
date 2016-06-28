@@ -77,9 +77,11 @@ with open(os.path.join(sitedir, "scenelist"), "r") as infile:
 srtm_mosaic = os.path.join(maindir, sitename, "srtm_{}".format(sitename))
 srtm_mosaic_utm = srtm_mosaic + "_utm"
 
+# mosaic srtm tiles and fill gaps
 if not os.path.isfile(srtm_mosaic):
     srtm.makeSRTM(selection, srtmdir, srtm_mosaic)
 
+# transform srtm mosaic to UTM projection
 if not os.path.isfile(srtm_mosaic_utm):
     srtm.transform(srtm_mosaic, srtm_mosaic_utm, targetres)
 
