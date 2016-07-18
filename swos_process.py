@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import os
 import re
 import spatial
@@ -9,14 +11,19 @@ from ancillary import finder, multicore
 from gamma.util import geocode
 from pyroSAR import identify
 
-sitename = "Azraq"
+from swos_testsites import lookup
+
+sitename = "Greece_EasternMacedonia"
 maindir = "/geonfs01_vol1/ve39vem/swos_process"
 srtmdir = "/geonfs02_vol1/SRTM_1_HGT"
+
 
 targetres = 20
 func_geoback = 2
 func_interp = 0
 scaling = ["linear", "db"]
+
+sitename = sitename.replace(" ", "_")
 
 sitedir = os.path.join(maindir, sitename)
 tempdir = os.path.join(sitedir, "proc_in")
@@ -26,12 +33,13 @@ for dir in [tempdir, outdir]:
     if not os.path.isdir(dir):
         os.makedirs(dir)
 
-site = vector.Vector("/geonfs01_vol1/ve39vem/swos_testsites/Test_Sites_project_v29_{}.shp".format(sitename))
+sites = vector.Vector("/geonfs01_vol1/ve39vem/swos_testsites/Test_Sites_project_v30.shp")
+site = sites["Site_Name={}".format(lookup[sitename])]
 site_area = site.getArea()
 
-scenes = finder("/geonfs02_vol1/swos_fsu/sentinel1/GRD", ["^S1[AB]"], regex=True)
-# scenes = finder("/geonfs01_vol1/ve39vem/swos", ["*zip"])
-
+# scenes = finder("/geonfs02_vol1/swos_fsu/sentinel1/GRD", ["^S1[AB]"], regex=True)
+# # scenes = finder("/geonfs01_vol1/ve39vem/swos", ["*zip"])
+#
 # selection = []
 # a = datetime.now()
 # for scene in scenes:
@@ -53,10 +61,15 @@ scenes = finder("/geonfs02_vol1/swos_fsu/sentinel1/GRD", ["^S1[AB]"], regex=True
 # print b - a
 #
 # with open(os.path.join(sitedir, "scenelist"), "w") as outfile:
-#     outfile.write("\n".join([x.scene for x in selection])+"\n")
-#
+#     outfile.write("\n".join([x.scene for x in selection]) + "\n")
+
 with open(os.path.join(sitedir, "scenelist"), "r") as infile:
-    selection = [identify(x) for x in infile.read().strip().split()]
+    files = infile.read().strip().split()
+    selection = []
+    for scene in files:
+        id = identify(scene)
+        if len(finder(outdir, [id.outname_base()], regex=True)) == 0:
+            selection.append(id)
 
 # scenes = [identify(x) for x in selection]
 #
