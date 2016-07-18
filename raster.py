@@ -463,7 +463,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
 
     # read shapefile bounding coordinates and reduce list of rasters to those overlapping with the shapefile
     if shapefile is not None:
-        shp = vector.Vector(shapefile)
+        shp = shapefile if isinstance(shapefile, vector.Vector) else vector.Vector(shapefile)
         shp.reproject(srs)
         ext = shp.extent
         arg_ext = ["-te", ext["xmin"], ext["ymin"], ext["xmax"], ext["ymax"]]
