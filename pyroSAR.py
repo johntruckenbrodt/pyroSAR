@@ -143,12 +143,10 @@ class ID(object):
 
     def gdalinfo(self, scene):
         """
-
         Args:
             scene: an archive containing a SAR scene
 
-        sets object attributes
-
+        returns a dictionary of metadata attributes
         """
         self.scene = os.path.realpath(scene)
         files = self.findfiles("(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)")
