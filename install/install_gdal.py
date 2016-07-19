@@ -9,12 +9,12 @@ import sys
 import tarfile
 import zipfile
 from urllib2 import urlopen
-from auxil import *
+from install.auxil import *
 
 # the number of CPUs used for compilation
 cores = 20
 
-root = "/homes4/geoinf/ve39vem/test2_gdal"
+root = "/homes4/geoinf/ve39vem/gdal"
 downloaddir = os.path.join(root, "originals")
 packagedir = os.path.join(root, "packages")
 installdir = os.path.join(root, "local")
@@ -163,10 +163,15 @@ for module in modules:
 print "--------------------------------------------------"
 print "installing GDAL..."
 
+# todo: adjust to Felix' system
 # define extra environment variables
 env = os.environ.copy()
 env["LDFLAGS"] = "-L/usr/local/lib64"
-env["LD_LIBRARY_PATH"] = "/usr/local/lib64" + os.pathsep + env["LD_LIBRARY_PATH"]
+
+if "LD_LIBRARY_PATH" not in env.keys():
+    env["LD_LIBRARY_PATH"] = "/usr/local/lib64"
+else:
+    env["LD_LIBRARY_PATH"] = "/usr/local/lib64" + os.pathsep + env["LD_LIBRARY_PATH"]
 
 localdir = localdirs["gdal"]
 build_gdal = os.path.join(localdir, "build")
