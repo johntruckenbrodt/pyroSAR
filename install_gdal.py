@@ -6,154 +6,225 @@ import zipfile
 from urllib2 import urlopen
 import subprocess as sp
 
-root = "/homes4/geoinf/ve39vem/test_gdal"
+# the number of CPUs used for compilation
+cores = 20
+
+root = "/homes4/geoinf/ve39vem/test2_gdal"
 downloaddir = os.path.join(root, "originals")
 packagedir = os.path.join(root, "packages")
 installdir = os.path.join(root, "local")
 
+
+# function to execute shell commands
+def execute(cmd, cwd=None, env=None):
+    proc = sp.Popen(cmd, stdin=None, stdout=sp.PIPE, stderr=sp.PIPE, cwd=cwd, env=env)
+    out, err = proc.communicate()
+    if proc.returncode and err:
+        if cmd[0] == "make":
+            rollback(cwd)
+        raise InstallationError(cmd, err)
+
+
+# function to clean up temporary files created during compilation
+def rollback(directory):
+    try:
+        sp.check_call(["make", "clean"], cwd=directory)
+        sp.check_call(["make", "distclean"], cwd=directory)
+    except sp.CalledProcessError:
+        pass
+
+
+# custom error in case a command fails
+class InstallationError(Exception):
+    def __init__(self, command, errormessage):
+        Exception.__init__(self, "\n\nexecuted command:\n{}\n\n{}".format(" ".join(command), errormessage))
+
+
+# create installation directories in case they do not exist
 for dir in [root, downloaddir, packagedir, installdir]:
     if not os.path.isdir(dir):
         os.makedirs(dir)
 
-modules = ["gdal", "geos", "hdf4", "hdf5", "netcdf", "kml", "kea"]
+# optional dependency packages for GDAL
+modules = ["geos", "proj", "tiff", "geotiff"]
 
+# package version to be used
 versions = {"gdal": "2.1.0",
             "geos": "3.5.0",
-            "kea": "1.4.4",
             "kml": "1.2.0",
             "htop": "1.0.2",
+            "hdf4": "4.2.12",
+            "hdf5": "1.8.17",
             "netcdf": "4.3.3.1",
-            "rsgislib": "2.2.0"}
+            "proj": "4.9.2",
+            "tiff": "4.0.6",
+            "geotiff": "1.4.1",
+            "expat": "2.2.0"}
 
-remotes = {"gdal": "http://download.osgeo.org/gdal/{0}/gdal-{1}.tar.gz".format(versions["gdal"], versions["gdal"]),
+# package URLs
+# in case of hdf4 and hdf5 the most recent versions are going to be used
+remotes = {"gdal": "http://download.osgeo.org/gdal/{0}/gdal-{0}.tar.gz".format(versions["gdal"]),
            "geos": "http://download.osgeo.org/geos/geos-{0}.tar.bz2".format(versions["geos"]),
-           "hdf4": "https://www.hdfgroup.org/ftp/HDF/HDF_Current/src/",
-           "hdf5": "https://www.hdfgroup.org/ftp/HDF5/current/src/",
-           "kea": "https://bitbucket.org/chchrsc/kealib/downloads/kealib-{0}.tar.gz".format(versions["kea"]),
+           "hdf4": "https://www.hdfgroup.org/ftp/HDF/releases/HDF{0}/src/hdf-{0}.tar.gz".format(versions["hdf4"]),
+           "hdf5": "https://www.hdfgroup.org/ftp/HDF5/releases/hdf5-{0}/src/hdf5-{0}.tar.gz".format(versions["hdf5"]),
            "kml": "https://libkml.googlecode.com/files/libkml-{0}.tar.gz".format(versions["kml"]),
-           "netcdf": "ftp://ftp.unidata.ucar.edu/pub/netcdf/netcdf-{0}.tar.gz".format(versions["netcdf"])}
+           "netcdf": "ftp://ftp.unidata.ucar.edu/pub/netcdf/netcdf-{0}.tar.gz".format(versions["netcdf"]),
+           "proj": "http://download.osgeo.org/proj/proj-{0}.tar.gz".format(versions["proj"]),
+           "tiff": "http://download.osgeo.org/libtiff/tiff-{0}.tar.gz".format(versions["tiff"]),
+           "geotiff": "http://download.osgeo.org/geotiff/libgeotiff/libgeotiff-{0}.tar.gz".format(versions["geotiff"]),
+           "expat": "https://sourceforge.net/projects/expat/files/expat/{0}/expat-{0}.tar.bz2".format(versions["expat"])}
 
+##################################################################
 print "downloading..."
 
-locals = []
+# a dictionary
+locals = {}
 
-for module in modules:
-    print module
-
-    if re.search("hdf[45]", module):
-        remotename = os.path.join(remotes[module], re.findall("hdf[5]*-.[0-9.]+.tar.gz", urlopen(remotes[module]).read())[0])
-    else:
-        remotename = remotes[module]
+for module in modules+["gdal"]:
+    remotename = remotes[module]
     localname = os.path.join(downloaddir, os.path.basename(remotename))
-    locals.append(localname)
+    locals[module] = localname
     try:
         if not os.path.isfile(localname):
+            print module
             infile = urlopen(remotename)
             with open(localname, "wb") as outfile:
                 outfile.write(infile.read())
             infile.close()
-        else:
-            print "...skipped"
     except:
         print "...failed"
 
+##################################################################
 print "--------------------------------------------------"
 print "unpacking..."
 
-localdirs = []
+localdirs = {}
 
-for i in range(len(locals)):
-
-    tar = tarfile.open(locals[i])
+for module in modules+["gdal"]:
+    tar = tarfile.open(locals[module])
     header = os.path.commonprefix(tar.getnames())
     localdir = os.path.join(packagedir, header)
-    localdirs.append(localdir)
+    localdirs[module] = localdir
     if not os.path.isdir(localdir):
         print header.strip("/")
         tar.extractall(packagedir)
     tar.close()
 
+##################################################################
 print "--------------------------------------------------"
-print "configuring..."
+print "compiling dependencies..."
 
-for localdir in localdirs:
-    build = os.path.join(localdir, "build")
+# create installation directories for the packages
+build_dirs = {}
+for module in modules:
+    build = os.path.join(localdirs[module], "build")
+    build_dirs[module] = build
     if not os.path.isdir(build):
         os.makedirs(build)
 
+# ./configure --prefix=/homes4/geoinf/ve39vem/test_gdal/packages/hdf-4.2.12/build --with-zlib --with-jpeg --enable-shared --disable-netcdf --disable-fortran
+
+# define specific package configuration options
+build_ops = {"geos": [],
+             "proj": [],
+             # "hdf4": ["--with-zlib",
+             #          "--with-jpeg",
+             #          "--enable-shared",
+             #          "--disable-netcdf",
+             #          "--disable-fortran"],
+             # "hdf5": ["--enable-shared",
+             #          "--enable-build-all",
+             #          "--with-zlib",
+             #          "--with-pthread",
+             #          "--enable-cxx"],
+             "tiff": ["--exec-prefix={}".format(build_dirs["tiff"])],
+             "geotiff": ["--with-proj={}".format(build_dirs["proj"]),
+                         "--with-libtiff={}".format(build_dirs["tiff"]),
+                         "--with-zlib",
+                         "--with-jpeg"],
+             # "netcdf": ["--enable-netcdf-4",
+             #            "--enable-shared",
+             #            "--enable-utilities",
+             #            "--enable-hdf4",
+             #            "--enable-hdf4-file-tests",
+             #            "--enable-v2"],
+             "gdal": ["--without-python",
+                      "--with-geos={}".format(os.path.join(build_dirs["geos"], "bin/geos-config")),
+                      # "--with-hdf4={}".format(build_dirs["hdf4"]),
+                      # "--with-hdf5={}".format(build_dirs["hdf5"]),
+                      "--with-static-proj4={}".format(build_dirs["proj"]),
+                      # "--with-netcdf={}".format(build_dirs["netcdf"]),
+                      "--with-libtiff={}".format(build_dirs["tiff"]),
+                      "--with-geotiff={}".format(build_dirs["geotiff"])]}
+
+# configure, compile and install the packages
+for module in modules:
+    localdir = localdirs[module]
+    build = os.path.join(localdir, "build")
+    if not os.path.isdir(os.path.join(build, "bin")):
+        print module
+        # define the configuration command
+        cmd = ["./configure", "-q", "--prefix={}".format(build)]+build_ops[module]
+        print "...configuration"
+        if module == "netcdf":
+            # define extra environment variables
+            env = os.environ.copy()
+            env["H4DIR"] = build_dirs["hdf4"]
+            env["H5DIR"] = build_dirs["hdf5"]
+            env["CPPFLAGS"] = "-I{0} -I{1}".format(*[os.path.join(build_dirs[x], "include") for x in ["hdf4", "hdf5"]])
+            env["LDFLAGS"] = "-L{0} -L{1}".format(*[os.path.join(build_dirs[x], "lib") for x in ["hdf4", "hdf5"]])
+            execute(cmd, cwd=localdir, env=env)
+        else:
+            execute(cmd, cwd=localdir)
+        print "...compilation"
+        execute(["make", "-j{}".format(cores)], cwd=localdir)
+        print "...installation"
+        execute(["make", "install"], cwd=localdir)
 #################################
+print "--------------------------------------------------"
+print "installing GDAL..."
 
-localdir = [x for x in localdirs if re.search("geos", x)][0]
-build_geos = os.path.join(localdir, "build")
-
-# config = os.path.join(localdir, "configure")
-# cmd = [config, "--prefix={}".format(build_geos)]
-# sp.check_call(cmd, cwd=localdir)
-# sp.check_call(["make", "-C", localdir, "-j10"])
-# sp.check_call(["make", "-C", localdir, "install"])
-#################################
-
-localdir = [x for x in localdirs if re.search("hdf-", x)][0]
-build_hdf4 = os.path.join(localdir, "build")
-
-# config = os.path.join(localdir, "configure")
-# cmd = [config, "--prefix={}".format(build_hdf4), "--with-zlib", "--with-jpeg", "--enable-shared", "--disable-netcdf", "--disable-fortran"]
-# sp.check_call(cmd, cwd=localdir)
-# sp.check_call(["make", "-C", localdir, "-j10"])
-# sp.check_call(["make", "-C", localdir, "install"])
-#################################
-
-localdir = [x for x in localdirs if re.search("hdf5", x)][0]
-build_hdf5 = os.path.join(localdir, "build")
-
-# config = os.path.join(localdir, "configure")
-# cmd = [config, "--prefix={}".format(build_hdf5), "--enable-shared", "--enable-build-all", "--with-zlib", "--with-pthread", "--enable-cxx"]
-# sp.check_call(cmd, cwd=localdir)
-# sp.check_call(["make", "-C", localdir, "-j10"])
-# sp.check_call(["make", "-C", localdir, "install"])
-#################################
-
+# define extra environment variables
 env = os.environ.copy()
-env["H4DIR"] = build_hdf4
-env["H5DIR"] = build_hdf5
-env["CPPFLAGS"] = "-I{0} -I{1}".format(os.path.join(build_hdf4, "include"), os.path.join(build_hdf5, "include"))
-env["LDFLAGS"] = "-L{0} -L{1}".format(os.path.join(build_hdf4, "lib"), os.path.join(build_hdf5, "lib"))
-
-localdir = [x for x in localdirs if re.search("netcdf", x)][0]
-build_netcdf = os.path.join(localdir, "build")
-
-# config = os.path.join(localdir, "configure")
-# cmd = [config, "--prefix={}".format(build_netcdf), "--enable-netcdf-4", "--enable-shared", "--enable-utilities", "--enable-hdf4", "--enable-hdf4-file-tests", "--enable-v2"]
-# sp.check_call(cmd, cwd=localdir, env=env)
-# sp.check_call(["make", "-C", localdir, "-j10"])
-# sp.check_call(["make", "-C", localdir, "install"])
-#################################
-
+env["LDFLAGS"] = "-L/usr/local/lib64"
 env["LD_LIBRARY_PATH"] = "/usr/local/lib64" + os.pathsep + env["LD_LIBRARY_PATH"]
 
-localdir = [x for x in localdirs if re.search("gdal", x)][0]
-config = os.path.join(localdir, "configure")
+localdir = localdirs["gdal"]
 build_gdal = os.path.join(localdir, "build")
 
+# define the configuration command
+cmd = ["./configure", "-q", "--prefix={}".format(build_gdal)]+build_ops["gdal"]
 
-env["LDFLAGS"] = "-L/usr/local/lib64"
+print "...configuration"
+execute(cmd, cwd=localdir, env=env)
 
-cmd = [config, "--prefix={}".format(build_gdal), "--without-python",
-       "--with-geos={}".format(os.path.join(build_geos, "bin/geos-config")),
-       "--with-hdf4={}".format(build_hdf4),
-       "--with-hdf5={}".format(build_hdf5),
-       "--with-netcdf={}".format(build_netcdf)]
+print "...compilation"
+execute(["make", "-j{}".format(cores)], cwd=localdir)
 
-sp.check_call(cmd, cwd=localdir, env=env)
-sp.check_call(["make", "-C", localdir, "-j10"])
-sp.check_call(["make", "-C", localdir, "install"])
+print "...installation"
+execute(["make", "install"], cwd=localdir)
 #################################
+print "installing the GDAL Python binding..."
 
 env["LD_LIBRARY_PATH"] = os.path.join(build_gdal, "lib") + os.pathsep + env["LD_LIBRARY_PATH"]
-env["PATH"] = "{0}:{1}:{2}".format(os.path.join(build_gdal, "bin"), os.path.join(localdir, "swig/python/scripts"), env["PATH"])
+env["PATH"] = "{0}:{1}:{2}".format(os.path.join(build_gdal, "bin"),
+                                   os.path.join(localdir, "swig/python/scripts"),
+                                   env["PATH"])
 
-sp.check_call(["make", "-C", os.path.join(localdir, "swig"), "-j10"], env=env)
+print "...compilation"
+execute(["make", "-j{}".format(cores)], cwd=os.path.join(localdir, "swig"), env=env)
 
-env["PYTHONPATH"] = os.path.join(installdir, "lib/python2.7/site-packages") + os.pathsep + env["PYTHONPATH"]
+packagesubdir = os.path.join(installdir, "lib/python2.7/site-packages")
 
-sp.check_call([sys.executable, os.path.join(localdir, "swig/python/setup.py"), "install", "--prefix=" + installdir], env=env, cwd=os.path.join(localdir, "swig/python"))
+if not os.path.isdir(packagesubdir):
+    os.makedirs(packagesubdir)
+
+if "PYTHONPATH" not in env.keys():
+    env["PYTHONPATH"] = packagesubdir
+else:
+    env["PYTHONPATH"] = packagesubdir + os.pathsep + env["PYTHONPATH"]
+
+cmd = [sys.executable, "setup.py", "install", "--prefix=" + installdir]
+
+print "...installation"
+execute(cmd, env=env, cwd=os.path.join(localdir, "swig/python"))

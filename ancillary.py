@@ -24,6 +24,8 @@ try:
 except ImportError:
     pass
 
+osr.UseExceptions()
+
 
 # suppress console stdout prints, i.e. redirect them to a temporary string object
 # call enablePrint() to reverse the effect
@@ -38,27 +40,26 @@ def blockPrint():
 # if type "osr" is selected the function will return a spatial reference object of type osr.SpatialReference()
 def crsConvert(crsIn, crsOut):
     if isinstance(crsIn, osr.SpatialReference):
-        srs = crsIn
+        srs = crsIn.Clone()
     else:
         srs = osr.SpatialReference()
-        check = None
-        for fun in [srs.ImportFromEPSG, srs.ImportFromWkt, srs.ImportFromProj4]:
+        try:
+            srs.ImportFromEPSG(crsIn)
+        except (TypeError, RuntimeError):
             try:
-                check = fun(crsIn)
-                if check != 0:
-                    raise TypeError
-                else:
-                    break
-            except TypeError:
-                continue
-        if check is None:
-            raise ValueError("crsText not recognized; must be of type WKT, PROJ4 otr EPSG")
+                srs.ImportFromWkt(crsIn)
+            except (TypeError, RuntimeError):
+                try:
+                    srs.ImportFromProj4(crsIn)
+                except (TypeError, RuntimeError):
+                    raise TypeError("crsText not recognized; must be of type WKT, PROJ4 or EPSG")
     if crsOut == "wkt":
         return srs.ExportToWkt()
     elif crsOut == "proj4":
         return srs.ExportToProj4()
     elif crsOut == "epsg":
-        return int(srs.GetAttrValue("AUTHORITY", 1))
+        srs.AutoIdentifyEPSG()
+        return int(srs.GetAuthorityCode(None))
     elif crsOut == "osr":
         return srs
     else:

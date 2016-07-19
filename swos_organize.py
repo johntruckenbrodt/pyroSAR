@@ -6,17 +6,21 @@ from ancillary import finder, multicore
 from archivist import scan, tar2zip
 
 dir_c1f = "/geonfs01_vol3/swos/data/ers_envisat"
-dir_scene = "/geonfs01_vol1/ve39vem/swos"
+dir_scene = "/geonfs01_vol1/ve39vem/swos_archive"
 
 areas = ['02_Spain_LagunaDeFuenteDePiedra',
          '04_Jordan_Azraq',
          '07_Sweden_StoreMosse-Kavsjon',
+         '13_Greece_Makedonia',
          '15_Egypt_LakeBurullus',
          '17_France_Carmargue',
          '18_Kenya_LakeVictoria',
          '22_Tanzania_Kilombero']
 
 sensors = ["ERS", "ASAR"]
+
+if not os.path.isdir(dir_scene):
+    os.makedirs(dir_scene)
 
 
 def operator(package, outdir, archive):

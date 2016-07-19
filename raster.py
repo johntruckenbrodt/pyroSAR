@@ -20,7 +20,7 @@ import spatial
 import numpy as np
 from osgeo.gdalconst import *
 from osgeo import gdal, ogr, osr
-from ancillary import dissolve, crsConvert, finder, run
+from ancillary import dissolve, crsConvert, finder, run, multicore
 from envi import HDRobject, hdr
 import subprocess as sp
 from math import ceil, floor, sqrt
@@ -31,7 +31,7 @@ gdal.UseExceptions()
 
 
 class Raster(object):
-    #todo: init a Raster object from array data not only from a filename
+    # todo: init a Raster object from array data not only from a filename
     def __init__(self, filename):
         if os.path.isfile(filename):
             self.filename = filename if os.path.isabs(filename) else os.path.join(os.getcwd(), filename)
@@ -48,11 +48,8 @@ class Raster(object):
         self.dtype = gdal.GetDataTypeName(self.raster.GetRasterBand(1).DataType)
         self.projection = self.raster.GetProjection()
         self.srs = osr.SpatialReference(wkt=self.projection)
-        self.proj4 = self.srs.ExportToProj4().strip()
-        try:
-            self.epsg = crsConvert(self.proj4, "epsg")
-        except TypeError:
-            self.epsg = None
+        self.proj4 = self.srs.ExportToProj4()
+        self.epsg = crsConvert(self.srs, "epsg")
         self.geogcs = self.srs.GetAttrValue("geogcs")
         self.projcs = self.srs.GetAttrValue("projcs") if self.srs.IsProjected() else None
         self.geo = dict(zip(["xmin", "xres", "rotation_x", "ymax", "rotation_y", "yres"], self.raster.GetGeoTransform()))
@@ -443,7 +440,7 @@ def reproject(rasterobject, reference, outname, resampling="bilinear", format="E
 #     header.band_names = bandnames
 #     hdr(header)
 
-def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None):
+def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None, separate=False):
 
     if layernames is not None:
         if len(layernames) != len(srcfiles):
@@ -494,24 +491,34 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     # create VRT files for mosaicing
     vrtlist = []
     for i in range(len(srcfiles)):
-        if isinstance(srcfiles[i], list):
-            vrt = os.path.join(os.path.dirname(dstfile), os.path.splitext(os.path.basename(srcfiles[i][0]))[0]+".vrt")
-            run(["gdalbuildvrt", "-overwrite", arg_srcnodata, arg_ext, vrt, srcfiles[i]])
-            srcfiles[i] = vrt
-            vrtlist.append(vrt)
+        base = srcfiles[i][0] if isinstance(srcfiles[i], list) else srcfiles[i]
+        vrt = os.path.join(os.path.dirname(dstfile), os.path.splitext(os.path.basename(base))[0]+".vrt")
+        run(["gdalbuildvrt", "-overwrite", arg_srcnodata, arg_ext, vrt, srcfiles[i]])
+        srcfiles[i] = vrt
+        vrtlist.append(vrt)
 
     # if no specific layernames are defined and sortfun is not set to None, sort files by custom function or, by default, the basename of the raster/VRT file
     if layernames is None and sortfun is not None:
         srcfiles = sorted(srcfiles, key=sortfun if sortfun else os.path.basename)
 
-    # create VRT for stacking
-    vrt = os.path.splitext(dstfile)[0]+".vrt"
-    run(["gdalbuildvrt", "-q", "-overwrite", "-separate", arg_srcnodata, arg_ext, vrt, srcfiles])
-    vrtlist.append(vrt)
+    bandnames = [os.path.splitext(os.path.basename(x))[0] for x in srcfiles] if layernames is None else layernames
 
-    # warp files
-    run(["gdalwarp", "-q", "-multi", "-overwrite", arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, vrt, dstfile])
-    # ["--config", "GDAL_CACHEMAX", 2000, "-wm", 6000, "-co", "INTERLEAVE="+interleave]
+    if separate:
+        if not os.path.isdir(dstfile):
+            os.makedirs(dstfile)
+        dstfiles = [os.path.join(dstfile, x) for x in bandnames]
+
+        for i in range(len(srcfiles)):
+            run(["gdalwarp", "-q", "-multi", "-overwrite", arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, srcfiles[i], dstfiles[i]])
+    else:
+        # create VRT for stacking
+        vrt = os.path.splitext(dstfile)[0]+".vrt"
+        run(["gdalbuildvrt", "-q", "-overwrite", "-separate", arg_srcnodata, arg_ext, vrt, srcfiles])
+        vrtlist.append(vrt)
+
+        # warp files
+        run(["gdalwarp", "-q", "-multi", "-overwrite", arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, vrt, dstfile])
+        # ["--config", "GDAL_CACHEMAX", 2000, "-wm", 6000, "-co", "INTERLEAVE="+interleave]
 
     # remove VRT files
     for vrt in vrtlist:
@@ -519,5 +526,5 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
 
     # edit ENVI HDR files to contain specific layer names
     par = HDRobject(dstfile+".hdr")
-    par.band_names = [os.path.splitext(os.path.basename(x))[0] for x in srcfiles] if layernames is None else layernames
+    par.band_names = bandnames
     hdr(par)
