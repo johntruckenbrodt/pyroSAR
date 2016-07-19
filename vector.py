@@ -40,12 +40,15 @@ class Vector(object):
             self.init_layer()
 
     def __getitem__(self, expression):
-        try:
-            field, value = expression.split("=")
-        except AttributeError:
-            raise KeyError("invalid expression")
-        feat = self.getFeatureByAttribute(field, parse_literal(value))
-        return feature2vector(feat, ref=self)
+        if isinstance(parse_literal(expression), int):
+            return self.getFeatureByIndex(parse_literal(expression))
+        else:
+            try:
+                field, value = expression.split("=")
+            except AttributeError:
+                raise KeyError("invalid expression")
+            feat = self.getFeatureByAttribute(field, parse_literal(value))
+            return feature2vector(feat, ref=self)
 
     def init_layer(self):
         self.layer = self.vector.GetLayer()
@@ -153,7 +156,14 @@ class Vector(object):
         self.layer.ResetReading()
         return out
 
+    def getFeatureByIndex(self, index):
+        feature = self.layer[index]
+        if feature is None:
+            feature = self.getfeatures()[index]
+        return feature
+
     def getfeatures(self):
+        self.layer.ResetReading()
         features = [x.Clone() for x in self.layer]
         self.layer.ResetReading()
         return features
