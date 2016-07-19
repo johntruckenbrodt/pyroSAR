@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ##############################################################
 # OGR wrapper for convenient vector data handling and processing
 # John Truckenbrodt 2015
@@ -11,7 +12,7 @@ by the OGR python binding
 
 import os
 from osgeo import ogr, osr
-from ancillary import crsConvert
+from ancillary import crsConvert, parse_literal
 
 ogr.UseExceptions()
 osr.UseExceptions()
@@ -32,11 +33,19 @@ class Vector(object):
 
         self.vector = self.driver.CreateDataSource("out") if driver == "Memory" else self.driver.Open(filename)
 
-        self.nlayers = self.vector.GetLayerCount()
-        if self.nlayers > 1:
+        nlayers = self.vector.GetLayerCount()
+        if nlayers > 1:
             raise IOError("multiple layers are currently not supported")
-        elif self.nlayers == 1:
+        elif nlayers == 1:
             self.init_layer()
+
+    def __getitem__(self, expression):
+        try:
+            field, value = expression.split("=")
+        except AttributeError:
+            raise KeyError("invalid expression")
+        feat = self.getFeatureByAttribute(field, parse_literal(value))
+        return feature2vector(feat, ref=self)
 
     def init_layer(self):
         self.layer = self.vector.GetLayer()
@@ -71,8 +80,12 @@ class Vector(object):
         return self.layer.GetName()
 
     @property
+    def nlayers(self):
+        return self.vector.GetLayerCount()
+
+    @property
     def nfeatures(self):
-        return self.layer.GetFeatureCount()
+        return len(self.layer)
 
     @property
     def nfields(self):
@@ -129,26 +142,27 @@ class Vector(object):
     def getArea(self):
         return sum([x.GetGeometryRef().GetArea() for x in self.getfeatures()])
 
+    def getFeatureByAttribute(self, fieldname, attribute):
+        if fieldname not in self.fieldnames:
+            raise KeyError("invalid field name")
+        out = None
+        self.layer.ResetReading()
+        for feature in self.layer:
+            if feature.GetField(fieldname).strip() == attribute.strip():
+                out = feature.Clone()
+        self.layer.ResetReading()
+        return out
+
     def getfeatures(self):
-        features = [None]*self.nfeatures
-        self.layer.SetNextByIndex(0)
-        for i in range(self.nfeatures):
-            if self.__features[i] is None:
-                features[i] = self.layer.GetNextFeature()
-            else:
-                features[i] = self.__features[i].Clone()
-                self.layer.SetNextByIndex(i+1)
-        self.layer.SetNextByIndex(0)
+        features = [x.Clone() for x in self.layer]
+        self.layer.ResetReading()
         return features
 
     def load(self):
-        self.layer.SetNextByIndex(0)
+        self.layer.ResetReading()
         for i in range(self.nfeatures):
             if self.__features[i] is None:
-                self.__features[i] = self.layer.GetNextFeature()
-            else:
-                self.layer.SetNextByIndex(i+1)
-        self.layer.SetNextByIndex(0)
+                self.__features[i] = self.layer[i]
 
     def reproject(self, projection):
 
@@ -167,11 +181,10 @@ class Vector(object):
         self.__init__()
         self.addlayer(layername, srs_out, geomType)
 
-        for i in range(len(features)):
-            geom = features[i].GetGeometryRef()
+        for feature in features:
+            geom = feature.GetGeometryRef()
             geom.Transform(coordTrans)
-
-            newfeature = features[i].Clone()
+            newfeature = feature.Clone()
             newfeature.SetGeometry(geom)
             self.layer.CreateFeature(newfeature)
             newfeature.Destroy()
@@ -196,20 +209,14 @@ class Vector(object):
         for fieldDef in self.fieldDefs:
             outlayer.CreateField(fieldDef)
 
-        inFeatures = self.getfeatures()
-
-        for i in range(len(inFeatures)):
+        for feature in self.layer:
             outFeature = ogr.Feature(outlayerdef)
-            outFeature.SetGeometry(inFeatures[i].GetGeometryRef())
+            outFeature.SetGeometry(feature.GetGeometryRef())
             for j in range(0, self.nfields):
-                outFeature.SetField(self.fieldnames[j], inFeatures[i].GetField(j))
-
+                outFeature.SetField(self.fieldnames[j], feature.GetField(j))
             # add the feature to the shapefile
             outlayer.CreateFeature(outFeature)
-
-            # destroy the features and get the next input feature
             outFeature.Destroy()
-            inFeatures[i].Destroy()
 
         srs_out = self.srs.Clone()
         srs_out.MorphToESRI()
@@ -217,3 +224,15 @@ class Vector(object):
             prj.write(srs_out.ExportToWkt())
 
         outdataset.Destroy()
+
+
+def feature2vector(feature, ref, layername=None):
+    layername = layername if layername is not None else ref.layername
+    vec = Vector(driver="Memory")
+    vec.addlayer(layername, ref.srs, ref.geomType)
+    feat_def = feature.GetDefnRef()
+    fields = [feat_def.GetFieldDefn(x) for x in range(0, feat_def.GetFieldCount())]
+    vec.layer.CreateFields(fields)
+    vec.layer.CreateFeature(feature)
+    vec.init_features()
+    return vec
