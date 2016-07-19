@@ -1,44 +1,23 @@
+##############################################################
+# custom installation of GDAL and optional dependencies without administrator rights
+# John Truckenbrodt 2016
+##############################################################
+
 import os
 import re
 import sys
 import tarfile
 import zipfile
 from urllib2 import urlopen
-import subprocess as sp
+from install.auxil import *
 
 # the number of CPUs used for compilation
 cores = 20
 
-root = "/homes4/geoinf/ve39vem/test2_gdal"
+root = "/homes4/geoinf/ve39vem/gdal"
 downloaddir = os.path.join(root, "originals")
 packagedir = os.path.join(root, "packages")
 installdir = os.path.join(root, "local")
-
-
-# function to execute shell commands
-def execute(cmd, cwd=None, env=None):
-    proc = sp.Popen(cmd, stdin=None, stdout=sp.PIPE, stderr=sp.PIPE, cwd=cwd, env=env)
-    out, err = proc.communicate()
-    if proc.returncode and err:
-        if cmd[0] == "make":
-            rollback(cwd)
-        raise InstallationError(cmd, err)
-
-
-# function to clean up temporary files created during compilation
-def rollback(directory):
-    try:
-        sp.check_call(["make", "clean"], cwd=directory)
-        sp.check_call(["make", "distclean"], cwd=directory)
-    except sp.CalledProcessError:
-        pass
-
-
-# custom error in case a command fails
-class InstallationError(Exception):
-    def __init__(self, command, errormessage):
-        Exception.__init__(self, "\n\nexecuted command:\n{}\n\n{}".format(" ".join(command), errormessage))
-
 
 # create installation directories in case they do not exist
 for dir in [root, downloaddir, packagedir, installdir]:
@@ -65,13 +44,13 @@ versions = {"gdal": "2.1.0",
 # in case of hdf4 and hdf5 the most recent versions are going to be used
 remotes = {"gdal": "http://download.osgeo.org/gdal/{0}/gdal-{0}.tar.gz".format(versions["gdal"]),
            "geos": "http://download.osgeo.org/geos/geos-{0}.tar.bz2".format(versions["geos"]),
+           "proj": "http://download.osgeo.org/proj/proj-{0}.tar.gz".format(versions["proj"]),
+           "tiff": "http://download.osgeo.org/libtiff/tiff-{0}.tar.gz".format(versions["tiff"]),
+           "geotiff": "http://download.osgeo.org/geotiff/libgeotiff/libgeotiff-{0}.tar.gz".format(versions["geotiff"]),
            "hdf4": "https://www.hdfgroup.org/ftp/HDF/releases/HDF{0}/src/hdf-{0}.tar.gz".format(versions["hdf4"]),
            "hdf5": "https://www.hdfgroup.org/ftp/HDF5/releases/hdf5-{0}/src/hdf5-{0}.tar.gz".format(versions["hdf5"]),
            "kml": "https://libkml.googlecode.com/files/libkml-{0}.tar.gz".format(versions["kml"]),
            "netcdf": "ftp://ftp.unidata.ucar.edu/pub/netcdf/netcdf-{0}.tar.gz".format(versions["netcdf"]),
-           "proj": "http://download.osgeo.org/proj/proj-{0}.tar.gz".format(versions["proj"]),
-           "tiff": "http://download.osgeo.org/libtiff/tiff-{0}.tar.gz".format(versions["tiff"]),
-           "geotiff": "http://download.osgeo.org/geotiff/libgeotiff/libgeotiff-{0}.tar.gz".format(versions["geotiff"]),
            "expat": "https://sourceforge.net/projects/expat/files/expat/{0}/expat-{0}.tar.bz2".format(versions["expat"])}
 
 ##################################################################
@@ -112,7 +91,7 @@ for module in modules+["gdal"]:
 
 ##################################################################
 print "--------------------------------------------------"
-print "compiling dependencies..."
+print "installing dependencies..."
 
 # create installation directories for the packages
 build_dirs = {}
@@ -184,10 +163,15 @@ for module in modules:
 print "--------------------------------------------------"
 print "installing GDAL..."
 
+# todo: adjust to Felix' system
 # define extra environment variables
 env = os.environ.copy()
 env["LDFLAGS"] = "-L/usr/local/lib64"
-env["LD_LIBRARY_PATH"] = "/usr/local/lib64" + os.pathsep + env["LD_LIBRARY_PATH"]
+
+if "LD_LIBRARY_PATH" not in env.keys():
+    env["LD_LIBRARY_PATH"] = "/usr/local/lib64"
+else:
+    env["LD_LIBRARY_PATH"] = "/usr/local/lib64" + os.pathsep + env["LD_LIBRARY_PATH"]
 
 localdir = localdirs["gdal"]
 build_gdal = os.path.join(localdir, "build")
@@ -204,6 +188,7 @@ execute(["make", "-j{}".format(cores)], cwd=localdir)
 print "...installation"
 execute(["make", "install"], cwd=localdir)
 #################################
+print "--------------------------------------------------"
 print "installing the GDAL Python binding..."
 
 env["LD_LIBRARY_PATH"] = os.path.join(build_gdal, "lib") + os.pathsep + env["LD_LIBRARY_PATH"]

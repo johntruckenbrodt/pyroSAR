@@ -50,11 +50,11 @@ def centerdist(obj1, obj2):
     shape1 = init_vector(obj1)
     shape2 = init_vector(obj2)
 
-    feature1 = shape1.layer.GetFeature(0)
+    feature1 = shape1[0]
     geometry1 = feature1.GetGeometryRef()
     center1 = geometry1.Centroid()
 
-    feature2 = shape2.layer.GetFeature(0)
+    feature2 = shape2[0]
     geometry2 = feature2.GetGeometryRef()
     center2 = geometry2.Centroid()
 
@@ -67,10 +67,10 @@ def intersect(obj1, obj2):
 
     shape1.reproject(shape2.srs)
 
-    feature1 = shape1.layer.GetFeature(0)
+    feature1 = shape1[0]
     geometry1 = feature1.GetGeometryRef()
 
-    feature2 = shape2.layer.GetFeature(0)
+    feature2 = shape2[0]
     geometry2 = feature2.GetGeometryRef()
 
     intersect = geometry2.Intersection(geometry1)
