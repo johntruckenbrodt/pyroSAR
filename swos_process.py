@@ -13,7 +13,7 @@ from pyroSAR import identify
 
 from swos_testsites import lookup
 
-sitename = "Greece_EasternMacedonia"
+sitename = "Jordan_Azraq"
 maindir = "/geonfs01_vol1/ve39vem/swos_process"
 srtmdir = "/geonfs02_vol1/SRTM_1_HGT"
 
@@ -38,35 +38,37 @@ site = sites["Site_Name={}".format(lookup[sitename])]
 site_area = site.getArea()
 
 # scenes = finder("/geonfs02_vol1/swos_fsu/sentinel1/GRD", ["^S1[AB]"], regex=True)
-# # scenes = finder("/geonfs01_vol1/ve39vem/swos", ["*zip"])
-#
-# selection = []
-# a = datetime.now()
-# for scene in scenes:
-#     try:
-#         id = identify(scene)
-#         if len(finder(outdir, [id.outname_base()], regex=True)) == 0:
-#             intersect = spatial.intersect(id.bbox(), site)
-#             if intersect is not None:
-#                 if "VV" in id.polarizations and id.acquisition_mode == "IW":
-#                     # if id.start > "20160302T054342":
-#                     # if intersect.GetArea()/site_area == 1:
-#                     # if id.beam == "IW" and id.pols in ["SV", "DV"]:
-#                     print scene
-#                     selection.append(id)
-#     except IOError:
-#         continue
-#
-# b = datetime.now()
-# print b - a
-#
-# with open(os.path.join(sitedir, "scenelist"), "w") as outfile:
-#     outfile.write("\n".join([x.scene for x in selection]) + "\n")
+scenes = finder("/geonfs01_vol1/ve39vem/swos_archive", ["*zip"])
+
+selection = []
+a = datetime.now()
+for scene in scenes:
+    try:
+        id = identify(scene)
+        if len(finder(outdir, [id.outname_base()], regex=True)) == 0:
+            intersect = spatial.intersect(id.bbox(), site)
+            if intersect is not None:
+                if "VV" in id.polarizations:
+                # if "VV" in id.polarizations and id.acquisition_mode == "IW":
+                    # if id.start > "20160302T054342":
+                    # if intersect.GetArea()/site_area == 1:
+                    # if id.beam == "IW" and id.pols in ["SV", "DV"]:
+                    print scene
+                    selection.append(id)
+    except IOError:
+        continue
+
+b = datetime.now()
+print b - a
+
+with open(os.path.join(sitedir, "scenelist"), "w") as outfile:
+    outfile.write("\n".join([x.scene for x in selection]) + "\n")
 
 with open(os.path.join(sitedir, "scenelist"), "r") as infile:
     files = infile.read().strip().split()
     selection = []
     for scene in files:
+        print scene
         id = identify(scene)
         if len(finder(outdir, [id.outname_base()], regex=True)) == 0:
             selection.append(id)
@@ -98,8 +100,8 @@ if not os.path.isfile(srtm_mosaic):
 if not os.path.isfile(srtm_mosaic_utm):
     srtm.transform(srtm_mosaic, srtm_mosaic_utm, targetres)
 
-# scene = selection[1]
-# geocode(scene, srtm_mosaic_utm, tempdir, outdir, targetres, scaling, func_geoback, func_interp)
+scene = selection[1]
+geocode(scene, srtm_mosaic_utm, tempdir, outdir, targetres, scaling, func_geoback, func_interp)
 
 print "start geocoding"
 print datetime.now()
