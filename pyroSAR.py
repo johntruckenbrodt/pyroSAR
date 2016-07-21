@@ -21,6 +21,7 @@ from time import strptime, strftime
 import xml.etree.ElementTree as ET
 from xml_util import getNamespaces
 import sqlite3
+from envi import hdr
 
 
 def identify(scene):
@@ -365,7 +366,7 @@ class ID(object):
 
 
 class ESA(ID):
-    """Handle SAR data of the ESA format."""
+    """Handle SAR data in ESA format"""
 
     def __init__(self, scene):
 
@@ -441,6 +442,8 @@ class ESA(ID):
                 base = base.replace("SLC", "slc")
                 newname = os.path.join(directory, base + ext)
                 os.rename(item, newname)
+                if newname.endswith(".par"):
+                    hdr(newname)
         else:
             raise IOError("scene already processed")
 
@@ -451,10 +454,12 @@ class ESA(ID):
         candidates = [x for x in self.getGammaImages(self.gammadir) if re.search("_pri$", x)]
         for image in candidates:
             out = image.replace("pri", "grd")
-            run(["radcal_PRI", image, image + ".par", out, out + ".par", k_db, inc_ref])
+            run(["radcal_PRI", image, image+".par", out, out+".par", k_db, inc_ref])
+            hdr(out+".par")
             if replace:
-                os.remove(image)
-                os.remove(image + ".par")
+                for item in [image, image+".par", image+".hdr"]:
+                    if os.path.isfile(item):
+                        os.remove(item)
 
     def unpack(self, directory):
         base_file = os.path.basename(self.file).strip("\.zip|\.tar(?:\.gz|)")
@@ -576,9 +581,11 @@ class SAFE(ID):
             name = os.path.join(directory, "_".join(fields))
 
             if match.group("product") == "slc":
-                cmd = ["par_S1_SLC", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name, name + ".tops_par"]
+                cmd = ["par_S1_SLC", tiff, xml_ann, xml_cal, xml_noise, name+".par", name, name+".tops_par"]
+                hdr(name+".par")
             else:
-                cmd = ["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name]
+                cmd = ["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name+".par", name]
+                hdr(name+".par")
             try:
                 run(cmd)
             except ImportWarning:
