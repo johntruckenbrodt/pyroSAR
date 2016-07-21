@@ -1,7 +1,6 @@
 ##############################################################
 # ENVI header management
 # John Truckenbrodt 2015-2016
-# last update 2016-03-03
 ##############################################################
 """
 This script offers functionality for editing ENVI header files
@@ -14,7 +13,8 @@ obj = HDRobject("E:/test.hdr")
 obj.band_names = ["one", "two"]
 obj.write()
 """
-
+# todo: remove gamma.auxil dependency
+import os
 import re
 from gamma.auxil import ISPPar
 from ancillary import union
@@ -90,7 +90,7 @@ class HDRobject(object):
 
     # write object to an ENVI header file
     def write(self, filename="same"):
-        filename = self.filename[:-3]+"hdr" if filename is "same" else filename
+        filename = os.path.splitext(self.filename)[0]+".hdr" if filename is "same" else filename
         with open(filename, "w") as out:
             out.write("ENVI\n")
             for item in ["description", "samples", "lines", "bands", "header_offset", "file_type", "data_type", "interleave", "sensor_type", "byte_order", "map_info",
