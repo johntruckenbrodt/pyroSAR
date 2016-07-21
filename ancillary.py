@@ -1,7 +1,6 @@
 ##############################################################
 # core routines for software pythonland
-# John Truckenbrodt 2014-2015
-# last update 2015-12-08
+# John Truckenbrodt 2014-2016
 ##############################################################
 """
 This script gathers central functions and object instances for processing SAR images using the software GAMMA within the GUI
@@ -252,7 +251,7 @@ def run(cmd, outdir=None, logpath=None, inlist=None):
         log = sp.PIPE
     else:
         index = 1 if cmd[0] in [sys.executable, "Rscript"] else 0
-        logfile = os.path.join(logpath, os.path.splitext(cmd[index])[0]+".log")
+        logfile = os.path.join(logpath, os.path.splitext(os.path.basename(cmd[index]))[0]+".log")
         log = open(logfile, "a")
 
     if inlist is None:
