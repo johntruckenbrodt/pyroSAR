@@ -7,7 +7,7 @@ def gammaErrorHandler(process):
     knownErrors = {"image data formats differ": IOError,
                    "cannot open": IOError,
                    "no coverage of SAR image by DEM \(in (?:latitude/northing|longitude/easting)\)": IOError,
-                   "libgdal.so.1: no version information available": ImportWarning,
+                   "libgdal.so.1: no version information available": None,
                    "line outside of image": ValueError,
                    "no offsets found above SNR threshold": ValueError,
                    "window size < 4": ValueError,
@@ -21,7 +21,11 @@ def gammaErrorHandler(process):
     if errormessage != "":
         for error in knownErrors:
             if re.search(error, errormessage):
-                raise knownErrors[error](errormessage)
+                errortype = knownErrors[error]
+                if errortype:
+                    raise knownErrors[error](errormessage)
+                else:
+                    return
         raise GammaUnknownError(errormessage)
 
 
