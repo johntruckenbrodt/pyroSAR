@@ -15,6 +15,8 @@ from StringIO import StringIO
 from Tkinter import *
 from glob import glob
 from gamma.error import gammaErrorHandler
+from urllib import urlencode
+from urlparse import urlparse, urlunparse
 
 from osgeo import osr
 
@@ -308,6 +310,12 @@ class Stack(object):
 # union of two lists
 def union(a, b):
     return list(set(a) & set(b))
+
+
+# parse a url query
+def urlQueryParser(url, querydict):
+    address_parse = urlparse(url)
+    return urlunparse(address_parse._replace(query=urlencode(querydict)))
 
 
 # write parameter textfile
