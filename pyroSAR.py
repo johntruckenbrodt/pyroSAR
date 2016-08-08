@@ -9,6 +9,7 @@ this script is intended to contain several SAR scene identifier classes to read 
 import os
 import re
 import abc
+import ssl
 import math
 from osgeo import gdal, ogr, osr
 from osgeo.gdalconst import GA_ReadOnly
@@ -16,12 +17,14 @@ import spatial
 import StringIO
 import zipfile as zf
 import tarfile as tf
-from ancillary import finder, parse_literal, run, crsConvert
+from ancillary import finder, parse_literal, run, crsConvert, urlQueryParser
 from time import strptime, strftime
 import xml.etree.ElementTree as ET
 from xml_util import getNamespaces
 import sqlite3
 from envi import hdr
+from urllib import urlopen
+from datetime import datetime, timedelta
 
 
 def identify(scene):
@@ -538,9 +541,7 @@ class SAFE(ID):
 
         # scan the manifest.safe file and add selected attributes to a meta dictionary
         self.meta = self.scanManifest()
-
         self.meta["spacing"] = self.getSpacing()
-
         self.meta["projection"] = 'GEOGCS["WGS 84",' \
                                   'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
                                   'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
@@ -549,6 +550,8 @@ class SAFE(ID):
 
         # register the standardized meta attributes as object attributes
         ID.__init__(self, self.meta)
+
+        self.gammafiles = {"slc": [], "pri": [], "grd": []}
 
     def calibrate(self, replace=False):
         print "calibration already performed during import"
@@ -575,27 +578,71 @@ class SAFE(ID):
             # the reason (GAMMA command error vs. bad SAFE xml file entry) is yet to be discovered
             # xml_noise = os.path.join(self.scene, "annotation", "calibration", "noise-" + base)
             xml_noise = "-"
+
+            product = match.group("product")
+
             fields = (self.outname_base(),
                       match.group("pol").upper(),
-                      match.group("product"))
+                      product)
             name = os.path.join(directory, "_".join(fields))
 
-            if match.group("product") == "slc":
+            if product == "slc":
                 cmd = ["par_S1_SLC", tiff, xml_ann, xml_cal, xml_noise, name+".par", name, name+".tops_par"]
-                hdr(name+".par")
             else:
-                cmd = ["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name+".par", name]
-                hdr(name+".par")
-            try:
-                run(cmd)
-            except ImportWarning:
-                pass
+                cmd = ["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name]
+
+            run(cmd)
+            hdr(name+".par")
+            self.gammafiles[product].append(name)
+
+    def correctOSV(self, osvdir=None):
+        logdir = os.path.join(self.scene, "logfiles")
+        if not os.path.isdir(logdir):
+            os.makedirs(logdir)
+        if osvdir is None:
+            osvdir = os.path.join(self.scene, "osv")
+        if not os.path.isdir(osvdir):
+            os.makedirs(osvdir)
+        self.getOSV(osvdir)
+        for product in self.gammafiles:
+            for image in self.gammafiles[product]:
+                print "OPOD_vec", image+".par", osvdir
+                run(["OPOD_vec", image+".par", osvdir], outdir=logdir)
 
     def getCorners(self):
         coordinates = self.meta["coordinates"]
         lat = [x[0] for x in coordinates]
         lon = [x[1] for x in coordinates]
         return {"xmin": min(lon), "xmax": max(lon), "ymin": min(lat), "ymax": max(lat)}
+
+    def getOSV(self, outdir):
+        date = datetime.strptime(self.start, "%Y%m%dT%H%M%S")
+
+        before = (date-timedelta(days=1)).strftime("%Y-%m-%d")
+        after = (date+timedelta(days=1)).strftime("%Y-%m-%d")
+
+        query = dict()
+        query["validity_start_time"] = "{0}..{1}".format(before, after)
+
+        remote_poe = "https://qc.sentinel1.eo.esa.int/aux_poeorb/"
+
+        pattern = "S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF"
+
+        sslcontext = ssl._create_unverified_context()
+
+        subaddress = urlQueryParser(remote_poe, query)
+        response = urlopen(subaddress, context=sslcontext).read()
+        remotes = [os.path.join(remote_poe, x) for x in sorted(set(re.findall(pattern, response)))]
+
+        if not os.access(outdir, os.W_OK):
+            raise RuntimeError("insufficient directory permissions, unable to write")
+        downloads = [x for x in remotes if not os.path.isfile(os.path.join(outdir, os.path.basename(x)))]
+        for item in downloads:
+            print os.path.basename(item)
+            infile = urlopen(item, context=sslcontext)
+            with open(os.path.join(outdir, os.path.basename(item)), "wb") as outfile:
+                outfile.write(infile.read())
+            infile.close()
 
     def getSpacing(self):
         annotations = self.findfiles(self.pattern_ds)
@@ -634,7 +681,7 @@ class SAFE(ID):
 
         # id = identify("/geonfs01_vol1/ve39vem/S1/archive/S1A_EW_GRDM_1SDH_20150408T053103_20150408T053203_005388_006D8D_5FAC.zip")
 
-# todo: remove class and change dependencies to class CEOS (scripts: gammaGUI/reader_ers.py)
+# todo: remove class ERS and change dependencies to class CEOS (scripts: gammaGUI/reader_ers.py)
 # class ERS(object):
 #     def __init__(self, scene):
 #
