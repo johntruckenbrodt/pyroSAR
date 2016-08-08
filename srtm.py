@@ -2,8 +2,7 @@
 ##############################################################
 # preparation of srtm data for use in gamma
 # module of software gammaGUI
-# John Truckenbrodt 2014-15
-# last update 2015-11-04
+# John Truckenbrodt 2014-16
 ##############################################################
 
 """
@@ -24,14 +23,11 @@ import shutil
 import zipfile
 import subprocess as sp
 from urllib2 import urlopen
+
 from pyroSAR import ID
-
 import raster
-
 from gamma.auxil import ISPPar, UTM
-
 from ancillary import finder, run, dissolve, ReadPar
-
 from envi import HDRobject, hdr
 
 
@@ -124,9 +120,10 @@ def fill(dem, dem_out, logpath=None, replace=False):
             os.remove(item)
 
 
-# transform SRTM DEM from EQA to UTM projection
 def transform(infile, outfile, posting=90):
-
+    """
+    transform SRTM DEM from EQA to UTM projection
+    """
     # read DEM parameter file
     par = ISPPar(infile+".par")
 
@@ -149,9 +146,11 @@ def transform(infile, outfile, posting=90):
     hdr(outfile+".par")
 
 
-# create GAMMA parameter text files for DEM files
-# currently only EQA and UTM projections with WGS84 ellipsoid are supported
 def dempar(dem, logpath=None):
+    """
+    create GAMMA parameter text files for DEM files
+    currently only EQA and UTM projections with WGS84 ellipsoid are supported
+    """
     rast = raster.Raster(dem)
 
     # determine data type
@@ -189,8 +188,10 @@ def dempar(dem, logpath=None):
     run(["create_dem_par", os.path.splitext(dem)[0] + ".par"], os.path.dirname(dem), logpath, inlist=parlist)
 
 
-# byte swapping from small to big endian (as required by GAMMA)
 def swap(data, outname):
+    """
+    byte swapping from small to big endian (as required by GAMMA)
+    """
     rast = raster.Raster(data)
     dtype = rast.dtype
     if rast.format != "ENVI":
@@ -198,14 +199,16 @@ def swap(data, outname):
     dtype_lookup = {"Int16": 2, "CInt16": 2, "Int32": 4, "Float32": 4, "CFloat32": 4, "Float64": 8}
     if dtype not in dtype_lookup:
         raise IOError("data type {} not supported".format(dtype))
-    sp.check_call(["swap_bytes", data, outname, str(dtype_lookup[dtype])], stdout=sp.PIPE)
+    run(["swap_bytes", data, outname, str(dtype_lookup[dtype])])
     header = HDRobject(data+".hdr")
     header.byte_order = 1
     hdr(header, outname+".hdr")
 
 
-# mosaicing of multiple DEMs
 def mosaic(demlist, outname, byteorder=1, gammapar=True):
+    """
+    mosaicing of multiple DEMs
+    """
     if len(demlist) < 2:
         raise IOError("length of demlist < 2")
     nodata = str(raster.Raster(demlist[0]).nodata)
@@ -220,13 +223,15 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
         dempar(outname)
 
 
-# concatenate hgt file names overlapping with multiple SAR scenes
-# input is a list of GAMMA SAR scene parameter files
-# this list is read for corner coordinates of which the next integer lower left latitude and longitude is computed
-# hgt files are supplied in 1 degree equiangular format named e.g. N16W094.hgt (with pattern [NS][0-9]{2}[EW][0-9]{3}.hgt
-# For north and east hemisphere the respective absolute latitude and longitude values are smaller than the lower left coordinate of the SAR image
-# west and south coordinates are negative and hence the nearest lower left integer absolute value is going to be larger
 def hgt(parfiles):
+    """
+    concatenate hgt file names overlapping with multiple SAR scenes
+    input is a list of GAMMA SAR scene parameter files
+    this list is read for corner coordinates of which the next integer lower left latitude and longitude is computed
+    hgt files are supplied in 1 degree equiangular format named e.g. N16W094.hgt (with pattern [NS][0-9]{2}[EW][0-9]{3}.hgt
+    For north and east hemisphere the respective absolute latitude and longitude values are smaller than the lower left coordinate of the SAR image
+    west and south coordinates are negative and hence the nearest lower left integer absolute value is going to be larger
+    """
 
     if bool([type(x) in ID.__subclasses__() for x in parfiles]):
         corners = [x.getCorners() for x in parfiles]
@@ -293,11 +298,13 @@ def makeSRTM(scenes, srtmdir, outname):
 
     shutil.rmtree(tempdir)
 
-# automatic downloading and unpacking of srtm tiles
-# base directory must contain SLC files in GAMMA format including their parameter files for reading coordinates
-# additional dem directory may locally contain srtm files. This directory is searched for locally existing files, which are then copied to the current working directory
 
 def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
+    """
+    automatic downloading and unpacking of srtm tiles
+    base directory must contain SLC files in GAMMA format including their parameter files for reading coordinates
+    additional dem directory may locally contain srtm files. This directory is searched for locally existing files, which are then copied to the current working directory
+    """
 
     # concatenate required hgt tile names
     target_ids = hgt(parfiles)
