@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 ##############################################################
 # OGR wrapper for convenient vector data handling and processing
-# John Truckenbrodt 2015
-# last update 2015-12-09
+# John Truckenbrodt 2015-2016
 ##############################################################
 
 """
@@ -176,10 +175,7 @@ class Vector(object):
 
     def reproject(self, projection):
 
-        if isinstance(projection, osr.SpatialReference):
-            srs_out = projection.Clone()
-        else:
-            srs_out = crsConvert(projection, "osr")
+        srs_out = crsConvert(projection, "osr")
 
         # create the CoordinateTransformation
         coordTrans = osr.CoordinateTransformation(self.srs, srs_out)
