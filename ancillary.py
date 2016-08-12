@@ -28,23 +28,29 @@ except ImportError:
 osr.UseExceptions()
 
 
-# suppress console stdout prints, i.e. redirect them to a temporary string object
-# call enablePrint() to reverse the effect
 def blockPrint():
+    """
+    suppress console stdout prints, i.e. redirect them to a temporary string object
+    call enablePrint() to reverse the effect
+    """
     if isinstance(sys.stdout, file):
         sys.stdout = StringIO()
 
 
-# convert between epsg, wkt and proj4 spatial references
-# crsText must be a osr.SpatialReference object or a string of type WKT, PROJ4 or EPSG
-# crsOut must be either "wkt", "proj4", "epsg" or "osr"
-# if type "osr" is selected the function will return a spatial reference object of type osr.SpatialReference()
 def crsConvert(crsIn, crsOut):
+    """
+    convert between epsg, wkt, proj4 and opengis spatial references
+    crsText must be a osr.SpatialReference object, an opengis URL (e.g. "http://www.opengis.net/def/crs/EPSG/0/4326") or a string of type WKT, PROJ4 or EPSG
+    crsOut must be either "wkt", "proj4", "epsg", "osr" or "opengis"
+    if type "osr" is selected the function will return a spatial reference object of type osr.SpatialReference()
+    """
     if isinstance(crsIn, osr.SpatialReference):
         srs = crsIn.Clone()
     else:
         srs = osr.SpatialReference()
         try:
+            if "opengis.net/def/crs/EPSG/0/" in crsIn:
+                crsIn = int(os.path.basename(crsIn.strip("/")))
             srs.ImportFromEPSG(crsIn)
         except (TypeError, RuntimeError):
             try:
@@ -61,21 +67,28 @@ def crsConvert(crsIn, crsOut):
     elif crsOut == "epsg":
         srs.AutoIdentifyEPSG()
         return int(srs.GetAuthorityCode(None))
+    elif crsOut == "opengis":
+        srs.AutoIdentifyEPSG()
+        return "http://www.opengis.net/def/crs/EPSG/0/{}".format(srs.GetAuthorityCode(None))
     elif crsOut == "osr":
         return srs
     else:
         raise ValueError("crsOut not recognized; must be either wkt, proj4 or epsg")
 
 
-# merge two dictionaries
 def dictmerge(x, y):
+    """
+    merge two dictionaries
+    """
     z = x.copy()
     z.update(y)
     return z
 
 
-# list and tuple flattening
 def dissolve(inlist):
+    """
+    list and tuple flattening; e.g. [[1, 2], [3, 4]] -> [1, 2, 3, 4]
+    """
     out = []
     for i in inlist:
         i = list(i) if type(i) is tuple else i
@@ -83,22 +96,25 @@ def dissolve(inlist):
     return out
 
 
-# reverse console stdout print suppression from function blockPrint
 def enablePrint():
+    """
+    reverse console stdout print suppression from function blockPrint
+    """
     if not isinstance(sys.stdout, file):
         sys.stdout = sys.__stdout__
 
 
-# function for finding files in a folder and its subdirectories
-# search patterns must be given in a list
-# patterns can follow the unix shell standard (default) or regular expressions (via argument regex)
-# the argument recursive decides whether search is done recursively in all subdirectories or in the defined directory only
-# foldermodes:
-# 0: no folders
-# 1: folders included
-# 2: only folders
 def finder(folder, matchlist, foldermode=0, regex=False, recursive=True):
-
+    """
+    function for finding files in a folder and its subdirectories
+    search patterns must be given in a list
+    patterns can follow the unix shell standard (default) or regular expressions (via argument regex)
+    the argument recursive decides whether search is done recursively in all subdirectories or in the defined directory only
+    foldermodes:
+    0: no folders
+    1: folders included
+    2: only folders
+    """
     # match patterns
     if regex:
         if recursive:
@@ -118,8 +134,10 @@ def finder(folder, matchlist, foldermode=0, regex=False, recursive=True):
     return sorted(out)
 
 
-# compute distance in meters between two points in latlon
 def haversine(lat1, lon1, lat2, lon2):
+    """
+    compute distance in meters between two points in latlon
+    """
     radius = 6371000
     lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
     a = math.sin((lat2-lat1)/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2-lon1)/2)**2
@@ -127,24 +145,26 @@ def haversine(lat1, lon1, lat2, lon2):
     return radius * c
 
 
-# wrapper for multicore process execution
-# function: individual function to be applied to each process item
-# cores: the number of subprocesses started/CPUs used; this value is reduced in case the number of subprocesses is smaller
-# multiargs: a dictionary containing subfunction argument names as keys and lists of arguments to be distributed among the processes as values
-# singleargs: all remaining arguments which are invariant among the subprocesses
-# important:
-# -all multiargs value lists must be of same length, i.e. all argument keys must be explicitly defined for each subprocess
-# -all function arguments passed via singleargs must be provided with the full argument name and its value (i.e. argname=argval); default function args are not accepted
-# if the processes return anything else than None, this function will return a list of results
-# if all processes return None, this function will be of type void
-# example:
-# def add(x, y, z):
-#     return x+y+z
-# multicore(add, cores=2, multiargs={"x": [1, 2]}, y=5, z=9)
-# -> returns [15, 16]
-# multicore(add, cores=2, multiargs={"x": [1, 2], "y": [5, 6]}, z=9)
-# -> returns [15, 17]
 def multicore(function, cores, multiargs, **singleargs):
+    """
+    wrapper for multicore process execution
+    function: individual function to be applied to each process item
+    cores: the number of subprocesses started/CPUs used; this value is reduced in case the number of subprocesses is smaller
+    multiargs: a dictionary containing subfunction argument names as keys and lists of arguments to be distributed among the processes as values
+    singleargs: all remaining arguments which are invariant among the subprocesses
+    important:
+    -all multiargs value lists must be of same length, i.e. all argument keys must be explicitly defined for each subprocess
+    -all function arguments passed via singleargs must be provided with the full argument name and its value (i.e. argname=argval); default function args are not accepted
+    if the processes return anything else than None, this function will return a list of results
+    if all processes return None, this function will be of type void
+    example:
+    def add(x, y, z):
+        return x+y+z
+    multicore(add, cores=2, multiargs={"x": [1, 2]}, y=5, z=9)
+    -> returns [15, 16]
+    multicore(add, cores=2, multiargs={"x": [1, 2], "y": [5, 6]}, z=9)
+    -> returns [15, 17]
+    """
 
     # compare the function arguments with the multi and single arguments and raise errors if mismatches occur
     function_check = inspect.getargspec(function)
@@ -186,8 +206,10 @@ def multicore(function, cores, multiargs, **singleargs):
     #     return result
 
 
-# return the smallest possible data type
 def parse_literal(x):
+    """
+    return the smallest possible data type
+    """
     if isinstance(x, list):
         return [parse_literal(y) for y in x]
     try:
@@ -199,8 +221,10 @@ def parse_literal(x):
             return str(x)
 
 
-# classical queue implementation
 class Queue(object):
+    """
+    classical queue implementation
+    """
     def __init__(self, inlist=None):
         self.stack = [] if inlist is None else inlist
 
@@ -220,8 +244,10 @@ class Queue(object):
             return val
 
 
-# read processing parameter text files
 class ReadPar(object):
+    """
+    read processing parameter text files
+    """
     def __init__(self, filename, splits="[:|\t|=\s]", type=""):
         if type == "exe":
             splits = "[\t\n]"
@@ -244,8 +270,10 @@ class ReadPar(object):
                         self.index.append(items[0])
 
 
-# wrapper for subprocess execution including logfile writing and command prompt piping
 def run(cmd, outdir=None, logpath=None, inlist=None):
+    """
+    wrapper for subprocess execution including logfile writing and command prompt piping
+    """
     cmd = [str(x) for x in dissolve(cmd)]
     if outdir is None:
         outdir = os.getcwd()
@@ -268,9 +296,11 @@ def run(cmd, outdir=None, logpath=None, inlist=None):
         log.close()
 
 
-# classical stack implementation
-# input can be a list, a single value or None (i.e. Stack())
 class Stack(object):
+    """
+    classical stack implementation
+    input can be a list, a single value or None (i.e. Stack())
+    """
     def __init__(self, inlist=None):
         if isinstance(inlist, list):
             self.stack = inlist
@@ -307,19 +337,25 @@ class Stack(object):
             return val
 
 
-# union of two lists
 def union(a, b):
+    """
+    union of two lists
+    """
     return list(set(a) & set(b))
 
 
-# parse a url query
 def urlQueryParser(url, querydict):
+    """
+    parse a url query
+    """
     address_parse = urlparse(url)
     return urlunparse(address_parse._replace(query=urlencode(querydict)))
 
 
-# write parameter textfile
 def writer(filename, arguments, strfill=True):
+    """
+    write parameter textfile
+    """
     with open(filename, "w") as out:
         for i in range(0, len(arguments)):
             if strfill:
