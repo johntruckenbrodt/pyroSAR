@@ -12,10 +12,8 @@ def getNamespaces(xml):
         line = infile.readline()
         if not line:
             break
-        # todo: find out how this can be generalized
-        if line.startswith("<xfdu"):
+        if "xmlns" in line:
             namespaces = dict([tuple(x.replace("xmlns:", "").replace('"', '').split("=")) for x in line.split() if x.startswith("xmlns")])
-            break
     # reset file pointer
     infile.seek(0)
 
