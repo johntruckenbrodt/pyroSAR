@@ -1,7 +1,6 @@
 ##############################################################
 # GDAL wrapper for convenient raster data handling and processing
-# John Truckenbrodt 2015
-# last update 2015-12-05
+# John Truckenbrodt 2015-2016
 ##############################################################
 
 """
@@ -10,8 +9,8 @@ by the GDAL python binding.
 Several functions are provided along with this module to directly modify the raster object in memory or directly write a newly created file to disk (without modifying the raster
 object itself). Upon initializing a Raster object only metadata is loaded, the actual data can be, for example, loaded to memory by calling functions matrix or load.
 """
-#todo: function to write data with the same metadata as a given file
-#todo: documentation
+# todo: function to write data with the same metadata as a given file
+# todo: documentation
 
 import os
 import re
@@ -24,6 +23,7 @@ from ancillary import dissolve, crsConvert, finder, run, multicore
 from envi import HDRobject, hdr
 import subprocess as sp
 from math import ceil, floor, sqrt
+from time import gmtime, strftime
 
 os.environ["GDAL_PAM_PROXY_DIR"] = "/tmp"
 
@@ -277,7 +277,7 @@ class Raster(object):
         # else:
         #     raise RuntimeError("file already exists")
 
-        if format == "GTiff" and not outname.endswith(".tif"):
+        if format == "GTiff" and not re.search("\.tif[f]*$", outname):
             outname += ".tif"
 
         dtype = self.dtype if dtype == "default" else dtype
@@ -291,6 +291,7 @@ class Raster(object):
         dim = [0, 0, self.cols, self.rows] if dim == "full" else dim
         driver = gdal.GetDriverByName(format)
         outDataset = driver.Create(outname, dim[2], dim[3], self.bands, self.dtypes(dtype))
+        outDataset.SetMetadata(self.raster.GetMetadata())
         if self.geo is not None:
             outDataset.SetGeoTransform(geo)
         if self.projection is not None:
@@ -301,6 +302,8 @@ class Raster(object):
             mat = self.raster.GetRasterBand(i).ReadAsArray(*dim) if len(self.__data) == 0 else self.__data[i - 1]
             outband.WriteArray(mat)
             outband.FlushCache()
+        if format == "GTiff":
+            outDataset.SetMetadataItem("TIFFTAG_DATETIME", strftime("%Y:%m:%d %H:%M:%S", gmtime()))
         outDataset = None
 
     # write a png image of three raster bands (provided in a list of 1-based integers); percent controls the size ratio of input and output
@@ -317,9 +320,11 @@ class Raster(object):
     #     sp.check_call([str(x) for x in cmd])
 
 
-# object containing the outer coordinates of a raster object as well as the enclosed area in square map units
-# input can be a raster object or a list
 class Extent(object):
+    """
+    object containing the outer coordinates of a raster object as well as the enclosed area in square map units
+    input can be a raster object or a list
+    """
     def __init__(self, geoobject):
         if type(geoobject) == Raster:
             gt = geoobject.geo
@@ -343,8 +348,10 @@ class Extent(object):
 #         outDataset.SetProjection(rasterobject.projection)
 #     return outDataset
 
-# compute the geographical intersection between two objects of type Raster or Extent
 def intersect(obj1, obj2):
+    """
+    compute the geographical intersection between two objects of type Raster or Extent
+    """
     if type(obj1) == Raster:
         ext1 = Extent(obj1)
         proj1 = obj1.proj4
@@ -373,8 +380,10 @@ def intersect(obj1, obj2):
         return None
 
 
-# reproject a raster file
 def reproject(rasterobject, reference, outname, resampling="bilinear", format="ENVI"):
+    """
+    reproject a raster file
+    """
     rasterobject = rasterobject if type(rasterobject) == Raster else Raster(rasterobject)
     projection = reference.projection if type(reference) == Raster else reference
     sp.check_call(["gdalwarp", "-overwrite", "-q", "-r", resampling, "-of", format,
@@ -486,7 +495,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     arg_srcnodata = ["-srcnodata", srcnodata] if srcnodata is not None else []
     arg_dstnodata = ["-dstnodata", dstnodata] if dstnodata is not None else []
     arg_resampling = ["-r", resampling] if resampling is not None else []
-    arg_format = ["-of", "ENVI"]
+    arg_format = ["-of", "GTiff" if separate else "ENVI"]
 
     # create VRT files for mosaicing
     vrtlist = []
@@ -506,10 +515,12 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     if separate:
         if not os.path.isdir(dstfile):
             os.makedirs(dstfile)
-        dstfiles = [os.path.join(dstfile, x) for x in bandnames]
+        dstfiles = [os.path.join(dstfile, x)+".tif" for x in bandnames]
+
+        arg_compression = ["-co", "COMPRESS=DEFLATE", "-co", "PREDICTOR=2"]
 
         for i in range(len(srcfiles)):
-            run(["gdalwarp", "-q", "-multi", "-overwrite", arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, srcfiles[i], dstfiles[i]])
+            run(["gdalwarp", "-q", "-multi", "-overwrite", arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, arg_compression, srcfiles[i], dstfiles[i]])
     else:
         # create VRT for stacking
         vrt = os.path.splitext(dstfile)[0]+".vrt"
@@ -528,3 +539,5 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     par = HDRobject(dstfile+".hdr")
     par.band_names = bandnames
     hdr(par)
+
+
