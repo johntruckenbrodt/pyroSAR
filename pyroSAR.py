@@ -473,8 +473,9 @@ class ESA(ID):
         self._unpack(outdir)
 
 
-# id = identify("/geonfs01_vol1/ve39vem/swos/ASA_APP_1PTDPA20040102_102928_000000162023_00051_09624_0240.N1.zip")
-# id = identify("/geonfs01_vol1/ve39vem/swos/SAR_IMP_1PXASI19920419_110159_00000017C083_00323_03975_8482.E1.zip")
+# id = identify("/geonfs01_vol1/ve39vem/swos_archive/ASA_APP_1PTDPA20040102_102928_000000162023_00051_09624_0240.N1.zip")
+# id = identify("/geonfs01_vol1/ve39vem/swos_archive/SAR_IMP_1PXASI19920419_110159_00000017C083_00323_03975_8482.E1.zip")
+# id = identify("/geonfs01_vol1/ve39vem/swos_archive/SAR_IMP_1PXASI19950723_083726_00000017A002_00479_01335_0757.E2.zip")
 
 
 # class RS2(ID):
@@ -680,6 +681,9 @@ class SAFE(ID):
         self._unpack(outdir)
 
         # id = identify("/geonfs01_vol1/ve39vem/S1/archive/S1A_EW_GRDM_1SDH_20150408T053103_20150408T053203_005388_006D8D_5FAC.zip")
+
+# id = identify("/geonfs01_vol1/ve39vem/S1/archive/Egypt/S1A_IW_GRDH_1SDV_20141220T155633_20141220T155658_003805_0048BB_CE9B.zip")
+
 
 # todo: remove class ERS and change dependencies to class CEOS (scripts: gammaGUI/reader_ers.py)
 # class ERS(object):
