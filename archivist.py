@@ -1,7 +1,6 @@
 ##############################################################
 # utility collection for compressed archives
 # John Truckenbrodt 2016
-# last update 2016-03-30
 ##############################################################
 
 import os
