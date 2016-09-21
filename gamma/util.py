@@ -11,6 +11,7 @@ core parameters are iterated over a set of values in order to find the one best 
 The approach of the single routines is likely to still have drawbacks and might fail in certain situations. Testing and suggestions on improvements are very welcome.
 """
 import os
+import re
 import math
 from envi import hdr
 import subprocess as sp
@@ -114,7 +115,296 @@ def correlate(master, slave, off, offs, ccp, offsets="-", coffs="-", coffsets="-
         raise RuntimeError("cross-correlation failed; consider verifying scene overlap or choice of polarization")
 
 
-def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoback=2, func_interp=0):
+def cc_find(master, slave, diffpar, offs, ccp, winsize, mode, offsets="-", n_ovr=2, nr=400, naz=400, thres=.15, c_ovr=4):
+    """
+    *** Offset estimation between MLI or SLC images using intensity cross-correlation ***
+    Args:
+        master    (input) real valued intensity image 1 (reference)
+        slave     (input) real valued intensity image 2
+        diffpar   DIFF/GEO parameter file
+        offs      (output) offset estimates (fcomplex)
+        ccp       (output) cross-correlation of each patch (0.0->1.0) (float)
+        winsize   patch size in range and azimuth (pixels)
+        offsets   (output) range and azimuth offsets and cross-correlation data in text format, enter - for no output
+        n_ovr     MLI oversampling factor (integer 2**N (1,2,4,8), enter - for default: 2)
+        nr        number of offset estimates in range direction (enter - for default from offset parameter file)
+        naz       number of offset estimates in azimuth direction (enter - for default from offset parameter file)
+        thres     cross-correlation threshold (enter - for default from offset parameter file)
+        c_ovr     correlation function oversampling factor (integer 2**N (1,2,4,8) default: 4)
+    """
+    args = [diffpar, offs, ccp, str(winsize), str(winsize), offsets, str(n_ovr), str(nr), str(naz), str(thres), str(c_ovr)]
+
+    if mode == "MLI":
+        cmd = ["offset_pwrm", master, slave]+args
+    elif mode == "SLC":
+        cmd = ["offset_pwr", master, slave, master+".par", slave+".par"]+args
+    else:
+        raise ValueError("mode must be either 'MLI' or 'SLC'")
+
+    proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE)
+    out, err = proc.communicate()
+    for line in out.split("\n"):
+        if line.startswith("number of offsets above correlation threshold"):
+            vals = map(float, re.findall("[0-9]+", line))
+            return vals[0]/vals[1]
+
+
+def cc_fit(offs, ccp, diffpar, mode, coffs="-", coffsets="-", thres=.15, npoly=4):
+    """
+    *** Range and azimuth offset polynomial estimation ***
+    Args:
+          offs          (input) range and azimuth offset estimates for each patch (fcomplex)
+          ccp           (input) cross-correlation or SNR of each patch (float)
+          diffpar       (input) ISP offset/interferogram parameter file
+          coffs         (output) culled range and azimuth offset estimates (fcomplex, enter - for none)
+          coffsets      (output) culled offset estimates and cross-correlation values (text format, enter - for none)
+          thres         cross-correlation threshold (enter - for default from diffpar)
+          npoly         number of model polynomial parameters (enter - for default, 1, 3, 4, 6, default: 4)
+    """
+    args = [offs, ccp, diffpar, coffs, coffsets, str(thres), str(npoly)]
+
+    if mode == "MLI":
+        cmd = ["offset_fitm"]+args
+    elif mode == "SLC":
+        cmd = ["offset_fit"]+args
+    else:
+        raise ValueError("mode must be either 'MLI' or 'SLC'")
+
+    proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE)
+    out, err = proc.communicate()
+    fit = None
+    for line in out.split("\n"):
+        if line.startswith("final model fit std. dev."):
+            fit = tuple(map(float, re.findall("[0-9]+.[0-9]+", line)))
+    print "final model fit std. dev. (range, azimuth):", fit
+    if not fit:
+        raise RuntimeError("failed at fitting offset estimation; command:\n{}".format(" ".join(cmd)))
+
+
+def cc_fit2(offs, ccp, diffpar, mode, coffs="-", coffsets="-", thres=.15, npoly=4):
+    """
+    *** Range and azimuth offset polynomial estimation ***
+    Args:
+          offs          (input) range and azimuth offset estimates for each patch (fcomplex)
+          ccp           (input) cross-correlation or SNR of each patch (float)
+          diffpar       (input) ISP offset/interferogram parameter file
+          coffs         (output) culled range and azimuth offset estimates (fcomplex, enter - for none)
+          coffsets      (output) culled offset estimates and cross-correlation values (text format, enter - for none)
+          thres         cross-correlation threshold (enter - for default from diffpar)
+          npoly         number of model polynomial parameters (enter - for default, 1, 3, 4, 6, default: 4)
+    """
+    args = [offs, ccp, diffpar, coffs, coffsets, str(thres), str(npoly)]
+
+    if mode == "MLI":
+        cmd = ["offset_fitm"]+args
+    elif mode == "SLC":
+        cmd = ["offset_fit"]+args
+    else:
+        raise ValueError("mode must be either 'MLI' or 'SLC'")
+
+    proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE)
+    out, err = proc.communicate()
+    errormessage = 'ERROR: insufficient offset points left after culling to determine offset model parameters'
+    if errormessage in err:
+        raise RuntimeError(errormessage)
+    for line in out.split("\n"):
+        if line.startswith("final model fit std. dev."):
+            return tuple(map(float, re.findall("[0-9]+.[0-9]+", line)))
+    raise RuntimeError(err)
+
+
+def cc(master, slave, diffpar, offs, ccp, mode, offsets="-", nr=400, naz=400, thres=.15, c_ovr=4, minwin=8, maxwin=1024):
+    best = 0
+    winsize = minwin
+    bestwin = 8
+    while winsize <= maxwin:
+        ratio = cc_find(master, slave, diffpar, offs, ccp, winsize, mode, offsets, 1, nr, naz, thres, c_ovr)
+        if ratio > best:
+            best = ratio
+            bestwin = winsize
+        else:
+            break
+        winsize *= 2
+    print "optimal window size:", bestwin
+    ratio = cc_find(master, slave, diffpar, offs, ccp, bestwin, mode, n_ovr=8)
+    print "offset acceptance ratio:", ratio
+    return bestwin
+
+
+def cc_find2(master, slave, diffpar, offs, ccp, rwin, azwin, mode, offsets="-", n_ovr=2, nr=400, naz=400, thres=.15, c_ovr=4):
+    """
+    *** Offset estimation between MLI or SLC images using intensity cross-correlation ***
+    Args:
+        master    (input) real valued intensity image 1 (reference)
+        slave     (input) real valued intensity image 2
+        diffpar   DIFF/GEO parameter file
+        offs      (output) offset estimates (fcomplex)
+        ccp       (output) cross-correlation of each patch (0.0->1.0) (float)
+        winsize   patch size in range and azimuth (pixels)
+        offsets   (output) range and azimuth offsets and cross-correlation data in text format, enter - for no output
+        n_ovr     MLI oversampling factor (integer 2**N (1,2,4,8), enter - for default: 2)
+        nr        number of offset estimates in range direction (enter - for default from offset parameter file)
+        naz       number of offset estimates in azimuth direction (enter - for default from offset parameter file)
+        thres     cross-correlation threshold (enter - for default from offset parameter file)
+        c_ovr     correlation function oversampling factor (integer 2**N (1,2,4,8) default: 4)
+    """
+    args = [diffpar, offs, ccp, str(rwin), str(azwin), offsets, str(n_ovr), str(nr), str(naz), str(thres), str(c_ovr)]
+    if mode == "MLI":
+        cmd = ["offset_pwrm", master, slave]+args
+    elif mode == "SLC":
+        cmd = ["offset_pwr", master, slave, master+".par", slave+".par"]+args
+    else:
+        raise ValueError("mode must be either 'MLI' or 'SLC'")
+    proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE)
+    out, err = proc.communicate()
+    errormessage = 'ERROR: no offsets found above correlation threshold'
+    if errormessage in err:
+        raise RuntimeError(errormessage)
+    for line in out.split("\n"):
+        if line.startswith("number of offsets above correlation threshold"):
+            vals = map(float, re.findall("[0-9]+", line))
+            return int(vals[0])
+    raise RuntimeError(err)
+
+
+def correlate2(master, slave, diffpar, offs, ccp, offsets="-", coffs="-", coffsets="-", npoly=4, thres=0.15, minwin=8, maxwin=2048, niter=2, path_log=None):
+    if not os.path.isfile(diffpar):
+        run(["create_diff_par", master+".par", "-", diffpar, 1, 0], logpath=path_log)
+    if path_log is not None:
+        if not os.path.isdir(path_log):
+            os.makedirs(path_log)
+    mode = "SLC" if ISPPar(master+".par").image_format in ["FCOMPLEX", "SCOMPLEX"] else "MLI"
+    print "#####################################\ncross-correlation offset estimation"
+    for i in range(0, niter):
+        print "#############\niteration {}".format(i+1)
+        cc(master, slave, diffpar, offs, ccp, mode, offsets, thres=thres, minwin=minwin, maxwin=maxwin)
+        cc_fit(offs, ccp, diffpar, mode, coffs, coffsets, thres, npoly)
+    print "#############\n...done\n#####################################"
+
+
+def find_poly(offs, ccp, diffpar, mode, coffs, coffsets, thres=.15):
+    bestpoly = 1
+    bestfit = 999
+    for npoly in [1, 3, 4]:
+        try:
+            fit = cc_fit2(offs, ccp, diffpar, mode, coffs, coffsets, thres, npoly)
+            if sum(fit) < bestfit:
+                bestpoly = npoly
+                bestfit = fit
+        except RuntimeError:
+            continue
+    print "best polynomial order:", bestpoly
+    return cc_fit2(offs, ccp, diffpar, mode, coffs, coffsets, thres, bestpoly)
+
+
+def correlate3(master, slave, diffpar, offs, ccp, offsets="-", coffs="-", coffsets="-"):
+    if not os.path.isfile(diffpar):
+        run(["create_diff_par", master + ".par", "-", diffpar, 1, 0], logpath=path_log)
+    par = ISPPar(master+".par")
+    mode = "SLC" if par.image_format in ["FCOMPLEX", "SCOMPLEX"] else "MLI"
+    rwin = 2**(math.log(par.range_pixel_spacing*10, 2)//1)
+    azwin = 2**(math.log(par.azimuth_pixel_spacing*10, 2)//1)
+    nr = 3*(par.range_samples//rwin)
+    naz = 3*(par.azimuth_lines//azwin)
+    n_ovr = 2
+    thres = .15
+    # cc_find2(master, slave, diffpar, offs, ccp, rwin, azwin, mode, offsets, n_ovr, nr, naz, thres)
+    # print find_poly(offs, ccp, diffpar, mode, coffs, coffsets, thres)
+    # # cc_find2(master, slave, diffpar, offs, ccp, rwin/2, azwin/2, mode, offsets, n_ovr, nr*2, naz*2, thres)
+    # # fit2 = find_poly(offs, ccp, diffpar, mode, coffs, coffsets, thres)
+    #
+    cc_find2(master, slave, diffpar, offs, ccp, 8, 8, mode, offsets, n_ovr, 1000, 1000, thres)
+    print find_poly(offs, ccp, diffpar, mode, coffs, coffsets, thres)
+
+
+def correlate4(master, slave, diffpar, offs, ccp, offsets="-", coffs="-", coffsets="-"):
+    if not os.path.isfile(diffpar):
+        try:
+            run(["create_diff_par", master + ".par", "-", diffpar, "1", "0"])
+        except IOError:
+            run(["create_diff_par", slave + ".par", "-", diffpar, "1", "0"])
+    try:
+        par = ISPPar(master+".par")
+    except IOError:
+        par = ISPPar(slave + ".par")
+    mode = "SLC" if par.image_format in ["FCOMPLEX", "SCOMPLEX"] else "MLI"
+    # determine best window size
+    bestwinsize = 0
+    bestnoffs = 0
+    for factor in [1, 2, 3, 4, 8]:
+        try:
+            noffs = cc_find2(master, slave, diffpar, offs, ccp, 8, 8, mode, offsets, 2, 1000/factor, 1000/factor)
+            if noffs > bestnoffs:
+                bestnoffs = noffs
+                bestwinsize = factor*8
+            else:
+                break
+        except RuntimeError:
+            continue
+    if bestwinsize == 0:
+        bestwinsize = 8
+    print "optimal window size:", bestwinsize
+    if bestnoffs < 1000:
+        print "initial number of offsets:", int(bestnoffs)
+        # offset search refinement
+        nr = (par.range_samples // 1000 * 1000)/(bestwinsize/8)
+        naz = (par.azimuth_lines // 1000 * 1000)/(bestwinsize/8)
+        nr = nr if nr <= 4000 else 4000
+        naz = naz if naz <= 4000 else 4000
+        print "new number of windows:", nr, naz
+        bestnoffs = cc_find2(master, slave, diffpar, offs, ccp, bestwinsize, bestwinsize, mode, offsets, 8, nr, naz)
+        print "final number of offsets:", int(bestnoffs)
+    else:
+        print "number of offsets:", int(bestnoffs)
+    fit = find_poly(offs, ccp, diffpar, mode, coffs, coffsets)
+    print "achieved fit:", fit
+
+
+def correlate5(master, slave, diffpar, offs, ccp, offsets="-", coffs="-", coffsets="-"):
+    if os.path.isfile(master+".par"):
+        parfile = master+".par"
+    elif os.path.isfile(slave+".par"):
+        parfile = slave+".par"
+    else:
+        raise IOError("no appropriate parameter file found")
+    run(["create_diff_par", parfile, "-", diffpar, 1, 0])
+    par = ISPPar(parfile)
+    mode = "SLC" if par.image_format in ["FCOMPLEX", "SCOMPLEX"] else "MLI"
+    winsize = int(2**(math.log(par.range_pixel_spacing*10, 2)//1))
+    dim_ratio = float(par.azimuth_lines)/float(par.range_samples)
+    overlap = .5
+    noffsets = 0
+    while winsize >= 8:
+        print "window size:", winsize
+        nr = int(round((float(par.range_samples) / winsize) * (1 + overlap)))
+        naz = int(int(nr) * dim_ratio)
+        print "number of search windows (range, azimuth):", nr, naz
+        try:
+            noffsets = cc_find2(master, slave, diffpar, offs, ccp, winsize, winsize, mode, offsets, 2, nr, naz)
+            print "number of found offsets:", noffsets
+            if noffsets > 50:
+                fit = find_poly(offs, ccp, diffpar, mode, coffs, coffsets)
+                print "polynomial fit (range, azimuth):", fit
+                if sum(fit) > 1.5:
+                    raise RuntimeError
+                else:
+                    break
+            winsize /= 2
+        except RuntimeError:
+            winsize /= 2
+            continue
+    if winsize == 4 and noffsets < 50:
+        print "window size:", 8
+        nr = (par.range_samples // 1000 * 1000)
+        naz = (par.azimuth_lines // 1000 * 1000)
+        print "number of search windows (range, azimuth):", nr, naz
+        noffsets = cc_find2(master, slave, diffpar, offs, ccp, 8, 8, mode, offsets, 8, nr, naz)
+        print "number of found offsets:", noffsets
+        fit = find_poly(offs, ccp, diffpar, mode, coffs, coffsets)
+        print "polynomial fit (range, azimuth):", fit
+
+
+def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoback=2, func_interp=0, sarsimulation=True):
     """
     scaling can be either 'linear', 'db' or a list of both (i.e. ['linear', 'db'])
 
@@ -123,14 +413,14 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
     lut: rough geocoding lookup table
     lut_fine: fine geocoding lookup table
     sim_map: simulated SAR backscatter image in DEM geometry
-    sim_sar: simulated SAR backscatter image in SAR coordinates
+    sim_sar: simulated SAR backscatter image in SAR geometry
     u: zenith angle of surface normal vector n (angle between z and n)
     v: orientation angle of n (between x and projection of n in xy plane)
     inc: local incidence angle (between surface normal and look vector)
     psi: projection angle (between surface normal and image plane normal)
     pix: pixel area normalization factor
     ls_map: layover and shadow map (in map projection)
-    off.par: ISP offset/interferogram parameter file
+    diffpar: ISP offset/interferogram parameter file
     offs: offset estimates (fcomplex)
     coffs: culled range and azimuth offset estimates (fcomplex)
     coffsets: culled offset estimates and cross correlation values (text format)
@@ -146,24 +436,35 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
 
     scene.convert2gamma(scene.scene)
 
+    try:
+        scene.correctOSV()
+    except:
+        pass
+
     scene.calibrate()
 
     images = [x for x in scene.getGammaImages(scene.scene) if x.endswith("_grd")]
 
-    rlks = int(targetres//scene.spacing[0])
-    azlks = int(targetres//scene.spacing[1])
-    rlks = 1 if rlks == 0 else rlks
-    azlks = 1 if azlks == 0 else azlks
+    # rlks = int(targetres//scene.spacing[0])
+    # azlks = int(targetres//scene.spacing[1])
+    # rlks = 1 if rlks == 0 else rlks
+    # azlks = 1 if azlks == 0 else azlks
+
+    # rlks = int(targetres/round(scene.spacing[0]))
+    # azlks = int(targetres/round(scene.spacing[1]))
+    #
+    # for image in images:
+    #     run(["multi_look_MLI", image, image+".par", image+"_mli", image+"_mli.par", rlks, azlks])
 
     for image in images:
-        run(["multi_look_MLI", image, image+".par", image+"_mli", image+"_mli.par", rlks, azlks])
+        multilook(image, image+"_mli", targetres)
 
     images = [x+"_mli" for x in images]
 
     master = images[0]
 
     dem_seg = master+"_dem"
-    lut = master+"_lut"
+    lut_coarse = master+"_lut_coarse"
     lut_fine = master+"_lut_fine"
     sim_map = master+"_sim_map"
     sim_sar = master+"_sim_sar"
@@ -173,10 +474,11 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
     psi = master+"_psi"
     pix = master+"_pix"
     ls_map = master+"_ls_map"
-    pixel_area = master+"_pixel_area"
-    pixel_area2 = master+"_pixel_area2"
-    off_par = master+"_off.par"
+    pixel_area_coarse = master+"_pixel_area_coarse"
+    pixel_area_fine = master+"_pixel_area_fine"
+    diffpar = master+"_off.par"
     offs = master+"_offs"
+    offsets = offs + ".txt"
     coffs = master+"_coffs"
     coffsets = master+"_coffsets"
     ccp = master+"_ccp"
@@ -191,7 +493,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
 
     master_par = ISPPar(master+".par")
 
-    gc_map_opt = [dem+".par", dem, dem_seg+".par", dem_seg, lut, ovs_lat, ovs_lon, sim_map, u, v, inc, psi, pix, ls_map, 8, func_interp]
+    gc_map_opt = [dem+".par", dem, dem_seg+".par", dem_seg, lut_coarse, ovs_lat, ovs_lon, sim_map, u, v, inc, psi, pix, ls_map, 8, func_interp]
 
     if master_par.image_geometry == "GROUND_RANGE":
         run(["gc_map_grd", master+".par"]+gc_map_opt, logpath=path_log)
@@ -201,58 +503,75 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
     for item in [dem_seg, sim_map, u, v, psi, pix, inc]:
         hdr(dem_seg+".par", item+".hdr")
 
-    run(["pixel_area", master+".par", dem_seg+".par", dem_seg, lut, ls_map, inc, pixel_area], logpath=path_log)
-
-    ######################################################################
-    # cross correlation approach 1 #######################################
-    # ####################################################################
-    # dempar = ISPPar(dem_seg + ".par")
-    # samples_dem = dempar.width
-    # samples_mli = master_par.range_samples
-    # lines_mli = master_par.azimuth_lines
-    # run(["geocode", lut, sim_map, samples_dem, sim_sar, samples_mli, lines_mli, func_interp], logpath=path_log)
-    # init_offset(master, sim_sar, off_par, path_log)
-    # correlate(master, sim_sar, off_par, offs, ccp, coffs=coffs, coffsets=coffsets, offsets=offs+".txt", path_log=path_log, maxwin=256)
-    ######################################################################
-    # cross correlation approach 2 #######################################
-    ######################################################################
-    init_offset(master, pixel_area, off_par, path_log)
-    correlate(master, pixel_area, off_par, offs, ccp, coffs=coffs, coffsets=coffsets, offsets=offs+".txt", path_log=path_log, maxwin=256)
-    ######################################################################
     sim_width = ISPPar(dem_seg+".par").width
-    try:
-        run(["gc_map_fine", lut, sim_width, off_par, lut_fine, 0], logpath=path_log)
-    except sp.CalledProcessError:
-        print "...failed"
-        return
+
+    if sarsimulation is True:
+        ######################################################################
+        # cross correlation approach 1 #######################################
+        # ####################################################################
+        # dempar = ISPPar(dem_seg + ".par")
+        # samples_dem = dempar.width
+        # samples_mli = master_par.range_samples
+        # lines_mli = master_par.azimuth_lines
+        # run(["geocode", lut, sim_map, samples_dem, sim_sar, samples_mli, lines_mli, func_interp], logpath=path_log)
+        # init_offset(master, sim_sar, diffpar, path_log)
+        # correlate(master, sim_sar, diffpar, offs, ccp, coffs=coffs, coffsets=coffsets, offsets=offs+".txt", path_log=path_log, maxwin=256)
+        ######################################################################
+        # cross correlation approach 2 #######################################
+        ######################################################################
+        run(["pixel_area", master + ".par", dem_seg + ".par", dem_seg, lut_coarse, ls_map, inc, pixel_area_coarse], logpath=path_log)
+        init_offset(master, pixel_area_coarse, diffpar, path_log)
+        # correlate(master, pixel_area_coarse, diffpar, offs, ccp, coffs=coffs, coffsets=coffsets, offsets=offsets, path_log=path_log, maxwin=256)
+        # correlate2(master, pixel_area_coarse, diffpar, offs, ccp, offsets=offsets, coffs=coffs, coffsets=coffsets, path_log=path_log)
+        # correlate3(master, pixel_area_coarse, diffpar, offs, ccp, offsets=offsets, coffs=coffs, coffsets=coffsets)
+        print "#####################################"
+        print "cross correlation step 1"
+        correlate5(pixel_area_coarse, master, diffpar, offs, ccp, offsets, coffs, coffsets)
+        print "#####################################"
+        print "cross correlation step 2"
+        correlate5(pixel_area_coarse, master, diffpar, offs, ccp, offsets, coffs, coffsets)
+        print "#####################################"
+        # print "cross correlation step 3"
+        # correlate4(pixel_area_coarse, master, diffpar, offs, ccp, offsets, coffs, coffsets)
+        # print "#####################################"
+        ######################################################################
+        try:
+            run(["gc_map_fine", lut_coarse, sim_width, diffpar, lut_fine, 0], logpath=path_log)
+        except sp.CalledProcessError:
+            print "...failed"
+            return
+    else:
+
+        lut_fine = lut_coarse
 
     ######################################################################
     # normalization and backward geocoding approach 1 ####################
     ######################################################################
     for image in images:
-        run(["geocode_back", image, master_par.range_samples, lut_fine, image+"_geo", sim_width, 0, func_geoback], logpath=path_log)
-        run(["product", image+"_geo", pix, image+"_geo_pix", sim_width, 1, 1, 0], logpath=path_log)
-        run(["lin_comb", 1, image+"_geo_pix", 0, math.cos(math.radians(master_par.incidence_angle)), image+"_geo_pix_flat", sim_width], logpath=path_log)
-        run(["sigma2gamma", image+"_geo_pix_flat", inc, image+"_geo_norm", sim_width], logpath=path_log)
+        run(["geocode_back", image, master_par.range_samples, lut_fine, image+"_geo", sim_width, "-", func_geoback], logpath=path_log)
+        run(["product", image+"_geo", pix, image+"_geo_pan", sim_width, 1, 1, 0], logpath=path_log)
+        run(["lin_comb", 1, image+"_geo_pan", 0, math.cos(math.radians(master_par.incidence_angle)), image+"_geo_pan_flat", sim_width], logpath=path_log)
+        run(["sigma2gamma", image+"_geo_pan_flat", inc, image+"_geo_norm", sim_width], logpath=path_log)
         hdr(dem_seg+".par", image+"_geo_norm.hdr")
     ######################################################################
     # normalization and backward geocoding approach 2 ####################
     ######################################################################
     # try:
-    #     run(["pixel_area", master+".par", dem_seg+".par", dem_seg, lut_fine, ls_map, inc, pixel_area2], logpath=path_log)
+    #     run(["pixel_area", master+".par", dem_seg+".par", dem_seg, lut_fine, ls_map, inc, pixel_area_fine], logpath=path_log)
     # except sp.CalledProcessError:
     #     print "...failed"
     #     return
     # run(["radcal_MLI", master, master+".par", "-", master+"_cal", "-", 0, 0, 1, 0.0, "-", ellipse_pixel_area], logpath=path_log)
-    # run(["ratio", ellipse_pixel_area, pixel_area2, ratio_sigma0, master_par.range_samples, 1, 1], logpath=path_log)
+    # run(["ratio", ellipse_pixel_area, pixel_area_fine, ratio_sigma0, master_par.range_samples, 1, 1], logpath=path_log)
     #
     # for image in images:
-    #     run(["product", image, ratio_sigma0, image+"_pixcal", master_par.range_samples, 1, 1], logpath=path_log)
-    #     run(["geocode_back", image+"_pixcal", master_par.range_samples, lut_fine, image+"_geo", sim_width, 0, func_geoback], logpath=path_log)
-    #     run(["lin_comb", 1, image+"_geo", 0, math.cos(math.radians(master_par.incidence_angle)), image+"_geo_flat", sim_width], logpath=path_log)
-    #     run(["sigma2gamma", image+"_geo_flat", inc, image+"_geo_norm", sim_width], logpath=path_log)
+    #     run(["product", image, ratio_sigma0, image+"_pan", master_par.range_samples, 1, 1], logpath=path_log)
+    #     run(["geocode_back", image+"_pan", master_par.range_samples, lut_fine, image+"_pan_geo", sim_width, 0, func_geoback], logpath=path_log)
+    #     run(["lin_comb", 1, image+"_pan_geo", 0, math.cos(math.radians(master_par.incidence_angle)), image+"_pan_geo_flat", sim_width], logpath=path_log)
+    #     run(["sigma2gamma", image+"_pan_geo_flat", inc, image+"_geo_norm", sim_width], logpath=path_log)
     #     hdr(dem_seg+".par", image+"_geo_norm.hdr")
     ######################################################################
+    # conversion to (dB and) geotiff
     for image in images:
         for scale in scaling:
             if scale == "db":
@@ -354,6 +673,29 @@ def ovs(parfile, targetres):
     ovs_lat = post_north/targetres
     ovs_lon = post_east/targetres
     return ovs_lat, ovs_lon
+
+
+def multilook(infile, outfile, targetres):
+    par = ISPPar(infile+".par")
+
+    if par.image_geometry == "SLANT_RANGE":
+        groundRangePS = par.range_pixel_spacing/(math.sin(math.radians(par.incidence_angle)))
+        rlks = int(round(float(targetres)/groundRangePS))
+    else:
+        rlks = int(round(float(targetres)/par.range_pixel_spacing))
+    azlks = int(round(float(targetres)/par.azimuth_pixel_spacing))
+
+    rlks = rlks if rlks > 0 else 1
+    azlks = azlks if azlks > 0 else 1
+
+    if rlks+azlks == 2:
+        print "nothing to be done"
+        return
+    else:
+        cmd = ["multi_look_MLI", infile, infile+".par", outfile, outfile+".par", str(rlks), str(azlks)]
+        proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE)
+        out, err = proc.communicate()
+        hdr(outfile+".par")
 
 
 class Spacing(object):
