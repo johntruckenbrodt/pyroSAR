@@ -408,7 +408,7 @@ class ESA(ID):
         self.meta["product"] = "SLC" if self.meta["acquisition_mode"] in ["IMS", "APS", "WSS"] else "PRI"
 
         if self.meta["sensor"] == "ASAR":
-            self.meta["polarizations"] = [self.meta[x].replace("/", "") for x in self.meta if re.search("TX_RX_POLAR", x)]
+            self.meta["polarizations"] = [y.replace("/", "") for x, y in self.meta.iteritems() if 'TX_RX_POLAR' in x and len(y) == 3]
         elif self.meta["sensor"] in ["ERS1", "ERS2"]:
             self.meta["polarizations"] = ["VV"]
 
