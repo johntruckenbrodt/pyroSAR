@@ -5,6 +5,8 @@ import raster
 import vector
 from osgeo import ogr, osr
 
+osr.UseExceptions()
+
 
 def bbox(coordinates, crs, outname=None, format="ESRI Shapefile", overwrite=True):
     """
