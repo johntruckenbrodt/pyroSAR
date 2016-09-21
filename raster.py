@@ -19,7 +19,8 @@ import spatial
 import numpy as np
 from osgeo.gdalconst import *
 from osgeo import gdal, ogr, osr
-from ancillary import dissolve, crsConvert, finder, run, multicore
+from ancillary import dissolve, finder, run, multicore
+from spatial import crsConvert
 from envi import HDRobject, hdr
 import subprocess as sp
 from math import ceil, floor, sqrt

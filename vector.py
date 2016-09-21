@@ -11,7 +11,8 @@ by the OGR python binding
 
 import os
 from osgeo import ogr, osr
-from ancillary import crsConvert, parse_literal
+from ancillary import parse_literal
+from spatial import crsConvert
 
 ogr.UseExceptions()
 osr.UseExceptions()

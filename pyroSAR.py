@@ -17,7 +17,8 @@ import spatial
 import StringIO
 import zipfile as zf
 import tarfile as tf
-from ancillary import finder, parse_literal, run, crsConvert, urlQueryParser
+from ancillary import finder, parse_literal, run, urlQueryParser
+from spatial import crsConvert
 from time import strptime, strftime
 import xml.etree.ElementTree as ET
 from xml_util import getNamespaces

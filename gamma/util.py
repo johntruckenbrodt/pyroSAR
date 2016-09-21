@@ -16,7 +16,8 @@ import math
 from envi import hdr
 import subprocess as sp
 from auxil import ISPPar
-from ancillary import run, Stack, haversine, union
+from ancillary import run, Stack, union
+from spatial import haversine
 
 
 # INPUT FILES:

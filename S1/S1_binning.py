@@ -4,8 +4,8 @@ import re
 from time import asctime
 
 import raster
-from ancillary import finder, run, dissolve, haversine
-
+from ancillary import finder, run, dissolve
+from spatial import haversine
 
 # path = "/media/john/Data/DATA/Sentinel"
 # path_tiling = "/media/john/Data/DATA/Sentinel/tiling_test"
