@@ -16,16 +16,12 @@ from Tkinter import *
 from urllib import urlencode
 from urlparse import urlparse, urlunparse
 
-from osgeo import osr
-
 from gamma.error import gammaErrorHandler
 
 try:
     import pathos.multiprocessing as mp
 except ImportError:
     pass
-
-osr.UseExceptions()
 
 
 def blockPrint():
