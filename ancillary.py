@@ -9,11 +9,11 @@ Please refer to the descriptions of the individual functions/instances for detai
 
 import inspect
 import math
+import fnmatch
 import os
 import subprocess as sp
 from StringIO import StringIO
 from Tkinter import *
-from glob import glob
 from gamma.error import gammaErrorHandler
 from urllib import urlencode
 from urlparse import urlparse, urlunparse
@@ -116,16 +116,11 @@ def finder(folder, matchlist, foldermode=0, regex=False, recursive=True):
     2: only folders
     """
     # match patterns
-    if regex:
-        if recursive:
-            out = dissolve([[os.path.join(group[0], x) for x in dissolve(group) if re.search(pattern, x)] for group in os.walk(folder) for pattern in matchlist])
-        else:
-            out = dissolve([[os.path.join(folder, x) for x in os.listdir(folder) if re.search(pattern, x)] for pattern in matchlist])
+    pattern = r'|'.join(matchlist if regex else [fnmatch.translate(x) for x in matchlist])
+    if recursive:
+        out = dissolve([[os.path.join(root, x) for x in dirs+files if re.search(pattern, x)] for root, dirs, files in os.walk(folder)])
     else:
-        if recursive:
-            out = list(set([f for files in [glob(os.path.join(item[0], pattern)) for item in os.walk(folder) for pattern in matchlist] for f in files]))
-        else:
-            out = dissolve([glob(os.path.join(folder, pattern)) for pattern in matchlist])
+        out = [x for x in os.listdir(folder) if re.search(pattern, x)]
     # exclude directories
     if foldermode == 0:
         out = [x for x in out if not os.path.isdir(x)]
