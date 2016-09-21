@@ -2,6 +2,7 @@
 import os
 import re
 import zipfile as zf
+from ftplib import FTP
 from time import strftime,gmtime
 from urllib2 import urlopen, HTTPError
 import xml.etree.ElementTree as ET
@@ -38,6 +39,7 @@ def getOrbitContentVersions(contentVersion):
 
 def getAuxdata(datasets, scenes, auxDataPath=os.path.join(os.environ['HOME'], '.snap/auxdata')):
     scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
+    sensors = list(set([scene.sensor for scene in scenes]))
     for dataset in datasets:
         if dataset == 'SRTM 1Sec HGT':
             files = [x.replace('hgt', 'SRTMGL1.hgt.zip') for x in list(set(dissolve([scene.getHGT() for scene in scenes])))]
@@ -54,8 +56,7 @@ def getAuxdata(datasets, scenes, auxDataPath=os.path.join(os.environ['HOME'], '.
                     with open(outfile, 'wb') as output:
                         output.write(input.read())
                     input.close()
-        elif dataset == 'Orbits':
-            sensors = list(set([scene.sensor for scene in scenes]))
+        elif dataset == 'POEORB':
             for sensor in sensors:
                 if re.search('S1[AB]', sensor):
 
@@ -107,5 +108,18 @@ def getAuxdata(datasets, scenes, auxDataPath=os.path.join(os.environ['HOME'], '.
                     remote_contentVersion.close()
                 else:
                     print 'not implemented yet'
+        elif dataset == 'Delft Precise Orbits':
+            path_server = 'dutlru2.lr.tudelft.nl'
+            subdirs = {'ASAR:': 'ODR.ENVISAT1/eigen-cg03c', 'ERS1': 'ODR.ERS-1/dgm-e04', 'ERS2': 'ODR.ERS-2/dgm-e04'}
+            ftp = FTP(path_server)
+            ftp.login()
+            for sensor in sensors:
+                if sensor in subdirs.keys():
+                    path_target = os.path.join('pub/orbits', subdirs[sensor])
+                    path_local = os.path.join(auxDataPath, 'Orbits/Delft Precise Orbits', subdirs[sensor])
+                    ftp.cwd(path_target)
+                    for item in ftp.nlst():
+                        ftp.retrbinary('RETR '+item, open(os.path.join(path_local, item), 'wb').write)
+            ftp.quit()
         else:
             print 'not implemented yet'
