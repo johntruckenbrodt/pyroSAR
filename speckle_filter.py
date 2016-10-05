@@ -18,13 +18,15 @@
 # |_____________________________________________________________________________________________________________
 #
 
-from time import asctime
-from osgeo import gdal
-import raster
-import numpy as np
-from gdalconst import *
-from astropy.convolution import convolve, Box2DKernel
 import argparse
+from time import asctime
+
+import numpy as np
+from astropy.convolution import convolve, Box2DKernel
+from gdalconst import *
+from osgeo import gdal
+
+from spatial import raster
 
 
 # @profile
