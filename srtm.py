@@ -20,15 +20,16 @@ The following tasks are performed by executing this script:
 import os
 import re
 import shutil
-import zipfile
 import subprocess as sp
+import zipfile as zf
 from urllib2 import urlopen
 
-from pyroSAR import ID
-import raster
-from gamma.auxil import ISPPar, UTM
-from ancillary import finder, run, dissolve, ReadPar
+from ancillary import finder, run, ReadPar
 from envi import HDRobject, hdr
+from gamma.auxil import ISPPar, UTM
+from gamma.util import gamma
+from pyroSAR import ID
+from spatial import raster
 
 
 def main():
@@ -92,18 +93,18 @@ def fill(dem, dem_out, logpath=None, replace=False):
     # replace values
     value = 0
     new_value = 1
-    run(["replace_values", dem, value, new_value, dem+"_temp", width, rpl_flg, dtype], path_dem, logpath)
+    gamma(["replace_values", dem, value, new_value, dem + "_temp", width, rpl_flg, dtype], path_dem, logpath)
 
     value = -32768
     new_value = 0
-    run(["replace_values", dem+"_temp", value, new_value, dem+"_temp2", width, rpl_flg, dtype], path_dem, logpath)
+    gamma(["replace_values", dem + "_temp", value, new_value, dem + "_temp2", width, rpl_flg, dtype], path_dem, logpath)
 
     # interpolate missing values
     r_max = 9
     np_min = 40
     np_max = 81
     w_mode = 2
-    run(["interp_ad", dem+"_temp2", dem_out, width, r_max, np_min, np_max, w_mode, dtype], path_dem, logpath)
+    gamma(["interp_ad", dem + "_temp2", dem_out, width, r_max, np_min, np_max, w_mode, dtype], path_dem, logpath)
 
     # remove temporary files
     os.remove(dem+"_temp")
@@ -139,10 +140,10 @@ def transform(infile, outfile, posting=90):
 
     # create new DEM parameter file with UTM projection details
     inlist = ["UTM", "WGS84", 1, utm.zone, falsenorthing, os.path.basename(outfile), "", "", "", "", "", "-{0} {1}".format(posting, posting), ""]
-    run(["create_dem_par", outfile+".par"], inlist=inlist)
+    gamma(["create_dem_par", outfile + ".par"], inlist=inlist)
 
     # transform dem
-    run(["dem_trans", infile+".par", infile, outfile+".par", outfile, "-", "-", "-", 1])
+    gamma(["dem_trans", infile + ".par", infile, outfile + ".par", outfile, "-", "-", "-", 1])
     hdr(outfile+".par")
 
 
@@ -185,7 +186,7 @@ def dempar(dem, logpath=None):
         parlist = [projection, ellipsoid, 1, os.path.basename(dem), dtype, 0, 1, rast.cols, rast.rows, posting, latlon]
 
     # execute GAMMA command
-    run(["create_dem_par", os.path.splitext(dem)[0] + ".par"], os.path.dirname(dem), logpath, inlist=parlist)
+    gamma(["create_dem_par", os.path.splitext(dem)[0] + ".par"], os.path.dirname(dem), logpath, inlist=parlist)
 
 
 def swap(data, outname):
@@ -199,7 +200,7 @@ def swap(data, outname):
     dtype_lookup = {"Int16": 2, "CInt16": 2, "Int32": 4, "Float32": 4, "CFloat32": 4, "Float64": 8}
     if dtype not in dtype_lookup:
         raise IOError("data type {} not supported".format(dtype))
-    run(["swap_bytes", data, outname, str(dtype_lookup[dtype])])
+    gamma(["swap_bytes", data, outname, str(dtype_lookup[dtype])])
     header = HDRobject(data+".hdr")
     header.byte_order = 1
     hdr(header, outname+".hdr")
@@ -212,7 +213,7 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
     if len(demlist) < 2:
         raise IOError("length of demlist < 2")
     nodata = str(raster.Raster(demlist[0]).nodata)
-    run(dissolve(["gdalwarp", "-q", "-of", "ENVI", "-srcnodata", nodata, "-dstnodata", nodata, demlist, outname]))
+    run(["gdalwarp", "-q", "-of", "ENVI", "-srcnodata", nodata, "-dstnodata", nodata, demlist, outname])
     if byteorder == 1:
         swap(outname, outname+"_swap")
         for item in [outname, outname+".hdr", outname+".aux.xml"]:
@@ -356,7 +357,7 @@ def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
                 with open(localname+".zip", "wb") as outfile:
                     outfile.write(infile.read())
                 infile.close()
-                with zipfile.ZipFile(localname+".zip", "r") as z:
+                with zf.ZipFile(localname+".zip", "r") as z:
                     z.extractall(outdir)
                 os.remove(localname+".zip")
                 targets.append(localname)
