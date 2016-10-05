@@ -77,7 +77,7 @@ def finder(folder, matchlist, foldermode=0, regex=False, recursive=True):
     if recursive:
         out = dissolve([[os.path.join(root, x) for x in dirs+files if re.search(pattern, x)] for root, dirs, files in os.walk(folder)])
     else:
-        out = [x for x in os.listdir(folder) if re.search(pattern, x)]
+        out = [os.path.join(folder, x) for x in os.listdir(folder) if re.search(pattern, x)]
     # exclude directories
     if foldermode == 0:
         out = [x for x in out if not os.path.isdir(x)]
