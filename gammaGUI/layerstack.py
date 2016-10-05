@@ -16,15 +16,14 @@ The following tasks are performed by executing this script:
 -see documentation of GDAL's gdalbuildvrt and gdalwarp for details
 """
 
-import sys
-
 import os
 import re
-import raster
 import subprocess as sp
+import sys
 
 from ancillary import dissolve, finder
 from envi import HDRobject, hdr
+from spatial import raster
 
 [path_in, file_out, shape, pattern, reg, resampling, targetres, nodata] = sys.argv[1:]
 
