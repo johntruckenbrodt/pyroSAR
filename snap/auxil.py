@@ -27,10 +27,10 @@ def parse_recipe(name):
     return tree
 
 
-def write_recipe(recipe, outname):
-    outname = outname if outname.endswith('.xml') else outname + '.xml'
-    with open(outname, 'w') as outfile:
-        outfile.write(ET.tostring(recipe))
+def write_recipe(recipe, outfile):
+    outfile = outfile if outfile.endswith('.xml') else outfile + '.xml'
+    with open(outfile, 'w') as out:
+        out.write(ET.tostring(recipe))
 
 
 def getOrbitContentVersions(contentVersion):
