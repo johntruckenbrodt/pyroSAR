@@ -2,8 +2,8 @@
 import re
 
 
-def gammaErrorHandler(process):
-    errormessage = process.stderr.read().strip().replace("ERROR: ", "")
+def gammaErrorHandler(message):
+    errormessage = message.strip().replace("ERROR: ", "")
     knownErrors = {"image data formats differ": IOError,
                    "cannot open": IOError,
                    "no coverage of SAR image by DEM \(in (?:latitude/northing|longitude/easting)\)": IOError,
