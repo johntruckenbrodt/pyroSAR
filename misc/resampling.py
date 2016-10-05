@@ -1,7 +1,8 @@
-import gdal
-import raster
 from math import floor
+
 import numpy as np
+
+from spatial import raster
 
 
 def seq(start, stop, step=1):
