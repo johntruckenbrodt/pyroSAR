@@ -7,16 +7,15 @@ This script gathers central functions and object instances for processing SAR im
 Please refer to the descriptions of the individual functions/instances for details
 """
 
+import re
+import sys
 import fnmatch
 import inspect
 import os
 import subprocess as sp
 from StringIO import StringIO
-from Tkinter import *
 from urllib import urlencode
 from urlparse import urlparse, urlunparse
-
-from gamma.error import gammaErrorHandler
 
 try:
     import pathos.multiprocessing as mp
@@ -101,9 +100,9 @@ def multicore(function, cores, multiargs, **singleargs):
     example:
     def add(x, y, z):
         return x+y+z
-    multicore(add, cores=2, multiargs={"x": [1, 2]}, y=5, z=9)
+    multicore(add, cores=2, multiargs={'x': [1, 2]}, y=5, z=9)
     -> returns [15, 16]
-    multicore(add, cores=2, multiargs={"x": [1, 2], "y": [5, 6]}, z=9)
+    multicore(add, cores=2, multiargs={'x': [1, 2], 'y': [5, 6]}, z=9)
     -> returns [15, 17]
     """
 
@@ -112,14 +111,14 @@ def multicore(function, cores, multiargs, **singleargs):
     multiargs_check = [x for x in multiargs if x not in function_check[0]]
     singleargs_check = [x for x in singleargs if x not in function_check[0]]
     if len(multiargs_check) > 0:
-        raise AttributeError("incompatible multi arguments: {0}".format(", ".join(multiargs_check)))
+        raise AttributeError('incompatible multi arguments: {0}'.format(', '.join(multiargs_check)))
     if len(singleargs_check) > 0:
-        raise AttributeError("incompatible single arguments: {0}".format(", ".join(singleargs_check)))
+        raise AttributeError('incompatible single arguments: {0}'.format(', '.join(singleargs_check)))
 
     # compare the list lengths of the multi arguments and raise errors if they are of different length
     arglengths = list(set([len(x) for x in multiargs]))
     if len(arglengths) > 1:
-        raise AttributeError("multi argument lists of different length")
+        raise AttributeError('multi argument lists of different length')
 
     # prevent starting more threads than necessary
     cores = cores if arglengths[0] >= cores else arglengths[0]
@@ -189,52 +188,45 @@ class ReadPar(object):
     """
     read processing parameter text files
     """
-    def __init__(self, filename, splits="[:|\t|=\s]", type=""):
-        if type == "exe":
-            splits = "[\t\n]"
-        with open(filename, "r") as infile:
+    def __init__(self, filename, splits='[:|\t|=\s]', type=''):
+        if type == 'exe':
+            splits = '[\t\n]'
+        with open(filename, 'r') as infile:
             self.index = []
             for line in infile:
-                if not line.startswith("#"):
+                if not line.startswith('#'):
                     items = filter(None, re.split(splits, line))
                     if len(items) > 1:
                         if len(items) > 2:
-                            entry = items[1] if items[2] in ["m", "decimal", "arc-sec", "degrees"] else items[1:]
-                            entry = [x for x in items if x not in ["m", "decimal", "arc-sec", "degrees"]]
-                            if "".join(entry) == "WGS1984":
-                                entry = "WGS84"
+                            entry = items[1] if items[2] in ['m', 'decimal', 'arc-sec', 'degrees'] else items[1:]
+                            entry = [x for x in items if x not in ['m', 'decimal', 'arc-sec', 'degrees']]
+                            if ''.join(entry) == 'WGS1984':
+                                entry = 'WGS84'
                         else:
                             entry = items[1]
-                        if type == "exe":
-                            items[0] = items[0].replace(" ", "_")
+                        if type == 'exe':
+                            items[0] = items[0].replace(' ', '_')
                         setattr(self, items[0], entry)
                         self.index.append(items[0])
 
 
-def run(cmd, outdir=None, logpath=None, inlist=None):
+def run(cmd, outdir=None, logfile=None, inlist=None, void=True):
     """
     wrapper for subprocess execution including logfile writing and command prompt piping
     """
     cmd = [str(x) for x in dissolve(cmd)]
     if outdir is None:
         outdir = os.getcwd()
-    if logpath is None:
-        log = sp.PIPE
-    else:
-        index = 1 if cmd[0] in [sys.executable, "Rscript"] else 0
-        logfile = os.path.join(logpath, os.path.splitext(os.path.basename(cmd[index]))[0]+".log")
-        log = open(logfile, "a")
-
-    if inlist is None:
-        # proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=log, stderr=err, cwd=outdir)
-        proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=log, stderr=sp.PIPE, cwd=outdir)
-        gammaErrorHandler(proc)
-    else:
-        out, err = sp.Popen(cmd, stdin=sp.PIPE, stdout=log, stderr=sp.PIPE, cwd=outdir, universal_newlines=True, shell=False).communicate("".join([str(x)+"\n" for x in inlist]))
+    log = sp.PIPE if logfile is None else open(logfile, 'a')
+    proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=log, stderr=sp.PIPE, cwd=outdir, universal_newlines=True)
+    instream = None if inlist is None else ''.join([str(x)+'\n' for x in inlist])
+    out, err = proc.communicate(instream)
     # add line for separating log entries of repeated function calls
-    if logpath is not None:
-        log.write("#####################################################################\n")
+    if logfile:
+        log.write('#####################################################################\n')
         log.close()
+    if not void:
+        return out, err
 
 
 class Stack(object):
@@ -297,9 +289,29 @@ def writer(filename, arguments, strfill=True):
     """
     write parameter textfile
     """
-    with open(filename, "w") as out:
-        for i in range(0, len(arguments)):
-            if strfill:
-                out.write(arguments[i][0].replace(" ", "_") + "\t" + arguments[i][1] + "\n")
-            else:
-                out.write(arguments[i][0] + "\t" + arguments[i][1] + "\n")
+    argstring = '\n'.join(['\t'.join(x) for x in arguments])+'\n'
+    if strfill:
+        argstring = argstring.replace(' ', '_')
+    with open(filename, 'w') as out:
+        out.write(argstring)
+
+
+def which(program):
+    """
+    mimics UNIX's which
+    taken from this post: http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
+    can be replaced by shutil.which() in Python 3.3
+    """
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ['PATH'].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+    return None
