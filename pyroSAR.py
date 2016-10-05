@@ -13,12 +13,11 @@ import ssl
 import math
 from osgeo import gdal, ogr, osr
 from osgeo.gdalconst import GA_ReadOnly
-import spatial
+from spatial import crsConvert, bbox
 import StringIO
 import zipfile as zf
 import tarfile as tf
-from ancillary import finder, parse_literal, run, urlQueryParser
-from spatial import crsConvert
+from ancillary import finder, parse_literal, urlQueryParser
 from time import strptime, strftime
 import xml.etree.ElementTree as ET
 from xml_util import getNamespaces
@@ -26,6 +25,7 @@ import sqlite3
 from envi import hdr
 from urllib import urlopen
 from datetime import datetime, timedelta
+from gamma.util import gamma
 
 
 def identify(scene):
@@ -49,9 +49,9 @@ class ID(object):
     def bbox(self, outname=None, overwrite=True):
         """Return the bounding box."""
         if outname is None:
-            return spatial.bbox(self.getCorners(), self.projection)
+            return bbox(self.getCorners(), self.projection)
         else:
-            spatial.bbox(self.getCorners(), self.projection, outname=outname, format="ESRI Shapefile", overwrite=overwrite)
+            bbox(self.getCorners(), self.projection, outname=outname, format="ESRI Shapefile", overwrite=overwrite)
 
     @abc.abstractmethod
     def calibrate(self, replace=False):
@@ -68,7 +68,7 @@ class ID(object):
         else:
             return None
 
-    def export2sqlite(self):
+    def export2sqlite(self, target=None):
         """
         Export the most important metadata in a sqlite database which is located in the same folder as the source file.
         """
@@ -76,8 +76,9 @@ class ID(object):
         if self.compression is None:
             raise RuntimeError('Uncompressed data is not suitable for the metadata base')
 
-        database = os.path.join(os.path.dirname(self.scene), 'data.db')
+        database = os.path.join(os.path.dirname(self.scene), 'data.db') if target is None else target
         conn = sqlite3.connect(database)
+        # todo: following doesn't work:
         conn.enable_load_extension(True)
         conn.execute("SELECT load_extension('libspatialite')")
         conn.execute("SELECT InitSpatialMetaData();")
@@ -436,7 +437,7 @@ class ESA(ID):
         self.gammadir = directory
         outname = os.path.join(directory, self.outname_base())
         if len(self.getGammaImages(directory)) == 0:
-            run(["par_ASAR", self.file, outname])
+            gamma(["par_ASAR", self.file, outname])
             os.remove(outname + ".hdr")
             for item in finder(directory, [os.path.basename(outname)], regex=True):
                 ext = ".par" if item.endswith(".par") else ""
@@ -458,7 +459,7 @@ class ESA(ID):
         candidates = [x for x in self.getGammaImages(self.gammadir) if re.search("_pri$", x)]
         for image in candidates:
             out = image.replace("pri", "grd")
-            run(["radcal_PRI", image, image+".par", out, out+".par", k_db, inc_ref])
+            gamma(["radcal_PRI", image, image + ".par", out, out + ".par", k_db, inc_ref])
             hdr(out+".par")
             if replace:
                 for item in [image, image+".par", image+".hdr"]:
@@ -593,7 +594,7 @@ class SAFE(ID):
             else:
                 cmd = ["par_S1_GRD", tiff, xml_ann, xml_cal, xml_noise, name + ".par", name]
 
-            run(cmd)
+            gamma(cmd)
             hdr(name+".par")
             self.gammafiles[product].append(name)
 
@@ -609,7 +610,7 @@ class SAFE(ID):
         for product in self.gammafiles:
             for image in self.gammafiles[product]:
                 print "OPOD_vec", image+".par", osvdir
-                run(["OPOD_vec", image+".par", osvdir], outdir=logdir)
+                gamma(["OPOD_vec", image + ".par", osvdir], outdir=logdir)
 
     def getCorners(self):
         coordinates = self.meta["coordinates"]
