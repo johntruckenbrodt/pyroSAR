@@ -72,8 +72,8 @@ README
 import os
 import re
 
-from ancillary import finder, run, ReadPar
-from gamma.util import ISPPar
+from ancillary import finder, ReadPar
+from gamma.util import ISPPar, gamma
 
 # define (and create) directories for processing results and logfile
 path_log = os.path.join(os.getcwd(), "LOG/ISP/")
@@ -109,7 +109,7 @@ if len(list_flt) > 0:
         # read image samples
         samples = str(ISPPar(name_pwr1 + '.par').range_samples)
         # run gamma command
-        run(["cc_wave", name_flt, name_pwr1, name_pwr2, name_cc, samples, par.bx, par.by, par.wgt_wave], path_out, path_log)
+        gamma(["cc_wave", name_flt, name_pwr1, name_pwr2, name_cc, samples, par.bx, par.by, par.wgt_wave], path_out, path_log)
 
     print "...estimation finished"
 else:

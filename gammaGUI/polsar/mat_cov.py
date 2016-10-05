@@ -7,8 +7,9 @@
 import os
 import re
 
-from ancillary import run, finder, ReadPar
+from ancillary import finder, ReadPar
 from gammaGUI.auxiliary import grouping
+from gamma.util import gamma
 
 path_log = os.path.join(os.getcwd(), "LOG/LAT/")
 if not os.path.exists(path_log):
@@ -39,8 +40,8 @@ for scene in tuples:
     if not os.path.exists(path_out):
         os.makedirs(path_out)
     base = os.path.basename(hh_slc.replace("HH_", ""))
-    run(["polcovar", hh_slc, hv_slc, vv_slc, hh_slc+".par", hv_slc+".par", vv_slc+".par", base,
-         base+"_mat_cov.par", rlks, azlks], path_out, path_log)
+    gamma(["polcovar", hh_slc, hv_slc, vv_slc, hh_slc + ".par", hv_slc + ".par", vv_slc + ".par", base,
+         base + "_mat_cov.par", rlks, azlks], path_out, path_log)
 
 # rename files to consistent pattern
 for filename in finder(os.getcwd(), ["*.c*"]):

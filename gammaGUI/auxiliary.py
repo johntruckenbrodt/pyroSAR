@@ -1,10 +1,10 @@
 
 import os
 import shutil
-from ancillary import finder, writer, run
+from ancillary import finder, writer
 import subprocess as sp
 from Tkinter import *
-from gamma.util import ISPPar
+from gamma.util import ISPPar, gamma
 
 import tkMessageBox
 
@@ -206,7 +206,7 @@ def importer(text):
 
         # try to import file, if not possible (i.e. not an accepted format) continue with the next file
         try:
-            run(args, path_tmp, path_log)
+            gamma(args, path_tmp, path_log)
             # find next best parameter file of the newly imported files
             name_par = finder(path_tmp, ["*.par"])[0]
 

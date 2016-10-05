@@ -70,8 +70,8 @@ cc_ad takes the following arguments:
 import os
 import re
 
-from ancillary import finder, run, ReadPar
-from gamma.util import ISPPar
+from ancillary import finder, ReadPar
+from gamma.util import ISPPar, gamma
 
 
 # define (and create) directories for processing results and logfile
@@ -112,7 +112,7 @@ if len(list_flt) > 0:
             # read image samples
             samples = str(ISPPar(name_mli + ".par").range_samples)
             # run gamma command
-            run(['cc_ad', name_flt, name_mli, name_rmli, "-", "-", name_cc, samples, par.box_min, par.box_max, par.wgt_ad], path_out, path_log)
+            gamma(['cc_ad', name_flt, name_mli, name_rmli, "-", "-", name_cc, samples, par.box_min, par.box_max, par.wgt_ad], path_out, path_log)
         else:
             print "coherence image", name_cc, "already exists"
 

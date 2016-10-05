@@ -6,9 +6,9 @@
 import os
 import re
 
-from ancillary import run, dissolve, finder
+from ancillary import dissolve, finder
 from gammaGUI.auxiliary import grouping
-from gamma.util import ISPPar
+from gamma.util import ISPPar, gamma
 from envi import hdr
 
 path_log = os.path.join(os.getcwd(), "LOG/LAT/")
@@ -61,7 +61,7 @@ for scene in tuples:
         for element in elements:
             requirements = [components[x] for x in elements[element]]
             if "-" not in requirements:
-                run(dissolve(["KENNAUGH_MATRIX", values, nlines, base, element]), logpath=path_log)
+                gamma(dissolve(["KENNAUGH_MATRIX", values, nlines, base, element]), logpath=path_log)
 
     for element in finder(os.path.dirname(base), ["\.[tk][1-4]{2}$"], regex=True):
         new = re.sub("\.k", "_k", element) if re.search("\.k[1-4]{2}", element) else re.sub("\.t", "_k", element)

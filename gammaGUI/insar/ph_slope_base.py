@@ -54,7 +54,8 @@ FLATTENING
 import re
 import os.path
 
-from ancillary import finder, run
+from ancillary import finder
+from gamma.util import gamma
 
 # define (and create) directories for processing results and logfile
 path_log = os.path.join(os.getcwd(), "LOG/ISP/")
@@ -83,7 +84,7 @@ if len(list_int) > 0:
             raise IOError("baseline file missing")
         name_flt = name_int[:-3]+"flt"
         print os.path.basename(name_flt)
-        run(["ph_slope_base", name_int, slc_par, name_off, name_base, name_flt], path_out, path_log)
+        gamma(["ph_slope_base", name_int, slc_par, name_off, name_base, name_flt], path_out, path_log)
 
     print "...done"
 else:

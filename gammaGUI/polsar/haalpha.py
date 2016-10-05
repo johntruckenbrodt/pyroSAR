@@ -6,9 +6,10 @@
 
 import os
 
-from ancillary import run, ReadPar
+from ancillary import ReadPar
 from envi import hdr
 from gammaGUI.auxiliary import grouping
+from gamma.util import gamma
 
 path_log = os.path.join(os.getcwd(), "LOG/LAT/")
 
@@ -37,8 +38,8 @@ for scene in tuples:
 
     base = os.path.basename(hh_slc.replace("HH_", ""))
 
-    run(["haalpha", pauli_alpha, pauli_beta, pauli_gamma, hh_slc+".par", base+"_cpd_A", base+"_cpd_alpha",
-         base+"_cpd_H", base+"_cpd_l1", base+"_cpd_l2", base+"_cpd_l3", mlipar, rlks, azlks], path_out, path_log)
+    gamma(["haalpha", pauli_alpha, pauli_beta, pauli_gamma, hh_slc + ".par", base + "_cpd_A", base + "_cpd_alpha",
+         base + "_cpd_H", base + "_cpd_l1", base + "_cpd_l2", base + "_cpd_l3", mlipar, rlks, azlks], path_out, path_log)
 
     for tag in ["_cpd_A", "_cpd_alpha", "_cpd_H"]:
         hdr(mlipar, os.path.join(path_out, base)+tag+".hdr")

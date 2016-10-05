@@ -17,7 +17,8 @@ The following tasks are performed by executing this script:
 import re
 import os
 
-from ancillary import finder, ReadPar, run
+from ancillary import finder, ReadPar
+from gamma.util import gamma
 
 par = ReadPar(os.path.join(os.getcwd(), "PAR/interferogram.par"), type="exe")
 
@@ -47,7 +48,7 @@ if len(offsets) > 0:
         except IOError:
             print "MLI for the primary SLC missing"
 
-        run(["SLC_intf", slc, rslc, slc + ".par", rslc + ".par", name_off, name_int, par_mli.range_looks, par_mli.azimuth_looks, "0", "-", par.sps_flg, par.azf_flg,
+        gamma(["SLC_intf", slc, rslc, slc + ".par", rslc + ".par", name_off, name_int, par_mli.range_looks, par_mli.azimuth_looks, "0", "-", par.sps_flg, par.azf_flg,
              par.rp1_flg, par.rp2_flg], path_out, path_log)
 
     print "...done"

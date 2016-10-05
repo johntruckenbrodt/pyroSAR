@@ -7,9 +7,7 @@ import sys
 
 import os
 
-from gamma.util import ISPPar, Spacing
-
-from ancillary import run
+from gamma.util import ISPPar, Spacing, gamma
 from envi import hdr
 
 # receive input file
@@ -42,5 +40,5 @@ out_meta = out_data + ".par"
 scale = 0.000001 if "ERS" in par.sensor else 1.0
 
 # perform gamma command
-run(["multi_look", data, meta, out_data, out_meta, mlk.rlks, mlk.azlks, "-", "-", scale], os.getcwd(), path_log)
+gamma(["multi_look", data, meta, out_data, out_meta, mlk.rlks, mlk.azlks, "-", "-", scale], os.getcwd(), path_log)
 hdr(out_meta)

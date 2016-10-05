@@ -24,10 +24,10 @@ sar image is below the defined threshold (command init_offsetm)
 import os
 import re
 import sys
-from ancillary import run, dissolve, ReadPar
+from ancillary import dissolve, ReadPar
 from envi import hdr
 from auxiliary import Tuple, grouping, Environment
-from gamma.util import ISPPar, correlate, init_offset
+from gamma.util import ISPPar, correlate, init_offset, gamma
 
 # create list of scene tuple objects
 tuples = grouping()
@@ -100,7 +100,7 @@ for scene in tuples:
     if not os.path.isfile(lut_fine):
 
         print"creating initial lookup table"
-        run(["gc_map", masterpar_name, "-", dem+".par", dem, dem_sub+".par", dem_sub, lut_rough, "-", "-", sim_map, slope, aspect, inc, "-", "-", ls_map, par.frame, 2], path_out, path_log)
+        gamma(["gc_map", masterpar_name, "-", dem + ".par", dem, dem_sub + ".par", dem_sub, lut_rough, "-", "-", sim_map, slope, aspect, inc, "-", "-", ls_map, par.frame, 2], path_out, path_log)
 
         for header in [inc+".hdr", ls_map+".hdr", slope+".hdr", aspect+".hdr"]:
             hdr(dem_sub+".par", header)
@@ -110,7 +110,7 @@ for scene in tuples:
             topo_base = os.path.join(path_out, os.path.basename(master))
             pix_gamma = topo_base+"_pix_gamma"
             parfile = master+".par"
-            run(["pixel_area", parfile, dem_sub+".par", dem_sub, lut_rough, ls_map, inc, "-", pix_gamma], path_out, path_log)
+            gamma(["pixel_area", parfile, dem_sub + ".par", dem_sub, lut_rough, ls_map, inc, "-", pix_gamma], path_out, path_log)
 
         # read additional parameters
         dempar = ISPPar(dem_sub + ".par")
@@ -119,7 +119,7 @@ for scene in tuples:
         lines_mli = masterpar.azimuth_lines
 
         print "refinement of lookup table"
-        run(["geocode", lut_rough, sim_map, samples_dem, sim_rdc, samples_mli, lines_mli, par.interp_mode], path_out, path_log)
+        gamma(["geocode", lut_rough, sim_map, samples_dem, sim_rdc, samples_mli, lines_mli, par.interp_mode], path_out, path_log)
 
         print "initial computation of offsets"
         init_offset(master, sim_rdc, diffpar, path_log)
@@ -128,7 +128,7 @@ for scene in tuples:
         correlate(master, sim_rdc, diffpar, offs, offsets, snr, coffs, coffsets, path_log, maxwin=2048, overlap=.3, poly=par.polynomial, ovs=par.oversampling)
 
         print "refinement of lookup table with offset polynomials"
-        run(["gc_map_fine", lut_rough, samples_dem, diffpar, lut_fine, 1], path_out, path_log)
+        gamma(["gc_map_fine", lut_rough, samples_dem, diffpar, lut_fine, 1], path_out, path_log)
 
         for item in [lut_rough, sim_map, sim_rdc]:
             os.remove(item)
@@ -154,11 +154,11 @@ for scene in tuples:
                 ellip_pix_gamma0 = topo_base+"_ellip_pix_gamma0"
                 parfile = image+".par" if re.search("_mli$", image) else scene.getTop("HH_(?:slc_|)(?:cal_|)mli$")+".par"
                 # refined pixel area estimation
-                run(["pixel_area", parfile, dem_sub+".par", dem_sub, lut_fine, ls_map, inc, "-", pix_gamma], path_out, path_log)
-                run(["radcal_MLI", image, parfile, "-", "temp", "-", "-", "-", 2, "-", "-", ellip_pix_gamma0], path_out, path_log)
+                gamma(["pixel_area", parfile, dem_sub + ".par", dem_sub, lut_fine, ls_map, inc, "-", pix_gamma], path_out, path_log)
+                gamma(["radcal_MLI", image, parfile, "-", "temp", "-", "-", "-", 2, "-", "-", ellip_pix_gamma0], path_out, path_log)
                 width_mli = ISPPar(parfile).range_samples
-                run(["ratio", ellip_pix_gamma0, pix_gamma, pix_gamma0ratio, width_mli, 1, 1, 0], path_out, path_log)
-                run(["product", image, pix_gamma0ratio, image+"_norm", width_mli, 1, 1, 0], path_out, path_log)
+                gamma(["ratio", ellip_pix_gamma0, pix_gamma, pix_gamma0ratio, width_mli, 1, 1, 0], path_out, path_log)
+                gamma(["product", image, pix_gamma0ratio, image + "_norm", width_mli, 1, 1, 0], path_out, path_log)
                 # remove temporary files
                 for item in [os.path.join(path_out, "temp"), pix_gamma, ellip_pix_gamma0, pix_gamma0ratio]:
                     os.remove(item)
@@ -189,7 +189,7 @@ for scene in tuples:
             print os.path.basename(image)
             interp_mode = par.interp_mode_coherence if "_cc" in image else par.interp_mode_intensity
 
-            run(["geocode_back", image, samples_mli, lut_fine, image + "_geo", samples_dem, "-", interp_mode], path_out, path_log)
+            gamma(["geocode_back", image, samples_mli, lut_fine, image + "_geo", samples_dem, "-", interp_mode], path_out, path_log)
 
             # create envi header file
             hdr(dem_sub+".par", image+"_geo.hdr")
@@ -198,17 +198,17 @@ for scene in tuples:
             # eqaimage = geoimage+"_eqa"
             #
             # # transform image to eqa projection
-            # run(["map_trans", dem_sub+".par", geoimage, dempar_eqa, eqaimage, "-", "-", "-", "-", 1], os.path.dirname(geoimage), path_log)
+            # gamma(["map_trans", dem_sub+".par", geoimage, dempar_eqa, eqaimage, "-", "-", "-", "-", 1], os.path.dirname(geoimage), path_log)
             #
             # width_eqa = ISPPar(dempar_eqa).width
             #
             # # create bitmap
             # if "cc" in geoimage:
-            #     run(["rascc", eqaimage, "-", width_eqa, 1, 1, 0, 1, 1, .1, .9, 1.0, .35, 1, eqaimage + ".bmp"], os.path.dirname(geoimage), path_log)
+            #     gamma(["rascc", eqaimage, "-", width_eqa, 1, 1, 0, 1, 1, .1, .9, 1.0, .35, 1, eqaimage + ".bmp"], os.path.dirname(geoimage), path_log)
             # else:
-            #     run(["raspwr", eqaimage, width_eqa, 1, 0, 1, 1, 1, .35, 1.0, eqaimage + ".bmp", "0"], os.path.dirname(geoimage), path_log)
+            #     gamma(["raspwr", eqaimage, width_eqa, 1, 0, 1, 1, 1, .35, 1.0, eqaimage + ".bmp", "0"], os.path.dirname(geoimage), path_log)
             #
             # # create kml
-            # run(["mk_kml", dempar_eqa, eqaimage + ".bmp", eqaimage + ".kml"], os.path.dirname(geoimage), path_log)
+            # gamma(["mk_kml", dempar_eqa, eqaimage + ".bmp", eqaimage + ".kml"], os.path.dirname(geoimage), path_log)
 
 print "#############################################\ngeocoding finished"

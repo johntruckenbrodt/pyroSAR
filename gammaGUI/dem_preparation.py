@@ -19,8 +19,8 @@ import sys
 import os
 import subprocess as sp
 
-from ancillary import run
 from envi import hdr, HDRobject
+from gamma.util import gamma
 
 # define (and create) directories for processing results and logfile
 path_dem = os.path.join(os.getcwd(), "DEM/")
@@ -75,7 +75,7 @@ if not os.path.isfile(dem + ".par"):
     posting = "-"+header.map_info[6]+" "+header.map_info[5]
     topleft = header.map_info[4]+" "+header.map_info[3]
     dempar = ["UTM", "WGS84", "1", header.map_info[7], false_northing, os.path.basename(dem), "", "", "", header.samples, header.lines, posting, topleft]
-    run(["create_dem_par", dem + ".par"], path_dem, path_log, inlist=dempar)
+    gamma(["create_dem_par", dem + ".par"], path_dem, path_log, inlist=dempar)
     process += 1
 
 if process == 0:

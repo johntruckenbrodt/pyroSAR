@@ -43,10 +43,11 @@ import srtm
 import shutil
 import subprocess as sp
 from time import asctime
-from gamma.util import correlate, ovs, ISPPar
+from gamma.util import correlate, ovs, ISPPar, gamma
 from S1_auxil import Identifier, unpack, init_parser, OSV
-from ancillary import run, finder, blockPrint, enablePrint
+from ancillary import finder, blockPrint, enablePrint
 from pyroSAR import identify
+
 
 def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermediates=False, res_target=20, func_geoback=2, func_interp=0, poedir=None, resdir=None):
 
@@ -110,7 +111,7 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
             print "...no appropriate file found"
         else:
             for item in files_mli:
-                run(["S1_OPOD_vec", item+".par", osvfile], logpath=path_log)
+                gamma(["S1_OPOD_vec", item + ".par", osvfile], logpath=path_log)
 
     # compute multilooking factors
     par = ISPPar(files_mli[0]+".par")
@@ -123,7 +124,7 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
     if rlks > 1 or azlks > 1:
         print "multilooking..."
         for item in files_mli:
-            run(["multi_look_MLI", item, item+".par", item+"2", item+"2.par", rlks, azlks], logpath=path_log)
+            gamma(["multi_look_MLI", item, item + ".par", item + "2", item + "2.par", rlks, azlks], logpath=path_log)
 
         # collect all newly created MLIs
         files_mli = [x+"2" for x in files_mli]
@@ -194,14 +195,14 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
 
     print "sar image simulation..."
     try:
-        run(["gc_map", master+".par", "-", name_srtm+".par", name_srtm, dem_seg+".par", dem_seg, lut, ovs_lat, ovs_lon, sim_sar, u, v, inc, psi, pix, ls_map, 8, func_interp], logpath=path_log)
+        gamma(["gc_map", master + ".par", "-", name_srtm + ".par", name_srtm, dem_seg + ".par", dem_seg, lut, ovs_lat, ovs_lon, sim_sar, u, v, inc, psi, pix, ls_map, 8, func_interp], logpath=path_log)
     except sp.CalledProcessError:
         print "...failed"
         return
 
     ######################################################################
     print "initial pixel area estimation..."
-    run(["pixel_area", master+".par", dem_seg+".par", dem_seg, lut, ls_map, inc, pixel_area], logpath=path_log)
+    gamma(["pixel_area", master + ".par", dem_seg + ".par", dem_seg, lut, ls_map, inc, pixel_area], logpath=path_log)
 
     ######################################################################
     print "cross correlation..."
@@ -214,7 +215,7 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
     print "supplementing lookup table with offset polynomials..."
     try:
         sim_width = ISPPar(dem_seg+".par").width
-        run(["gc_map_fine", lut, sim_width, master+"_diff.par", lut_fine, 0], logpath=path_log)
+        gamma(["gc_map_fine", lut, sim_width, master + "_diff.par", lut_fine, 0], logpath=path_log)
     except sp.CalledProcessError:
         print "...failed"
         return
@@ -222,7 +223,7 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
     ######################################################################
     print "refined pixel area estimation..."
     try:
-        run(["pixel_area", master+".par", dem_seg+".par", dem_seg, lut_fine, ls_map, inc, pixel_area2], logpath=path_log)
+        gamma(["pixel_area", master + ".par", dem_seg + ".par", dem_seg, lut_fine, ls_map, inc, pixel_area2], logpath=path_log)
     except sp.CalledProcessError:
         print "...failed"
         return
@@ -231,20 +232,20 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
     print "radiometric calibration and normalization..."
     try:
 
-        run(["radcal_MLI", master, master+".par", "-", master+"_cal", "-", 0, 0, 1, 0.0, "-", ellipse_pixel_area], logpath=path_log)
-        run(["ratio", ellipse_pixel_area, pixel_area2, ratio_sigma0, par.range_samples, 1, 1], logpath=path_log)
+        gamma(["radcal_MLI", master, master + ".par", "-", master + "_cal", "-", 0, 0, 1, 0.0, "-", ellipse_pixel_area], logpath=path_log)
+        gamma(["ratio", ellipse_pixel_area, pixel_area2, ratio_sigma0, par.range_samples, 1, 1], logpath=path_log)
         for item in files_mli:
-            run(["product", item, ratio_sigma0, item+"_pixcal", par.range_samples, 1, 1], logpath=path_log)
+            gamma(["product", item, ratio_sigma0, item + "_pixcal", par.range_samples, 1, 1], logpath=path_log)
     except sp.CalledProcessError:
         print "...failed"
         return
     ######################################################################
     print "backward geocoding, incidence angle normalization and conversion to gamma backscatter..."
     for item in files_mli:
-        run(["geocode_back", item+"_pixcal", par.range_samples, lut_fine, item+"_geo", sim_width, 0, func_geoback], logpath=path_log)
+        gamma(["geocode_back", item + "_pixcal", par.range_samples, lut_fine, item + "_geo", sim_width, 0, func_geoback], logpath=path_log)
 
-        run(["lin_comb", 1, item+"_geo", 0, math.cos(math.radians(par.incidence_angle)), item+"_geo_flat", sim_width], logpath=path_log)
-        run(["sigma2gamma", item+"_geo_flat", inc, item+"_geo_norm", sim_width], logpath=path_log)
+        gamma(["lin_comb", 1, item + "_geo", 0, math.cos(math.radians(par.incidence_angle)), item + "_geo_flat", sim_width], logpath=path_log)
+        gamma(["sigma2gamma", item + "_geo_flat", inc, item + "_geo_norm", sim_width], logpath=path_log)
 
     ######################################################################
 
@@ -253,7 +254,7 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
         polarization = re.findall("[HV]{2}", os.path.basename(item))[0].lower()
         outname = outname_base+"_"+polarization
         try:
-            run(["data2geotiff", dem_seg+".par", item, 2, outname+"_geocoded_norm.tif"], logpath=path_log)
+            gamma(["data2geotiff", dem_seg + ".par", item, 2, outname + "_geocoded_norm.tif"], logpath=path_log)
         except ImportWarning:
             pass
         except sp.CalledProcessError:

@@ -13,7 +13,8 @@ The gammaGUI working directory is first searched for SLC files (suffix "_slc"). 
 calibration is performed. If the option "replace" was set in the GUI dialog, the original SLC files are deleted.
 """
 import os
-from ancillary import finder, ReadPar, run
+from ancillary import finder, ReadPar
+from gamma.util import gamma
 
 # read parameter file
 par = ReadPar(os.path.join(os.getcwd(), "PAR/cal_slc.par"))
@@ -41,7 +42,7 @@ if len(list_slc) > 0:
             print name_slc
             K_dB = list_K_dB[sensor]
             name_cslc = name_slc+"_cal"
-            run(["radcal_SLC", name_slc, name_slc+".par", name_cslc, name_cslc+".par", "-", "-", "-", "-", "-", "-", K_dB], path_out, path_log)
+            gamma(["radcal_SLC", name_slc, name_slc + ".par", name_cslc, name_cslc + ".par", "-", "-", "-", "-", "-", "-", K_dB], path_out, path_log)
             if par.replace == "True":
                 os.remove(name_slc)
                 os.remove(name_slc+".par")

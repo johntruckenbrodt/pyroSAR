@@ -5,9 +5,10 @@
 ##############################################################
 import os
 
-from ancillary import run, finder, ReadPar
+from ancillary import finder, ReadPar
 from envi import hdr
 from gammaGUI.auxiliary import grouping
+from gamma.util import gamma
 
 path_log = os.path.join(os.getcwd(), "LOG/LAT/")
 if not os.path.exists(path_log):
@@ -36,7 +37,7 @@ for scene in tuples:
     samples = ReadPar(scene.HH_slc+".par").range_samples
     base = os.path.basename(hh_slc.replace("HH_", ""))
 
-    run(["FD3C_DEC", hh_slc, hv_slc, vv_slc, t13, samples, base, rlks, azlks], os.path.dirname(t13), path_log)
+    gamma(["FD3C_DEC", hh_slc, hv_slc, vv_slc, t13, samples, base, rlks, azlks], os.path.dirname(t13), path_log)
     for tag in ["_fdd_pd", "_fdd_ps", "_fdd_pv"]:
         hdr(hh_mli+".par", os.path.join(os.path.dirname(t13), base)+tag+".hdr")
 
