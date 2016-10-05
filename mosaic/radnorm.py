@@ -1,9 +1,10 @@
-
-import raster
 import argparse
+
 import numpy as np
 from scipy import stats
+
 from mosaic_aux import orthoregress
+from spatial import raster
 
 
 def radnorm(reference, target, imad, fs_in, fs_out, ncp_thres=0.95):

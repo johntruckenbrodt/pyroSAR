@@ -1,10 +1,11 @@
-import gdal
 import math
-import numpy as np
-from gdalconst import *
 from time import asctime
 
-import raster
+import gdal
+import numpy as np
+from gdalconst import *
+
+from spatial import raster
 
 
 def bandmean(infile, outfile, maxmem=2000):

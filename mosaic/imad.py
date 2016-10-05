@@ -1,11 +1,12 @@
+import argparse
+
 import gdal
 import numpy as np
-import argparse
 from gdalconst import GDT_Float32
-
-import raster
 from scipy import linalg, stats
+
 from mosaic_aux import Cpm, geneiv
+from spatial import raster
 
 
 def imad(file1, file2, outfile, lam=0.0):

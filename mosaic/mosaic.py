@@ -1,11 +1,11 @@
-
-import raster
 import argparse
-from imad import imad
 import subprocess as sp
-from mosaic_aux import *
 from time import asctime
+
+from imad import imad
+from mosaic_aux import *
 from radnorm import radnorm
+from spatial import raster
 
 
 # helper function for deleting intermediate files
@@ -156,7 +156,7 @@ def mosaic(master, slaves, mosaik):
         os.rename(mosaik_temp, mosaik)
         os.rename(mosaik_temp+".hdr", mosaik+".hdr")
         os.rename(mosaik_temp+".aux.xml", mosaik+".aux.xml")
-        raster.Raster(mosaik).png([5, 4, 3], mosaik+"_quicklook.png")
+        raster.Raster(mosaik).png([5, 4, 3], mosaik + "_quicklook.png")
         master = mosaik
 
         del slaves[index]
