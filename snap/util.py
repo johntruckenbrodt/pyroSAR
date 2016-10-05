@@ -1,19 +1,17 @@
-
 import os
 import re
 import shutil
 import subprocess as sp
 from ancillary import finder
 from auxil import suffix_lookup, parse_recipe, write_recipe
-from pyroSAR import identify
+import pyroSAR
 
 
 def geocode(infile, outdir, polarizations='all'):
-
     orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
                     'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
 
-    id = identify(infile)
+    id = infile if isinstance(infile, pyroSAR.ID) else pyroSAR.identify(infile)
 
     if id.sensor in ['ASAR', 'ERS1', 'ERS2']:
         formatName = 'ENVISAT'
@@ -42,7 +40,7 @@ def geocode(infile, outdir, polarizations='all'):
 
     ############################################
     read = workflow.find('.//node[@id="Read"]')
-    read.find('.//parameters/file').text = infile
+    read.find('.//parameters/file').text = id.scene
     read.find('.//parameters/formatName').text = formatName
     ############################################
     orb = workflow.find('.//node[@id="Apply-Orbit-File"]')
@@ -58,10 +56,10 @@ def geocode(infile, outdir, polarizations='all'):
     if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
         tf.find('.//parameters/sourceBands').text = 'Beta0'
     else:
-        tf.find('.//parameters/sourceBands').text = ','.join(['Beta0_'+x for x in polarizations])
+        tf.find('.//parameters/sourceBands').text = ','.join(['Beta0_' + x for x in polarizations])
     ############################################
     tc = workflow.find('.//node[@id="Terrain-Correction"]')
-    tc.find('.//parameters/sourceBands').text = ','.join(['Gamma0_'+x for x in polarizations])
+    tc.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
     ############################################
     dB = workflow.find('.//node[@id="LinearToFromdB"]')
     dB.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
@@ -70,17 +68,19 @@ def geocode(infile, outdir, polarizations='all'):
     write.find('.//parameters/file').text = outname
     write.find('.//parameters/formatName').text = format
 
-    write_recipe(workflow, outname+'_proc')
+    write_recipe(workflow, outname + '_proc')
 
     if format == 'GeoTiff-BigTIFF':
         sp.check_call(['gpt',
+                       # '-Dsnap.dataio.reader.tileWidth=*',
+                       # '-Dsnap.dataio.reader.tileHeight=1',
                        '-Dsnap.dataio.bigtiff.tiling.width=256',
-                       '-Dsnap.dataio.bigtiff.tiling.height =256',
+                       '-Dsnap.dataio.bigtiff.tiling.height=256',
                        # '-Dsnap.dataio.bigtiff.compression.type=LZW',
                        # '-Dsnap.dataio.bigtiff.compression.quality=0.75',
                        outname + '_proc.xml'])
     else:
-        sp.check_call(['gpt', outname+'_proc.xml'])
+        sp.check_call(['gpt', outname + '_proc.xml'])
 
     if format == 'ENVI':
         for item in finder(outname, ['*.img']):
