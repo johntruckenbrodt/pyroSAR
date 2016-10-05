@@ -15,10 +15,17 @@ import re
 import math
 from envi import hdr
 import subprocess as sp
-from auxil import ISPPar
+from gamma.auxil import ISPPar
+from gamma.error import gammaErrorHandler
 from ancillary import run, Stack, union
 from spatial import haversine
+import pyroSAR
 
+
+def gamma(cmd, outdir=None, logpath=None, inlist=None):
+    log = os.path.join(logpath, cmd[0]+'.log') if logpath else None
+    out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False)
+    gammaErrorHandler(err)
 
 # INPUT FILES:
 # -master: master image
@@ -69,7 +76,7 @@ def correlate(master, slave, off, offs, ccp, offsets="-", coffs="-", coffsets="-
     par = ISPPar(master+".par")
 
     if not os.path.isfile(off):
-        run(["create_diff_par", master+".par", "-", off, 1, 0], logpath=path_log)
+        gamma(["create_diff_par", master + ".par", "-", off, 1, 0], logpath=path_log)
 
     if path_log is not None:
         if not os.path.isdir(path_log):
@@ -96,12 +103,12 @@ def correlate(master, slave, off, offs, ccp, offsets="-", coffs="-", coffsets="-
         args = [off, offs, ccp, winsize, winsize, offsets, ovs, nr, naz, thres]
         try:
             if mode == "SLC":
-                run([commands[0], master, slave, master+".par", slave+".par"]+args, path_out, path_log)
+                gamma([commands[0], master, slave, master + ".par", slave + ".par"] + args, path_out, path_log)
             else:
-                run([commands[0], master, slave]+args, path_out, path_log)
+                gamma([commands[0], master, slave] + args, path_out, path_log)
             passed = True
             try:
-                run([commands[1], offs, ccp, off, coffs, coffsets, thres, poly], path_out, path_log)
+                gamma([commands[1], offs, ccp, off, coffs, coffsets, thres, poly], path_out, path_log)
             except RuntimeError:
                 passed = False
         except ValueError:
@@ -270,7 +277,7 @@ def cc_find2(master, slave, diffpar, offs, ccp, rwin, azwin, mode, offsets="-", 
 
 def correlate2(master, slave, diffpar, offs, ccp, offsets="-", coffs="-", coffsets="-", npoly=4, thres=0.15, minwin=8, maxwin=2048, niter=2, path_log=None):
     if not os.path.isfile(diffpar):
-        run(["create_diff_par", master+".par", "-", diffpar, 1, 0], logpath=path_log)
+        gamma(["create_diff_par", master + ".par", "-", diffpar, 1, 0], logpath=path_log)
     if path_log is not None:
         if not os.path.isdir(path_log):
             os.makedirs(path_log)
@@ -300,7 +307,7 @@ def find_poly(offs, ccp, diffpar, mode, coffs, coffsets, thres=.15):
 
 def correlate3(master, slave, diffpar, offs, ccp, offsets="-", coffs="-", coffsets="-"):
     if not os.path.isfile(diffpar):
-        run(["create_diff_par", master + ".par", "-", diffpar, 1, 0], logpath=path_log)
+        gamma(["create_diff_par", master + ".par", "-", diffpar, 1, 0], logpath=path_log)
     par = ISPPar(master+".par")
     mode = "SLC" if par.image_format in ["FCOMPLEX", "SCOMPLEX"] else "MLI"
     rwin = 2**(math.log(par.range_pixel_spacing*10, 2)//1)
@@ -321,9 +328,9 @@ def correlate3(master, slave, diffpar, offs, ccp, offsets="-", coffs="-", coffse
 def correlate4(master, slave, diffpar, offs, ccp, offsets="-", coffs="-", coffsets="-"):
     if not os.path.isfile(diffpar):
         try:
-            run(["create_diff_par", master + ".par", "-", diffpar, "1", "0"])
+            gamma(["create_diff_par", master + ".par", "-", diffpar, "1", "0"])
         except IOError:
-            run(["create_diff_par", slave + ".par", "-", diffpar, "1", "0"])
+            gamma(["create_diff_par", slave + ".par", "-", diffpar, "1", "0"])
     try:
         par = ISPPar(master+".par")
     except IOError:
@@ -368,7 +375,7 @@ def correlate5(master, slave, diffpar, offs, ccp, offsets="-", coffs="-", coffse
         parfile = slave+".par"
     else:
         raise IOError("no appropriate parameter file found")
-    run(["create_diff_par", parfile, "-", diffpar, 1, 0])
+    gamma(["create_diff_par", parfile, "-", diffpar, 1, 0])
     par = ISPPar(parfile)
     mode = "SLC" if par.image_format in ["FCOMPLEX", "SCOMPLEX"] else "MLI"
     winsize = int(2**(math.log(par.range_pixel_spacing*10, 2)//1))
@@ -428,6 +435,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
     ccp: cross-correlation of each patch (0.0->1.0) (float)
     """
 
+    scene = scene if isinstance(scene, pyroSAR.ID) else pyroSAR.identify(scene)
+
     scaling = [scaling] if isinstance(scaling, str) else scaling if isinstance(scaling, list) else []
     scaling = union(scaling, ["db", "linear"])
     if len(scaling) == 0:
@@ -455,7 +464,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
     # azlks = int(targetres/round(scene.spacing[1]))
     #
     # for image in images:
-    #     run(["multi_look_MLI", image, image+".par", image+"_mli", image+"_mli.par", rlks, azlks])
+    #     gamma(["multi_look_MLI", image, image+".par", image+"_mli", image+"_mli.par", rlks, azlks])
 
     for image in images:
         multilook(image, image+"_mli", targetres)
@@ -497,9 +506,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
     gc_map_opt = [dem+".par", dem, dem_seg+".par", dem_seg, lut_coarse, ovs_lat, ovs_lon, sim_map, u, v, inc, psi, pix, ls_map, 8, func_interp]
 
     if master_par.image_geometry == "GROUND_RANGE":
-        run(["gc_map_grd", master+".par"]+gc_map_opt, logpath=path_log)
+        gamma(["gc_map_grd", master + ".par"] + gc_map_opt, logpath=path_log)
     else:
-        run(["gc_map", master+".par", "-"]+gc_map_opt, logpath=path_log)
+        gamma(["gc_map", master + ".par", "-"] + gc_map_opt, logpath=path_log)
 
     for item in [dem_seg, sim_map, u, v, psi, pix, inc]:
         hdr(dem_seg+".par", item+".hdr")
@@ -514,13 +523,13 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
         # samples_dem = dempar.width
         # samples_mli = master_par.range_samples
         # lines_mli = master_par.azimuth_lines
-        # run(["geocode", lut, sim_map, samples_dem, sim_sar, samples_mli, lines_mli, func_interp], logpath=path_log)
+        # gamma(["geocode", lut, sim_map, samples_dem, sim_sar, samples_mli, lines_mli, func_interp], logpath=path_log)
         # init_offset(master, sim_sar, diffpar, path_log)
         # correlate(master, sim_sar, diffpar, offs, ccp, coffs=coffs, coffsets=coffsets, offsets=offs+".txt", path_log=path_log, maxwin=256)
         ######################################################################
         # cross correlation approach 2 #######################################
         ######################################################################
-        run(["pixel_area", master + ".par", dem_seg + ".par", dem_seg, lut_coarse, ls_map, inc, pixel_area_coarse], logpath=path_log)
+        gamma(["pixel_area", master + ".par", dem_seg + ".par", dem_seg, lut_coarse, ls_map, inc, pixel_area_coarse], logpath=path_log)
         init_offset(master, pixel_area_coarse, diffpar, path_log)
         # correlate(master, pixel_area_coarse, diffpar, offs, ccp, coffs=coffs, coffsets=coffsets, offsets=offsets, path_log=path_log, maxwin=256)
         # correlate2(master, pixel_area_coarse, diffpar, offs, ccp, offsets=offsets, coffs=coffs, coffsets=coffsets, path_log=path_log)
@@ -537,7 +546,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
         # print "#####################################"
         ######################################################################
         try:
-            run(["gc_map_fine", lut_coarse, sim_width, diffpar, lut_fine, 0], logpath=path_log)
+            gamma(["gc_map_fine", lut_coarse, sim_width, diffpar, lut_fine, 0], logpath=path_log)
         except sp.CalledProcessError:
             print "...failed"
             return
@@ -549,40 +558,40 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling="linear", func_geoba
     # normalization and backward geocoding approach 1 ####################
     ######################################################################
     for image in images:
-        run(["geocode_back", image, master_par.range_samples, lut_fine, image+"_geo", sim_width, "-", func_geoback], logpath=path_log)
-        run(["product", image+"_geo", pix, image+"_geo_pan", sim_width, 1, 1, 0], logpath=path_log)
-        run(["lin_comb", 1, image+"_geo_pan", 0, math.cos(math.radians(master_par.incidence_angle)), image+"_geo_pan_flat", sim_width], logpath=path_log)
-        run(["sigma2gamma", image+"_geo_pan_flat", inc, image+"_geo_norm", sim_width], logpath=path_log)
+        gamma(["geocode_back", image, master_par.range_samples, lut_fine, image + "_geo", sim_width, "-", func_geoback], logpath=path_log)
+        gamma(["product", image + "_geo", pix, image + "_geo_pan", sim_width, 1, 1, 0], logpath=path_log)
+        gamma(["lin_comb", 1, image + "_geo_pan", 0, math.cos(math.radians(master_par.incidence_angle)), image + "_geo_pan_flat", sim_width], logpath=path_log)
+        gamma(["sigma2gamma", image + "_geo_pan_flat", inc, image + "_geo_norm", sim_width], logpath=path_log)
         hdr(dem_seg+".par", image+"_geo_norm.hdr")
     ######################################################################
     # normalization and backward geocoding approach 2 ####################
     ######################################################################
     # try:
-    #     run(["pixel_area", master+".par", dem_seg+".par", dem_seg, lut_fine, ls_map, inc, pixel_area_fine], logpath=path_log)
+    #     gamma(["pixel_area", master+".par", dem_seg+".par", dem_seg, lut_fine, ls_map, inc, pixel_area_fine], logpath=path_log)
     # except sp.CalledProcessError:
     #     print "...failed"
     #     return
-    # run(["radcal_MLI", master, master+".par", "-", master+"_cal", "-", 0, 0, 1, 0.0, "-", ellipse_pixel_area], logpath=path_log)
-    # run(["ratio", ellipse_pixel_area, pixel_area_fine, ratio_sigma0, master_par.range_samples, 1, 1], logpath=path_log)
+    # gamma(["radcal_MLI", master, master+".par", "-", master+"_cal", "-", 0, 0, 1, 0.0, "-", ellipse_pixel_area], logpath=path_log)
+    # gamma(["ratio", ellipse_pixel_area, pixel_area_fine, ratio_sigma0, master_par.range_samples, 1, 1], logpath=path_log)
     #
     # for image in images:
-    #     run(["product", image, ratio_sigma0, image+"_pan", master_par.range_samples, 1, 1], logpath=path_log)
-    #     run(["geocode_back", image+"_pan", master_par.range_samples, lut_fine, image+"_pan_geo", sim_width, 0, func_geoback], logpath=path_log)
-    #     run(["lin_comb", 1, image+"_pan_geo", 0, math.cos(math.radians(master_par.incidence_angle)), image+"_pan_geo_flat", sim_width], logpath=path_log)
-    #     run(["sigma2gamma", image+"_pan_geo_flat", inc, image+"_geo_norm", sim_width], logpath=path_log)
+    #     gamma(["product", image, ratio_sigma0, image+"_pan", master_par.range_samples, 1, 1], logpath=path_log)
+    #     gamma(["geocode_back", image+"_pan", master_par.range_samples, lut_fine, image+"_pan_geo", sim_width, 0, func_geoback], logpath=path_log)
+    #     gamma(["lin_comb", 1, image+"_pan_geo", 0, math.cos(math.radians(master_par.incidence_angle)), image+"_pan_geo_flat", sim_width], logpath=path_log)
+    #     gamma(["sigma2gamma", image+"_pan_geo_flat", inc, image+"_geo_norm", sim_width], logpath=path_log)
     #     hdr(dem_seg+".par", image+"_geo_norm.hdr")
     ######################################################################
     # conversion to (dB and) geotiff
     for image in images:
         for scale in scaling:
             if scale == "db":
-                run(["linear_to_dB", image+"_geo_norm", image+"_geo_norm_db", sim_width, 0, -99], logpath=path_log)
+                gamma(["linear_to_dB", image + "_geo_norm", image + "_geo_norm_db", sim_width, 0, -99], logpath=path_log)
                 hdr(dem_seg+".par", image+"_geo_norm_db.hdr")
             suffix = {"linear": "", "db": "_db"}[scale]
             infile = image+"_geo_norm{}".format(suffix)
             outfile = os.path.join(outdir, os.path.basename(image)+"_geo_norm{}.tif".format(suffix))
             try:
-                run(["data2geotiff", dem_seg+".par", infile, 2, outfile], logpath=path_log)
+                gamma(["data2geotiff", dem_seg + ".par", infile, 2, outfile], logpath=path_log)
             except ImportWarning:
                 pass
 
@@ -599,7 +608,7 @@ def init_offset(master, slave, off, path_log, thres=0.15):
     path_out = os.path.dirname(off)
 
     if not os.path.isfile(off):
-        run(["create_diff_par", master+".par", "-", off, 1, 0], logpath=path_log)
+        gamma(["create_diff_par", master + ".par", "-", off, 1, 0], logpath=path_log)
 
     par = ISPPar(master + ".par")
     mode = "SLC" if par.image_format in ["FCOMPLEX", "SCOMPLEX"] else "MLI"
@@ -609,7 +618,7 @@ def init_offset(master, slave, off, path_log, thres=0.15):
     # todo: query input file type in order to decide whether command is executed
     cmd = "init_offset_orbit" if mode == "SLC" else "init_offset_orbitm"
     if mode == "SLC":
-        run([cmd, master+".par", slave+".par", off], path_out, path_log)
+        gamma([cmd, master + ".par", slave + ".par", off], path_out, path_log)
 
     mlk = Spacing(par)
     passed = False
@@ -622,9 +631,9 @@ def init_offset(master, slave, off, path_log, thres=0.15):
             try:
                 args = [int(mlk.rlks)*factor, int(mlk.azlks)*factor, "-", "-", "-", "-", thres, win, win]
                 if mode == "SLC":
-                    run(["init_offset", master, slave, master+".par", slave+".par", off]+args, path_out, path_log)
+                    gamma(["init_offset", master, slave, master + ".par", slave + ".par", off] + args, path_out, path_log)
                 else:
-                    run(["init_offsetm", master, slave, off]+args, path_out, path_log)
+                    gamma(["init_offsetm", master, slave, off] + args, path_out, path_log)
                 passed = True
             except ValueError:
                 passed = False
