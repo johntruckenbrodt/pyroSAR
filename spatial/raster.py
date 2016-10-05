@@ -14,17 +14,22 @@ object itself). Upon initializing a Raster object only metadata is loaded, the a
 
 import os
 import re
-import vector
-import spatial
-import numpy as np
-from osgeo.gdalconst import *
-from osgeo import gdal, ogr, osr
-from ancillary import dissolve, finder, run, multicore
-from spatial import crsConvert
-from envi import HDRobject, hdr
 import subprocess as sp
-from math import ceil, floor, sqrt
+from math import sqrt
 from time import gmtime, strftime
+
+import numpy as np
+from osgeo import gdal, osr
+from osgeo.gdalconst import *
+
+# from auxil import crsConvert
+# from util import bbox, intersect
+import auxil
+import util
+
+import vector
+from ancillary import dissolve, run
+from envi import HDRobject, hdr
 
 os.environ["GDAL_PAM_PROXY_DIR"] = "/tmp"
 
@@ -50,7 +55,7 @@ class Raster(object):
         self.projection = self.raster.GetProjection()
         self.srs = osr.SpatialReference(wkt=self.projection)
         self.proj4 = self.srs.ExportToProj4()
-        self.epsg = crsConvert(self.srs, "epsg")
+        self.epsg = auxil.crsConvert(self.srs, "epsg")
         self.geogcs = self.srs.GetAttrValue("geogcs")
         self.projcs = self.srs.GetAttrValue("projcs") if self.srs.IsProjected() else None
         self.geo = dict(zip(["xmin", "xres", "rotation_x", "ymax", "rotation_y", "yres"], self.raster.GetGeoTransform()))
@@ -104,9 +109,9 @@ class Raster(object):
 
     def bbox(self, outname=None, format="ESRI Shapefile", overwrite=True):
         if outname is None:
-            return spatial.bbox(self.geo, self.proj4)
+            return util.bbox(self.geo, self.proj4)
         else:
-            spatial.bbox(self.geo, self.proj4, outname=outname, format=format, overwrite=overwrite)
+            util.bbox(self.geo, self.proj4, outname=outname, format=format, overwrite=overwrite)
 
     # translate raster data type descriptions
     @staticmethod
@@ -207,7 +212,7 @@ class Raster(object):
     # if no name for an output file is provided, a list of pixel coordinates for cropping is returned
     # def crop(self, clipobject, outname=None):
     #     ext = Extent(self)
-    #     inter = intersect(self, clipobject)
+    #     inter = util.intersect(self, clipobject)
     #     if inter is None:
     #         raise IOError("no extent overlap")
     #     clip = [int(ceil((inter.left-ext.left)/self.res[0])), int(ceil((ext.top-inter.top)/self.res[1])),
@@ -480,7 +485,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
 
         for i in range(len(srcfiles)):
             group = sorted(srcfiles[i], key=sortfun) if isinstance(srcfiles[i], list) else [srcfiles[i]]
-            group = [x for x in group if spatial.intersect(shp, Raster(x))]
+            group = [x for x in group if intersect(shp, Raster(x))]
             if len(group) > 1:
                 srcfiles[i] = group
             elif len(group) == 1:

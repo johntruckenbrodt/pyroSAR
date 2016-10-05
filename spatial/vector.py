@@ -12,7 +12,7 @@ by the OGR python binding
 import os
 from osgeo import ogr, osr
 from ancillary import parse_literal
-from spatial import crsConvert
+import auxil
 
 ogr.UseExceptions()
 osr.UseExceptions()
@@ -98,7 +98,7 @@ class Vector(object):
         """
         type can be either "epsg", "wkt", "proj4" or "osr"
         """
-        return crsConvert(self.layer.GetSpatialRef(), type)
+        return auxil.crsConvert(self.layer.GetSpatialRef(), type)
 
     @property
     def proj4(self):
@@ -176,7 +176,7 @@ class Vector(object):
 
     def reproject(self, projection):
 
-        srs_out = crsConvert(projection, "osr")
+        srs_out = auxil.crsConvert(projection, "osr")
 
         # create the CoordinateTransformation
         coordTrans = osr.CoordinateTransformation(self.srs, srs_out)
