@@ -67,7 +67,6 @@
             <demResamplingMethod>BILINEAR_INTERPOLATION</demResamplingMethod>
             <imgResamplingMethod>BILINEAR_INTERPOLATION</imgResamplingMethod>
             <pixelSpacingInMeter>20.0</pixelSpacingInMeter>
-            <pixelSpacingInDegree>1.796630568239043E-4</pixelSpacingInDegree>
             <mapProjection>GEOGCS[&quot;WGS84(DD)&quot;, &#xd;
                 DATUM[&quot;WGS84&quot;, &#xd;
                 SPHEROID[&quot;WGS84&quot;, 6378137.0, 298.257223563]], &#xd;
