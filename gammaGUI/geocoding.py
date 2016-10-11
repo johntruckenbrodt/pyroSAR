@@ -27,7 +27,7 @@ import sys
 from ancillary import dissolve, ReadPar
 from envi import hdr
 from auxiliary import Tuple, grouping, Environment
-from gamma.util import ISPPar, correlate, init_offset, gamma
+import gamma
 
 # create list of scene tuple objects
 tuples = grouping()
@@ -94,13 +94,13 @@ for scene in tuples:
 
     # define parameter file of the master
     masterpar_name = master + ".par"
-    masterpar = ISPPar(masterpar_name)
+    masterpar = gamma.ISPPar(masterpar_name)
 
     # perform forward geocoding if the corresponding refined lookup table does not yet exist
     if not os.path.isfile(lut_fine):
 
         print"creating initial lookup table"
-        gamma(["gc_map", masterpar_name, "-", dem + ".par", dem, dem_sub + ".par", dem_sub, lut_rough, "-", "-", sim_map, slope, aspect, inc, "-", "-", ls_map, par.frame, 2], path_out, path_log)
+        gamma.process(["gc_map", masterpar_name, "-", dem + ".par", dem, dem_sub + ".par", dem_sub, lut_rough, "-", "-", sim_map, slope, aspect, inc, "-", "-", ls_map, par.frame, 2], path_out, path_log)
 
         for header in [inc+".hdr", ls_map+".hdr", slope+".hdr", aspect+".hdr"]:
             hdr(dem_sub+".par", header)
@@ -110,31 +110,31 @@ for scene in tuples:
             topo_base = os.path.join(path_out, os.path.basename(master))
             pix_gamma = topo_base+"_pix_gamma"
             parfile = master+".par"
-            gamma(["pixel_area", parfile, dem_sub + ".par", dem_sub, lut_rough, ls_map, inc, "-", pix_gamma], path_out, path_log)
+            gamma.process(["pixel_area", parfile, dem_sub + ".par", dem_sub, lut_rough, ls_map, inc, "-", pix_gamma], path_out, path_log)
 
         # read additional parameters
-        dempar = ISPPar(dem_sub + ".par")
+        dempar = gamma.ISPPar(dem_sub + ".par")
         samples_dem = dempar.width
         samples_mli = masterpar.range_samples
         lines_mli = masterpar.azimuth_lines
 
         print "refinement of lookup table"
-        gamma(["geocode", lut_rough, sim_map, samples_dem, sim_rdc, samples_mli, lines_mli, par.interp_mode], path_out, path_log)
+        gamma.process(["geocode", lut_rough, sim_map, samples_dem, sim_rdc, samples_mli, lines_mli, par.interp_mode], path_out, path_log)
 
         print "initial computation of offsets"
-        init_offset(master, sim_rdc, diffpar, path_log)
+        gamma.init_offset(master, sim_rdc, diffpar, path_log)
 
         print "cross-correlation offset and polynomial estimation"
-        correlate(master, sim_rdc, diffpar, offs, offsets, snr, coffs, coffsets, path_log, maxwin=2048, overlap=.3, poly=par.polynomial, ovs=par.oversampling)
+        gamma.correlate(master, sim_rdc, diffpar, offs, offsets, snr, coffs, coffsets, path_log, maxwin=2048, overlap=.3, poly=par.polynomial, ovs=par.oversampling)
 
         print "refinement of lookup table with offset polynomials"
-        gamma(["gc_map_fine", lut_rough, samples_dem, diffpar, lut_fine, 1], path_out, path_log)
+        gamma.process(["gc_map_fine", lut_rough, samples_dem, diffpar, lut_fine, 1], path_out, path_log)
 
         for item in [lut_rough, sim_map, sim_rdc]:
             os.remove(item)
     else:
         # read additional parameters
-        samples_dem = ISPPar(dem_sub + ".par").width
+        samples_dem = gamma.ISPPar(dem_sub + ".par").width
         samples_mli = masterpar.range_samples
     # perform topographic normalization
     if tnorm:
@@ -154,11 +154,11 @@ for scene in tuples:
                 ellip_pix_gamma0 = topo_base+"_ellip_pix_gamma0"
                 parfile = image+".par" if re.search("_mli$", image) else scene.getTop("HH_(?:slc_|)(?:cal_|)mli$")+".par"
                 # refined pixel area estimation
-                gamma(["pixel_area", parfile, dem_sub + ".par", dem_sub, lut_fine, ls_map, inc, "-", pix_gamma], path_out, path_log)
-                gamma(["radcal_MLI", image, parfile, "-", "temp", "-", "-", "-", 2, "-", "-", ellip_pix_gamma0], path_out, path_log)
-                width_mli = ISPPar(parfile).range_samples
-                gamma(["ratio", ellip_pix_gamma0, pix_gamma, pix_gamma0ratio, width_mli, 1, 1, 0], path_out, path_log)
-                gamma(["product", image, pix_gamma0ratio, image + "_norm", width_mli, 1, 1, 0], path_out, path_log)
+                gamma.process(["pixel_area", parfile, dem_sub + ".par", dem_sub, lut_fine, ls_map, inc, "-", pix_gamma], path_out, path_log)
+                gamma.process(["radcal_MLI", image, parfile, "-", "temp", "-", "-", "-", 2, "-", "-", ellip_pix_gamma0], path_out, path_log)
+                width_mli = gamma.ISPPar(parfile).range_samples
+                gamma.process(["ratio", ellip_pix_gamma0, pix_gamma, pix_gamma0ratio, width_mli, 1, 1, 0], path_out, path_log)
+                gamma.process(["product", image, pix_gamma0ratio, image + "_norm", width_mli, 1, 1, 0], path_out, path_log)
                 # remove temporary files
                 for item in [os.path.join(path_out, "temp"), pix_gamma, ellip_pix_gamma0, pix_gamma0ratio]:
                     os.remove(item)
@@ -189,7 +189,7 @@ for scene in tuples:
             print os.path.basename(image)
             interp_mode = par.interp_mode_coherence if "_cc" in image else par.interp_mode_intensity
 
-            gamma(["geocode_back", image, samples_mli, lut_fine, image + "_geo", samples_dem, "-", interp_mode], path_out, path_log)
+            gamma.process(["geocode_back", image, samples_mli, lut_fine, image + "_geo", samples_dem, "-", interp_mode], path_out, path_log)
 
             # create envi header file
             hdr(dem_sub+".par", image+"_geo.hdr")

@@ -9,7 +9,7 @@ import os
 from ancillary import finder, ReadPar
 from envi import hdr, HDRobject
 from gammaGUI.auxiliary import grouping
-from gamma.util import gamma
+import gamma
 
 path_log = os.path.join(os.getcwd(), "LOG/LAT/")
 if not os.path.exists(path_log):
@@ -41,7 +41,7 @@ for scene in tuples:
     samples = ReadPar(hh_slc+".par").range_samples
 
     base = os.path.basename(hh_slc.replace("HH_", ""))
-    gamma(["CLOUDE_DEC", hh_slc, hv_slc, vv_slc, t12, t13, samples, base, rlks, azlks], os.path.dirname(t12), path_log)
+    gamma.process(["CLOUDE_DEC", hh_slc, hv_slc, vv_slc, t12, t13, samples, base, rlks, azlks], os.path.dirname(t12), path_log)
 
     # create envi header files (note: number of lines must be reduced by 1 for import into envi)
     header = HDRobject(hh_mli+".par")

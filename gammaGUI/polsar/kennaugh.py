@@ -8,7 +8,7 @@ import re
 
 from ancillary import dissolve, finder
 from gammaGUI.auxiliary import grouping
-from gamma.util import ISPPar, gamma
+import gamma
 from envi import hdr
 
 path_log = os.path.join(os.getcwd(), "LOG/LAT/")
@@ -26,7 +26,7 @@ for scene in tuples:
 
     try:
         hh_mli = scene.getTop("HH_(?:slc_|)(?:cal_|)mli$")
-        nlines = ISPPar(hh_mli+".par").azimuth_lines
+        nlines = gamma.ISPPar(hh_mli+".par").azimuth_lines
     except AttributeError:
         print "...skipped; no appropriate files found"
         continue
@@ -61,7 +61,7 @@ for scene in tuples:
         for element in elements:
             requirements = [components[x] for x in elements[element]]
             if "-" not in requirements:
-                gamma(dissolve(["KENNAUGH_MATRIX", values, nlines, base, element]), logpath=path_log)
+                gamma.process(dissolve(["KENNAUGH_MATRIX", values, nlines, base, element]), logpath=path_log)
 
     for element in finder(os.path.dirname(base), ["\.[tk][1-4]{2}$"], regex=True):
         new = re.sub("\.k", "_k", element) if re.search("\.k[1-4]{2}", element) else re.sub("\.t", "_k", element)

@@ -18,7 +18,7 @@ import re
 import os
 
 from ancillary import finder, ReadPar
-from gamma.util import gamma
+import gamma
 
 # read parameter file
 par = ReadPar(os.path.join(os.getcwd(), "PAR/baseline.par"), type="exe")
@@ -44,7 +44,7 @@ if len(interferograms) > 0:
         # rslc = finder(os.getcwd(), [re.findall("[A-Z0-9_]{10}[0-9T]{15}_[HV]{2}_slc(?:_cal)", name_int)[1]+"_reg"])[0]
         rslc = name_int[:-3]+"reg"
 
-        gamma(["base_init", slc + ".par", rslc + ".par", name_off, name_int, name_base, par.method_flag, par.nrfft, par.nazfft, par.r_samp, par.az_line], path_out, path_log)
+        gamma.process(["base_init", slc + ".par", rslc + ".par", name_off, name_int, name_base, par.method_flag, par.nrfft, par.nazfft, par.r_samp, par.az_line], path_out, path_log)
 
     print "...done"
 else:

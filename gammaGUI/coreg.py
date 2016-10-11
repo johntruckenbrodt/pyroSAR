@@ -19,7 +19,7 @@ The following tasks are performed by executing this script:
 import os
 import sys
 from ancillary import ReadPar
-from gamma.util import correlate, init_offset, gamma
+import gamma
 from auxiliary import Environment
 
 # retrieve additional arguments
@@ -55,15 +55,15 @@ print os.path.basename(slc1), "->", os.path.basename(slc2)
 print "----------"
 print "coregistration started..."
 
-gamma(["create_offset", slc1 + ".par", slc2 + ".par", name_off, par.algorithm, 1, 1, 0], path_out, path_log)
+gamma.process(["create_offset", slc1 + ".par", slc2 + ".par", name_off, par.algorithm, 1, 1, 0], path_out, path_log)
 
 print "...initial offset estimation"
-init_offset(slc1, slc2, name_off, path_log, thres=thres)
+gamma.init_offset(slc1, slc2, name_off, path_log, thres=thres)
 
 print "...cross-correlation"
-correlate(slc1, slc2, name_off, name_offs, name_offsets, name_snr, name_coffs, name_coffsets, path_log, maxwin=2048, overlap=.3, poly=par.polynomial, ovs=par.oversampling, thres=thres)
+gamma.correlate(slc1, slc2, name_off, name_offs, name_offsets, name_snr, name_coffs, name_coffsets, path_log, maxwin=2048, overlap=.3, poly=par.polynomial, ovs=par.oversampling, thres=thres)
 
 print "...resampling of SLC file"
-gamma(["SLC_interp", slc2, slc1 + ".par", slc2 + ".par", name_off, name_reg, name_reg + ".par"], path_out, path_log)
+gamma.process(["SLC_interp", slc2, slc1 + ".par", slc2 + ".par", name_off, name_reg, name_reg + ".par"], path_out, path_log)
 
 print "...done"

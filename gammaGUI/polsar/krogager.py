@@ -11,7 +11,7 @@ import os
 from ancillary import ReadPar
 from envi import hdr
 from gammaGUI.auxiliary import grouping
-from gamma.util import gamma
+import gamma
 
 path_log = os.path.join(os.getcwd(), "LOG/LAT/")
 
@@ -43,9 +43,9 @@ for scene in tuples:
     # define placeholder parameter file names, which are required by the single commands but will not be needed in the future and are thus deleted once gamma commands have been executed
     dummypar1 = os.path.join(path_out, base+"_dummy1")
     dummypar2 = os.path.join(path_out, base+"_dummy2")
-    gamma(["multi_look", rl, hh_slc + ".par", base + "_sphere", dummypar1, rlks, azlks], path_out, path_log)
+    gamma.process(["multi_look", rl, hh_slc + ".par", base + "_sphere", dummypar1, rlks, azlks], path_out, path_log)
     try:
-        gamma(["diplane_helix", ll, rr, hh_slc + ".par", base + "_diplane", base + "_helix", dummypar2, rlks, azlks, "-", "-", "-"], path_out, path_log)
+        gamma.process(["diplane_helix", ll, rr, hh_slc + ".par", base + "_diplane", base + "_helix", dummypar2, rlks, azlks, "-", "-", "-"], path_out, path_log)
     # catch strange behaviour of diplane_helix command to throw an error; by execution in the shell, no error is shown, via python an error is forwarded
     except RuntimeError:
         pass

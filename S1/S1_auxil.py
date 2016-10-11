@@ -11,7 +11,7 @@ from datetime import datetime
 from urllib import urlopen, urlencode
 from urlparse import urlparse, urlunparse
 import xml.etree.ElementTree as ElementTree
-from gamma.util import gamma
+import gamma
 
 try:
     import argparse
@@ -112,8 +112,8 @@ def deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False, pa
             for item in [burst1, burst2, burst3]:
                 out1.write(item+"\t"+item+".par\t"+item+".tops_par\n")
                 out2.write(item+"_drp\t"+item+"_drp.par\t"+item+"_drp.tops_par\n")
-    gamma(["SLC_deramp_S1_TOPS", tab_in, tab_out, 0, 0], logpath=path_log)
-    gamma(["SLC_mosaic_S1_TOPS", tab_out, name_out, name_out + ".par", rlks, azlks], logpath=path_log)
+    gamma.process(["SLC_deramp_S1_TOPS", tab_in, tab_out, 0, 0], logpath=path_log)
+    gamma.process(["SLC_mosaic_S1_TOPS", tab_out, name_out, name_out + ".par", rlks, azlks], logpath=path_log)
 
     if replace:
         for item in [burst1, burst2, burst3]:

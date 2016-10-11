@@ -43,7 +43,7 @@ import srtm
 import shutil
 import subprocess as sp
 from time import asctime
-from gamma.util import correlate, ovs, ISPPar, gamma
+import gamma
 from S1_auxil import Identifier, unpack, init_parser, OSV
 from ancillary import finder, blockPrint, enablePrint
 from pyroSAR import identify
@@ -111,10 +111,10 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
             print "...no appropriate file found"
         else:
             for item in files_mli:
-                gamma(["S1_OPOD_vec", item + ".par", osvfile], logpath=path_log)
+                gamma.process(["S1_OPOD_vec", item + ".par", osvfile], logpath=path_log)
 
     # compute multilooking factors
-    par = ISPPar(files_mli[0]+".par")
+    par = gamma.ISPPar(files_mli[0]+".par")
     rlks = int(res_target//par.range_pixel_spacing)
     azlks = int(res_target//par.azimuth_pixel_spacing)
     rlks = 1 if rlks == 0 else rlks
@@ -124,7 +124,7 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
     if rlks > 1 or azlks > 1:
         print "multilooking..."
         for item in files_mli:
-            gamma(["multi_look_MLI", item, item + ".par", item + "2", item + "2.par", rlks, azlks], logpath=path_log)
+            gamma.process(["multi_look_MLI", item, item + ".par", item + "2", item + "2.par", rlks, azlks], logpath=path_log)
 
         # collect all newly created MLIs
         files_mli = [x+"2" for x in files_mli]
@@ -153,7 +153,7 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
     ratio_sigma0 = base+"ratio_sigma0"
 
     # read image parameter file for meta information
-    par = ISPPar(master+".par")
+    par = gamma.ISPPar(master+".par")
 
     # retrieve incidence angle from parameter file
     incidence = str(int(round(par.incidence_angle)))
@@ -191,31 +191,32 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
     # create DEM products
 
     # compute DEM oversampling factors
-    ovs_lat, ovs_lon = ovs(name_srtm+".par", res_target)
+    ovs_lat, ovs_lon = gamma.ovs(name_srtm+".par", res_target)
 
     print "sar image simulation..."
     try:
-        gamma(["gc_map", master + ".par", "-", name_srtm + ".par", name_srtm, dem_seg + ".par", dem_seg, lut, ovs_lat, ovs_lon, sim_sar, u, v, inc, psi, pix, ls_map, 8, func_interp], logpath=path_log)
+        gamma.process(["gc_map", master + ".par", "-", name_srtm + ".par", name_srtm, dem_seg + ".par", dem_seg, lut, ovs_lat, ovs_lon, sim_sar, u, v, inc, psi, pix, ls_map, 8, func_interp],
+                logpath=path_log)
     except sp.CalledProcessError:
         print "...failed"
         return
 
     ######################################################################
     print "initial pixel area estimation..."
-    gamma(["pixel_area", master + ".par", dem_seg + ".par", dem_seg, lut, ls_map, inc, pixel_area], logpath=path_log)
+    gamma.process(["pixel_area", master + ".par", dem_seg + ".par", dem_seg, lut, ls_map, inc, pixel_area], logpath=path_log)
 
     ######################################################################
     print "cross correlation..."
     try:
-        correlate(master, pixel_area, master+"_diff.par", offs, snr, coffs=coffs, coffsets=coffsets, offsets=offs+".txt", path_log=path_log, maxwin=256)
+        gamma.correlate(master, pixel_area, master+"_diff.par", offs, snr, coffs=coffs, coffsets=coffsets, offsets=offs+".txt", path_log=path_log, maxwin=256)
     except RuntimeError:
         print "...failed"
         return
     ######################################################################
     print "supplementing lookup table with offset polynomials..."
     try:
-        sim_width = ISPPar(dem_seg+".par").width
-        gamma(["gc_map_fine", lut, sim_width, master + "_diff.par", lut_fine, 0], logpath=path_log)
+        sim_width = gamma.ISPPar(dem_seg+".par").width
+        gamma.process(["gc_map_fine", lut, sim_width, master + "_diff.par", lut_fine, 0], logpath=path_log)
     except sp.CalledProcessError:
         print "...failed"
         return
@@ -223,7 +224,7 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
     ######################################################################
     print "refined pixel area estimation..."
     try:
-        gamma(["pixel_area", master + ".par", dem_seg + ".par", dem_seg, lut_fine, ls_map, inc, pixel_area2], logpath=path_log)
+        gamma.process(["pixel_area", master + ".par", dem_seg + ".par", dem_seg, lut_fine, ls_map, inc, pixel_area2], logpath=path_log)
     except sp.CalledProcessError:
         print "...failed"
         return
@@ -232,20 +233,20 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
     print "radiometric calibration and normalization..."
     try:
 
-        gamma(["radcal_MLI", master, master + ".par", "-", master + "_cal", "-", 0, 0, 1, 0.0, "-", ellipse_pixel_area], logpath=path_log)
-        gamma(["ratio", ellipse_pixel_area, pixel_area2, ratio_sigma0, par.range_samples, 1, 1], logpath=path_log)
+        gamma.process(["radcal_MLI", master, master + ".par", "-", master + "_cal", "-", 0, 0, 1, 0.0, "-", ellipse_pixel_area], logpath=path_log)
+        gamma.process(["ratio", ellipse_pixel_area, pixel_area2, ratio_sigma0, par.range_samples, 1, 1], logpath=path_log)
         for item in files_mli:
-            gamma(["product", item, ratio_sigma0, item + "_pixcal", par.range_samples, 1, 1], logpath=path_log)
+            gamma.process(["product", item, ratio_sigma0, item + "_pixcal", par.range_samples, 1, 1], logpath=path_log)
     except sp.CalledProcessError:
         print "...failed"
         return
     ######################################################################
     print "backward geocoding, incidence angle normalization and conversion to gamma backscatter..."
     for item in files_mli:
-        gamma(["geocode_back", item + "_pixcal", par.range_samples, lut_fine, item + "_geo", sim_width, 0, func_geoback], logpath=path_log)
+        gamma.process(["geocode_back", item + "_pixcal", par.range_samples, lut_fine, item + "_geo", sim_width, 0, func_geoback], logpath=path_log)
 
-        gamma(["lin_comb", 1, item + "_geo", 0, math.cos(math.radians(par.incidence_angle)), item + "_geo_flat", sim_width], logpath=path_log)
-        gamma(["sigma2gamma", item + "_geo_flat", inc, item + "_geo_norm", sim_width], logpath=path_log)
+        gamma.process(["lin_comb", 1, item + "_geo", 0, math.cos(math.radians(par.incidence_angle)), item + "_geo_flat", sim_width], logpath=path_log)
+        gamma.process(["sigma2gamma", item + "_geo_flat", inc, item + "_geo_norm", sim_width], logpath=path_log)
 
     ######################################################################
 
@@ -254,7 +255,7 @@ def main(zipfile, tempdir, outdir, srtmdir, transform, logfiles=True, intermedia
         polarization = re.findall("[HV]{2}", os.path.basename(item))[0].lower()
         outname = outname_base+"_"+polarization
         try:
-            gamma(["data2geotiff", dem_seg + ".par", item, 2, outname + "_geocoded_norm.tif"], logpath=path_log)
+            gamma.process(["data2geotiff", dem_seg + ".par", item, 2, outname + "_geocoded_norm.tif"], logpath=path_log)
         except ImportWarning:
             pass
         except sp.CalledProcessError:

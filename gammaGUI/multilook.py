@@ -7,7 +7,7 @@ import sys
 
 import os
 
-from gamma.util import ISPPar, Spacing, gamma
+import gamma
 from envi import hdr
 
 # receive input file
@@ -17,8 +17,8 @@ meta = data + ".par"
 print data
 
 # read parameter file and compute multilooking parameters
-par = ISPPar(meta)
-mlk = Spacing(par, sys.argv[1])
+par = gamma.ISPPar(meta)
+mlk = gamma.Spacing(par, sys.argv[1])
 
 # define (and create) directories for logfile
 path_log = os.path.join(os.getcwd(), "LOG/ISP/")
@@ -40,5 +40,5 @@ out_meta = out_data + ".par"
 scale = 0.000001 if "ERS" in par.sensor else 1.0
 
 # perform gamma command
-gamma(["multi_look", data, meta, out_data, out_meta, mlk.rlks, mlk.azlks, "-", "-", scale], os.getcwd(), path_log)
+gamma.process(["multi_look", data, meta, out_data, out_meta, mlk.rlks, mlk.azlks, "-", "-", scale], os.getcwd(), path_log)
 hdr(out_meta)

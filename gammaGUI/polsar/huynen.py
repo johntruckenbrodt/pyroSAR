@@ -8,7 +8,7 @@ import os
 
 from ancillary import finder, ReadPar
 from gammaGUI.auxiliary import grouping
-from gamma.util import gamma
+import gamma
 
 path_log = os.path.join(os.getcwd(), "LOG/LAT/")
 if not os.path.exists(path_log):
@@ -37,7 +37,7 @@ for scene in tuples:
     base = os.path.basename(hh_slc).replace("HH_", "")
 
     for i in range(1, 4):
-        gamma(["HUYNEN_DEC", hh_slc, hv_slc, vv_slc, t11, t12, t13, samples, base, i], os.path.dirname(t11), path_log)
+        gamma.process(["HUYNEN_DEC", hh_slc, hv_slc, vv_slc, t11, t12, t13, samples, base, i], os.path.dirname(t11), path_log)
 
 else:
     # rename files to consistent pattern

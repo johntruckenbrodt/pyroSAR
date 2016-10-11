@@ -19,7 +19,7 @@ import os
 import sys
 import time
 import pyroSAR
-from gamma.util import ISPPar, gamma
+import gamma
 from ancillary import finder
 
 orbit_correct = True if sys.argv[-1] == "True" else False
@@ -48,8 +48,8 @@ for scene in scenes:
 
     tempname = os.path.join(os.getcwd(), "temp")
     print "importing..."
-    gamma(["par_ESA_ERS", "LEA_01.001", tempname + ".par", "DAT_01.001", tempname], scene, path_log, [""])
-    par = ISPPar(tempname+".par")
+    gamma.process(["par_ESA_ERS", "LEA_01.001", tempname + ".par", "DAT_01.001", tempname], scene, path_log, [""])
+    par = gamma.ISPPar(tempname+".par")
 
     date = "".join([format(int(x), "02d") for x in par.date[0:3]])
     timestamp = date+"T"+time.strftime("%H%M%S", time.gmtime(round(par.center_time)))
@@ -88,13 +88,13 @@ for scene in scenes:
                 path_delft_target = os.path.join(path_delft, par.sensor, "dgm-e04" if int(date) <= 19960601 else "dgm-e04.fd")
             else:
                 path_delft_target = os.path.join(path_delft, par.sensor, "dgm-e04")
-            gamma(["DELFT_vec2", outname + ".par", path_delft_target], path_out, path_log)
+                gamma.process(["DELFT_vec2", outname + ".par", path_delft_target], path_out, path_log)
         except:
             pass
 
     # perform radiometric calibration
     print "...calibrating"
-    gamma(["radcal_SLC", outname, outname + ".par", outname + "_cal", outname + "_cal.par", 4, antenna, 1, antenna_corr, 1, sc_db, id.cal], path_out, path_log)
+    gamma.process(["radcal_SLC", outname, outname + ".par", outname + "_cal", outname + "_cal.par", 4, antenna, 1, antenna_corr, 1, sc_db, id.cal], path_out, path_log)
 
     os.remove(os.path.join(path_out, outname))
     os.remove(os.path.join(path_out, outname)+".par")

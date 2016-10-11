@@ -23,7 +23,7 @@ import subprocess as sp
 from ancillary import ReadPar, dissolve
 from envi import HDRobject, hdr
 from auxiliary import grouping
-from gamma.util import gamma
+import gamma
 
 # read processing parameter textfile
 par = ReadPar(os.path.join(os.getcwd(), "PAR/tempfilter.par"), type="exe")
@@ -87,7 +87,7 @@ for tag in ["HH", "VV", "HV", "VH", "pauli_alpha", "pauli_beta", "pauli_gamma", 
         meta = HDRobject(processlist[0][:-3]+"tfilt.hdr")
 
         # perform temporal filtering
-        gamma(["temp_filt", name_ftab, meta.samples, par.waz, par.wr, par.wgt_tfilt], os.getcwd(), path_log)
+        gamma.process(["temp_filt", name_ftab, meta.samples, par.waz, par.wr, par.wgt_tfilt], os.getcwd(), path_log)
 
         for x in processlist:
             os.remove(x)

@@ -8,7 +8,7 @@ import os
 import re
 
 from ancillary import finder, ReadPar
-from gamma.util import gamma
+import gamma
 
 # read parameter file
 par = ReadPar(os.path.join(os.getcwd(), "PAR/baseline.par"))
@@ -63,27 +63,27 @@ if len(interferograms) > 0:
 
         if not os.path.isfile(dem_rdc):
             print "...transforming DEM to range-doppler coordinates"
-            gamma(["geocode", lut_fine, dem_map, par_dem.width, dem_rdc, par_mli.range_samples, par_mli.azimuth_lines, "2"], os.path.dirname(dem_map), path_log)
+            gamma.process(["geocode", lut_fine, dem_map, par_dem.width, dem_rdc, par_mli.range_samples, par_mli.azimuth_lines, "2"], os.path.dirname(dem_map), path_log)
         else:
             print "...found DEM in range-doppler coordinates"
 
         print "...initial DEM interferogram simulation"
-        gamma(["phase_sim", primary + ".par", name_off, name_base_init, dem_rdc, ph_sim], os.path.dirname(name_int), path_log)
+        gamma.process(["phase_sim", primary + ".par", name_off, name_base_init, dem_rdc, ph_sim], os.path.dirname(name_int), path_log)
 
         print "...initial differential interferogram generation"
-        gamma(["SLC_diff_intf", primary, secondary, primary + ".par", secondary + ".par", name_off, ph_sim, diff_int,
-             par_mli.range_looks, par_mli.azimuth_looks], os.path.dirname(name_int), path_log)
+        gamma.process(["SLC_diff_intf", primary, secondary, primary + ".par", secondary + ".par", name_off, ph_sim, diff_int,
+                 par_mli.range_looks, par_mli.azimuth_looks], os.path.dirname(name_int), path_log)
 
         print "...refining baseline"
-        gamma(["base_init", primary + ".par", secondary + ".par", name_off, diff_int, name_base_res, "4"], path_out, path_log)
-        gamma(["base_add", name_base_init, name_base_res, name_base_refine, "1"], path_out, path_log)
+        gamma.process(["base_init", primary + ".par", secondary + ".par", name_off, diff_int, name_base_res, "4"], path_out, path_log)
+        gamma.process(["base_add", name_base_init, name_base_res, name_base_refine, "1"], path_out, path_log)
 
         print "...refined DEM interferogram simulation"
-        gamma(["phase_sim", primary + ".par", name_off, name_base_refine, dem_rdc, ph_sim], os.path.dirname(name_int), path_log)
+        gamma.process(["phase_sim", primary + ".par", name_off, name_base_refine, dem_rdc, ph_sim], os.path.dirname(name_int), path_log)
 
         print "...refined differential interferogram generation"
-        gamma(["SLC_diff_intf", primary, secondary, primary + ".par", secondary + ".par", name_off, ph_sim, diff_int,
-             par_mli.range_looks, par_mli.azimuth_looks], os.path.dirname(name_int), path_log)
+        gamma.process(["SLC_diff_intf", primary, secondary, primary + ".par", secondary + ".par", name_off, ph_sim, diff_int,
+                 par_mli.range_looks, par_mli.azimuth_looks], os.path.dirname(name_int), path_log)
         print "----------"
 
     print "...done"
