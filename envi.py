@@ -13,10 +13,10 @@ obj = HDRobject('E:/test.hdr')
 obj.band_names = ['one', 'two']
 obj.write()
 """
-# todo: remove gamma.auxil dependency
+# todo: remove gamma dependency
 import os
 import re
-from gamma.auxil import ISPPar
+from gamma import ISPPar
 from ancillary import union
 
 

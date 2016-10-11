@@ -2,25 +2,25 @@ from osgeo import ogr, osr
 
 import raster
 import vector
-import auxil
+from .auxil import crsConvert
 
 osr.UseExceptions()
 
 
-def bbox(coordinates, crs, outname=None, format="ESRI Shapefile", overwrite=True):
+def bbox(coordinates, crs, outname=None, format='ESRI Shapefile', overwrite=True):
     """
     create a bounding box vector object or shapefile from coordinates and coordinate reference system
     coordinates must be provided in a dictionary containing numerical variables with names 'xmin', 'xmax', 'ymin' and 'ymax'
     the coordinate reference system can be in either WKT, EPSG or PROJ4 format
     """
-    srs = auxil.crsConvert(crs, "osr")
+    srs = crsConvert(crs, 'osr')
 
     ring = ogr.Geometry(ogr.wkbLinearRing)
 
-    ring.AddPoint(coordinates["xmin"], coordinates["ymin"])
-    ring.AddPoint(coordinates["xmin"], coordinates["ymax"])
-    ring.AddPoint(coordinates["xmax"], coordinates["ymax"])
-    ring.AddPoint(coordinates["xmax"], coordinates["ymin"])
+    ring.AddPoint(coordinates['xmin'], coordinates['ymin'])
+    ring.AddPoint(coordinates['xmin'], coordinates['ymax'])
+    ring.AddPoint(coordinates['xmax'], coordinates['ymax'])
+    ring.AddPoint(coordinates['xmax'], coordinates['ymin'])
     ring.CloseRings()
 
     geom = ogr.Geometry(ogr.wkbPolygon)
@@ -28,10 +28,10 @@ def bbox(coordinates, crs, outname=None, format="ESRI Shapefile", overwrite=True
 
     geom.FlattenTo2D()
 
-    bbox = vector.Vector(driver="Memory")
-    bbox.addlayer("bbox", srs, ogr.wkbPolygon)
-    bbox.addfield("id", width=4)
-    bbox.addfeature(geom, "id", 1)
+    bbox = vector.Vector(driver='Memory')
+    bbox.addlayer('bbox', srs, ogr.wkbPolygon)
+    bbox.addfield('id', width=4)
+    bbox.addfeature(geom, 'id', 1)
     geom.Destroy()
     if outname is None:
         return bbox
@@ -45,7 +45,7 @@ def init_vector(obj):
     elif isinstance(obj, vector.Vector):
         shape = obj
     else:
-        raise IOError("object must be of type Raster or Vector")
+        raise IOError('object must be of type Raster or Vector')
     return shape
 
 

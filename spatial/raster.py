@@ -24,12 +24,12 @@ from osgeo.gdalconst import *
 
 # from auxil import crsConvert
 # from util import bbox, intersect
-import auxil
-import util
+import spatial.auxil
+import spatial.util
+import spatial.vector
 
-import vector
 from ancillary import dissolve, run
-from envi import HDRobject, hdr
+import envi
 
 os.environ["GDAL_PAM_PROXY_DIR"] = "/tmp"
 
@@ -55,7 +55,7 @@ class Raster(object):
         self.projection = self.raster.GetProjection()
         self.srs = osr.SpatialReference(wkt=self.projection)
         self.proj4 = self.srs.ExportToProj4()
-        self.epsg = auxil.crsConvert(self.srs, "epsg")
+        self.epsg = spatial.auxil.crsConvert(self.srs, "epsg")
         self.geogcs = self.srs.GetAttrValue("geogcs")
         self.projcs = self.srs.GetAttrValue("projcs") if self.srs.IsProjected() else None
         self.geo = dict(zip(["xmin", "xres", "rotation_x", "ymax", "rotation_y", "yres"], self.raster.GetGeoTransform()))
@@ -109,9 +109,9 @@ class Raster(object):
 
     def bbox(self, outname=None, format="ESRI Shapefile", overwrite=True):
         if outname is None:
-            return util.bbox(self.geo, self.proj4)
+            return spatial.util.bbox(self.geo, self.proj4)
         else:
-            util.bbox(self.geo, self.proj4, outname=outname, format=format, overwrite=overwrite)
+            spatial.util.bbox(self.geo, self.proj4, outname=outname, format=format, overwrite=overwrite)
 
     # translate raster data type descriptions
     @staticmethod
@@ -398,63 +398,6 @@ def reproject(rasterobject, reference, outname, resampling="bilinear", format="E
                    "-t_srs", projection, rasterobject.filename, outname])
 
 
-# stack multiple raster objects into one ENVI file
-# def stack(rasters, outname, maxmem=10000):
-#     if len(set([x.cols for x in rasters])) > 1 or len(set([x.rows for x in rasters])) > 1:
-#         raise IOError("dimension mismatch")
-#     if len(set(["".join([str(y) for y in x.raster.GetGeoTransform()]) for x in rasters])) > 1:
-#         raise IOError("location mismatch")
-#     if len(set([x.projection for x in rasters])) > 1:
-#         raise IOError("projection mismatch")
-#
-#     ref = rasters[0]
-#     cols = ref.cols
-#     rows = ref.rows
-#     bands = sum([x.bands for x in rasters])
-#     maxlines = maxmem // (cols * bands * 4 / 1048576.)
-#
-#     driver = gdal.GetDriverByName("ENVI")
-#     out = driver.Create(outname, cols, rows, bands, GDT_Float32)
-#
-#     index = 0
-#     bandnames = []
-#     while index < rows:
-#         max = rows if index + maxlines > rows else index + maxlines
-#
-#         outarray = np.zeros((bands, max - index, cols), dtype=np.float32)
-#         bandindex = 0
-#         for item in rasters:
-#
-#             hdrfile = os.path.splitext(item.filename)[0] + ".hdr"
-#             if os.path.isfile(hdrfile):
-#                 names = HDRobject(hdrfile).band_names
-#
-#                 for name in names:
-#                     if re.search("Band [0-9]*", name):
-#                         bandnames.append(os.path.splitext(os.path.basename(item.filename))[0] + ": " + name)
-#                     else:
-#                         bandnames.append(name)
-#             else:
-#                 bandnames.append(os.path.splitext(os.path.basename(item.filename))[0])
-#
-#             outarray[bandindex:bandindex + item.bands, :, :] = item.raster.ReadAsArray(0, index, cols, max)
-#             bandindex += item.bands
-#         for band in range(1, bands + 1):
-#             maskout = out.GetRasterBand(band)
-#             maskout.WriteArray(outarray[band - 1, :, :], index, 0)
-#             maskout.FlushCache()
-#         index += max
-#
-#     out.SetGeoTransform(ref.raster.GetGeoTransform())
-#     out.SetProjection(ref.raster.GetProjection())
-#
-#     out = None
-#
-#     hdrfile = os.path.splitext(outname)[0] + ".hdr"
-#     header = HDRobject(hdrfile)
-#     header.band_names = bandnames
-#     hdr(header)
-
 def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None, separate=False):
 
     if layernames is not None:
@@ -478,7 +421,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
 
     # read shapefile bounding coordinates and reduce list of rasters to those overlapping with the shapefile
     if shapefile is not None:
-        shp = shapefile if isinstance(shapefile, vector.Vector) else vector.Vector(shapefile)
+        shp = shapefile if isinstance(shapefile, spatial.vector.Vector) else spatial.vector.Vector(shapefile)
         shp.reproject(srs)
         ext = shp.extent
         arg_ext = ["-te", ext["xmin"], ext["ymin"], ext["xmax"], ext["ymax"]]
@@ -542,8 +485,8 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
         os.remove(vrt)
 
     # edit ENVI HDR files to contain specific layer names
-    par = HDRobject(dstfile+".hdr")
+    par = envi.HDRobject(dstfile+".hdr")
     par.band_names = bandnames
-    hdr(par)
+    envi.hdr(par)
 
 
