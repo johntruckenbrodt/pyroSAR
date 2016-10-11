@@ -1,5 +1,6 @@
 
 import re
+import math
 from ancillary import parse_literal
 import subprocess as sp
 
@@ -62,8 +63,11 @@ class ISPPar(object):
             par_file.close()
 
 
-# convert a gamma parameter file corner coordinate from EQA to UTM
+# todo: make pretty or remove gamma dependency
 class UTM(object):
+    """
+    convert a gamma parameter file corner coordinate from EQA to UTM
+    """
     def __init__(self, parfile):
         par = ISPPar(parfile)
         inlist = [str(x) for x in ["WGS84", 1, "EQA", par.corner_lon, par.corner_lat, "", "WGS84", 1, "UTM", ""]]
@@ -81,3 +85,26 @@ class UTM(object):
             if "UTM" in entry[0]:
                 self.zone, self.northing, self.easting = entry[1]
                 self.index = list(set(self.index+["zone", "northing", "easting"]))
+
+
+class Spacing(object):
+    def __init__(self, par, targetres="automatic"):
+        """
+        compute ground multilooking factors and pixel spacings from an ISPPar object for a defined target resolution
+        """
+        # compute ground range pixel spacing
+        par = par if isinstance(par, ISPPar) else ISPPar(par)
+        self.groundRangePS = par.range_pixel_spacing/(math.sin(math.radians(par.incidence_angle)))
+        # compute initial multilooking factors
+        if targetres == "automatic":
+            if self.groundRangePS > par.azimuth_pixel_spacing:
+                ratio = self.groundRangePS/par.azimuth_pixel_spacing
+                self.rlks = 1
+                self.azlks = int(round(ratio))
+            else:
+                ratio = par.azimuth_pixel_spacing/self.groundRangePS
+                self.rlks = int(round(ratio))
+                self.azlks = 1
+        else:
+            self.rlks = int(round(float(targetres)/self.groundRangePS))
+            self.azlks = int(round(float(targetres)/par.azimuth_pixel_spacing))
