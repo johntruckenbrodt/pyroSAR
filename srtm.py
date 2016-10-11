@@ -27,9 +27,11 @@ from urllib2 import urlopen
 from ancillary import finder, run, ReadPar
 from envi import HDRobject, hdr
 from gamma.auxil import ISPPar, UTM
-from gamma.util import gamma
+import gamma
 from pyroSAR import ID
 from spatial import raster
+
+# todo: move to module gamma or remove gamma dependency
 
 
 def main():
@@ -93,18 +95,18 @@ def fill(dem, dem_out, logpath=None, replace=False):
     # replace values
     value = 0
     new_value = 1
-    gamma(["replace_values", dem, value, new_value, dem + "_temp", width, rpl_flg, dtype], path_dem, logpath)
+    gamma.process(["replace_values", dem, value, new_value, dem + "_temp", width, rpl_flg, dtype], path_dem, logpath)
 
     value = -32768
     new_value = 0
-    gamma(["replace_values", dem + "_temp", value, new_value, dem + "_temp2", width, rpl_flg, dtype], path_dem, logpath)
+    gamma.process(["replace_values", dem + "_temp", value, new_value, dem + "_temp2", width, rpl_flg, dtype], path_dem, logpath)
 
     # interpolate missing values
     r_max = 9
     np_min = 40
     np_max = 81
     w_mode = 2
-    gamma(["interp_ad", dem + "_temp2", dem_out, width, r_max, np_min, np_max, w_mode, dtype], path_dem, logpath)
+    gamma.process(["interp_ad", dem + "_temp2", dem_out, width, r_max, np_min, np_max, w_mode, dtype], path_dem, logpath)
 
     # remove temporary files
     os.remove(dem+"_temp")
@@ -140,10 +142,10 @@ def transform(infile, outfile, posting=90):
 
     # create new DEM parameter file with UTM projection details
     inlist = ["UTM", "WGS84", 1, utm.zone, falsenorthing, os.path.basename(outfile), "", "", "", "", "", "-{0} {1}".format(posting, posting), ""]
-    gamma(["create_dem_par", outfile + ".par"], inlist=inlist)
+    gamma.process(["create_dem_par", outfile + ".par"], inlist=inlist)
 
     # transform dem
-    gamma(["dem_trans", infile + ".par", infile, outfile + ".par", outfile, "-", "-", "-", 1])
+    gamma.process(["dem_trans", infile + ".par", infile, outfile + ".par", outfile, "-", "-", "-", 1])
     hdr(outfile+".par")
 
 
@@ -186,7 +188,7 @@ def dempar(dem, logpath=None):
         parlist = [projection, ellipsoid, 1, os.path.basename(dem), dtype, 0, 1, rast.cols, rast.rows, posting, latlon]
 
     # execute GAMMA command
-    gamma(["create_dem_par", os.path.splitext(dem)[0] + ".par"], os.path.dirname(dem), logpath, inlist=parlist)
+    gamma.process(["create_dem_par", os.path.splitext(dem)[0] + ".par"], os.path.dirname(dem), logpath, inlist=parlist)
 
 
 def swap(data, outname):
@@ -200,7 +202,7 @@ def swap(data, outname):
     dtype_lookup = {"Int16": 2, "CInt16": 2, "Int32": 4, "Float32": 4, "CFloat32": 4, "Float64": 8}
     if dtype not in dtype_lookup:
         raise IOError("data type {} not supported".format(dtype))
-    gamma(["swap_bytes", data, outname, str(dtype_lookup[dtype])])
+    gamma.process(["swap_bytes", data, outname, str(dtype_lookup[dtype])])
     header = HDRobject(data+".hdr")
     header.byte_order = 1
     hdr(header, outname+".hdr")
