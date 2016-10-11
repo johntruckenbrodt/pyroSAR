@@ -1,2 +1,3 @@
 
-from util import *
+from .util import geocode
+from .auxil import getAuxdata
