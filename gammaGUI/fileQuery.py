@@ -4,27 +4,27 @@
 # John Truckenbrodt 2014-2015
 ##############################################################
 
-from Tkinter import *
+import Tkinter
 from tkFileDialog import askopenfilename, askdirectory, asksaveasfilename
 
 from auxiliary import Environment
 
 
 # FILE DIALOG WITH PATH DISPLAY AND BROWSE BUTTON
-class FileQuery(Frame):
+class FileQuery(Tkinter.Frame):
     def __init__(self, parent, name, option):
-        Frame.__init__(self, parent, Environment.bcolor)
+        Tkinter.Frame.__init__(self, parent, Environment.bcolor)
         self.pack()
         self.option = option
-        self.lab = Label(self, Environment.label_ops, text=name, width=20)
-        self.lab.pack(side=LEFT)
-        self.file = StringVar()
-        self.filename = StringVar()
-        self.dirname = StringVar()
-        self.ent = Entry(self, width=40, textvariable=self.file, highlightbackground="white")
-        self.ent.pack(side=LEFT)
-        self.btn = Button(self, Environment.button_ops, text="Browse", command=self.browse_button)
-        self.btn.pack(side=LEFT)
+        self.lab = Tkinter.Label(self, Environment.label_ops, text=name, width=20)
+        self.lab.pack(side=Tkinter.LEFT)
+        self.file = Tkinter.StringVar()
+        self.filename = Tkinter.StringVar()
+        self.dirname = Tkinter.StringVar()
+        self.ent = Tkinter.Entry(self, width=40, textvariable=self.file, highlightbackground="white")
+        self.ent.pack(side=Tkinter.LEFT)
+        self.btn = Tkinter.Button(self, Environment.button_ops, text="Browse", command=self.browse_button)
+        self.btn.pack(side=Tkinter.LEFT)
 
     # create button for browsing folders/files
     def browse_button(self):

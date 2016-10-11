@@ -1,10 +1,11 @@
 
 import os
+import re
 import shutil
 from ancillary import finder, writer
 import subprocess as sp
-from Tkinter import *
-from gamma.util import ISPPar, gamma
+import Tkinter
+import gamma
 
 import tkMessageBox
 
@@ -142,19 +143,19 @@ def execute(action, fileList, arguments):
             if "disrmg" in action[0]:
                 if len(text[2]) == 0:
                     text[2] = "-"
-                samples = ISPPar(finder(Environment.workdir.get(), [re.findall("[A-Z0-9_]{9,10}[0-9T]{15}_[HV]{2}_slc(?:_cal|)?", text[1])[0]])[0]+".par").range_samples
+                samples = gamma.ISPPar(finder(Environment.workdir.get(), [re.findall("[A-Z0-9_]{9,10}[0-9T]{15}_[HV]{2}_slc(?:_cal|)?", text[1])[0]])[0]+".par").range_samples
                 text.append(samples)
 
             elif "mph" in action[0]:
-                samples = ISPPar(finder(Environment.workdir.get(), [re.findall("[A-Z0-9_]{9,10}[0-9T]{15}_[HV]{2}_slc(?:_cal|)?", text[1])[0]])[0]+".par").range_samples
+                samples = gamma.ISPPar(finder(Environment.workdir.get(), [re.findall("[A-Z0-9_]{9,10}[0-9T]{15}_[HV]{2}_slc(?:_cal|)?", text[1])[0]])[0]+".par").range_samples
                 text.append(samples)
                 if "2" in action[0]:
-                    samples = ISPPar(finder(Environment.workdir.get(), [re.findall("[A-Z0-9_]{9,10}[0-9T]{15}_[HV]{2}_slc(?:_cal|)?", text[2])[0]])[0]+".par").range_samples
+                    samples = gamma.ISPPar(finder(Environment.workdir.get(), [re.findall("[A-Z0-9_]{9,10}[0-9T]{15}_[HV]{2}_slc(?:_cal|)?", text[2])[0]])[0]+".par").range_samples
                     text.append(samples)
             else:
                 for i in range(1, len(text)):
                     try:
-                        text.append(ISPPar(text[i] + ".par").range_samples)
+                        text.append(gamma.ISPPar(text[i] + ".par").range_samples)
                     except:
                         continue
             print "#############################################"
@@ -206,14 +207,14 @@ def importer(text):
 
         # try to import file, if not possible (i.e. not an accepted format) continue with the next file
         try:
-            gamma(args, path_tmp, path_log)
+            gamma.process(args, path_tmp, path_log)
             # find next best parameter file of the newly imported files
             name_par = finder(path_tmp, ["*.par"])[0]
 
             print re.sub("w[0-9]__", "wx__", os.path.basename(name_par)[:25])
 
             # read parameter file
-            par = ISPPar(name_par)
+            par = gamma.ISPPar(name_par)
 
             # extract time stamp and sensor from parameter file name
             time = re.findall("[0-9]{8}T[0-9]{6}", name_par)[0]
@@ -242,36 +243,36 @@ def importer(text):
 def makeform(self, fields, defaultentries):
     entries = []
     for i in range(0, len(fields)):
-        row = Frame(self, Environment.bcolor)
-        row.pack(side=TOP, padx=5, pady=5)
-        lab = Label(row, Environment.label_ops, width=25, text=fields[i], anchor="w")
-        lab.pack(side=LEFT)
+        row = Tkinter.Frame(self, Environment.bcolor)
+        row.pack(side=Tkinter.TOP, padx=5, pady=5)
+        lab = Tkinter.Label(row, Environment.label_ops, width=25, text=fields[i], anchor="w")
+        lab.pack(side=Tkinter.LEFT)
 
         # add dropdown button
         if fields[i] in Environment.dropoptions:
             optionlist = Environment.dropoptions[fields[i]]
-            var = StringVar(self)
+            var = Tkinter.StringVar(self)
             if fields[i] in Environment.dropoptions["int"]:
                 default = Environment.dropoptions[fields[i]][int(defaultentries[i])]
             else:
                 default = defaultentries[i]
             var.set(default)
-            ent = OptionMenu(row, var, *optionlist)
-            ent.pack(side=RIGHT, expand=YES)
+            ent = Tkinter.OptionMenu(row, var, *optionlist)
+            ent.pack(side=Tkinter.RIGHT, expand=Tkinter.YES)
             ent.config(Environment.button_ops, width=14, bd=.5)
             entries.append([fields[i], var])
         # add checkbutton
         elif fields[i] in Environment.checkbuttons:
-            var = StringVar(self)
+            var = Tkinter.StringVar(self)
             var.set(str(defaultentries[i]))
-            ent = Checkbutton(row, variable=var, onvalue="True", offvalue="False")
-            ent.pack(side=RIGHT, expand=YES)
+            ent = Tkinter.Checkbutton(row, variable=var, onvalue="True", offvalue="False")
+            ent.pack(side=Tkinter.RIGHT, expand=Tkinter.YES)
             ent.config(Environment.checkbutton_ops)
             entries.append([fields[i], var])
         # add text entry field
         else:
-            ent = Entry(row)
-            ent.pack(side=RIGHT, expand=YES)
+            ent = Tkinter.Entry(row)
+            ent.pack(side=Tkinter.RIGHT, expand=Tkinter.YES)
             ent.insert(0, defaultentries[i])
             entries.append([fields[i], ent])
     return entries

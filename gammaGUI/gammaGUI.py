@@ -5,8 +5,9 @@
 ##############################################################
 
 import os
+import sys
 import tkMessageBox
-from Tkinter import *
+import Tkinter
 from PIL import ImageTk, Image
 
 from dialog import Dialog
@@ -15,14 +16,14 @@ from auxiliary import Environment
 
 
 # CENTRAL CLASS FOR GUI MAIN WINDOW
-class Main(Frame):
+class Main(Tkinter.Frame):
     def __init__(self, *args, **kwargs):
-        Frame.__init__(self, *args, **kwargs)
+        Tkinter.Frame.__init__(self, *args, **kwargs)
 
         # set up main window
         self.master.geometry("600x400")
         root.title("GAMMA GUI")
-        header = Label(root, Environment.header_ops, text="Welcome to the GEO410 GAMMA GUI")
+        header = Tkinter.Label(root, Environment.header_ops, text="Welcome to the GEO410 GAMMA GUI")
         header.pack()
 
         # DEFINE EXECUTION ARGUMENTS
@@ -123,22 +124,22 @@ class Main(Frame):
         # #######################################################################################################
 
         # main menu
-        menubar = Menu(self.master, Environment.menu_ops)
+        menubar = Tkinter.Menu(self.master, Environment.menu_ops)
         self.master.config(menu=menubar)
-        fileMenu = Menu(menubar, tearoff=0)
+        fileMenu = Tkinter.Menu(menubar, tearoff=0)
         # #######################################################################################################
         # MSP
-        impMenu = Menu(fileMenu, Environment.menu_ops)
+        impMenu = Tkinter.Menu(fileMenu, Environment.menu_ops)
         menubar.add_cascade(label="IMP", menu=impMenu)
         impMenu.add_command(label="General Data Import", command=lambda: self.callChild(args_import))
         impMenu.add_command(label="ERS Data Import", command=lambda: self.callChild(args_ers))
         # #######################################################################################################
         # IMP
-        ispMenu = Menu(fileMenu, Environment.menu_ops)
-        corMenu = Menu(ispMenu, Environment.menu_ops)
-        fltMenu = Menu(ispMenu, Environment.menu_ops)
-        cohMenu = Menu(ispMenu, Environment.menu_ops)
-        calMenu = Menu(ispMenu, Environment.menu_ops)
+        ispMenu = Tkinter.Menu(fileMenu, Environment.menu_ops)
+        corMenu = Tkinter.Menu(ispMenu, Environment.menu_ops)
+        fltMenu = Tkinter.Menu(ispMenu, Environment.menu_ops)
+        cohMenu = Tkinter.Menu(ispMenu, Environment.menu_ops)
+        calMenu = Tkinter.Menu(ispMenu, Environment.menu_ops)
         menubar.add_cascade(label="ISP", menu=ispMenu)
 
         ispMenu.add_cascade(label="SLC coregistration", menu=corMenu)
@@ -157,16 +158,16 @@ class Main(Frame):
         calMenu.add_command(label="SLC", command=lambda: self.callChild(args_cal_slc))
         # #######################################################################################################
         # GEO
-        geoMenu = Menu(fileMenu, Environment.menu_ops)
+        geoMenu = Tkinter.Menu(fileMenu, Environment.menu_ops)
         menubar.add_cascade(label="GEO", menu=geoMenu)
         geoMenu.add_command(label="SRTM preparation", command=lambda: self.callChild(args_srtm_prep))
         geoMenu.add_command(label="DEM preparation", command=lambda: self.callChild(args_dem))
         geoMenu.add_command(label="Geocoding", command=lambda: self.callChild(args_geo))
         # #######################################################################################################
         # LAT
-        latMenu = Menu(fileMenu, Environment.menu_ops)
-        polMenu = Menu(latMenu, Environment.menu_ops)
-        filtMenu = Menu(latMenu, Environment.menu_ops)
+        latMenu = Tkinter.Menu(fileMenu, Environment.menu_ops)
+        polMenu = Tkinter.Menu(latMenu, Environment.menu_ops)
+        filtMenu = Tkinter.Menu(latMenu, Environment.menu_ops)
         menubar.add_cascade(label="LAT", menu=latMenu)
         latMenu.add_cascade(label="Polarimetry", menu=polMenu)
         latMenu.add_cascade(label="Filtering", menu=filtMenu)
@@ -183,13 +184,13 @@ class Main(Frame):
         filtMenu.add_command(label="Multitemporal Filtering", command=lambda: self.callChild(args_tfilt))
         # #######################################################################################################
         # DISP
-        dispMenu = Menu(fileMenu, Environment.menu_ops)
-        pwrMenu = Menu(dispMenu, Environment.menu_ops)
-        phaMenu = Menu(dispMenu, Environment.menu_ops)
-        slcMenu = Menu(dispMenu, Environment.menu_ops)
-        intMenu = Menu(dispMenu, Environment.menu_ops)
-        ccMenu = Menu(dispMenu, Environment.menu_ops)
-        hgtMenu = Menu(dispMenu, Environment.menu_ops)
+        dispMenu = Tkinter.Menu(fileMenu, Environment.menu_ops)
+        pwrMenu = Tkinter.Menu(dispMenu, Environment.menu_ops)
+        phaMenu = Tkinter.Menu(dispMenu, Environment.menu_ops)
+        slcMenu = Tkinter.Menu(dispMenu, Environment.menu_ops)
+        intMenu = Tkinter.Menu(dispMenu, Environment.menu_ops)
+        ccMenu = Tkinter.Menu(dispMenu, Environment.menu_ops)
+        hgtMenu = Tkinter.Menu(dispMenu, Environment.menu_ops)
         menubar.add_cascade(label="DISP", menu=dispMenu)
 
         dispMenu.add_cascade(label="Multilook", menu=pwrMenu)
@@ -219,12 +220,12 @@ class Main(Frame):
         hgtMenu.add_command(label=args_dishgt[0], command=lambda: self.callChild(args_dishgt))
 
         # dialog for defining the working directory
-        self.frame = Frame(self, bg="white", height=30, bd=2, width=300)
+        self.frame = Tkinter.Frame(self, bg="white", height=30, bd=2, width=300)
         self.frame.pack()
         Environment.workdir = FileQuery(self.frame, "Working Directory", 2).file
         # #######################################################################################################
         # AUX
-        auxMenu = Menu(fileMenu, Environment.menu_ops)
+        auxMenu = Tkinter.Menu(fileMenu, Environment.menu_ops)
         menubar.add_cascade(label="AUX", menu=auxMenu)
         auxMenu.add_command(label="Export/Delete", command=lambda: self.callChild(args_cpdel))
         auxMenu.add_command(label="Layer Stacking", command=lambda: self.callChild(args_stack))
@@ -239,14 +240,14 @@ class Main(Frame):
 # #######################################################################################################
 # INITIALIZE GUI
 if __name__ == "__main__":
-    root = Tk()
-    root.resizable(width=FALSE, height=FALSE)
+    root = Tkinter.Tk()
+    root.resizable(width=Tkinter.FALSE, height=Tkinter.FALSE)
     # load image as main window background
     basedir = os.path.dirname(os.path.abspath(__file__))
 
     image = Image.open(os.path.join(basedir,  "background.jpg"))
     tkimage = ImageTk.PhotoImage(image)
-    Label(root, image=tkimage).place({"x": 0, "y": 0, "relwidth": 1, "relheight": 1})
+    Tkinter.Label(root, image=tkimage).place({"x": 0, "y": 0, "relwidth": 1, "relheight": 1})
     # call main window
     Main(root, Environment.bcolor).pack({"side": "top", "fill": "both"})
     root.mainloop()

@@ -14,18 +14,18 @@ a button is created for starting the process
 """
 
 import os
-from Tkinter import *
+import Tkinter
 from fileQuery import FileQuery
 from ancillary import ReadPar
 from auxiliary import Environment, makeform, execute
 
 
-class Dialog(Toplevel):
+class Dialog(Tkinter.Toplevel):
     def __init__(self, args):
-        Toplevel.__init__(self)
+        Tkinter.Toplevel.__init__(self)
         self.config(Environment.bcolor)
-        self.resizable(width=FALSE, height=FALSE)
-        Frame(self, Environment.bcolor, height=10, bd=5).pack()
+        self.resizable(width=Tkinter.FALSE, height=Tkinter.FALSE)
+        Tkinter.Frame(self, Environment.bcolor, height=10, bd=5).pack()
 
         self.title = args[0][0]
 
@@ -41,7 +41,7 @@ class Dialog(Toplevel):
 
         # add window label from args_extra
         if args[0][0] in Environment.args_extra:
-            self.label = Label(self, Environment.header_ops, text=Environment.args_extra[args[0][0]])
+            self.label = Tkinter.Label(self, Environment.header_ops, text=Environment.args_extra[args[0][0]])
             self.label.pack()
             self.space = 10
 
@@ -73,9 +73,9 @@ class Dialog(Toplevel):
 
         # set window appearance
         self.geometry("600x" + str(self.ydim))
-        Frame(self, bg="white", height=2).pack({"fill": "x"})
-        Frame(self, Environment.bcolor, height=10, bd=5).pack()
+        Tkinter.Frame(self, bg="white", height=2).pack({"fill": "x"})
+        Tkinter.Frame(self, Environment.bcolor, height=10, bd=5).pack()
 
         # create execution button
-        self.Action = Button(self, Environment.button_ops, text="Action", padx=40, command=lambda: execute(self.action, self.objList, self.ents))
+        self.Action = Tkinter.Button(self, Environment.button_ops, text="Action", padx=40, command=lambda: execute(self.action, self.objList, self.ents))
         self.Action.pack()
