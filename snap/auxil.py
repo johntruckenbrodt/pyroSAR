@@ -27,6 +27,14 @@ def parse_recipe(name):
     return tree
 
 
+def parse_node(name):
+    name = name if name.endswith('.xml') else name+'.xml'
+    absname = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'recipes', 'nodes', name)
+    with open(absname, 'r') as workflow:
+        tree = ET.fromstring(workflow.read())
+    return tree
+
+
 def write_recipe(recipe, outfile):
     outfile = outfile if outfile.endswith('.xml') else outfile + '.xml'
     with open(outfile, 'w') as out:
