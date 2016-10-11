@@ -1,8 +1,3 @@
-from osgeo import osr, ogr, gdal
 
-osr.UseExceptions()
-ogr.UseExceptions()
-gdal.UseExceptions()
-
-from auxil import *
-from util import *
+from auxil import crsConvert, haversine
+from util import bbox, init_vector, centerdist, intersect
