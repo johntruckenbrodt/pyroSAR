@@ -2,12 +2,15 @@ import os
 import re
 import shutil
 import subprocess as sp
+
+import spatial
 from ancillary import finder
-from auxil import suffix_lookup, parse_recipe, write_recipe
+from spatial.vector import Vector
+from .auxil import suffix_lookup, parse_recipe, write_recipe, parse_node
 import pyroSAR
 
 
-def geocode(infile, outdir, polarizations='all'):
+def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None):
     orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
                     'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
 
@@ -60,6 +63,19 @@ def geocode(infile, outdir, polarizations='all'):
     ############################################
     tc = workflow.find('.//node[@id="Terrain-Correction"]')
     tc.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
+    tc.find('.//parameters/pixelSpacingInMeter').text = str(tr)
+    if t_srs:
+        t_srs = spatial.crsConvert(t_srs, 'wkt')
+        tc.find('.//parameters/mapProjection').text = t_srs
+    else:
+        tc.find('.//parameters/mapProjection').text = \
+            'GEOGCS["WGS84(DD)",' \
+            'DATUM["WGS84",' \
+            'SPHEROID["WGS84", 6378137.0, 298.257223563]],' \
+            'PRIMEM["Greenwich", 0.0],' \
+            'UNIT["degree", 0.017453292519943295],' \
+            'AXIS["Geodetic longitude", EAST],' \
+            'AXIS["Geodetic latitude", NORTH]]'
     ############################################
     dB = workflow.find('.//node[@id="LinearToFromdB"]')
     dB.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
@@ -67,20 +83,49 @@ def geocode(infile, outdir, polarizations='all'):
     write = workflow.find('.//node[@id="Write"]')
     write.find('.//parameters/file').text = outname
     write.find('.//parameters/formatName').text = format
+    ############################################
+    if shapefile:
+        shp = shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
+        bounds = spatial.bbox(shp.extent, shp.wkt)
+        bounds.reproject(id.projection)
+        intersect = spatial.intersect(id.bbox(), bounds)
+        if not intersect:
+            raise RuntimeError('no bounding box intersection between shapefile and scene')
+        wkt = bounds.convert2wkt()[0]
+        subset = parse_node('subset')
+        position = list(workflow).index(read)+1
+        workflow.insert(position, subset)
+        subset = workflow[position]
+        workflow[position+1].find('.//sources/sourceProduct').attrib['refid'] = 'Subset'
+        subset.find('.//parameters/region').text = ','.join(map(str, [0, 0, id.samples, id.lines]))
+        subset.find('.//parameters/geoRegion').text = wkt
+        ############################################
 
     write_recipe(workflow, outname + '_proc')
 
     if format == 'GeoTiff-BigTIFF':
-        sp.check_call(['gpt',
-                       # '-Dsnap.dataio.reader.tileWidth=*',
-                       # '-Dsnap.dataio.reader.tileHeight=1',
-                       '-Dsnap.dataio.bigtiff.tiling.width=256',
-                       '-Dsnap.dataio.bigtiff.tiling.height=256',
-                       # '-Dsnap.dataio.bigtiff.compression.type=LZW',
-                       # '-Dsnap.dataio.bigtiff.compression.quality=0.75',
-                       outname + '_proc.xml'])
+        cmd = ['gpt',
+               # '-Dsnap.dataio.reader.tileWidth=*',
+               # '-Dsnap.dataio.reader.tileHeight=1',
+               '-Dsnap.dataio.bigtiff.tiling.width=256',
+               '-Dsnap.dataio.bigtiff.tiling.height=256',
+               # '-Dsnap.dataio.bigtiff.compression.type=LZW',
+               # '-Dsnap.dataio.bigtiff.compression.quality=0.75',
+               outname + '_proc.xml']
     else:
-        sp.check_call(['gpt', outname + '_proc.xml'])
+        cmd = ['gpt', outname + '_proc.xml']
+
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+    out, err = proc.communicate()
+    if proc.returncode != 0:
+        print err
+        print 'failed: ', os.path.basename(id.scene)
+        os.remove(outname + '_proc.xml')
+        if os.path.isfile(outname + '.tif'):
+            os.remove(outname + '.tif')
+        elif os.path.isdir(outname):
+            shutil.rmtree(outname)
+        return
 
     if format == 'ENVI':
         for item in finder(outname, ['*.img']):
