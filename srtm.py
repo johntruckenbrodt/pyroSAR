@@ -20,15 +20,13 @@ The following tasks are performed by executing this script:
 import os
 import re
 import shutil
-import subprocess as sp
 import zipfile as zf
 from urllib2 import urlopen
 
 from ancillary import finder, run, ReadPar
 from envi import HDRobject, hdr
-from gamma.auxil import ISPPar, UTM
 import gamma
-from pyroSAR import ID
+import pyroSAR
 from spatial import raster
 
 # todo: move to module gamma or remove gamma dependency
@@ -85,7 +83,7 @@ def main():
 
 def fill(dem, dem_out, logpath=None, replace=False):
 
-    width = ISPPar(dem+'.par').width
+    width = gamma.ISPPar(dem+'.par').width
 
     path_dem = os.path.dirname(dem_out)
 
@@ -128,10 +126,10 @@ def transform(infile, outfile, posting=90):
     transform SRTM DEM from EQA to UTM projection
     """
     # read DEM parameter file
-    par = ISPPar(infile+'.par')
+    par = gamma.ISPPar(infile+'.par')
 
     # transform corner coordinate to UTM
-    utm = UTM(infile+'.par')
+    utm = gamma.UTM(infile+'.par')
 
     for item in [outfile, outfile+'.par']:
         if os.path.isfile(item):
@@ -236,23 +234,15 @@ def hgt(parfiles):
     west and south coordinates are negative and hence the nearest lower left integer absolute value is going to be larger
     """
 
-    if bool([type(x) in ID.__subclasses__() for x in parfiles]):
-        corners = [x.getCorners() for x in parfiles]
-        lat = list(set([int(float(y[x])//1) for x in ['ymin', 'ymax'] for y in corners]))
-        lon = list(set([int(float(y[x])//1) for x in ['xmin', 'xmax'] for y in corners]))
-
-    else:
-        lat = []
-        lon = []
-        for parfile in parfiles:
-            out, err = sp.Popen(['SLC_corners', parfile], stdout=sp.PIPE).communicate()
-            for line in out.split('\n'):
-                # note: upper left and lower right, as computed by SLC_corners, define the bounding box coordinates and not those of the actual SAR image
-                if line.startswith('upper left') or line.startswith('lower right'):
-                    items = filter(None, re.split('[\t\s]', line))
-                    # compute lower right coordinates of intersecting hgt tile
-                    lat.append(int(float(items[-2])//1))
-                    lon.append(int(float(items[-1])//1))
+    lat = []
+    lon = []
+    for parfile in parfiles:
+        if isinstance(parfile, pyroSAR.ID):
+            corners = parfile.getCorners()
+        elif parfile.endswith('.par'):
+            corners = gamma.slc_corners(parfile)
+        lat += [int(float(corners[x]) // 1) for x in ['ymin', 'ymax']]
+        lon += [int(float(corners[x]) // 1) for x in ['xmin', 'xmax']]
 
     # add missing lat/lon values (and add an extra buffer of one degree)
     # lat = range(min(lat)-1, max(lat)+2)
@@ -273,6 +263,12 @@ def hgt(parfiles):
 
 
 def makeSRTM(scenes, srtmdir, outname):
+    """
+    Create a DEM from SRTM tiles
+    Input is a list of pyroSAR.ID objects from which coordinates are read to determine the required DEM extent
+    Mosaics SRTM DEM tiles, converts them to Gamma format and subtracts offset to WGS84 ellipsoid
+    for DEMs downloaded from USGS http://gdex.cr.usgs.gov or CGIAR http://srtm.csi.cgiar.org
+    """
 
     tempdir = outname+'___temp'
     os.makedirs(tempdir)
@@ -284,19 +280,17 @@ def makeSRTM(scenes, srtmdir, outname):
     nodatas = [str(int(raster.Raster(x).nodata)) for x in hgt_files]
 
     srtm_vrt = os.path.join(tempdir, 'srtm.vrt')
-    srtm_mosaic = srtm_vrt.replace('.vrt', '')
+    srtm_temp = srtm_vrt.replace('.vrt', '_tmp')
+    srtm_final = srtm_vrt.replace('.vrt', '')
 
     run(['gdalbuildvrt', '-overwrite', '-srcnodata', ' '.join(nodatas), srtm_vrt, hgt_files])
 
-    run(['gdal_translate', '-of', 'ENVI', '-a_nodata', -32768, srtm_vrt, srtm_mosaic])
+    run(['gdal_translate', '-of', 'ENVI', '-a_nodata', -32768, srtm_vrt, srtm_temp])
 
-    swap(srtm_mosaic, srtm_mosaic+'_swap')
+    gamma.process(['srtm2dem', srtm_temp, srtm_final+'.par', 2, '-'])
 
-    srtm_mosaic += '_swap'
-
-    dempar(srtm_mosaic)
-
-    fill(srtm_mosaic, outname, replace=True)
+    shutil.move(srtm_final, outname)
+    shutil.move(srtm_final+'.par', outname+'.par')
     hdr(outname+'.par')
 
     shutil.rmtree(tempdir)
