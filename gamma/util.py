@@ -22,10 +22,23 @@ from spatial import haversine
 import pyroSAR
 
 
-def process(cmd, outdir=None, logpath=None, inlist=None):
+def process(cmd, outdir=None, logpath=None, inlist=None, void=True):
     log = os.path.join(logpath, cmd[0]+'.log') if logpath else None
-    out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False)
+    out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=void)
     gammaErrorHandler(err)
+    if not void:
+        return out, err
+
+
+def slc_corners(parfile):
+    out, err = process(['SLC_corners', parfile], void=False)
+    pts = {}
+    for line in out.split('\n'):
+        if line.startswith('min. latitude'):
+            pts['ymin'], pts['ymax'] = [float(x) for x in re.findall('[0-9]+\.[0-9]+', line)]
+        elif line.startswith('min. longitude'):
+            pts['xmin'], pts['xmax'] = [float(x) for x in re.findall('[0-9]+\.[0-9]+', line)]
+    return pts
 
 
 # INPUT FILES:
