@@ -35,21 +35,21 @@ from spatial import raster
 
 
 def main():
-    print "#############################################"
-    print "preparing SRTM mosaic:"
+    print '#############################################'
+    print 'preparing SRTM mosaic:'
     # read parameter textfile
-    par = ReadPar(os.path.join(os.getcwd(), "PAR/srtm.par"))
+    par = ReadPar(os.path.join(os.getcwd(), 'PAR/srtm.par'))
 
     demdir = None
-    if hasattr(par, "SRTM_archive"):
+    if hasattr(par, 'SRTM_archive'):
         if os.path.isdir(par.SRTM_archive):
             demdir = par.SRTM_archive
 
-    parfiles = finder(os.getcwd(), ["*slc.par", "*mli.par", "*cal.par"])
+    parfiles = finder(os.getcwd(), ['*slc.par', '*mli.par', '*cal.par'])
 
     # define (and create) directories for processing results and logfile
-    path_dem = os.path.join(os.getcwd(), "DEM/")
-    path_log = os.path.join(os.getcwd(), "LOG/GEO/")
+    path_dem = os.path.join(os.getcwd(), 'DEM/')
+    path_log = os.path.join(os.getcwd(), 'LOG/GEO/')
     for path in [path_log, path_dem]:
         if not os.path.exists(path):
             os.makedirs(path)
@@ -58,34 +58,34 @@ def main():
     demlist = hgt_collect(parfiles, path_dem, demdir=demdir, arcsec=int(par.arcsec))
 
     # remove files created by this function
-    for item in finder(path_dem, ["mosaic*", "dem*", "*.par"]):
+    for item in finder(path_dem, ['mosaic*', 'dem*', '*.par']):
         os.remove(item)
 
     if len(demlist) == 0:
-        raise IOError("no hgt files found")
+        raise IOError('no hgt files found')
 
     # perform mosaicing if multiple files are found
     if len(demlist) > 1:
-        print "mosaicing..."
-        dem = os.path.join(path_dem, "mosaic")
+        print 'mosaicing...'
+        dem = os.path.join(path_dem, 'mosaic')
         mosaic(demlist, dem)
     else:
         dem = demlist[0]
         dempar(dem)
-    fill(dem, os.path.join(path_dem, "dem_final"), path_log)
-    dem = os.path.join(path_dem, "dem_final")
+    fill(dem, os.path.join(path_dem, 'dem_final'), path_log)
+    dem = os.path.join(path_dem, 'dem_final')
 
     # transform DEM to UTM
-    if par.utm == "True":
-        print "transforming to UTM..."
-        transform(dem, dem+"_utm", int(par.targetres))
-        hdr(dem+"_utm.par")
-    print "...done"
+    if par.utm == 'True':
+        print 'transforming to UTM...'
+        transform(dem, dem+'_utm', int(par.targetres))
+        hdr(dem+'_utm.par')
+    print '...done'
 
 
 def fill(dem, dem_out, logpath=None, replace=False):
 
-    width = ISPPar(dem+".par").width
+    width = ISPPar(dem+'.par').width
 
     path_dem = os.path.dirname(dem_out)
 
@@ -95,31 +95,31 @@ def fill(dem, dem_out, logpath=None, replace=False):
     # replace values
     value = 0
     new_value = 1
-    gamma.process(["replace_values", dem, value, new_value, dem + "_temp", width, rpl_flg, dtype], path_dem, logpath)
+    gamma.process(['replace_values', dem, value, new_value, dem + '_temp', width, rpl_flg, dtype], path_dem, logpath)
 
     value = -32768
     new_value = 0
-    gamma.process(["replace_values", dem + "_temp", value, new_value, dem + "_temp2", width, rpl_flg, dtype], path_dem, logpath)
+    gamma.process(['replace_values', dem + '_temp', value, new_value, dem + '_temp2', width, rpl_flg, dtype], path_dem, logpath)
 
     # interpolate missing values
     r_max = 9
     np_min = 40
     np_max = 81
     w_mode = 2
-    gamma.process(["interp_ad", dem + "_temp2", dem_out, width, r_max, np_min, np_max, w_mode, dtype], path_dem, logpath)
+    gamma.process(['interp_ad', dem + '_temp2', dem_out, width, r_max, np_min, np_max, w_mode, dtype], path_dem, logpath)
 
     # remove temporary files
-    os.remove(dem+"_temp")
-    os.remove(dem+"_temp2")
+    os.remove(dem+'_temp')
+    os.remove(dem+'_temp2')
 
     # duplicate parameter file for newly created dem
-    shutil.copy(dem+".par", dem_out+".par")
+    shutil.copy(dem+'.par', dem_out+'.par')
 
     # create ENVI header file
-    hdr(dem_out+".par")
+    hdr(dem_out+'.par')
 
     if replace:
-        for item in [dem+x for x in ["", ".par", ".hdr", ".aux.xml"] if os.path.isfile(dem+x)]:
+        for item in [dem+x for x in ['', '.par', '.hdr', '.aux.xml'] if os.path.isfile(dem+x)]:
             os.remove(item)
 
 
@@ -128,12 +128,12 @@ def transform(infile, outfile, posting=90):
     transform SRTM DEM from EQA to UTM projection
     """
     # read DEM parameter file
-    par = ISPPar(infile+".par")
+    par = ISPPar(infile+'.par')
 
     # transform corner coordinate to UTM
-    utm = UTM(infile+".par")
+    utm = UTM(infile+'.par')
 
-    for item in [outfile, outfile+".par"]:
+    for item in [outfile, outfile+'.par']:
         if os.path.isfile(item):
             os.remove(item)
 
@@ -141,12 +141,12 @@ def transform(infile, outfile, posting=90):
     falsenorthing = 10000000. if par.corner_lat < 0 else 0
 
     # create new DEM parameter file with UTM projection details
-    inlist = ["UTM", "WGS84", 1, utm.zone, falsenorthing, os.path.basename(outfile), "", "", "", "", "", "-{0} {1}".format(posting, posting), ""]
-    gamma.process(["create_dem_par", outfile + ".par"], inlist=inlist)
+    inlist = ['UTM', 'WGS84', 1, utm.zone, falsenorthing, os.path.basename(outfile), '', '', '', '', '', '-{0} {1}'.format(posting, posting), '']
+    gamma.process(['create_dem_par', outfile + '.par'], inlist=inlist)
 
     # transform dem
-    gamma.process(["dem_trans", infile + ".par", infile, outfile + ".par", outfile, "-", "-", "-", 1])
-    hdr(outfile+".par")
+    gamma.process(['dem_trans', infile + '.par', infile, outfile + '.par', outfile, '-', '-', '-', 1])
+    hdr(outfile+'.par')
 
 
 def dempar(dem, logpath=None):
@@ -157,38 +157,38 @@ def dempar(dem, logpath=None):
     rast = raster.Raster(dem)
 
     # determine data type
-    dtypes = {"Int16": "INTEGER*2", "UInt16": "INTEGER*2", "Float32": "REAL*4"}
+    dtypes = {'Int16': 'INTEGER*2', 'UInt16': 'INTEGER*2', 'Float32': 'REAL*4'}
     if rast.dtype not in dtypes:
-        raise IOError("data type not supported")
+        raise IOError('data type not supported')
     else:
         dtype = dtypes[rast.dtype]
 
     # format pixel posting and top left coordinate
-    posting = str(rast.geo["yres"])+" "+str(rast.geo["xres"])
-    latlon = str(rast.geo["ymax"])+" "+str(rast.geo["xmin"])
+    posting = str(rast.geo['yres'])+' '+str(rast.geo['xres'])
+    latlon = str(rast.geo['ymax'])+' '+str(rast.geo['xmin'])
 
     # evaluate projection
-    projections = {"longlat": "EQA", "utm": "UTM"}
-    if rast.proj4args["proj"] not in projections:
-        raise ValueError("projection not supported (yet)")
+    projections = {'longlat': 'EQA', 'utm': 'UTM'}
+    if rast.proj4args['proj'] not in projections:
+        raise ValueError('projection not supported (yet)')
     else:
-        projection = projections[rast.proj4args["proj"]]
+        projection = projections[rast.proj4args['proj']]
 
     # get ellipsoid
-    ellipsoid = rast.proj4args["ellps"] if "ellps" in rast.proj4args else rast.proj4args["datum"]
-    if ellipsoid != "WGS84":
-        raise ValueError("ellipsoid not supported (yet)")
+    ellipsoid = rast.proj4args['ellps'] if 'ellps' in rast.proj4args else rast.proj4args['datum']
+    if ellipsoid != 'WGS84':
+        raise ValueError('ellipsoid not supported (yet)')
 
     # create list for GAMMA command input
-    if projection == "UTM":
-        zone = rast.proj4args["zone"]
-        falsenorthing = 10000000. if rast.geo["ymin"] < 0 else 0
+    if projection == 'UTM':
+        zone = rast.proj4args['zone']
+        falsenorthing = 10000000. if rast.geo['ymin'] < 0 else 0
         parlist = [projection, ellipsoid, 1, zone, falsenorthing, os.path.basename(dem), dtype, 0, 1, rast.cols, rast.rows, posting, latlon]
     else:
         parlist = [projection, ellipsoid, 1, os.path.basename(dem), dtype, 0, 1, rast.cols, rast.rows, posting, latlon]
 
     # execute GAMMA command
-    gamma.process(["create_dem_par", os.path.splitext(dem)[0] + ".par"], os.path.dirname(dem), logpath, inlist=parlist)
+    gamma.process(['create_dem_par', os.path.splitext(dem)[0] + '.par'], os.path.dirname(dem), logpath, inlist=parlist)
 
 
 def swap(data, outname):
@@ -197,15 +197,15 @@ def swap(data, outname):
     """
     rast = raster.Raster(data)
     dtype = rast.dtype
-    if rast.format != "ENVI":
-        raise IOError("only ENVI format supported")
-    dtype_lookup = {"Int16": 2, "CInt16": 2, "Int32": 4, "Float32": 4, "CFloat32": 4, "Float64": 8}
+    if rast.format != 'ENVI':
+        raise IOError('only ENVI format supported')
+    dtype_lookup = {'Int16': 2, 'CInt16': 2, 'Int32': 4, 'Float32': 4, 'CFloat32': 4, 'Float64': 8}
     if dtype not in dtype_lookup:
-        raise IOError("data type {} not supported".format(dtype))
-    gamma.process(["swap_bytes", data, outname, str(dtype_lookup[dtype])])
-    header = HDRobject(data+".hdr")
+        raise IOError('data type {} not supported'.format(dtype))
+    gamma.process(['swap_bytes', data, outname, str(dtype_lookup[dtype])])
+    header = HDRobject(data+'.hdr')
     header.byte_order = 1
-    hdr(header, outname+".hdr")
+    hdr(header, outname+'.hdr')
 
 
 def mosaic(demlist, outname, byteorder=1, gammapar=True):
@@ -213,15 +213,15 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
     mosaicing of multiple DEMs
     """
     if len(demlist) < 2:
-        raise IOError("length of demlist < 2")
+        raise IOError('length of demlist < 2')
     nodata = str(raster.Raster(demlist[0]).nodata)
-    run(["gdalwarp", "-q", "-of", "ENVI", "-srcnodata", nodata, "-dstnodata", nodata, demlist, outname])
+    run(['gdalwarp', '-q', '-of', 'ENVI', '-srcnodata', nodata, '-dstnodata', nodata, demlist, outname])
     if byteorder == 1:
-        swap(outname, outname+"_swap")
-        for item in [outname, outname+".hdr", outname+".aux.xml"]:
+        swap(outname, outname+'_swap')
+        for item in [outname, outname+'.hdr', outname+'.aux.xml']:
             os.remove(item)
-        os.rename(outname+"_swap", outname)
-        os.rename(outname+"_swap.hdr", outname+".hdr")
+        os.rename(outname+'_swap', outname)
+        os.rename(outname+'_swap.hdr', outname+'.hdr')
     if gammapar:
         dempar(outname)
 
@@ -238,18 +238,18 @@ def hgt(parfiles):
 
     if bool([type(x) in ID.__subclasses__() for x in parfiles]):
         corners = [x.getCorners() for x in parfiles]
-        lat = list(set([int(float(y[x])//1) for x in ["ymin", "ymax"] for y in corners]))
-        lon = list(set([int(float(y[x])//1) for x in ["xmin", "xmax"] for y in corners]))
+        lat = list(set([int(float(y[x])//1) for x in ['ymin', 'ymax'] for y in corners]))
+        lon = list(set([int(float(y[x])//1) for x in ['xmin', 'xmax'] for y in corners]))
 
     else:
         lat = []
         lon = []
         for parfile in parfiles:
-            out, err = sp.Popen(["SLC_corners", parfile], stdout=sp.PIPE).communicate()
-            for line in out.split("\n"):
+            out, err = sp.Popen(['SLC_corners', parfile], stdout=sp.PIPE).communicate()
+            for line in out.split('\n'):
                 # note: upper left and lower right, as computed by SLC_corners, define the bounding box coordinates and not those of the actual SAR image
-                if line.startswith("upper left") or line.startswith("lower right"):
-                    items = filter(None, re.split("[\t\s]", line))
+                if line.startswith('upper left') or line.startswith('lower right'):
+                    items = filter(None, re.split('[\t\s]', line))
                     # compute lower right coordinates of intersecting hgt tile
                     lat.append(int(float(items[-2])//1))
                     lon.append(int(float(items[-1])//1))
@@ -262,19 +262,19 @@ def hgt(parfiles):
     lon = range(min(lon), max(lon)+1)
 
     # convert coordinates to string with leading zeros and hemisphere identification letter
-    lat = [str(x).zfill(2+len(str(x))-len(str(x).strip("-"))) for x in lat]
-    lat = [x.replace("-", "S") if "-" in x else "N"+x for x in lat]
+    lat = [str(x).zfill(2+len(str(x))-len(str(x).strip('-'))) for x in lat]
+    lat = [x.replace('-', 'S') if '-' in x else 'N'+x for x in lat]
 
-    lon = [str(x).zfill(3+len(str(x))-len(str(x).strip("-"))) for x in lon]
-    lon = [x.replace("-", "W") if "-" in x else "E"+x for x in lon]
+    lon = [str(x).zfill(3+len(str(x))-len(str(x).strip('-'))) for x in lon]
+    lon = [x.replace('-', 'W') if '-' in x else 'E'+x for x in lon]
 
     # concatenate all formatted latitudes and longitudes with each other as final product
-    return [x+y+".hgt" for x in lat for y in lon]
+    return [x+y+'.hgt' for x in lat for y in lon]
 
 
 def makeSRTM(scenes, srtmdir, outname):
 
-    tempdir = outname+"___temp"
+    tempdir = outname+'___temp'
     os.makedirs(tempdir)
 
     hgt_options = hgt(scenes)
@@ -283,21 +283,21 @@ def makeSRTM(scenes, srtmdir, outname):
 
     nodatas = [str(int(raster.Raster(x).nodata)) for x in hgt_files]
 
-    srtm_vrt = os.path.join(tempdir, "srtm.vrt")
-    srtm_mosaic = srtm_vrt.replace(".vrt", "")
+    srtm_vrt = os.path.join(tempdir, 'srtm.vrt')
+    srtm_mosaic = srtm_vrt.replace('.vrt', '')
 
-    run(["gdalbuildvrt", "-overwrite", "-srcnodata", ' '.join(nodatas), srtm_vrt, hgt_files])
+    run(['gdalbuildvrt', '-overwrite', '-srcnodata', ' '.join(nodatas), srtm_vrt, hgt_files])
 
-    run(["gdal_translate", "-of", "ENVI", "-a_nodata", -32768, srtm_vrt, srtm_mosaic])
+    run(['gdal_translate', '-of', 'ENVI', '-a_nodata', -32768, srtm_vrt, srtm_mosaic])
 
-    swap(srtm_mosaic, srtm_mosaic+"_swap")
+    swap(srtm_mosaic, srtm_mosaic+'_swap')
 
-    srtm_mosaic += "_swap"
+    srtm_mosaic += '_swap'
 
     dempar(srtm_mosaic)
 
     fill(srtm_mosaic, outname, replace=True)
-    hdr(outname+".par")
+    hdr(outname+'.par')
 
     shutil.rmtree(tempdir)
 
@@ -314,7 +314,7 @@ def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
 
     targets = []
 
-    pattern = "[NS][0-9]{2}[EW][0-9]{3}"
+    pattern = '[NS][0-9]{2}[EW][0-9]{3}'
 
     # if an additional dem directory has been defined, check this directory for required hgt tiles
     if demdir is not None:
@@ -322,49 +322,49 @@ def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
             targets.append(item)
 
     # check for additional potentially existing hgt tiles in the defined output directory
-    for item in [os.path.join(outdir, x) for x in target_ids if os.path.isfile(os.path.join(outdir, x)) and not re.search(x, "\n".join(targets))]:
+    for item in [os.path.join(outdir, x) for x in target_ids if os.path.isfile(os.path.join(outdir, x)) and not re.search(x, '\n'.join(targets))]:
         targets.append(item)
 
-    print "found {} relevant SRTM tiles...".format(len(targets))
+    print 'found {} relevant SRTM tiles...'.format(len(targets))
 
     # search server for all required tiles, which were not found in the local directories
     if len(targets) < len(target_ids):
-        print "searching for SRTM tiles on the server..."
+        print 'searching for SRTM tiles on the server...'
         onlines = []
 
         if arcsec == 1:
-            remotes = ["http://e4ftl01.cr.usgs.gov/SRTM/SRTMGL1.003/2000.02.11/"]
-            remotepattern = pattern+".SRTMGL1.hgt.zip"
+            remotes = ['http://e4ftl01.cr.usgs.gov/SRTM/SRTMGL1.003/2000.02.11/']
+            remotepattern = pattern+'.SRTMGL1.hgt.zip'
         elif arcsec == 3:
-            server = "http://dds.cr.usgs.gov/srtm/version2_1/SRTM3/"
-            remotes = [os.path.join(server, x) for x in ["Africa", "Australia", "Eurasia", "Islands", "North_America", "South_America"]]
-            remotepattern = pattern+"[.]hgt.zip"
+            server = 'http://dds.cr.usgs.gov/srtm/version2_1/SRTM3/'
+            remotes = [os.path.join(server, x) for x in ['Africa', 'Australia', 'Eurasia', 'Islands', 'North_America', 'South_America']]
+            remotepattern = pattern+'[.]hgt.zip'
         else:
-            raise ValueError("argument arcsec must be of value 1 or 3")
+            raise ValueError('argument arcsec must be of value 1 or 3')
 
         for remote in remotes:
             response = urlopen(remote).read()
             items = sorted(set(re.findall(remotepattern, response)))
             for item in items:
-                outname = re.findall(pattern, item)[0]+".hgt"
+                outname = re.findall(pattern, item)[0]+'.hgt'
                 if outname in target_ids and outname not in [os.path.basename(x) for x in targets]:
                     onlines.append(os.path.join(remote, item))
 
         # if additional tiles have been found online, download and unzip them to the local directory
         if len(onlines) > 0:
-            print "downloading {} SRTM tiles...".format(len(onlines))
+            print 'downloading {} SRTM tiles...'.format(len(onlines))
             for candidate in onlines:
-                localname = os.path.join(outdir, re.findall(pattern, candidate)[0]+".hgt")
+                localname = os.path.join(outdir, re.findall(pattern, candidate)[0]+'.hgt')
                 infile = urlopen(candidate)
-                with open(localname+".zip", "wb") as outfile:
+                with open(localname+'.zip', 'wb') as outfile:
                     outfile.write(infile.read())
                 infile.close()
-                with zf.ZipFile(localname+".zip", "r") as z:
+                with zf.ZipFile(localname+'.zip', 'r') as z:
                     z.extractall(outdir)
-                os.remove(localname+".zip")
+                os.remove(localname+'.zip')
                 targets.append(localname)
     return targets
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
