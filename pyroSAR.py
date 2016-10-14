@@ -599,6 +599,8 @@ class SAFE(ID):
             name = os.path.join(directory, '_'.join(fields))
 
             if product == 'slc':
+                swath = match.group('swath').upper()
+                name = name.replace('{:_<{l}}'.format(self.acquisition_mode, l=len(swath)), swath)
                 cmd = ['par_S1_SLC', tiff, xml_ann, xml_cal, xml_noise, name+'.par', name, name+'.tops_par']
             else:
                 cmd = ['par_S1_GRD', tiff, xml_ann, xml_cal, xml_noise, name + '.par', name]
