@@ -20,11 +20,14 @@ from .error import gammaErrorHandler
 from ancillary import run, Stack, union
 from spatial import haversine
 import pyroSAR
+from collections import OrderedDict
+from osgeo import ogr
+ogr.UseExceptions()
 
 
 def process(cmd, outdir=None, logpath=None, inlist=None, void=True):
     log = os.path.join(logpath, cmd[0]+'.log') if logpath else None
-    out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=void)
+    out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False)
     gammaErrorHandler(err)
     if not void:
         return out, err
@@ -39,6 +42,43 @@ def slc_corners(parfile):
         elif line.startswith('min. longitude'):
             pts['xmin'], pts['xmax'] = [float(x) for x in re.findall('[0-9]+\.[0-9]+', line)]
     return pts
+
+
+def slc_burst_corners(parfile, tops_parfile):
+    proc = sp.Popen(['SLC_burst_corners', parfile, tops_parfile], stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE)
+    out, err = proc.communicate()
+    if proc.returncode != 0:
+        raise RuntimeError(err+'\nreading of burst corners failed')
+    matches = [re.findall('[0-9.]+', x) for x in re.findall('Burst:[0-9 .]*', out)]
+    bursts = {}
+    for line in matches:
+        lat = map(float, line[1::2])
+        lon = map(float, line[2::2])
+        bursts[int(line[0])] = zip(lat, lon)
+    return OrderedDict(sorted(bursts.items()))
+
+
+def coord2geom(coordinatelist):
+    coordstrings = [' '.join(map(str, x)) for x in coordinatelist]
+    coordstrings.append(coordstrings[0])
+    return ogr.CreateGeometryFromWkt('POLYGON(({}))'.format(', '.join(coordstrings)))
+
+
+def burstoverlap(slc1_parfile, slc2_parfile, slc1_tops_parfile, slc2_tops_parfile):
+    b1 = slc_burst_corners(slc1_parfile, slc1_tops_parfile)
+    b2 = slc_burst_corners(slc2_parfile, slc2_tops_parfile)
+    master_select = []
+    slave_select = []
+    for mburst in b1.keys():
+        for sburst in b2.keys():
+            poly1 = coord2geom(b1[mburst])
+            poly2 = coord2geom(b2[sburst])
+            intersection = poly1.Intersection(poly2)
+            area_ratio = intersection.GetArea() / poly1.GetArea()
+            if area_ratio > 0.9:
+                master_select.append(mburst)
+                slave_select.append(sburst)
+    return master_select, slave_select
 
 
 # INPUT FILES:
