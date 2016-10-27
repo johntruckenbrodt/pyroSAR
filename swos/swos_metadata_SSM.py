@@ -1,12 +1,12 @@
 import os
 import re
-import raster
-from datetime import datetime
-from calendar import monthrange
 import xml.etree.ElementTree as ET
-from xml_util import getNamespaces
-from time import ctime, gmtime, strftime, strptime
+from calendar import monthrange
+from time import ctime, strftime, strptime
+
 from ancillary import finder
+from spatial import raster
+from xml_util import getNamespaces
 
 template = "/geonfs01_vol1/ve39vem/swos_test/meta_xml/template_SSM.xml"
 
@@ -82,7 +82,7 @@ for site in sites:
         meta_date.text = strftime("%Y-%m-%d")
 
         data_abstract.text = "This file contains an monthly means of a SAR-derived relative surface soil moisture index. " \
-                             "Values are scaled in percent from 0 to 100. Data gaps are moarked with value 255. " \
+                             "Values are scaled in percent from 0 to 100. Data gaps are marked with value 255. " \
                              "The data set was created in the framework of SWOS (Satellite-based Wetland Observation System)."
 
         data_contact_organization.text = "Friedrich-Schiller-University Jena"
