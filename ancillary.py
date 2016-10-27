@@ -47,8 +47,8 @@ def dissolve(inlist):
     """
     out = []
     for i in inlist:
-        i = list(i) if type(i) is tuple else i
-        out.extend(dissolve(i)) if type(i) is list else out.append(i)
+        i = list(i) if isinstance(i, tuple) else i
+        out.extend(dissolve(i)) if isinstance(i, list) else out.append(i)
     return out
 
 
@@ -221,6 +221,8 @@ def run(cmd, outdir=None, logfile=None, inlist=None, void=True):
     proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=log, stderr=sp.PIPE, cwd=outdir, universal_newlines=True)
     instream = None if inlist is None else ''.join([str(x)+'\n' for x in inlist])
     out, err = proc.communicate(instream)
+    if proc.returncode != 0:
+        raise sp.CalledProcessError(proc.returncode, cmd, err)
     # add line for separating log entries of repeated function calls
     if logfile:
         log.write('#####################################################################\n')
