@@ -245,9 +245,6 @@ def hgt(parfiles):
         lon += [int(float(corners[x]) // 1) for x in ['xmin', 'xmax']]
 
     # add missing lat/lon values (and add an extra buffer of one degree)
-    # lat = range(min(lat)-1, max(lat)+2)
-    # lon = range(min(lon)-1, max(lon)+2)
-
     lat = range(min(lat), max(lat)+1)
     lon = range(min(lon), max(lon)+1)
 
@@ -287,7 +284,7 @@ def makeSRTM(scenes, srtmdir, outname):
 
     run(['gdal_translate', '-of', 'ENVI', '-a_nodata', -32768, srtm_vrt, srtm_temp])
 
-    gamma.process(['srtm2dem', srtm_temp, srtm_final+'.par', 2, '-'])
+    gamma.process(['srtm2dem', srtm_temp, srtm_final, srtm_final+'.par', 2, '-'], outdir=tempdir)
 
     shutil.move(srtm_final, outname)
     shutil.move(srtm_final+'.par', outname+'.par')
