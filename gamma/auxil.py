@@ -1,4 +1,5 @@
 
+import os
 import re
 import math
 from ancillary import parse_literal
@@ -108,3 +109,43 @@ class Spacing(object):
         else:
             self.rlks = int(round(float(targetres)/self.groundRangePS))
             self.azlks = int(round(float(targetres)/par.azimuth_pixel_spacing))
+
+
+class Namespace(object):
+    def __init__(self, directory, basename):
+        self.__base = basename
+        self.__outdir = directory
+        self.__reg = []
+
+    def appreciate(self, keys):
+        for key in keys:
+            setattr(self, key.replace('.', '_'), os.path.join(self.__outdir, self.__base+'_'+key))
+            if key not in self.__reg:
+                self.__reg.append(key.replace('.', '_'))
+
+    def depreciate(self, keys):
+        for key in keys:
+            setattr(self, key.replace('.', '_'), '-')
+            if key not in self.__reg:
+                self.__reg.append(key.replace('.', '_'))
+
+    def getall(self):
+        out = {}
+        for key in self.__reg:
+            out[key] = getattr(self, key)
+        return out
+
+    def select(self, selection):
+        return [getattr(self, key) for key in selection]
+
+    def isregistered(self, key):
+        return key in self.__reg
+
+    def isappreciated(self, key):
+        if self.isregistered(key):
+            if self.get(key) != '-':
+                return True
+        return False
+
+    def get(self, key):
+        return getattr(self, key)
