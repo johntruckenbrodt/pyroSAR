@@ -1,0 +1,9 @@
+<node id="LinearToFromdB">
+    <operator>LinearToFromdB</operator>
+    <sources>
+        <sourceProduct refid="Terrain-Correction"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+        <sourceBands>Gamma0_VV,Gamma0_VH</sourceBands>
+    </parameters>
+</node>
