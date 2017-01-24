@@ -35,6 +35,15 @@ def parse_node(name):
     return tree
 
 
+def insert_node(workflow, predecessor_id, node):
+    predecessor = workflow.find('.//node[@id="{}"]'.format(predecessor_id))
+    position = list(workflow).index(predecessor) + 1
+    workflow.insert(position, node)
+    newnode = workflow[position]
+    newnode.find('.//sources/sourceProduct').attrib['refid'] = predecessor.attrib['id']
+    workflow[position + 1].find('.//sources/sourceProduct').attrib['refid'] = newnode.attrib['id']
+
+
 def write_recipe(recipe, outfile):
     outfile = outfile if outfile.endswith('.xml') else outfile + '.xml'
     with open(outfile, 'w') as out:
