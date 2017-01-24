@@ -139,7 +139,7 @@ def transform(infile, outfile, posting=90):
     falsenorthing = 10000000. if par.corner_lat < 0 else 0
 
     # create new DEM parameter file with UTM projection details
-    inlist = ['UTM', 'WGS84', 1, utm.zone, falsenorthing, os.path.basename(outfile), '', '', '', '', '', '-{0} {1}'.format(posting, posting), '']
+    inlist = ['UTM', 'WGS84', 1, utm.zone, falsenorthing, os.path.basename(outfile), '', '', '', '', '', '-{0} {0}'.format(posting), '']
     gamma.process(['create_dem_par', outfile + '.par'], inlist=inlist)
 
     # transform dem
@@ -274,6 +274,7 @@ def makeSRTM(scenes, srtmdir, outname):
 
     hgt_files = finder(srtmdir, hgt_options)
 
+    # todo: check if really needed
     nodatas = [str(int(raster.Raster(x).nodata)) for x in hgt_files]
 
     srtm_vrt = os.path.join(tempdir, 'srtm.vrt')
@@ -309,21 +310,21 @@ def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
 
     # if an additional dem directory has been defined, check this directory for required hgt tiles
     if demdir is not None:
-        for item in finder(demdir, target_ids):
-            targets.append(item)
+        targets.extend(finder(demdir, target_ids))
 
     # check for additional potentially existing hgt tiles in the defined output directory
-    for item in [os.path.join(outdir, x) for x in target_ids if os.path.isfile(os.path.join(outdir, x)) and not re.search(x, '\n'.join(targets))]:
-        targets.append(item)
+    extras = [os.path.join(outdir, x) for x in target_ids if os.path.isfile(os.path.join(outdir, x)) and not re.search(x, '\n'.join(targets))]
+    targets.extend(extras)
 
     print 'found {} relevant SRTM tiles...'.format(len(targets))
 
     # search server for all required tiles, which were not found in the local directories
     if len(targets) < len(target_ids):
-        print 'searching for SRTM tiles on the server...'
+        print 'searching for additional SRTM tiles on the server...'
         onlines = []
 
         if arcsec == 1:
+            # todo: this address now asks for a login -> find alternatives
             remotes = ['http://e4ftl01.cr.usgs.gov/SRTM/SRTMGL1.003/2000.02.11/']
             remotepattern = pattern+'.SRTMGL1.hgt.zip'
         elif arcsec == 3:
