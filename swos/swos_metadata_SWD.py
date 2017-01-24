@@ -5,25 +5,25 @@ from time import gmtime, strftime
 from spatial import raster
 from xml_util import getNamespaces
 
-template = "/geonfs01_vol1/ve39vem/swos_test/meta_xml/SWOS_SWD_meta_template.xml"
+template = '/geonfs01_vol1/ve39vem/swos_test/meta_xml/SWOS_SWD_meta_template.xml'
 
-sites = ["Egypt_Burullus", "France_Camargue", "Greece_EasternMacedonia", "Jordan_Azraq", "Spain_Fuente-de-Piedra", "Tanzania_Kilombero", "Sweden_Store-Mosse"]
+sites = ['Egypt_Burullus', 'France_Camargue', 'Greece_EasternMacedonia', 'Jordan_Azraq', 'Spain_Fuente-de-Piedra', 'Tanzania_Kilombero', 'Sweden_Store-Mosse']
 
 for site in sites:
 
     print site
 
-    datafile = "/geonfs01_vol1/ve39vem/swos_test/meta_xml/data_temp/SWOS_{}_SWD_2015.tif".format(site)
+    datafile = '/geonfs01_vol1/ve39vem/swos_test/meta_xml/data_temp/SWOS_{}_SWD_2015.tif'.format(site)
 
     if not os.path.isfile(datafile):
-        print "does not exist"
+        print 'does not exist'
         continue
 
-    outname = datafile.replace(".tif", ".xml")
+    outname = datafile.replace('.tif', '.xml')
 
     namespaces = getNamespaces(template)
 
-    with open(template, "r") as infile:
+    with open(template, 'r') as infile:
         tree = ET.fromstring(infile.read())
 
     name = tree.find('.//ns0:fileIdentifier/./', namespaces)
@@ -72,46 +72,46 @@ for site in sites:
 
     name.text = os.path.basename(os.path.splitext(datafile)[0])
 
-    data_title.text = "SWOS Surface Water Dynamics"
+    data_title.text = 'SWOS Surface Water Dynamics'
 
-    meta_contact_organization.text = "Friedrich-Schiller-University Jena"
-    meta_contact_email.text = "john.truckenbrodt@uni-jena.de"
+    meta_contact_organization.text = 'Friedrich-Schiller-University Jena'
+    meta_contact_email.text = 'john.truckenbrodt@uni-jena.de'
 
-    meta_date.text = strftime("%Y-%m-%d", gmtime())
+    meta_date.text = strftime('%Y-%m-%d', gmtime())
 
-    data_abstract.text = "This file contains an annual surface water dynamics classification. " \
-                         "Possible classes are (1) permanently submersed, (2) temporarily submersed and (3) never submersed. " \
-                         "The data set was created in the framework of SWOS (Satellite-based Wetland Observation System)."
+    data_abstract.text = 'This file contains an annual surface water dynamics classification. ' \
+                         'Possible classes are (1) permanently submersed, (2) temporarily submersed and (3) never submersed. ' \
+                         'The data set was created in the framework of SWOS (Satellite-based Wetland Observation System).'
 
-    data_contact_organization.text = "Friedrich-Schiller-University Jena"
-    data_contact_email.text = "john.truckenbrodt@uni-jena.de"
+    data_contact_organization.text = 'Friedrich-Schiller-University Jena'
+    data_contact_email.text = 'john.truckenbrodt@uni-jena.de'
 
     ras = raster.Raster(datafile)
     bbox = ras.bbox()
     bbox.reproject(meta_srs_url.text)
     ext = bbox.extent
-    data_extent_bbox_west.text = str(ext["xmin"])
-    data_extent_bbox_east.text = str(ext["xmax"])
-    data_extent_bbox_north.text = str(ext["ymax"])
-    data_extent_bbox_south.text = str(ext["ymin"])
+    data_extent_bbox_west.text = str(ext['xmin'])
+    data_extent_bbox_east.text = str(ext['xmax'])
+    data_extent_bbox_north.text = str(ext['ymax'])
+    data_extent_bbox_south.text = str(ext['ymin'])
 
     data_res.text = str(ras.res[0])
-    data_res.attrib['uom'] = "meter"
+    data_res.attrib['uom'] = 'meter'
 
     # try:
-    #     data_date.text = strftime("%Y-%m-%d", strptime(ras.raster.GetMetadataItem("TIFFTAG_DATETIME"), "%Y:%m:%d %H:%M:%S"))
+    #     data_date.text = strftime('%Y-%m-%d', strptime(ras.raster.GetMetadataItem('TIFFTAG_DATETIME'), '%Y:%m:%d %H:%M:%S'))
     # except TypeError:
-    #     data_date.text = datetime.strptime(ctime(os.path.getmtime(datafile)), "%a %b %d %H:%M:%S %Y")
+    #     data_date.text = datetime.strptime(ctime(os.path.getmtime(datafile)), '%a %b %d %H:%M:%S %Y')
 
-    data_date.text = "2016-07-29"
+    data_date.text = '2016-07-29'
 
-    data_date_type.text = "creation"
-    data_date_type.attrib['codeListValue'] = "creation"
+    data_date_type.text = 'creation'
+    data_date_type.attrib['codeListValue'] = 'creation'
 
-    data_extent_date_begin.text = "2015-01-01"
-    data_extent_date_end.text = "2015-12-31"
+    data_extent_date_begin.text = '2015-01-01'
+    data_extent_date_end.text = '2015-12-31'
 
-    keywords[1].find(".//ns0:MD_Keywords/ns0:keyword/ns2:CharacterString", namespaces).text = "surface water dynamics"
+    keywords[1].find('.//ns0:MD_Keywords/ns0:keyword/ns2:CharacterString', namespaces).text = 'surface water dynamics'
 
-    with open(outname, "w") as outfile:
+    with open(outname, 'w') as outfile:
         outfile.write(ET.tostring(tree))
