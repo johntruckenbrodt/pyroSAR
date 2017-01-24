@@ -24,8 +24,8 @@ from osgeo.gdalconst import GA_ReadOnly
 
 import envi
 import gamma
-from xml_util import getNamespaces
 import spatial
+from xml_util import getNamespaces
 from ancillary import finder, parse_literal, urlQueryParser
 
 
@@ -37,6 +37,10 @@ def identify(scene):
         except IOError:
             pass
     raise IOError('data format not supported')
+
+
+def filter_processed(scenelist, outdir, recursive=False):
+    return [x for x in scenelist if len(finder(outdir, [x.outname_base()], regex=True, recursive=recursive)) == 0]
 
 
 # todo: add bounding box info to init and summary methods
@@ -80,7 +84,7 @@ class ID(object):
 
         database = os.path.join(os.path.dirname(self.scene), 'data.db') if target is None else target
         conn = sqlite3.connect(database)
-        # todo: following doesn't work:
+        # todo: following line doesn't work:
         conn.enable_load_extension(True)
         conn.execute('SELECT load_extension("libspatialite")')
         conn.execute('SELECT InitSpatialMetaData();')
@@ -516,12 +520,13 @@ class SAFE(ID):
 
         self.scene = os.path.realpath(scene)
 
+        # todo: check whether the polarization naming convention has changed; now posssible: VV (used to be SV)
         self.pattern = r'^(?P<sensor>S1[AB])_' \
                        r'(?P<beam>S1|S2|S3|S4|S5|S6|IW|EW|WV|EN|N1|N2|N3|N4|N5|N6|IM)_' \
                        r'(?P<product>SLC|GRD|OCN)(?:F|H|M|_)_' \
                        r'(?:1|2)' \
                        r'(?P<category>S|A)' \
-                       r'(?P<pols>SH|SV|DH|DV)_' \
+                       r'(?P<pols>SH|SV|DH|DV|VV|HH)_' \
                        r'(?P<start>[0-9]{8}T[0-9]{6})_' \
                        r'(?P<stop>[0-9]{8}T[0-9]{6})_' \
                        r'(?:[0-9]{6})_' \
@@ -620,7 +625,6 @@ class SAFE(ID):
         self.getOSV(osvdir)
         for product in self.gammafiles:
             for image in self.gammafiles[product]:
-                print 'OPOD_vec', image+'.par', osvdir
                 gamma.process(['OPOD_vec', image + '.par', osvdir], outdir=logdir)
 
     def getCorners(self):
@@ -636,6 +640,7 @@ class SAFE(ID):
         after = (date+timedelta(days=1)).strftime('%Y-%m-%d')
 
         query = dict()
+        query['mission'] = self.sensor
         query['validity_start_time'] = '{0}..{1}'.format(before, after)
 
         remote_poe = 'https://qc.sentinel1.eo.esa.int/aux_poeorb/'
@@ -652,7 +657,6 @@ class SAFE(ID):
             raise RuntimeError('insufficient directory permissions, unable to write')
         downloads = [x for x in remotes if not os.path.isfile(os.path.join(outdir, os.path.basename(x)))]
         for item in downloads:
-            print os.path.basename(item)
             infile = urlopen(item, context=sslcontext)
             with open(os.path.join(outdir, os.path.basename(item)), 'wb') as outfile:
                 outfile.write(infile.read())
@@ -735,3 +739,55 @@ class SAFE(ID):
 #         antenna = 'antenna_ERS2_UKPAF_x_19970120'
 #     else:
 #         antenna = 'antenna_ERS2'
+
+
+class Archive(object):
+    def __init__(self, scenelist):
+        self.scenelist = scenelist
+        if os.path.isfile(self.scenelist):
+            with open(scenelist, 'r') as infile:
+                self.reg = [os.path.basename(line.split(';')[3]) for line in infile]
+        else:
+            self.reg = []
+
+    def update(self, scenes):
+        scenefile = open(self.scenelist, 'a+' if os.path.isfile(self.scenelist) else 'w')
+        for scene in scenes:
+            base = os.path.basename(scene)
+            if base not in self.reg:
+                try:
+                    id = identify(scene)
+                except:
+                    continue
+                print base
+                items = [id.sensor, id.acquisition_mode, ','.join(id.polarizations), id.scene, id.bbox().convert2wkt()[0]]
+                outline = ';'.join(items) + '\n'
+                scenefile.write(outline)
+                self.reg.append(base)
+        scenefile.close()
+
+    def select(self, vectorobject):
+        vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
+        site_geom = ogr.CreateGeometryFromWkt(vectorobject.convert2wkt()[0])
+        selection_site = []
+        with open(self.scenelist, 'r') as infile:
+            for line in infile:
+                scene = line.strip().split(';')[3]
+                geom = ogr.CreateGeometryFromWkt(line.strip().split(';')[4])
+                intersection = geom.Intersection(site_geom)
+                if intersection.GetArea() > 0:
+                    selection_site.append(scene)
+        return selection_site
+
+    @property
+    def size(self):
+        return len(self.reg)
+
+    def change_directory(self, src, dst):
+        src_real = os.path.realpath(src)
+        dst_real = os.path.realpath(dst)
+        with open(self.scenelist, 'rb') as infile:
+            instring = infile.read()
+        outstring = instring.replace(src_real, dst_real)
+        with open(self.scenelist, 'wb') as outfile:
+            outfile.write(outstring)
