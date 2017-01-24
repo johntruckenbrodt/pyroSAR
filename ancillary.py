@@ -138,7 +138,7 @@ def multicore(function, cores, multiargs, **singleargs):
     # unblock the printing
     enablePrint()
 
-    return result
+    # return result
 
     # # evaluate the return of the processing function; if any value is not None then the whole list of results is returned
     # eval = [x for x in result if x is None]
@@ -210,7 +210,7 @@ class ReadPar(object):
                         self.index.append(items[0])
 
 
-def run(cmd, outdir=None, logfile=None, inlist=None, void=True):
+def run(cmd, outdir=None, logfile=None, inlist=None, void=True, errorpass=False):
     """
     wrapper for subprocess execution including logfile writing and command prompt piping
     """
@@ -221,7 +221,7 @@ def run(cmd, outdir=None, logfile=None, inlist=None, void=True):
     proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=log, stderr=sp.PIPE, cwd=outdir, universal_newlines=True)
     instream = None if inlist is None else ''.join([str(x)+'\n' for x in inlist])
     out, err = proc.communicate(instream)
-    if proc.returncode != 0:
+    if not errorpass and proc.returncode != 0:
         raise sp.CalledProcessError(proc.returncode, cmd, err)
     # add line for separating log entries of repeated function calls
     if logfile:
