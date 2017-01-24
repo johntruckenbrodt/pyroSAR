@@ -42,7 +42,7 @@ done
 
 #alternative installation using pip (was found to cause errors)
 #$py /usr/local/bin/pip2.7 install --install-option="--prefix=${maindir}/local" dill pox
-#$py /usr/local/bin/pip2.7 install --user --upgrade --install-option="--prefix${maindir}/local" dill pox
+#$py /usr/local/bin/pip2.7 install --user --upgrade --install-option="--prefix=${maindir}/local" dill pox
 
 #install pathos
 (cd $maindir/pathos*
