@@ -17,6 +17,7 @@ def gammaErrorHandler(message):
                    'insufficient offset points left after culling to determine offset model parameters': RuntimeError,
                    'calloc_1d: number of elements <= 0': ValueError,
                    'multi-look output line:': RuntimeError,
+                   'no OPOD state vector found with the required start time!': RuntimeError,
                    'gc_map operates only with slant range geometry, image geometry in SLC_par: GROUND_RANGE': RuntimeError}
     if errormessage != '':
         for error in knownErrors:
