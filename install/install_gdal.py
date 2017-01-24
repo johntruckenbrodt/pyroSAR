@@ -33,7 +33,7 @@ for dir in [root, downloaddir, packagedir, installdir]:
 modules = ["geos", "proj", "tiff", "geotiff"]
 
 # package version to be used
-versions = {"gdal": "2.1.1",
+versions = {"gdal": "2.1.2",
             "geos": "3.5.0",
             "kml": "1.2.0",
             "htop": "1.0.2",
