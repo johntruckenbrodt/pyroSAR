@@ -398,7 +398,7 @@ def reproject(rasterobject, reference, outname, resampling="bilinear", format="E
                    "-t_srs", projection, rasterobject.filename, outname])
 
 
-def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None, separate=False):
+def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None, separate=False, overwrite=False):
 
     if layernames is not None:
         if len(layernames) != len(srcfiles):
@@ -428,7 +428,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
 
         for i in range(len(srcfiles)):
             group = sorted(srcfiles[i], key=sortfun) if isinstance(srcfiles[i], list) else [srcfiles[i]]
-            group = [x for x in group if intersect(shp, Raster(x))]
+            group = [x for x in group if spatial.util.intersect(shp, Raster(x))]
             if len(group) > 1:
                 srcfiles[i] = group
             elif len(group) == 1:
@@ -445,6 +445,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     arg_dstnodata = ["-dstnodata", dstnodata] if dstnodata is not None else []
     arg_resampling = ["-r", resampling] if resampling is not None else []
     arg_format = ["-of", "GTiff" if separate else "ENVI"]
+    arg_overwrite = ["-overwrite"] if overwrite else []
 
     # create VRT files for mosaicing
     vrtlist = []
@@ -473,20 +474,18 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     else:
         # create VRT for stacking
         vrt = os.path.splitext(dstfile)[0]+".vrt"
-        run(["gdalbuildvrt", "-q", "-overwrite", "-separate", arg_srcnodata, arg_ext, vrt, srcfiles])
+        run(["gdalbuildvrt", "-q", arg_overwrite, "-separate", arg_srcnodata, arg_ext, vrt, srcfiles])
         vrtlist.append(vrt)
 
         # warp files
-        run(["gdalwarp", "-q", "-multi", "-overwrite", arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, vrt, dstfile])
+        run(["gdalwarp", "-q", "-multi", arg_overwrite, arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, vrt, dstfile])
         # ["--config", "GDAL_CACHEMAX", 2000, "-wm", 6000, "-co", "INTERLEAVE="+interleave]
+
+        # edit ENVI HDR files to contain specific layer names
+        par = envi.HDRobject(dstfile + ".hdr")
+        par.band_names = bandnames
+        envi.hdr(par)
 
     # remove VRT files
     for vrt in vrtlist:
         os.remove(vrt)
-
-    # edit ENVI HDR files to contain specific layer names
-    par = envi.HDRobject(dstfile+".hdr")
-    par.band_names = bandnames
-    envi.hdr(par)
-
-
