@@ -2,15 +2,14 @@ import os
 import re
 import shutil
 import subprocess as sp
-
 import spatial
 from ancillary import finder
 from spatial.vector import Vector
-from .auxil import suffix_lookup, parse_recipe, write_recipe, parse_node
+from .auxil import suffix_lookup, parse_recipe, write_recipe, parse_node, insert_node
 import pyroSAR
 
 
-def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None):
+def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB'):
     orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
                     'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
 
@@ -77,8 +76,15 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
             'AXIS["Geodetic longitude", EAST],' \
             'AXIS["Geodetic latitude", NORTH]]'
     ############################################
-    dB = workflow.find('.//node[@id="LinearToFromdB"]')
-    dB.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
+    if scaling is 'dB':
+        lin2db = parse_node('lin2db')
+        insert_node(workflow, 'Terrain-Correction', lin2db)
+
+        lin2db = workflow.find('.//node[@id="LinearToFromdB"]')
+        lin2db.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
+
+    # dB = workflow.find('.//node[@id="LinearToFromdB"]')
+    # dB.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
     ############################################
     write = workflow.find('.//node[@id="Write"]')
     write.find('.//parameters/file').text = outname
@@ -93,10 +99,10 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
             raise RuntimeError('no bounding box intersection between shapefile and scene')
         wkt = bounds.convert2wkt()[0]
         subset = parse_node('subset')
-        position = list(workflow).index(read)+1
-        workflow.insert(position, subset)
-        subset = workflow[position]
-        workflow[position+1].find('.//sources/sourceProduct').attrib['refid'] = 'Subset'
+
+        insert_node(workflow, 'Read', subset)
+
+        subset = workflow.find('.//node[@id="Subset"]')
         subset.find('.//parameters/region').text = ','.join(map(str, [0, 0, id.samples, id.lines]))
         subset.find('.//parameters/geoRegion').text = wkt
         ############################################
