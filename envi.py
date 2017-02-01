@@ -20,8 +20,10 @@ from gamma import ISPPar
 from ancillary import union
 
 
-# write ENVI header files
 def hdr(data, filename='same'):
+    """
+    write ENVI header files
+    """
     hdrobj = data if isinstance(data, HDRobject) else HDRobject(data)
     hdrobj.write(filename)
 
@@ -43,9 +45,11 @@ def get_envi_header_dict(hdr):
     return dict(matches)
 
 
-# create ENVI hdr file object from existing .par or .hdr file
-# for creating new headers from .par files currently only EQA and UTM projections with WGS-84 ellipsoid are supported
 class HDRobject(object):
+    """
+    create ENVI hdr file object from existing .par or .hdr file
+    for creating new headers from .par files currently only EQA and UTM projections with WGS-84 ellipsoid are supported
+    """
     def __init__(self, parfile='None'):
         self.filename = 'None' if parfile == 'None' else parfile
         if re.search('.hdr$', parfile):
@@ -105,8 +109,10 @@ class HDRobject(object):
                 for arg in args:
                     setattr(self, arg, args[arg])
 
-    # write object to an ENVI header file
     def write(self, filename='same'):
+        """
+        write object to an ENVI header file
+        """
         filename = os.path.splitext(self.filename)[0]+'.hdr' if filename is 'same' else filename
         with open(filename, 'w') as out:
             out.write('ENVI\n')
