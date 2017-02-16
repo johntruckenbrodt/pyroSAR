@@ -1,6 +1,6 @@
 ##############################################################
 # GDAL wrapper for convenient raster data handling and processing
-# John Truckenbrodt 2015-2016
+# John Truckenbrodt 2015-2017
 ##############################################################
 
 """
@@ -55,7 +55,10 @@ class Raster(object):
         self.projection = self.raster.GetProjection()
         self.srs = osr.SpatialReference(wkt=self.projection)
         self.proj4 = self.srs.ExportToProj4()
-        self.epsg = spatial.auxil.crsConvert(self.srs, "epsg")
+        try:
+            self.epsg = spatial.auxil.crsConvert(self.srs, "epsg")
+        except RuntimeError:
+            self.epsg = None
         self.geogcs = self.srs.GetAttrValue("geogcs")
         self.projcs = self.srs.GetAttrValue("projcs") if self.srs.IsProjected() else None
         self.geo = dict(zip(["xmin", "xres", "rotation_x", "ymax", "rotation_y", "yres"], self.raster.GetGeoTransform()))
@@ -402,20 +405,21 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
 
     if layernames is not None:
         if len(layernames) != len(srcfiles):
-            raise IOError("mismatch between number of source file groups and layernames")
+            raise IOError('mismatch between number of source file groups and layernames')
 
     if not isinstance(targetres, list) and len(targetres) != 2:
-        raise IOError("targetres must be a list with two entries for x and y resolution")
+        raise IOError('targetres must be a list with two entries for x and y resolution')
 
+    # todo: bug in situation when srcfiles contains only one list of files to be mosaicked
     if len(srcfiles) == 1:
-        raise IOError("only one file specified; nothing to be done")
+        raise IOError('only one file specified; nothing to be done')
 
-    if resampling not in ["near", "bilinear", "cubic", "cubicspline", "lanczos", "average", "mode",  "max", "min", "med", "Q1", "Q3"]:
-        raise IOError("resampling method not supported")
+    if resampling not in ['near', 'bilinear', 'cubic', 'cubicspline', 'lanczos', 'average', 'mode',  'max', 'min', 'med', 'Q1', 'Q3']:
+        raise IOError('resampling method not supported')
 
     projections = list(set([Raster(x).projection for x in dissolve(srcfiles)]))
     if len(projections) > 1:
-        raise IOError("raster projection mismatch")
+        raise IOError('raster projection mismatch')
     else:
         srs = projections[0]
 
@@ -424,7 +428,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
         shp = shapefile if isinstance(shapefile, spatial.vector.Vector) else spatial.vector.Vector(shapefile)
         shp.reproject(srs)
         ext = shp.extent
-        arg_ext = ["-te", ext["xmin"], ext["ymin"], ext["xmax"], ext["ymax"]]
+        arg_ext = ['-te', ext['xmin'], ext['ymin'], ext['xmax'], ext['ymax']]
 
         for i in range(len(srcfiles)):
             group = sorted(srcfiles[i], key=sortfun) if isinstance(srcfiles[i], list) else [srcfiles[i]]
@@ -440,19 +444,19 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
         arg_ext = []
 
     # define warping arguments
-    arg_targetres = dissolve(["-tr", targetres]) if targetres is not None else []
-    arg_srcnodata = ["-srcnodata", srcnodata] if srcnodata is not None else []
-    arg_dstnodata = ["-dstnodata", dstnodata] if dstnodata is not None else []
-    arg_resampling = ["-r", resampling] if resampling is not None else []
-    arg_format = ["-of", "GTiff" if separate else "ENVI"]
-    arg_overwrite = ["-overwrite"] if overwrite else []
+    arg_targetres = dissolve(['-tr', targetres]) if targetres is not None else []
+    arg_srcnodata = ['-srcnodata', srcnodata] if srcnodata is not None else []
+    arg_dstnodata = ['-dstnodata', dstnodata] if dstnodata is not None else []
+    arg_resampling = ['-r', resampling] if resampling is not None else []
+    arg_format = ['-of', 'GTiff' if separate else 'ENVI']
+    arg_overwrite = ['-overwrite'] if overwrite else []
 
     # create VRT files for mosaicing
     vrtlist = []
     for i in range(len(srcfiles)):
         base = srcfiles[i][0] if isinstance(srcfiles[i], list) else srcfiles[i]
-        vrt = os.path.join(os.path.dirname(dstfile), os.path.splitext(os.path.basename(base))[0]+".vrt")
-        run(["gdalbuildvrt", "-overwrite", arg_srcnodata, arg_ext, vrt, srcfiles[i]])
+        vrt = os.path.join(os.path.dirname(dstfile), os.path.splitext(os.path.basename(base))[0]+'.vrt')
+        run(['gdalbuildvrt', '-overwrite', arg_srcnodata, arg_ext, vrt, srcfiles[i]])
         srcfiles[i] = vrt
         vrtlist.append(vrt)
 
@@ -465,24 +469,24 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     if separate:
         if not os.path.isdir(dstfile):
             os.makedirs(dstfile)
-        dstfiles = [os.path.join(dstfile, x)+".tif" for x in bandnames]
+        dstfiles = [os.path.join(dstfile, x)+'.tif' for x in bandnames]
 
-        arg_compression = ["-co", "COMPRESS=DEFLATE", "-co", "PREDICTOR=2"]
+        arg_compression = ['-co', 'COMPRESS=DEFLATE', '-co', 'PREDICTOR=2']
 
         for i in range(len(srcfiles)):
-            run(["gdalwarp", "-q", "-multi", "-overwrite", arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, arg_compression, srcfiles[i], dstfiles[i]])
+            run(['gdalwarp', '-q', '-multi', '-overwrite', arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, arg_compression, srcfiles[i], dstfiles[i]])
     else:
         # create VRT for stacking
-        vrt = os.path.splitext(dstfile)[0]+".vrt"
-        run(["gdalbuildvrt", "-q", arg_overwrite, "-separate", arg_srcnodata, arg_ext, vrt, srcfiles])
+        vrt = os.path.splitext(dstfile)[0]+'.vrt'
+        run(['gdalbuildvrt', '-q', arg_overwrite, '-separate', arg_srcnodata, arg_ext, vrt, srcfiles])
         vrtlist.append(vrt)
 
         # warp files
-        run(["gdalwarp", "-q", "-multi", arg_overwrite, arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, vrt, dstfile])
-        # ["--config", "GDAL_CACHEMAX", 2000, "-wm", 6000, "-co", "INTERLEAVE="+interleave]
+        run(['gdalwarp', '-q', '-multi', arg_overwrite, arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, vrt, dstfile])
+        # ['--config', 'GDAL_CACHEMAX', 2000, '-wm', 6000, '-co', 'INTERLEAVE='+interleave]
 
         # edit ENVI HDR files to contain specific layer names
-        par = envi.HDRobject(dstfile + ".hdr")
+        par = envi.HDRobject(dstfile + '.hdr')
         par.band_names = bandnames
         envi.hdr(par)
 
