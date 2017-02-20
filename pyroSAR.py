@@ -1,6 +1,6 @@
 ##############################################################
 # Reading and Organizing system for SAR images
-# John Truckenbrodt, Felix Cremer 2016
+# John Truckenbrodt, Felix Cremer 2016-2017
 ##############################################################
 """
 this script is intended to contain several SAR scene identifier classes to read basic metadata from the scene folders/files, convert to GAMMA format and do simple pre-processing
@@ -10,8 +10,10 @@ import os
 import re
 import abc
 import ssl
+import math
 import sqlite3
 import StringIO
+import numpy as np
 import zipfile as zf
 import tarfile as tf
 from urllib2 import urlopen
@@ -20,7 +22,7 @@ from time import strptime, strftime
 from datetime import datetime, timedelta
 
 from osgeo import gdal, ogr, osr
-from osgeo.gdalconst import GA_ReadOnly
+from osgeo.gdalconst import GA_ReadOnly, GA_Update
 
 import envi
 import gamma
@@ -336,7 +338,7 @@ class ID(object):
 #     # todo: add a pattern to check if the scene could be handled by CEOS
 #     def __init__(self, scene):
 #
-#         raise IOError
+#         # raise IOError
 #
 #         self.gdalinfo(scene)
 #         self.sensor = self.CEOS_MISSION_ID
@@ -361,7 +363,7 @@ class ID(object):
 #             outname = os.path.join(directory, self.outname_base+'_VV_slc')
 #             lea = os.path.join(self.scene, 'LEA_01.001')
 #             title = os.path.basename(self.findfiles('\.PS$')[0]).replace('.PS', '')
-#             run(['par_ESA_ERS', lea, outname+'.par', self.file, outname], inlist=[title])
+#             gamma.process(['par_ESA_ERS', lea, outname+'.par', self.file, outname], inlist=[title])
 #         else:
 #             raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
 #
@@ -378,7 +380,6 @@ class ID(object):
 
 class ESA(ID):
     """Handle SAR data in ESA format"""
-
     def __init__(self, scene):
 
         self.pattern = r'(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_))_[012B][CP])' \
@@ -481,11 +482,6 @@ class ESA(ID):
         self._unpack(outdir)
 
 
-# id = identify('/geonfs01_vol1/ve39vem/swos_archive/ASA_APP_1PTDPA20040102_102928_000000162023_00051_09624_0240.N1.zip')
-# id = identify('/geonfs01_vol1/ve39vem/swos_archive/SAR_IMP_1PXASI19920419_110159_00000017C083_00323_03975_8482.E1.zip')
-# id = identify('/geonfs01_vol1/ve39vem/swos_archive/SAR_IMP_1PXASI19950723_083726_00000017A002_00479_01335_0757.E2.zip')
-
-
 # class RS2(ID):
 #     def __init__(self, scene):
 #
@@ -520,18 +516,17 @@ class SAFE(ID):
 
         self.scene = os.path.realpath(scene)
 
-        # todo: check whether the polarization naming convention has changed; now posssible: VV (used to be SV)
         self.pattern = r'^(?P<sensor>S1[AB])_' \
                        r'(?P<beam>S1|S2|S3|S4|S5|S6|IW|EW|WV|EN|N1|N2|N3|N4|N5|N6|IM)_' \
                        r'(?P<product>SLC|GRD|OCN)(?:F|H|M|_)_' \
                        r'(?:1|2)' \
                        r'(?P<category>S|A)' \
-                       r'(?P<pols>SH|SV|DH|DV|VV|HH)_' \
+                       r'(?P<pols>SH|SV|DH|DV|VV|HH|HV|VH)_' \
                        r'(?P<start>[0-9]{8}T[0-9]{6})_' \
                        r'(?P<stop>[0-9]{8}T[0-9]{6})_' \
-                       r'(?:[0-9]{6})_' \
-                       r'(?:[0-9A-F]{6})_' \
-                       r'(?:[0-9A-F]{4})' \
+                       r'(?P<orbitNumber>[0-9]{6})_' \
+                       r'(?P<dataTakeID>[0-9A-F]{6})_' \
+                       r'(?P<productIdentifier>[0-9A-F]{4})' \
                        r'\.SAFE$'
 
         self.pattern_ds = r'^s1[ab]-' \
@@ -570,10 +565,119 @@ class SAFE(ID):
 
         self.gammafiles = {'slc': [], 'pri': [], 'grd': []}
 
+    def removeGRDBorderNoise(self):
+        """
+        mask out Sentinel-1 image border noise
+        """
+        if self.compression is not None:
+            raise RuntimeError('scene is not yet unpacked')
+
+        # compute noise scaling factor
+        if self.meta['IPF_version'] < 2.5:
+            knoise = {'IW': 75088.7, 'EW': 56065.87}[self.acquisition_mode]
+            cads = self.getFileObj(self.findfiles('calibration-s1[ab]-[ie]w-grd-(?:hh|vv)')[0])
+            caltree = ET.fromstring(cads.read())
+            cads.close()
+            adn = float(caltree.find('.//calibrationVector/dn').text.split()[0])
+            if self.meta['IPF_version'] < 2.34:
+                scalingFactor = knoise * adn
+            else:
+                scalingFactor = knoise * adn * adn
+        else:
+            scalingFactor = 1
+
+        noisefile = self.getFileObj(self.findfiles('noise-s1[ab]-[ie]w-grd-(?:hh|vv)')[0])
+        noisetree = ET.fromstring(noisefile.read())
+        noisefile.close()
+        noiseVectors = noisetree.findall('.//noiseVector')
+
+        # define boundaries of image subsets to be masked
+        subsets = [(0, 0, 2000, self.lines),
+                   (0, 0, self.samples, 2000),
+                   (self.samples - 2000, 0, self.samples, self.lines),
+                   (0, self.lines - 2000, self.samples, self.lines)]
+
+        # extract row and column indices of noise vectors
+        xi = map(int, noiseVectors[0].find('pixel').text.split())
+        yi = np.array([int(x.find('line').text) for x in noiseVectors])
+
+        master = self.findfiles('s1.*(?:vv|hh).*tiff')[0]
+
+        ras_master = gdal.Open(master, GA_Update)
+        ras_slaves = [gdal.Open(x, GA_Update) for x in self.findfiles('s1.*tiff') if x != master]
+
+        outband_master = ras_master.GetRasterBand(1)
+        outband_slaves = [x.GetRasterBand(1) for x in ras_slaves]
+
+        # iterate over the four image subsets
+        for subset in subsets:
+            xmin, ymin, xmax, ymax = subset
+            xdiff = xmax - xmin
+            ydiff = ymax - ymin
+            # linear interpolation of noise vectors to array
+            noise_interp = np.empty((ydiff, xdiff), dtype=float)
+            for i in range(0, len(noiseVectors)):
+                if ymin <= yi[i] <= ymax:
+                    noise = map(float, noiseVectors[i].find('noiseLut').text.split())
+                    noise_interp[yi[i] - ymin, :] = np.interp(range(0, xdiff), xi, noise)
+            for i in range(0, xdiff):
+                yi_t = yi[(ymin <= yi) & (yi <= ymax)] - ymin
+                noise_interp[:, i] = np.interp(range(0, ydiff), yi_t, noise_interp[:, i][yi_t])
+
+            # read subset of image to array and subtract interpolated noise
+            mat_master = outband_master.ReadAsArray(*[xmin, ymin, xdiff, ydiff])
+            denoisedBlock = mat_master.astype(float) ** 2 - noise_interp * scalingFactor
+            denoisedBlock[(denoisedBlock < 0.5) | (mat_master < 30)] = 0
+            denoisedBlock = np.sqrt(denoisedBlock)
+
+            # mask out negative values
+            def helper1(x):
+                return np.argmax(x > 0)
+
+            def helper2(x):
+                return len(x) - np.argmax(x[::-1] > 0)
+
+            if subset == (0, 0, 2000, self.lines):
+                test = np.apply_along_axis(helper1, 1, denoisedBlock)
+                for j in range(0, ydiff):
+                    denoisedBlock[j, :test[j]] = 0
+                    denoisedBlock[j, test[j]:] = 1
+            elif subset == (0, self.lines - 2000, self.samples, self.lines):
+                test = np.apply_along_axis(helper2, 0, denoisedBlock)
+                for j in range(0, xdiff):
+                    denoisedBlock[test[j]:, j] = 0
+                    denoisedBlock[:test[j], j] = 1
+            elif subset == (self.samples - 2000, 0, self.samples, self.lines):
+                test = np.apply_along_axis(helper2, 1, denoisedBlock)
+                for j in range(0, ydiff):
+                    denoisedBlock[j, test[j]:] = 0
+                    denoisedBlock[j, :test[j]] = 1
+            elif subset == (0, 0, self.samples, 2000):
+                test = np.apply_along_axis(helper1, 0, denoisedBlock)
+                for j in range(0, xdiff):
+                    denoisedBlock[:test[j], j] = 0
+                    denoisedBlock[test[j]:, j] = 1
+
+            mat_master[denoisedBlock == 0] = 0
+            # write modified array back to original file
+            outband_master.WriteArray(mat_master, xmin, ymin)
+            outband_master.FlushCache()
+            for outband in outband_slaves:
+                mat = outband.ReadAsArray(*[xmin, ymin, xdiff, ydiff])
+                mat[denoisedBlock == 0] = 0
+                outband.WriteArray(mat, xmin, ymin)
+                outband.FlushCache()
+        outband_master = None
+        ras_master = None
+        for outband in outband_slaves:
+            outband = None
+        for ras in ras_slaves:
+            ras = None
+
     def calibrate(self, replace=False):
         print 'calibration already performed during import'
 
-    def convert2gamma(self, directory):
+    def convert2gamma(self, directory, noiseremoval=True):
         if self.compression is not None:
             raise RuntimeError('scene is not yet unpacked')
         if self.product == 'OCN':
@@ -590,13 +694,17 @@ class SAFE(ID):
 
             tiff = os.path.join(self.scene, 'measurement', base.replace('.xml', '.tiff'))
             xml_cal = os.path.join(self.scene, 'annotation', 'calibration', 'calibration-' + base)
-            # todo: investigate what the noise file is for
-            # the use of the noise xml file has been found to occasionally cause severe image artifacts of manifold nature and is thus excluded
-            # the reason (GAMMA command error vs. bad SAFE xml file entry) is yet to be discovered
-            # xml_noise = os.path.join(self.scene, 'annotation', 'calibration', 'noise-' + base)
-            xml_noise = '-'
 
             product = match.group('product')
+
+            # specify noise calibration file
+            # L1 GRD product: thermal noise already subtracted, specify xml_noise to add back thermal noise
+            # SLC products: specify noise file to remove noise
+            # xml_noise = '-': noise file not specified
+            if (noiseremoval and product == 'slc') or (not noiseremoval and product == 'grd'):
+                xml_noise = os.path.join(self.scene, 'annotation', 'calibration', 'noise-' + base)
+            else:
+                xml_noise = '-'
 
             fields = (self.outname_base(),
                       match.group('pol').upper(),
@@ -683,16 +791,13 @@ class SAFE(ID):
         meta['product'] = tree.find('.//s1sarl1:productType', namespaces).text
         meta['category'] = tree.find('.//s1sarl1:productClass', namespaces).text
         meta['sensor'] = tree.find('.//safe:familyName', namespaces).text.replace('ENTINEL-', '') + tree.find('.//safe:number', namespaces).text
+        meta['IPF_version'] = float(tree.find('.//safe:software', namespaces).attrib['version'])
 
         return meta
 
     def unpack(self, directory):
         outdir = os.path.join(directory, os.path.basename(self.file))
         self._unpack(outdir)
-
-        # id = identify('/geonfs01_vol1/ve39vem/S1/archive/S1A_EW_GRDM_1SDH_20150408T053103_20150408T053203_005388_006D8D_5FAC.zip')
-
-# id = identify('/geonfs01_vol1/ve39vem/S1/archive/Egypt/S1A_IW_GRDH_1SDV_20141220T155633_20141220T155658_003805_0048BB_CE9B.zip')
 
 
 # todo: remove class ERS and change dependencies to class CEOS (scripts: gammaGUI/reader_ers.py)
