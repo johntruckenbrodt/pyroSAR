@@ -1,6 +1,6 @@
 ##############################################################
 # utility collection for compressed archives
-# John Truckenbrodt 2016
+# John Truckenbrodt 2016-2017
 ##############################################################
 
 import os
@@ -18,6 +18,9 @@ import subprocess as sp
 
 
 def addMember(archive, filename):
+    """
+    add file/directory to a zipped archive
+    """
     handle_archive = zf.ZipFile(archive, 'a',  zf.ZIP_DEFLATED)
     base = os.path.basename(filename)
     if base not in handle_archive.namelist():
@@ -25,10 +28,14 @@ def addMember(archive, filename):
     handle_archive.close()
 
 
-# foldermodes:
-# 0: no folders
-# 1: folders included
 def scan(archive, pattern, foldermode=1):
+    """
+    find files in a compressed archive
+    output is a list with absolute directory names to files matching the defined pattern
+    foldermodes:
+    0: no folders
+    1: folders included
+    """
     files = []
     if isinstance(archive, str):
         archive = os.path.realpath(archive)
@@ -78,8 +85,11 @@ def compress(src, dstname, compression='zip'):
         handle.close()
 
 
-# adapted from 'http://stackoverflow.com/questions/18432565/python-convert-compressed-zip-to-uncompressed-tar'
 def zip2tar(zipfile, tarname, membernames=None):
+    """
+    in-memory conversion of zip archives to tar.gz format
+    adapted from 'http://stackoverflow.com/questions/18432565/python-convert-compressed-zip-to-uncompressed-tar'
+    """
     zip = zipfile if isinstance(zipfile, zf.ZipFile) else zf.ZipFile(zipfile)
     if not tarname.endswith('.tar.gz'):
         tarname += '.tar.gz'
@@ -101,6 +111,9 @@ def zip2tar(zipfile, tarname, membernames=None):
 
 
 def tar2zip(tarfile, zipname, membernames=None):
+    """
+    in-memory conversion of tar.gz archives to zip format
+    """
     if not zipname.endswith('.zip'):
         zipname += '.zip'
     zip = zf.ZipFile(zipname, 'w')
@@ -121,6 +134,9 @@ def tar2zip(tarfile, zipname, membernames=None):
 
 
 def deleteMembers(zipfile, matchlist, regex=False):
+    """
+    delete files/directories matching the defined patterns from a zipped archive
+    """
     pattern = r'|'.join(matchlist if regex else [fnmatch.translate(x) for x in matchlist])
     members_rel = [os.path.relpath(x, zipfile) for x in scan(zipfile, pattern)]
     if len(members_rel) > 0:
