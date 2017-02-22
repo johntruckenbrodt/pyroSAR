@@ -42,6 +42,10 @@ def identify(scene):
 
 
 def filter_processed(scenelist, outdir, recursive=False):
+    """
+    filter a list of pyroSAR objects to those that have not yet been processed and stored in the defined directory
+    the search for processed scenes is either done in the directory only or recursively into subdirectories
+    """
     return [x for x in scenelist if not x.is_processed(outdir, recursive)]
 
 
@@ -398,7 +402,7 @@ class ESA(ID):
                        r'(?P<cycle>[0-9]{3})_' \
                        r'(?P<relative_orbit>[0-9]{5})_' \
                        r'(?P<absolute_orbit>[0-9]{5})_' \
-                       r'(?P<counter>[0-9]{4})\.' \
+                       r'(?P<counter>[0-9]{4,})\.' \
                        r'(?P<satellite_ID>[EN][12])' \
                        r'(?P<extension>(?:\.zip|\.tar\.gz|))$'
 
