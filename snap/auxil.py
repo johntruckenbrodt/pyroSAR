@@ -1,18 +1,25 @@
 
 import os
 import re
+import shutil
+import pyroSAR
 import zipfile as zf
 from ftplib import FTP
 from time import strftime,gmtime
 from urllib2 import urlopen, HTTPError
 import xml.etree.ElementTree as ET
+from xml.dom import minidom
 from cStringIO import StringIO
 from pyroSAR import identify
-from ancillary import dissolve
+from ancillary import dissolve, finder
+import subprocess as sp
 
 suffix_lookup = {'Apply-Orbit-File': 'orb',
                  'Calibration': 'cal',
+                 'Cross-Correlation': '',
                  'LinearToFromdB': 'dB',
+                 'SAR-Simulation': '',
+                 'SARSim-Terrain-Correction': 'stc',
                  'Terrain-Correction': 'tc',
                  'Terrain-Flattening': 'tf',
                  'Read': '',
@@ -35,6 +42,12 @@ def parse_node(name):
     return tree
 
 
+def parse_suffix(workflow):
+    nodes = workflow.findall('node')
+    suffix = '_'.join(filter(None, [suffix_lookup[x] for x in [y.attrib['id'] for y in nodes]]))
+    return suffix
+
+
 def insert_node(workflow, predecessor_id, node):
     predecessor = workflow.find('.//node[@id="{}"]'.format(predecessor_id))
     position = list(workflow).index(predecessor) + 1
@@ -46,8 +59,10 @@ def insert_node(workflow, predecessor_id, node):
 
 def write_recipe(recipe, outfile):
     outfile = outfile if outfile.endswith('.xml') else outfile + '.xml'
+    rough_string = ET.tostring(recipe, 'utf-8')
+    reparsed = minidom.parseString(rough_string)
     with open(outfile, 'w') as out:
-        out.write(ET.tostring(recipe))
+        out.write(reparsed.toprettyxml(indent='\t', newl=''))
 
 
 def getOrbitContentVersions(contentVersion):
@@ -140,3 +155,53 @@ def getAuxdata(datasets, scenes, auxDataPath=os.path.join(os.environ['HOME'], '.
             ftp.quit()
         else:
             print 'not implemented yet'
+
+
+def gpt(xmlfile):
+    """
+    wrapper for ESA SNAP Graph Processing Tool GPT
+    input is a readily formatted workflow xml file as created by function geocode in module snap.util
+    """
+
+    with open(xmlfile, 'r') as infile:
+        workflow = ET.fromstring(infile.read())
+    write = workflow.find('.//node[@id="Write"]')
+    outname = write.find('.//parameters/file').text
+    outdir = os.path.dirname(outname)
+    format = write.find('.//parameters/formatName').text
+    infile = workflow.find('.//node[@id="Read"]/parameters/file').text
+
+    if format == 'GeoTiff-BigTIFF':
+        cmd = ['gpt',
+               # '-Dsnap.dataio.reader.tileWidth=*',
+               # '-Dsnap.dataio.reader.tileHeight=1',
+               '-Dsnap.dataio.bigtiff.tiling.width=256',
+               '-Dsnap.dataio.bigtiff.tiling.height=256',
+               # '-Dsnap.dataio.bigtiff.compression.type=LZW',
+               # '-Dsnap.dataio.bigtiff.compression.quality=0.75',
+               xmlfile]
+    else:
+        cmd = ['gpt', xmlfile]
+
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+    out, err = proc.communicate()
+    if proc.returncode != 0:
+        print err
+        print 'failed: ', os.path.basename(infile)
+        # os.remove(outname + '_proc.xml')
+        if os.path.isfile(outname + '.tif'):
+            os.remove(outname + '.tif')
+        elif os.path.isdir(outname):
+            shutil.rmtree(outname)
+        return
+
+    if format == 'ENVI':
+        id = pyroSAR.identify(infile)
+        suffix = parse_suffix(workflow)
+        for item in finder(outname, ['*.img']):
+            pol = re.search('[HV]{2}', item).group()
+            name_new = os.path.join(outdir, '{}_{}_{}'.format(id.outname_base(), pol, suffix))
+            sp.check_call(['gdal_translate', '-q', '-of', 'GTiff',
+                           '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES',
+                           item, name_new + '.tif'])
+        shutil.rmtree(outname)
