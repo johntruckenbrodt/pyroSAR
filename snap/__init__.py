@@ -1,3 +1,3 @@
 
 from .util import geocode
-from .auxil import getAuxdata
+from .auxil import getAuxdata, gpt
