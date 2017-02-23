@@ -9,8 +9,10 @@ from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_
 import pyroSAR
 
 
-def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB', geocoding_type='Range-Doppler', test=False):
+def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB', geocoding_type='Range-Doppler', test=False, removeS1BoderNoise=True):
     """
+    wrapper function for geocoding SAR images using ESA SNAP
+
     infile: a pyroSAR.ID object or a file/folder name of a SAR scene
     outdir: the directory to write the final files to
     t_srs: a target geographic reference system (a string in WKT or PROJ4 format or a EPSG identifier number)
@@ -20,6 +22,12 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     scaling: should the output be in linear of decibel scaling? Input can be single strings e.g. 'dB' or a list of both: ['linear', 'dB']
     geocoding_type: the type of geocoding applied; can be either 'Range-Doppler' or 'SAR simulation cross correlation'
     test: if set to True the workflow xml file is only written and not executed
+    removeS1BoderNoise: enables removal of S1 GRD border noise
+
+    If only one polarization is selected the results are directly written to GeoTiff.
+    Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTiff files (one for each polarization)
+    If GeoTiff would directly be selected as output format for multiple polarizations then a multilayer GeoTiff
+    is written by SNAP which is considered an unfavorable format
     """
     orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
                     'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
@@ -47,13 +55,26 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     format = 'GeoTiff-BigTIFF' if len(polarizations) == 1 else 'ENVI'
 
     ############################################
+    # Read node configuration
+
     read = workflow.find('.//node[@id="Read"]')
     read.find('.//parameters/file').text = id.scene
     read.find('.//parameters/formatName').text = formatName
     ############################################
+    # Remove-GRD-Border-Noise node configuration
+
+    if id.sensor in ['S1A', 'S1B'] and removeS1BoderNoise:
+        insert_node(workflow, 'Read', parse_node('Remove-GRD-Border-Noise'))
+        bn = workflow.find('.//node[@id="Remove-GRD-Border-Noise"]')
+        bn.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
+    ############################################
+    # orbit file application node configuration
+
     orb = workflow.find('.//node[@id="Apply-Orbit-File"]')
     orb.find('.//parameters/orbitType').text = orbit_lookup[formatName]
     ############################################
+    # calibration node configuration
+
     cal = workflow.find('.//node[@id="Calibration"]')
     if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
         cal.find('.//parameters/selectedPolarisations').text = 'Intensity'
@@ -62,12 +83,16 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     # todo: check whether the following works with Sentinel-1
     cal.find('.//parameters/sourceBands').text = ','.join(['Intensity_' + x for x in polarizations])
     ############################################
+    # terrain flattening node configuration
+
     tf = workflow.find('.//node[@id="Terrain-Flattening"]')
     if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
         tf.find('.//parameters/sourceBands').text = 'Beta0'
     else:
         tf.find('.//parameters/sourceBands').text = ','.join(['Beta0_' + x for x in polarizations])
     ############################################
+    # configuration of node sequence for specific geocoding approaches
+
     if geocoding_type == 'Range-Doppler':
         insert_node(workflow, 'Terrain-Flattening', parse_node('Terrain-Correction'))
         tc = workflow.find('.//node[@id="Terrain-Correction"]')
@@ -96,6 +121,7 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
             'AXIS["Geodetic longitude", EAST],' \
             'AXIS["Geodetic latitude", NORTH]]'
     ############################################
+    # add node for conversion from linear to db scaling
     if scaling is 'dB':
         lin2db = parse_node('lin2db')
         sourceNode = 'Terrain-Correction' if geocoding_type == 'Range-Doppler' else 'SARSim-Terrain-Correction'
@@ -104,9 +130,8 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
         lin2db = workflow.find('.//node[@id="LinearToFromdB"]')
         lin2db.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
 
-    # dB = workflow.find('.//node[@id="LinearToFromdB"]')
-    # dB.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
     ############################################
+    # add subset node and add bounding box coordinates of defined shapefile
     if shapefile:
         shp = shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
         bounds = spatial.bbox(shp.extent, shp.wkt)
@@ -123,7 +148,9 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
         subset.find('.//parameters/region').text = ','.join(map(str, [0, 0, id.samples, id.lines]))
         subset.find('.//parameters/geoRegion').text = wkt
     ############################################
+    # parametrize write node
 
+    # create a suffix for the output file to identify processing steps performed in the workflow
     suffix = parse_suffix(workflow)
 
     if format == 'ENVI':
@@ -135,7 +162,9 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     write.find('.//parameters/file').text = outname
     write.find('.//parameters/formatName').text = format
     ############################################
+    # write workflow to file
     write_recipe(workflow, outname + '_proc')
 
+    # execute the newly written workflow
     if not test:
         gpt(outname + '_proc.xml')
