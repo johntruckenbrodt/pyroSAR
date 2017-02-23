@@ -31,7 +31,7 @@ import spatial.vector
 from ancillary import dissolve, run
 import envi
 
-os.environ["GDAL_PAM_PROXY_DIR"] = "/tmp"
+os.environ['GDAL_PAM_PROXY_DIR'] = '/tmp'
 
 gdal.UseExceptions()
 
@@ -43,7 +43,7 @@ class Raster(object):
             self.filename = filename if os.path.isabs(filename) else os.path.join(os.getcwd(), filename)
             self.raster = gdal.Open(filename, GA_ReadOnly)
         else:
-            raise IOError("file does not exist")
+            raise IOError('file does not exist')
 
         self.cols = self.raster.RasterXSize
         self.rows = self.raster.RasterYSize
@@ -56,25 +56,25 @@ class Raster(object):
         self.srs = osr.SpatialReference(wkt=self.projection)
         self.proj4 = self.srs.ExportToProj4()
         try:
-            self.epsg = spatial.auxil.crsConvert(self.srs, "epsg")
+            self.epsg = spatial.auxil.crsConvert(self.srs, 'epsg')
         except RuntimeError:
             self.epsg = None
-        self.geogcs = self.srs.GetAttrValue("geogcs")
-        self.projcs = self.srs.GetAttrValue("projcs") if self.srs.IsProjected() else None
-        self.geo = dict(zip(["xmin", "xres", "rotation_x", "ymax", "rotation_y", "yres"], self.raster.GetGeoTransform()))
+        self.geogcs = self.srs.GetAttrValue('geogcs')
+        self.projcs = self.srs.GetAttrValue('projcs') if self.srs.IsProjected() else None
+        self.geo = dict(zip(['xmin', 'xres', 'rotation_x', 'ymax', 'rotation_y', 'yres'], self.raster.GetGeoTransform()))
 
         # note: yres is negative!
-        self.geo["xmax"] = self.geo["xmin"] + self.geo["xres"] * self.cols
-        self.geo["ymin"] = self.geo["ymax"] + self.geo["yres"] * self.rows
+        self.geo['xmax'] = self.geo['xmin'] + self.geo['xres'] * self.cols
+        self.geo['ymin'] = self.geo['ymax'] + self.geo['yres'] * self.rows
 
-        self.res = [abs(float(self.geo["xres"])), abs(float(self.geo["yres"]))]
+        self.res = [abs(float(self.geo['xres'])), abs(float(self.geo['yres']))]
         self.nodata = self.raster.GetRasterBand(1).GetNoDataValue()
 
         self.__data = []
 
     @property
     def proj4args(self):
-        args = [x.split("=") for x in re.split("[+ ]*", self.proj4) if len(x) > 0]
+        args = [x.split('=') for x in re.split('[+ ]*', self.proj4) if len(x) > 0]
         return dict([(x[0], None) if len(x) == 1 else tuple(x) for x in args])
 
     @property
@@ -88,10 +88,12 @@ class Raster(object):
             statcollect.append(stats)
         return statcollect
 
-    # assign an array to an existing Raster object
-    def assign(self, array, dim="full"):
+    def assign(self, array, dim='full'):
+        """
+        assign an array to an existing Raster object
+        """
         self.__data = [array]
-        if dim != "full":
+        if dim != 'full':
             shape = array.shape
             if len(shape) == 2:
                 self.bands = 1
@@ -104,28 +106,46 @@ class Raster(object):
             # print self.raster.RasterXSize, self.raster.RasterYSize
 
             self.dim = [self.rows, self.cols, self.bands]
-            self.geo["xmin"] += dim[0] * self.geo["xres"]
-            self.geo["ymax"] += dim[1] * self.geo["yres"]
-            self.geo["xmax"] = self.geo["xmin"] + self.geo["xres"] * self.cols
-            self.geo["ymin"] = self.geo["ymax"] + self.geo["yres"] * self.rows
-            self.raster.SetGeoTransform([self.geo[x] for x in ["xmin", "xres", "rotation_x", "ymax", "rotation_y", "yres"]])
+            self.geo['xmin'] += dim[0] * self.geo['xres']
+            self.geo['ymax'] += dim[1] * self.geo['yres']
+            self.geo['xmax'] = self.geo['xmin'] + self.geo['xres'] * self.cols
+            self.geo['ymin'] = self.geo['ymax'] + self.geo['yres'] * self.rows
+            self.raster.SetGeoTransform([self.geo[x] for x in ['xmin', 'xres', 'rotation_x', 'ymax', 'rotation_y', 'yres']])
 
-    def bbox(self, outname=None, format="ESRI Shapefile", overwrite=True):
+    def bbox(self, outname=None, format='ESRI Shapefile', overwrite=True):
         if outname is None:
             return spatial.util.bbox(self.geo, self.proj4)
         else:
             spatial.util.bbox(self.geo, self.proj4, outname=outname, format=format, overwrite=overwrite)
 
-    # translate raster data type descriptions
     @staticmethod
     def dtypes(typestring):
-        dictionary = {"Byte": GDT_Byte, "Int16": GDT_Int16, "UInt16": GDT_UInt16, "Int32": GDT_Int32, "UInt32": GDT_UInt32, "Float32": GDT_Float32, "Float64": GDT_Float64}
+        """
+        translate raster data type descriptions
+
+        Args:
+            typestring:
+
+        Returns:
+
+        """
+        dictionary = {'Byte': GDT_Byte, 'Int16': GDT_Int16, 'UInt16': GDT_UInt16, 'Int32': GDT_Int32, 'UInt32': GDT_UInt32, 'Float32': GDT_Float32, 'Float64': GDT_Float64}
         return dictionary[typestring]
 
-    # extract weighted average of pixels intersecting with a defined radius to a point
-    # radius is a multiple of the pixel resolution
     def extract(self, px, py, radius=1, no_data=0):
+        """
+        extract weighted average of pixels intersecting with a defined radius to a point
+        radius is a multiple of the pixel resolution
 
+        Args:
+            px:
+            py:
+            radius:
+            no_data:
+
+        Returns:
+
+        """
         xres, yres = self.res
 
         hx = xres / 2.0
@@ -135,15 +155,15 @@ class Raster(object):
         ylim = float(yres * radius)
 
         # compute minimum x and y pixel coordinates
-        xmin = int((px - self.geo["xmin"] - xlim) // xres)
-        ymin = int((self.geo["ymax"] - py - xlim) // yres)
+        xmin = int((px - self.geo['xmin'] - xlim) // xres)
+        ymin = int((self.geo['ymax'] - py - xlim) // yres)
 
         xmin = xmin if xmin >= 0 else 0
         ymin = ymin if ymin >= 0 else 0
 
         # compute maximum x and y pixel coordinates
-        xmax = int((px - self.geo["xmin"] + xlim) // xres) + 2
-        ymax = int((self.geo["ymax"] - py + ylim) // yres) + 2
+        xmax = int((px - self.geo['xmin'] + xlim) // xres) + 2
+        ymax = int((self.geo['ymax'] - py + ylim) // yres) + 2
 
         xmax = xmax if xmax <= self.cols else self.cols
         ymax = ymax if ymax <= self.rows else self.rows
@@ -161,8 +181,8 @@ class Raster(object):
                 if val != no_data:
                     # compute distances of pixel center coordinate to requested point
 
-                    xc = x * xres + hx + self.geo["xmin"]
-                    yc = self.geo["ymax"] - y * yres + hy
+                    xc = x * xres + hx + self.geo['xmin']
+                    yc = self.geo['ymax'] - y * yres + hy
 
                     dx = abs(xc - px)
                     dy = abs(yc - py)
@@ -181,32 +201,54 @@ class Raster(object):
             else:
                 return no_data
 
-    # get specific raster layer information objects
     def layers(self):
+        """
+        get specific raster layer information objects
+
+        Returns:
+
+        """
         return [self.raster.GetRasterBand(band) for band in range(1, self.bands + 1)]
 
-    # load all raster data to arrays
-    def load(self, dim="full"):
-        dim = [0, 0, self.cols, self.rows] if dim == "full" else dim
+    def load(self, dim='full'):
+        """
+        load all raster data to arrays
+
+        Args:
+            dim:
+
+        Returns:
+
+        """
+        dim = [0, 0, self.cols, self.rows] if dim == 'full' else dim
         for i in range(1, self.bands + 1):
             self.__data.append(self.matrix(i, dim))
 
-    # returns an array of a raster band
-    def matrix(self, band=1, dim="full"):
-        dim = [0, 0, self.cols, self.rows] if dim == "full" else dim
+    def matrix(self, band=1, dim='full'):
+        """
+        returns an array of a raster band
+
+        Args:
+            band:
+            dim:
+
+        Returns:
+
+        """
+        dim = [0, 0, self.cols, self.rows] if dim == 'full' else dim
         if len(self.__data) >= band:
             return self.__data[band - 1][dim[1]:dim[3], dim[0]:dim[2]]
         else:
             return self.raster.GetRasterBand(band).ReadAsArray(*dim)
 
     # compute basic statistic measures from selected bands (provided by either single integer keys or a list of integers)
-    # def getstat(self, statistic, bands="all"):
-    #     statistics = {"min": 0, "max": 1, "mean": 2, "sdev": 3}
+    # def getstat(self, statistic, bands='all'):
+    #     statistics = {'min': 0, 'max': 1, 'mean': 2, 'sdev': 3}
     #     if statistic not in statistics:
-    #         raise IOError("statistic not supported")
+    #         raise IOError('statistic not supported')
     #     if type(bands) == int:
     #         return self.allstats[bands-1][statistics[statistic]]
-    #     elif bands == "all":
+    #     elif bands == 'all':
     #         return [self.allstats[x-1][statistics[statistic]] for x in range(1, self.bands+1)]
     #     elif type(bands) == list:
     #         return [self.allstats[x-1][statistics[statistic]] for x in bands]
@@ -217,7 +259,7 @@ class Raster(object):
     #     ext = Extent(self)
     #     inter = util.intersect(self, clipobject)
     #     if inter is None:
-    #         raise IOError("no extent overlap")
+    #         raise IOError('no extent overlap')
     #     clip = [int(ceil((inter.left-ext.left)/self.res[0])), int(ceil((ext.top-inter.top)/self.res[1])),
     #             int(floor((inter.right-inter.left)/self.res[0])), int(floor((inter.top-inter.bottom)/self.res[1]))]
     #     if outname is not None:
@@ -225,16 +267,24 @@ class Raster(object):
     #     else:
     #         return clip
 
-    # remove all lines and columns containing only no data values
-    def reduce(self, outname=None, format="ENVI"):
+    def reduce(self, outname=None, format='ENVI'):
+        """
+        remove all lines and columns containing only no data values
 
+        Args:
+            outname:
+            format:
+
+        Returns:
+
+        """
         if self.bands != 1:
-            raise ValueError("only single band images supported")
+            raise ValueError('only single band images supported')
 
         stats = self.allstats[0]
 
         if stats[0] == stats[1]:
-            raise ValueError("file does not contain valid pixels")
+            raise ValueError('file does not contain valid pixels')
 
         # load raster layer into an array
         mat = self.matrix()
@@ -257,11 +307,18 @@ class Raster(object):
         else:
             self.write(outname, dim=[left, top, cols, rows], format=format)
 
-    # perform raster computations with custom functions and assign them to the exitsting raster object in memory
     def rescale(self, function):
+        """
+        perform raster computations with custom functions and assign them to the exitsting raster object in memory
 
+        Args:
+            function:
+
+        Returns:
+
+        """
         if self.bands != 1:
-            raise ValueError("only single band images supported")
+            raise ValueError('only single band images supported')
 
         # load array
         mat = self.matrix()
@@ -275,29 +332,40 @@ class Raster(object):
         # assign newly computed array to raster object
         self.assign(rounded)
 
-    # write the raster object to a file
-    # if the data itself has been loaded to self.data (by function load), the in-memory data will be written to the file, otherwise the data is copied from the source file
-    # the parameter dim gives the opportunity to write a cropped version of the raster file; a dim-formatted list is, for example, returned by function crop
-    def write(self, outname, dtype="default", format="ENVI", dim="full", overwrite=True):
+    def write(self, outname, dtype='default', format='ENVI', dim='full', overwrite=True):
+        """
+        write the raster object to a file
+        if the data itself has been loaded to self.data (by function load), the in-memory data will be written to the file, otherwise the data is copied from the source file
+        the parameter dim gives the opportunity to write a cropped version of the raster file; a dim-formatted list is, for example, returned by function crop
 
+        Args:
+            outname:
+            dtype:
+            format:
+            dim:
+            overwrite:
+
+        Returns:
+
+        """
         # if overwrite:
         #     for item in finder(os.path.basename(outname), [os.path.splitext(os.path.basename(outname))[0]], regex=True):
         #         os.remove(item)
         # else:
-        #     raise RuntimeError("file already exists")
+        #     raise RuntimeError('file already exists')
 
-        if format == "GTiff" and not re.search("\.tif[f]*$", outname):
-            outname += ".tif"
+        if format == 'GTiff' and not re.search('\.tif[f]*$', outname):
+            outname += '.tif'
 
-        dtype = self.dtype if dtype == "default" else dtype
+        dtype = self.dtype if dtype == 'default' else dtype
 
         geo = list(self.raster.GetGeoTransform())
 
-        if dim != "full":
+        if dim != 'full':
             geo[0] += dim[0] * geo[1]
             geo[3] += dim[1] * geo[5]
 
-        dim = [0, 0, self.cols, self.rows] if dim == "full" else dim
+        dim = [0, 0, self.cols, self.rows] if dim == 'full' else dim
         driver = gdal.GetDriverByName(format)
         outDataset = driver.Create(outname, dim[2], dim[3], self.bands, self.dtypes(dtype))
         outDataset.SetMetadata(self.raster.GetMetadata())
@@ -311,21 +379,21 @@ class Raster(object):
             mat = self.raster.GetRasterBand(i).ReadAsArray(*dim) if len(self.__data) == 0 else self.__data[i - 1]
             outband.WriteArray(mat)
             outband.FlushCache()
-        if format == "GTiff":
-            outDataset.SetMetadataItem("TIFFTAG_DATETIME", strftime("%Y:%m:%d %H:%M:%S", gmtime()))
+        if format == 'GTiff':
+            outDataset.SetMetadataItem('TIFFTAG_DATETIME', strftime('%Y:%m:%d %H:%M:%S', gmtime()))
         outDataset = None
 
     # write a png image of three raster bands (provided in a list of 1-based integers); percent controls the size ratio of input and output
     # def png(self, bands, outname, percent=10):
     #     if len(bands) != 3 or max(bands) not in range(1, self.bands+1) or min(bands) not in range(1, self.bands+1):
-    #         print "band indices out of range"
+    #         print 'band indices out of range'
     #         return
-    #     if not outname.endswith(".png"):
-    #         outname += ".png"
-    #     exp_bands = " ".join(["-b "+str(x) for x in bands]).split()
-    #     exp_scale = [["-scale", self.getstat("min", x), self.getstat("max", x), 0, 255] for x in bands]
-    #     exp_size = ["-outsize", str(percent)+"%", str(percent)+"%"]
-    #     cmd = dissolve([["gdal_translate", "-q", "-of", "PNG", "-ot", "Byte"], exp_size, exp_bands, exp_scale, self.filename, outname])
+    #     if not outname.endswith('.png'):
+    #         outname += '.png'
+    #     exp_bands = ' '.join(['-b '+str(x) for x in bands]).split()
+    #     exp_scale = [['-scale', self.getstat('min', x), self.getstat('max', x), 0, 255] for x in bands]
+    #     exp_size = ['-outsize', str(percent)+'%', str(percent)+'%']
+    #     cmd = dissolve([['gdal_translate', '-q', '-of', 'PNG', '-ot', 'Byte'], exp_size, exp_bands, exp_scale, self.filename, outname])
     #     sp.check_call([str(x) for x in cmd])
 
 
@@ -338,11 +406,11 @@ class Extent(object):
         if type(geoobject) == Raster:
             gt = geoobject.geo
             self.proj4 = geoobject.proj4
-            self.all = [gt["xmin"], gt["ymin"], gt["xmax"], gt["ymax"]]
+            self.all = [gt['xmin'], gt['ymin'], gt['xmax'], gt['ymax']]
         elif type(geoobject) == list:
             geoobject = [float(x) for x in geoobject]
             if geoobject[0] > geoobject[2] or geoobject[1] > geoobject[3]:
-                raise ValueError("wrong order of elements; must be [xmin, ymin, xmax, ymax]")
+                raise ValueError('wrong order of elements; must be [xmin, ymin, xmax, ymax]')
             self.all = geoobject
         self.xmin, self.ymin, self.xmax, self.ymax = self.all
         self.area = abs(self.xmax - self.xmin) * abs(self.ymax - self.ymin)
@@ -366,21 +434,21 @@ def intersect(obj1, obj2):
         proj1 = obj1.proj4
     elif type(obj1) == Extent:
         ext1 = obj1
-        if hasattr(obj1, "proj4"):
+        if hasattr(obj1, 'proj4'):
             proj1 = obj1.proj4
     else:
-        raise IOError("type Raster or Extent expected as first argument")
+        raise IOError('type Raster or Extent expected as first argument')
     if type(obj2) == Raster:
         ext2 = Extent(obj2)
         proj2 = obj2.proj4
     elif type(obj2) == Extent:
         ext2 = obj2
-        if hasattr(obj2, "proj4"):
+        if hasattr(obj2, 'proj4'):
             proj2 = obj2.proj4
     else:
-        raise IOError("type Raster or Extent expected as second argument")
+        raise IOError('type Raster or Extent expected as second argument')
     # if proj1 != proj2:
-    #     raise IOError("different projections")
+    #     raise IOError('different projections')
     try:
         intersection = Extent([max(ext1.xmin, ext2.xmin), max(ext1.ymin, ext2.ymin), min(ext1.xmax, ext2.xmax), min(ext1.ymax, ext2.ymax)])
         # intersection.proj4 = proj1
@@ -389,16 +457,16 @@ def intersect(obj1, obj2):
         return None
 
 
-def reproject(rasterobject, reference, outname, resampling="bilinear", format="ENVI"):
+def reproject(rasterobject, reference, outname, resampling='bilinear', format='ENVI'):
     """
     reproject a raster file
     """
     rasterobject = rasterobject if type(rasterobject) == Raster else Raster(rasterobject)
     projection = reference.projection if type(reference) == Raster else reference
-    sp.check_call(["gdalwarp", "-overwrite", "-q", "-r", resampling, "-of", format,
-                   "-tr", str(rasterobject.res[0]), str(rasterobject.res[1]),
-                   "-srcnodata", str(rasterobject.nodata), "-dstnodata", str(rasterobject.nodata),
-                   "-t_srs", projection, rasterobject.filename, outname])
+    sp.check_call(['gdalwarp', '-overwrite', '-q', '-r', resampling, '-of', format,
+                   '-tr', str(rasterobject.res[0]), str(rasterobject.res[1]),
+                   '-srcnodata', str(rasterobject.nodata), '-dstnodata', str(rasterobject.nodata),
+                   '-t_srs', projection, rasterobject.filename, outname])
 
 
 def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None, separate=False, overwrite=False):
