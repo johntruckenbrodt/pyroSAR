@@ -53,46 +53,6 @@
             <reGridMethod>false</reGridMethod>
         </parameters>
     </node>
-    <node id="Terrain-Correction">
-        <operator>Terrain-Correction</operator>
-        <sources>
-            <sourceProduct refid="Terrain-Flattening"/>
-        </sources>
-        <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-            <sourceBands>Gamma0_VH,Gamma0_VV</sourceBands>
-            <demName>SRTM 1Sec HGT</demName>
-            <externalDEMFile/>
-            <externalDEMNoDataValue>0.0</externalDEMNoDataValue>
-            <externalDEMApplyEGM/>
-            <demResamplingMethod>BILINEAR_INTERPOLATION</demResamplingMethod>
-            <imgResamplingMethod>BILINEAR_INTERPOLATION</imgResamplingMethod>
-            <pixelSpacingInMeter>20.0</pixelSpacingInMeter>
-            <mapProjection>GEOGCS[&quot;WGS84(DD)&quot;, &#xd;
-                DATUM[&quot;WGS84&quot;, &#xd;
-                SPHEROID[&quot;WGS84&quot;, 6378137.0, 298.257223563]], &#xd;
-                PRIMEM[&quot;Greenwich&quot;, 0.0], &#xd;
-                UNIT[&quot;degree&quot;, 0.017453292519943295], &#xd;
-                AXIS[&quot;Geodetic longitude&quot;, EAST], &#xd;
-                AXIS[&quot;Geodetic latitude&quot;, NORTH]]
-            </mapProjection>
-            <nodataValueAtSea>true</nodataValueAtSea>
-            <saveDEM>false</saveDEM>
-            <saveLatLon>false</saveLatLon>
-            <saveIncidenceAngleFromEllipsoid>false</saveIncidenceAngleFromEllipsoid>
-            <saveLocalIncidenceAngle>false</saveLocalIncidenceAngle>
-            <saveProjectedLocalIncidenceAngle>false</saveProjectedLocalIncidenceAngle>
-            <saveSelectedSourceBand>true</saveSelectedSourceBand>
-            <outputComplex>false</outputComplex>
-            <applyRadiometricNormalization>false</applyRadiometricNormalization>
-            <saveSigmaNought>false</saveSigmaNought>
-            <saveGammaNought>false</saveGammaNought>
-            <saveBetaNought>false</saveBetaNought>
-            <incidenceAngleForSigma0>Use projected local incidence angle from DEM</incidenceAngleForSigma0>
-            <incidenceAngleForGamma0>Use projected local incidence angle from DEM</incidenceAngleForGamma0>
-            <auxFile>Latest Auxiliary File</auxFile>
-            <externalAuxFile/>
-        </parameters>
-    </node>
     <node id="Write">
         <operator>Write</operator>
         <sources>
