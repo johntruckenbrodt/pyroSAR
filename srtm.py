@@ -2,7 +2,7 @@
 ##############################################################
 # preparation of srtm data for use in gamma
 # module of software gammaGUI
-# John Truckenbrodt 2014-16
+# John Truckenbrodt 2014-17
 ##############################################################
 
 """
@@ -33,6 +33,9 @@ from spatial import raster
 
 
 def main():
+    """
+    legacy compatibility to gammaGUI interface; will be remove in the future
+    """
     print '#############################################'
     print 'preparing SRTM mosaic:'
     # read parameter textfile
