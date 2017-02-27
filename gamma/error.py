@@ -13,6 +13,7 @@ def gammaErrorHandler(message):
                    'window size < 4': ValueError,
                    'MLI oversampling factor must be 1, 2, 4, 8': ValueError,
                    'no points available for determining average intensity': ValueError,
+                   'no overlap with lookup table': RuntimeError,
                    'insufficient offset points to determine offset model parameters': RuntimeError,
                    'insufficient offset points left after culling to determine offset model parameters': RuntimeError,
                    'calloc_1d: number of elements <= 0': ValueError,
