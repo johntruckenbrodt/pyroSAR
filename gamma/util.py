@@ -13,16 +13,18 @@ The approach of the single routines is likely to still have drawbacks and might 
 import os
 import re
 import math
-import envi
 import shutil
 import subprocess as sp
+from collections import OrderedDict
+from osgeo import ogr
+
+import envi
 from . import ISPPar, Spacing, Namespace
 from .error import gammaErrorHandler
 from ancillary import run, Stack, union, finder
 from spatial import haversine
 import pyroSAR
-from collections import OrderedDict
-from osgeo import ogr
+
 
 ogr.UseExceptions()
 
@@ -36,6 +38,9 @@ def process(cmd, outdir=None, logpath=None, inlist=None, void=True):
 
 
 def slc_corners(parfile):
+    """
+    extract the corner soordinates of a SAR scene
+    """
     out, err = process(['SLC_corners', parfile], void=False)
     pts = {}
     for line in out.split('\n'):
@@ -86,25 +91,6 @@ def burstoverlap(slc1_parfile, slc2_parfile, slc1_tops_parfile, slc2_tops_parfil
     return master_select, slave_select
 
 
-# INPUT FILES:
-# -master: master image
-# -slave: image coregistered to the master
-# -off: diffpar parameter file
-# OUTPUT FILES:
-# -offs: offset estimates (fcomplex)
-# -offsets: range and azimuth offsets and cross-correlation data (text format)
-# -ccp: cross-correlation of each patch (0.0->1.0) (float)
-# -coffs: culled range and azimuth offset estimates (fcomplex)
-# -coffsets: culled offset estimates and cross-correlation values (text format)
-# FURTHER INPUT:
-# -path_log: directory for created logfiles (e.g. offset_pwr will create file path_log/offset_pwr.log)
-# -maxwin: maximum (initial) window size for offset search (will be iteratively divided by 2 until the minwin is reached)
-# -minwin: minimum (final) window size
-# -overlap: percentage overlap of the search windows (the number of search windows is computed based on their windows size and the overlap)
-# -poly: the polynomial order for range and azimuth offset fitting
-# -ovs: image oversampling factor for offset estimation
-# -thres: cross-correlation threshold
-# the default value '-' will result in no output file written
 def correlate(master, slave, off, offs, ccp, offsets='-', coffs='-', coffsets='-',
               path_log=None, maxwin=2048, minwin=16, overlap=.3, poly=4, ovs=2,
               thres=0.15):
@@ -131,6 +117,7 @@ def correlate(master, slave, off, offs, ccp, offsets='-', coffs='-', coffsets='-
         poly: the polynomial order for range and azimuth offset fitting
         ovs: image oversampling factor for offset estimation
         thres: cross-correlation threshold
+    the default value '-' will result in no output file written
     """
 
     path_out = os.path.dirname(off)
@@ -529,31 +516,40 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         3: nn-thinned
     """
     if sarsimulation is True:
-        raise RuntimeError(
-            'geocoding with cross correlation offset refinement is currently disabled')
+        raise RuntimeError('geocoding with cross correlation offset refinement is currently disabled')
 
     scene = scene if isinstance(scene, pyroSAR.ID) else pyroSAR.identify(scene)
 
-    if len(finder(outdir, [scene.outname_base()], regex=True, recursive=False)) != 0:
+    for dir in [tempdir, outdir]:
+        if not os.path.isdir(dir):
+            os.makedirs(dir)
+
+    if scene.is_processed(outdir):
         print('scene {} already processed'.format(scene.outname_base()))
         return
 
-    scaling = [scaling] if isinstance(scaling, str) else scaling if isinstance(scaling,
-                                                                               list) else []
+    scaling = [scaling] if isinstance(scaling, str) else scaling if isinstance(scaling, list) else []
     scaling = union(scaling, ['db', 'linear'])
     if len(scaling) == 0:
         raise IOError('wrong input type for parameter scaling')
 
-    scene.unpack(tempdir)
+    if scene.compression is not None:
+        print 'unpacking scene..'
+        scene.unpack(tempdir)
+    else:
+        scene.scene = os.path.join(tempdir, os.path.basename(scene.file))
+        os.makedirs(scene.scene)
 
+    print 'converting scene to GAMMA format..'
     scene.convert2gamma(scene.scene)
 
     if scene.sensor in ['S1A', 'S1B']:
+        print 'updating orbit state vectors..'
         scene.correctOSV()
 
     scene.calibrate()
 
-    images = [x for x in scene.getGammaImages(scene.scene) if x.endswith('_grd')]
+    images = [x for x in scene.getGammaImages(scene.scene) if x.endswith('_grd') or x.endswith('_slc_cal')]
 
     for image in images:
         multilook(image, image + '_mli', targetres)
@@ -611,28 +607,24 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         ######################################################################
         n.appreciate(['pixel_area_coarse'])
         process(
-            ['pixel_area', master + '.par', n.dem_seg + '.par', n.dem_seg, n.lut_coarse,
-             n.ls_map, n.inc, n.pixel_area_coarse], logpath=path_log)
+            ['pixel_area', master + '.par', n.dem_seg + '.par', n.dem_seg, n.lut_coarse, n.ls_map, n.inc, n.pixel_area_coarse], logpath=path_log)
         init_offset(master, n.pixel_area_coarse, n.diff_par, path_log)
         # correlate(master, pixel_area_coarse, diffpar, offs, ccp, coffs=coffs, coffsets=coffsets, offsets=offsets, path_log=path_log, maxwin=256)
         # correlate2(master, pixel_area_coarse, diffpar, offs, ccp, offsets=offsets, coffs=coffs, coffsets=coffsets, path_log=path_log)
         # correlate3(master, pixel_area_coarse, diffpar, offs, ccp, offsets=offsets, coffs=coffs, coffsets=coffsets)
         print '#####################################'
         print 'cross correlation step 1'
-        correlate5(n.pixel_area_coarse, master, n.diff_par, n.offs, n.ccp, n.offsets,
-                   n.coffs, n.coffsets)
+        correlate5(n.pixel_area_coarse, master, n.diff_par, n.offs, n.ccp, n.offsets, n.coffs, n.coffsets)
         print '#####################################'
         print 'cross correlation step 2'
-        correlate5(n.pixel_area_coarse, master, n.diff_par, n.offs, n.ccp, n.offsets,
-                   n.coffs, n.coffsets)
+        correlate5(n.pixel_area_coarse, master, n.diff_par, n.offs, n.ccp, n.offsets, n.coffs, n.coffsets)
         print '#####################################'
         # print 'cross correlation step 3'
         # correlate4(pixel_area_coarse, master, diffpar, offs, ccp, offsets, coffs, coffsets)
         # print '#####################################'
         ######################################################################
         try:
-            process(['gc_map_fine', n.lut_coarse, sim_width, n.diff_par, n.lut_fine, 0],
-                    logpath=path_log)
+            process(['gc_map_fine', n.lut_coarse, sim_width, n.diff_par, n.lut_fine, 0], logpath=path_log)
         except sp.CalledProcessError:
             print '...failed'
             return
@@ -644,17 +636,10 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     # normalization and backward geocoding approach 1 ####################
     ######################################################################
     for image in images:
-        process(
-            ['geocode_back', image, master_par.range_samples, lut_final, image + '_geo',
-             sim_width, '-', func_geoback], logpath=path_log)
-        process(
-            ['product', image + '_geo', n.pix, image + '_geo_pan', sim_width, 1, 1, 0],
-            logpath=path_log)
-        process(['lin_comb', 1, image + '_geo_pan', 0,
-                 math.cos(math.radians(master_par.incidence_angle)),
-                 image + '_geo_pan_flat', sim_width], logpath=path_log)
-        process(['sigma2gamma', image + '_geo_pan_flat', n.inc, image + '_geo_norm',
-                 sim_width], logpath=path_log)
+        process(['geocode_back', image, master_par.range_samples, lut_final, image + '_geo', sim_width, '-', func_geoback], logpath=path_log)
+        process(['product', image + '_geo', n.pix, image + '_geo_pan', sim_width, 1, 1, 0], logpath=path_log)
+        process(['lin_comb', 1, image + '_geo_pan', 0, math.cos(math.radians(master_par.incidence_angle)), image + '_geo_pan_flat', sim_width], logpath=path_log)
+        process(['sigma2gamma', image + '_geo_pan_flat', n.inc, image + '_geo_norm', sim_width], logpath=path_log)
         envi.hdr(n.dem_seg + '.par', image + '_geo_norm.hdr')
     ######################################################################
     # normalization and backward geocoding approach 2 ####################
@@ -674,16 +659,12 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     for image in images:
         for scale in scaling:
             if scale == 'db':
-                process(['linear_to_dB', image + '_geo_norm', image + '_geo_norm_db',
-                         sim_width, 0, -99], logpath=path_log)
+                process(['linear_to_dB', image + '_geo_norm', image + '_geo_norm_db', sim_width, 0, -99], logpath=path_log)
                 envi.hdr(n.dem_seg + '.par', image + '_geo_norm_db.hdr')
             suffix = {'linear': '', 'db': '_db'}[scale]
             infile = image + '_geo_norm{}'.format(suffix)
-            outfile = \
-                os.path.join(outdir,
-                             os.path.basename(image) + '_geo_norm{}.tif'.format(suffix))
-            process(['data2geotiff', n.dem_seg + '.par', infile, 2, outfile],
-                    logpath=path_log)
+            outfile = os.path.join(outdir, os.path.basename(image) + '_geo_norm{}.tif'.format(suffix))
+            process(['data2geotiff', n.dem_seg + '.par', infile, 2, outfile], logpath=path_log)
 
     if scene.sensor in ['S1A', 'S1B']:
         shutil.copyfile(os.path.join(scene.scene, 'manifest.safe'),
@@ -998,19 +979,38 @@ def ovs(parfile, targetres):
 
 
 def multilook(infile, outfile, targetres):
+    """
+    multilooking of SLC and MLI images
+
+    targetres: the target resolution in ground range
+
+    if the image is in slant range the ground range resolution is computed by dividing the range pixel spacing by
+    the sine of the incidence angle
+
+    the looks in range and azimuth are chosen to approximate the target resolution by rounding the ratio between
+    target resolution and ground range/azimuth pixel spacing to the nearest integer
+    """
+    # read the input parameter file
     par = ISPPar(infile + '.par')
 
+    # compute the range looks
     if par.image_geometry == 'SLANT_RANGE':
-        groundRangePS = par.range_pixel_spacing / (
-        math.sin(math.radians(par.incidence_angle)))
+        # compute the ground range resolution
+        groundRangePS = par.range_pixel_spacing / (math.sin(math.radians(par.incidence_angle)))
         rlks = int(round(float(targetres) / groundRangePS))
     else:
         rlks = int(round(float(targetres) / par.range_pixel_spacing))
+    # compute the azimuth looks
     azlks = int(round(float(targetres) / par.azimuth_pixel_spacing))
 
+    # set the look factors to 1 if they were computed to be 0
     rlks = rlks if rlks > 0 else 1
     azlks = azlks if azlks > 0 else 1
 
-    process(['multi_look_MLI', infile, infile + '.par', outfile, outfile + '.par',
-             str(rlks), str(azlks)])
+    if par.image_format in ['SCOMPLEX', 'FCOMPLEX']:
+        # multilooking for SLC images
+        process(['multi_look', infile, infile + '.par', outfile, outfile + '.par', rlks, azlks])
+    else:
+        # multilooking for MLI images
+        process(['multi_look_MLI', infile, infile + '.par', outfile, outfile + '.par', rlks, azlks])
     envi.hdr(outfile + '.par')
