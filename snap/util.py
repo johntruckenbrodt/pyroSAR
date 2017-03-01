@@ -9,7 +9,7 @@ from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_
 import pyroSAR
 
 
-def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB', geocoding_type='Range-Doppler', test=False, removeS1BoderNoise=True):
+def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB', geocoding_type='Range-Doppler', test=False, removeS1BoderNoise=True, offset=None):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -23,6 +23,7 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     geocoding_type: the type of geocoding applied; can be either 'Range-Doppler' or 'SAR simulation cross correlation'
     test: if set to True the workflow xml file is only written and not executed
     removeS1BoderNoise: enables removal of S1 GRD border noise
+    offset: a tuple defining offsets for left, right, top and bottom in pixels, e.g. (100, 100, 0, 0); this variable is overridden if a shapefile is defined
 
     If only one polarization is selected the results are directly written to GeoTiff.
     Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTiff files (one for each polarization)
@@ -147,6 +148,18 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
         subset = workflow.find('.//node[@id="Subset"]')
         subset.find('.//parameters/region').text = ','.join(map(str, [0, 0, id.samples, id.lines]))
         subset.find('.//parameters/geoRegion').text = wkt
+    ############################################
+    # configure subset node for pixel offsets
+    if offset and not shapefile:
+        subset = parse_node('Subset')
+        insert_node(workflow, 'Read', subset)
+
+        # left, right, top and bottom offset in pixels
+        l, r, t, b = offset
+
+        subset = workflow.find('.//node[@id="Subset"]')
+        subset.find('.//parameters/region').text = ','.join(map(str, [l, t, id.samples-l-r, id.lines-t-b]))
+        subset.find('.//parameters/geoRegion').text = ''
     ############################################
     # parametrize write node
 
