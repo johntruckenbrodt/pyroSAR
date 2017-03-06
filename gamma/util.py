@@ -480,9 +480,28 @@ def correlate5(master, slave, diffpar, offs, ccp, offsets='-', coffs='-', coffse
 
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=2,
-            func_interp=0, sarsimulation=True, cleanup=True):
+            func_interp=0, nodata=(0, -99), sarsimulation=True, cleanup=True):
     """
-    scaling can be either 'linear', 'db' or a list of both (i.e. ['linear', 'db'])
+    scene: the SAR scene to be processed (can be the name of the file or a pyroSAR object)
+    dem: the reference DEM in GAMMA format
+    tempdir: a temporary directory for writing intermediate files
+    outdir: the directory for the final GeoTiff output files
+    targetres: the target resolution in meters
+    scaling: can be either 'linear', 'db' or a list of both (i.e. ['linear', 'db'])
+    func_geoback: backward geocoding interpolation mode (see GAMMA command geocode_back)
+        0: nearest-neighbor
+        1: bicubic spline
+        2: bicubic-log spline, interpolates log(data)
+        3: bicubic-sqrt spline, interpolates sqrt(data)
+        NOTE: bicubic-log spline and bicubic-sqrt spline modes should only be used with non-negative data!
+    func_interp: output lookup table values in regions of layover, shadow, or DEM gaps ( see GAMMA command gc_map)
+        0: set to (0.,0.)
+        1: linear interpolation across these regions
+        2: actual value
+        3: nn-thinned
+    nodata: the nodata values for the output files; defined as a tuple with two values, the first for linear, the second for logarithmic scaling, per default (0,-99)
+    sarsimulation: perform geocoding with SAR simulation cross correlation? If False, geocoding is performed with the Range-Doppler approach using orbit state vectors
+    cleanup: should all files written to the temporary directory during function execution be deleted after processing?
 
     intermediate output files (named <master_MLI>_<suffix>):
     dem: dem subsetted to the extent of the SAR image
@@ -502,18 +521,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     coffsets: culled offset estimates and cross correlation values (text format)
     ccp: cross-correlation of each patch (0.0->1.0) (float)
 
-    func_geoback: backward geocoding interpolation mode (GAMMA command geocode_back)
-        0: nearest-neighbor
-        1: bicubic spline
-        2: bicubic-log spline, interpolates log(data)
-        3: bicubic-sqrt spline, interpolates sqrt(data)
-        NOTE: bicubic-log spline and bicubic-sqrt spline modes should only be used with non-negative data!
 
-    func_interp: output lookup table values in regions of layover, shadow, or DEM gaps (enter '-' for default) (GAMMA command gc_map)
-        0: set to (0.,0.)
-        1: linear interpolation across these regions (default)
-        2: actual value
-        3: nn-thinned
     """
     if sarsimulation is True:
         raise RuntimeError('geocoding with cross correlation offset refinement is currently disabled')
@@ -661,10 +669,14 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
             if scale == 'db':
                 process(['linear_to_dB', image + '_geo_norm', image + '_geo_norm_db', sim_width, 0, -99], logpath=path_log)
                 envi.hdr(n.dem_seg + '.par', image + '_geo_norm_db.hdr')
+                nodata_out = nodata[1]
+            else:
+                nodata_out = nodata[0]
             suffix = {'linear': '', 'db': '_db'}[scale]
             infile = image + '_geo_norm{}'.format(suffix)
             outfile = os.path.join(outdir, os.path.basename(image) + '_geo_norm{}.tif'.format(suffix))
-            process(['data2geotiff', n.dem_seg + '.par', infile, 2, outfile], logpath=path_log)
+
+            process(['data2geotiff', n.dem_seg + '.par', infile, 2, outfile, nodata_out], logpath=path_log)
 
     if scene.sensor in ['S1A', 'S1B']:
         shutil.copyfile(os.path.join(scene.scene, 'manifest.safe'),
