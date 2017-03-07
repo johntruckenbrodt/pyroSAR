@@ -1,3 +1,7 @@
+##############################################################
+# interface for translating GAMMA errors into Python error types
+# John Truckenbrodt 2015-2017
+##############################################################
 
 import re
 
@@ -14,6 +18,7 @@ def gammaErrorHandler(message):
                    'MLI oversampling factor must be 1, 2, 4, 8': ValueError,
                    'no points available for determining average intensity': ValueError,
                    'no overlap with lookup table': RuntimeError,
+                   'nominal terrain altitude (m):      0.000': None,
                    'insufficient offset points to determine offset model parameters': RuntimeError,
                    'insufficient offset points left after culling to determine offset model parameters': RuntimeError,
                    'calloc_1d: number of elements <= 0': ValueError,
