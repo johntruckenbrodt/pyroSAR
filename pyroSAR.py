@@ -81,6 +81,16 @@ class ID(object):
         else:
             return None
 
+    def export2dict(self):
+        """
+        Return the uuid and the metadata that is defined in self.locals as a dictionary
+        """
+        metadata = {item:self.meta[item] for item in self.locals}
+        sq_file = os.path.basename(self.file)
+        title = os.path.splitext(sq_file)[0]
+        metadata['uuid'] = title
+        return metadata
+
     def export2sqlite(self, target=None):
         """
         Export the most important metadata in a sqlite database which is located in the same folder as the source file.
