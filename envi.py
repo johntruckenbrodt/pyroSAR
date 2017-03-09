@@ -1,6 +1,6 @@
 ##############################################################
 # ENVI header management
-# John Truckenbrodt 2015-2016
+# John Truckenbrodt 2015-2017
 ##############################################################
 """
 This script offers functionality for editing ENVI header files
@@ -30,7 +30,9 @@ def hdr(data, filename='same'):
 
 # todo: check whether this function is of benefit
 # http://gis.stackexchange.com/questions/48618/how-to-read-write-envi-metadata-using-gdal
-def get_envi_header_dict(hdr):
+def get_envi_header_dict(hdrfile):
+    with open(hdrfile, 'r') as infile:
+        hdr = infile.read()
     # Get all 'key = {val}' type matches
     regex = re.compile(r'^(.+?)\s*=\s*({\s*.*?\n*.*?})$', re.M | re.I)
     matches = regex.findall(hdr)
@@ -84,7 +86,8 @@ class HDRobject(object):
                 for arg in args:
                     setattr(self, arg, args[arg])
                 # todo: is this all really correct?
-                dtypes = {'FCOMPLEX': 6, 'FLOAT': 4, 'REAL*4': 4, 'INTEGER*2': 2, 'SHORT': 12}
+                # 2x16 bit complex data (SCOMPLEX) is not supported by ENVI, thus float (1x32 bit) is written to the header file
+                dtypes = {'FCOMPLEX': 6, 'SCOMPLEX': 4, 'FLOAT': 4, 'REAL*4': 4, 'INTEGER*2': 2, 'SHORT': 12}
                 self.data_type = dtypes[getattr(par, union(['data_format', 'image_format'], par.__dict__.keys())[0])]
                 if self.data_type == 6:
                     self.complex_function = 'Power'
