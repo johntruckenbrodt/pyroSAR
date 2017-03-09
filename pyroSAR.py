@@ -45,6 +45,7 @@ def filter_processed(scenelist, outdir, recursive=False):
     """
     filter a list of pyroSAR objects to those that have not yet been processed and stored in the defined directory
     the search for processed scenes is either done in the directory only or recursively into subdirectories
+    the scenes must have been processed with pyroSAR in order to follow the right naming scheme
     """
     return [x for x in scenelist if not x.is_processed(outdir, recursive)]
 
@@ -449,12 +450,12 @@ class ESA(ID):
     def convert2gamma(self, directory):
         """
         the command par_ASAR also accepts a K_dB argument in which case the resulting image names will carry the suffix GRD;
-        this is not implemented here but instead in function calibrate
+        this is not implemented here but instead in method calibrate
         """
         self.gammadir = directory
         outname = os.path.join(directory, self.outname_base())
         if len(self.getGammaImages(directory)) == 0:
-            gamma.process(['par_ASAR', self.file, outname])
+            gamma.process(['par_ASAR', os.path.basename(self.file), outname], os.path.dirname(self.file))
             os.remove(outname + '.hdr')
             for item in finder(directory, [os.path.basename(outname)], regex=True):
                 ext = '.par' if item.endswith('.par') else ''
@@ -482,6 +483,17 @@ class ESA(ID):
                 for item in [image, image+'.par', image+'.hdr']:
                     if os.path.isfile(item):
                         os.remove(item)
+        # candidates = [x for x in self.getGammaImages(self.gammadir) if re.search('_slc$', x)]
+        # for image in candidates:
+        #     par = gamma.ISPPar(image+'.par')
+        #     out = image+'_cal'
+        #     fcase = 1 if par.image_format == 'FCOMPLEX' else 3
+        #     gamma.process(['radcal_SLC', image, image + '.par', out, out + '.par', fcase, '-', '-', '-', '-', '-', k_db, inc_ref])
+        #     envi.hdr(out + '.par')
+        #     if replace:
+        #         for item in [image, image+'.par', image+'.hdr']:
+        #             if os.path.isfile(item):
+        #                 os.remove(item)
 
     def unpack(self, directory):
         base_file = os.path.basename(self.file).strip('\.zip|\.tar(?:\.gz|)')
