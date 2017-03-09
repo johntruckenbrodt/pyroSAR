@@ -1,0 +1,87 @@
+<graph id="Graph">
+    <version>1.0</version>
+    <node id="Read">
+        <operator>Read</operator>
+        <sources/>
+        <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+            <file>S1A_IW_GRDH_1SDV_20141220T155633_20141220T155658_003805_0048BB_CE9B.zip</file>
+            <formatName>SENTINEL-1</formatName>
+        </parameters>
+    </node>
+    <node id="Apply-Orbit-File">
+        <operator>Apply-Orbit-File</operator>
+        <sources>
+            <sourceProduct refid="Read"/>
+        </sources>
+        <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+            <orbitType>Sentinel Precise (Auto Download)</orbitType>
+            <polyDegree>3</polyDegree>
+            <continueOnFail>true</continueOnFail>
+        </parameters>
+    </node>
+    <node id="Calibration">
+        <operator>Calibration</operator>
+        <sources>
+            <sourceProduct refid="Apply-Orbit-File"/>
+        </sources>
+        <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+            <sourceBands/>
+            <auxFile>Product Auxiliary File</auxFile>
+            <externalAuxFile/>
+            <outputImageInComplex>false</outputImageInComplex>
+            <outputImageScaleInDb>false</outputImageScaleInDb>
+            <createGammaBand>false</createGammaBand>
+            <createBetaBand>true</createBetaBand>
+            <selectedPolarisations>VH,VV</selectedPolarisations>
+            <outputSigmaBand>false</outputSigmaBand>
+            <outputGammaBand>false</outputGammaBand>
+            <outputBetaBand>true</outputBetaBand>
+        </parameters>
+    </node>
+    <node id="Terrain-Flattening">
+        <operator>Terrain-Flattening</operator>
+        <sources>
+            <sourceProduct refid="Calibration"/>
+        </sources>
+        <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+            <sourceBands>Beta0_VH,Beta0_VV</sourceBands>
+            <demName>SRTM 1Sec HGT</demName>
+            <demResamplingMethod>BICUBIC_INTERPOLATION</demResamplingMethod>
+            <externalDEMFile/>
+            <externalDEMNoDataValue>0.0</externalDEMNoDataValue>
+            <outputSimulatedImage>false</outputSimulatedImage>
+            <reGridMethod>false</reGridMethod>
+        </parameters>
+    </node>
+    <node id="Write">
+        <operator>Write</operator>
+        <sources>
+            <sourceProduct refid="Terrain-Correction"/>
+        </sources>
+        <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+            <file>E:\DATA\SWOS\SNAP\test\output\S1A_IW_GRDH_1SDV_20141005T052515_20141005T052540_002690_003012_763E.tif</file>
+            <formatName>GeoTIFF</formatName>
+        </parameters>
+    </node>
+    <applicationData id="Presentation">
+        <Description/>
+        <node id="Read">
+            <displayPosition x="13.0" y="123.0"/>
+        </node>
+        <node id="Apply-Orbit-File">
+            <displayPosition x="239.0" y="141.0"/>
+        </node>
+        <node id="Calibration">
+            <displayPosition x="340.0" y="24.0"/>
+        </node>
+        <node id="Terrain-Flattening">
+            <displayPosition x="402.0" y="159.0"/>
+        </node>
+        <node id="Terrain-Correction">
+            <displayPosition x="489.0" y="33.0"/>
+        </node>
+        <node id="Write">
+            <displayPosition x="706.0" y="118.0"/>
+        </node>
+    </applicationData>
+</graph>

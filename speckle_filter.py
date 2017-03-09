@@ -1,3 +1,4 @@
+#!/usr/bin/env python2.7
 # ______________________________________________________________________________________________________________
 # |
 # |	NAME:
@@ -18,13 +19,15 @@
 # |_____________________________________________________________________________________________________________
 #
 
-from time import asctime
-from osgeo import gdal
-import raster
-import numpy as np
-from gdalconst import *
-from astropy.convolution import convolve, Box2DKernel
 import argparse
+from time import asctime
+
+import numpy as np
+from astropy.convolution import convolve, Box2DKernel
+from gdalconst import *
+from osgeo import gdal
+
+from spatial import raster
 
 
 # @profile
@@ -216,7 +219,7 @@ def quegan_cube(infile, outfile, kernel, time_kernel, is_list=False, nodata=0.0,
         for band in range(band_count):
             mean_ratio = ratio[band - 1]
             num = 1
-            for time in range(1, (time_kernel - 1) / 2):
+            for time in range(1, (int(time_kernel) - 1) / 2):
                 if band + time in range(band_count):
                     mean_ratio += ratio[band + time]
                     num += 1
@@ -258,9 +261,9 @@ def quegan_cube(infile, outfile, kernel, time_kernel, is_list=False, nodata=0.0,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('input', help='The input file.')
-    parser.add_argument('--kernel', '-k', default=3, help='The size of the moving window')
-    parser.add_argument('--memory', '-m', default=10240, help='The size of the maximal ram')
-    parser.add_argument('--nodata', '-n', default=0, help='The no data value')
+    parser.add_argument('--kernel', '-k', default=3, type=float, help='The size of the moving window')
+    parser.add_argument('--memory', '-m', default=10240, type=float, help='The size of the maximal ram')
+    parser.add_argument('--nodata', '-n', default=0, type=float, help='The no data value')
     parser.add_argument('--islist', '-l', default=False, help='Is it a list?')
     parser.add_argument('--time', '-t', default=None, help='The number of scenes that should be averaged in the time axis. If it is not specified, all time steps are averaged.')
     args = vars(parser.parse_args())

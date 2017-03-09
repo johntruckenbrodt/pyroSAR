@@ -1,0 +1,11 @@
+<node id="Remove-GRD-Border-Noise">
+<operator>Remove-GRD-Border-Noise</operator>
+<sources>
+  <sourceProduct refid="Read"/>
+</sources>
+<parameters class="com.bc.ceres.binding.dom.XppDomElement">
+  <selectedPolarisations>VV</selectedPolarisations>
+  <borderLimit>1000</borderLimit>
+  <trimThreshold>0.5</trimThreshold>
+</parameters>
+</node>

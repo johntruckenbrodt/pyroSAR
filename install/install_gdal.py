@@ -14,10 +14,15 @@ from install.auxil import *
 # the number of CPUs used for compilation
 cores = 20
 
-root = "/homes4/geoinf/ve39vem/gdal"
+# root = "/homes4/geoinf/ve39vem/gdal"
+# downloaddir = os.path.join(root, "originals")
+# packagedir = os.path.join(root, "packages")
+# installdir = os.path.join(root, "local")
+
+root = "/geonfs02_vol2/software/gdal"
 downloaddir = os.path.join(root, "originals")
 packagedir = os.path.join(root, "packages")
-installdir = os.path.join(root, "local")
+installdir = "/geonfs02_vol2/software/.local"
 
 # create installation directories in case they do not exist
 for dir in [root, downloaddir, packagedir, installdir]:
@@ -28,7 +33,7 @@ for dir in [root, downloaddir, packagedir, installdir]:
 modules = ["geos", "proj", "tiff", "geotiff"]
 
 # package version to be used
-versions = {"gdal": "2.1.0",
+versions = {"gdal": "2.1.2",
             "geos": "3.5.0",
             "kml": "1.2.0",
             "htop": "1.0.2",
@@ -174,7 +179,8 @@ else:
     env["LD_LIBRARY_PATH"] = "/usr/local/lib64" + os.pathsep + env["LD_LIBRARY_PATH"]
 
 localdir = localdirs["gdal"]
-build_gdal = os.path.join(localdir, "build")
+# build_gdal = os.path.join(localdir, "build")
+build_gdal = installdir
 
 # define the configuration command
 cmd = ["./configure", "-q", "--prefix={}".format(build_gdal)]+build_ops["gdal"]
@@ -213,3 +219,6 @@ cmd = [sys.executable, "setup.py", "install", "--prefix=" + installdir]
 
 print "...installation"
 execute(cmd, env=env, cwd=os.path.join(localdir, "swig/python"))
+
+# create additional symlink
+execute(["ln", "-s", "libgdal.so.20.1.0", "libgdal.so.1"], cwd=os.path.join(build_gdal, "lib"))

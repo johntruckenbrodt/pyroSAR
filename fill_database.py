@@ -1,5 +1,6 @@
-'''Script to initially fill the database of a folder
-'''
+"""
+Script to initially fill the database of a folder
+"""
 from pyroSAR import identify
 from ancillary import finder
 import getpass
@@ -24,4 +25,5 @@ def fill_db(folder):
         except RuntimeError as e:
             print e
 
-fill_db('../data/')
+if __name__ == 'main':
+    fill_db('../data/')

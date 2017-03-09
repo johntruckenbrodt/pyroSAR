@@ -1,0 +1,27 @@
+<node id="Cross-Correlation">
+<operator>Cross-Correlation</operator>
+<sources>
+  <sourceProduct refid="SAR-Simulation"/>
+</sources>
+<parameters class="com.bc.ceres.binding.dom.XppDomElement">
+  <numGCPtoGenerate>600</numGCPtoGenerate>
+  <coarseRegistrationWindowWidth>128</coarseRegistrationWindowWidth>
+  <coarseRegistrationWindowHeight>128</coarseRegistrationWindowHeight>
+  <rowInterpFactor>2</rowInterpFactor>
+  <columnInterpFactor>2</columnInterpFactor>
+  <maxIteration>10</maxIteration>
+  <gcpTolerance>0.5</gcpTolerance>
+  <applyFineRegistration>true</applyFineRegistration>
+  <inSAROptimized>true</inSAROptimized>
+  <fineRegistrationWindowWidth>32</fineRegistrationWindowWidth>
+  <fineRegistrationWindowHeight>32</fineRegistrationWindowHeight>
+  <fineRegistrationWindowAccAzimuth>16</fineRegistrationWindowAccAzimuth>
+  <fineRegistrationWindowAccRange>16</fineRegistrationWindowAccRange>
+  <fineRegistrationOversampling>16</fineRegistrationOversampling>
+  <coherenceWindowSize>3</coherenceWindowSize>
+  <coherenceThreshold>0.6</coherenceThreshold>
+  <useSlidingWindow>false</useSlidingWindow>
+  <computeOffset>false</computeOffset>
+  <onlyGCPsOnLand>true</onlyGCPsOnLand>
+</parameters>
+</node>
