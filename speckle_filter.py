@@ -73,7 +73,9 @@ def quegan(infile, outfile, kernel, is_list=False,
             print 'BandNummer:'
             print band
             print asctime()
-            srcband = np.split(data.matrix(band), [(maxlines - kernel + 1) * i, (maxlines - kernel + 1) * i + maxlines], axis=0)[1]
+            srcband = \
+            np.split(data.matrix(band), [(maxlines - kernel + 1) * i, (maxlines - kernel + 1) * i + maxlines], axis=0)[
+                1]
             srcband[srcband == nodata] = np.nan
 
             # print srcband.shape
@@ -181,7 +183,9 @@ def quegan_cube(infile, outfile, kernel, time_kernel, is_list=False, nodata=0.0,
             print 'BandNummer:'
             print band
             print asctime()
-            srcband = np.split(data.matrix(band), [(maxlines - kernel + 1) * i, (maxlines - kernel + 1) * i + maxlines], axis=0)[1]
+            srcband = \
+            np.split(data.matrix(band), [(maxlines - kernel + 1) * i, (maxlines - kernel + 1) * i + maxlines], axis=0)[
+                1]
             srcband[srcband == nodata] = np.nan
 
             # print srcband.shape
@@ -256,7 +260,8 @@ def quegan_cube(infile, outfile, kernel, time_kernel, is_list=False, nodata=0.0,
     print "End:", asctime()
     print "##########################################"
 
-def emd(infile, outfile,nodata=0.0, max_memory=10000):
+
+def emd(infile, outfile, nodata=0.0, max_memory=10000):
     print "##########################################"
     print "Start:", asctime()
 
@@ -264,12 +269,12 @@ def emd(infile, outfile,nodata=0.0, max_memory=10000):
         data = raster.Raster(infile)
         band_count = data.bands
     else:
-       band_count = len(infile)
-       data=raster.Raster(infile[0])
-    decomposition=[]
+        band_count = len(infile)
+        data = raster.Raster(infile[0])
+    decomposition = []
     print data.dim
-    things =  data.raster.ReadAsArray()
-    things[things==nodata] = np.nan
+    things = data.raster.ReadAsArray()
+    things[things == nodata] = np.nan
     output = np.zeros_like(things)
     print things.shape
     decomposition = np.empty_like(things)
@@ -277,7 +282,8 @@ def emd(infile, outfile,nodata=0.0, max_memory=10000):
     non_filtered = 0
     for row in range(data.rows):
         for col in range(data.cols):
-            print "Row and column:" row, col
+            print "Row and column:"
+            row, col
             timeseries = things[:, row, col]
 
             timeseries_masked = timeseries[np.logical_not(np.isnan(timeseries))]
@@ -286,34 +292,33 @@ def emd(infile, outfile,nodata=0.0, max_memory=10000):
             try:
                 imfs = deco.decompose()
             except ValueError:
-                imfs=[timeseries_masked]
-                non_filtered+=1
+                imfs = [timeseries_masked]
+                non_filtered += 1
             except TypeError:
-                imfs=[timeseries_masked]
-                non_filtered+=1
-            num_nan =0
+                imfs = [timeseries_masked]
+                non_filtered += 1
+            num_nan = 0
 
             for i in range(len(timeseries)):
                 if np.isnan(timeseries[i]):
-                    num_nan +=1
-                    output[i,row,col] = np.nan
+                    num_nan += 1
+                    output[i, row, col] = np.nan
                 else:
-                    output[i,row,col] = timeseries[i]-imfs[0][i-num_nan]
+                    output[i, row, col] = timeseries[i] - imfs[0][i - num_nan]
 
-            #hhtvis.plot_imfs(timeseries_masked, np.asarray(range(len(timeseries_masked))), imfs)
-    #return hht.EMD(timeseries).decompose()
-    print out
+                    # hhtvis.plot_imfs(timeseries_masked, np.asarray(range(len(timeseries_masked))), imfs)
+    # return hht.EMD(timeseries).decompose()
+    # print out
     print non_filtered
     driver = gdal.GetDriverByName("ENVI")
     out = driver.Create(outfile, data.cols, data.rows, data.bands, GDT_Float32)
 
-
     for band in range(band_count):
-        band+=1
-           # print band
-            #print i
+        band += 1
+        # print band
+        # print i
         maskout = out.GetRasterBand(band)
-        maskout.WriteArray(output[band-1,:,:])
+        maskout.WriteArray(output[band - 1, :, :])
         maskout.FlushCache()
     out.SetGeoTransform(data.raster.GetGeoTransform())
     out.SetProjection(data.raster.GetProjection())
@@ -332,7 +337,8 @@ if __name__ == '__main__':
     parser.add_argument('--memory', '-m', default=10240, type=float, help='The size of the maximal ram')
     parser.add_argument('--nodata', '-n', default=0, type=float, help='The no data value')
     parser.add_argument('--islist', '-l', default=False, help='Is it a list?')
-    parser.add_argument('--time', '-t', default=None, help='The number of scenes that should be averaged in the time axis. If it is not specified, all time steps are averaged.')
+    parser.add_argument('--time', '-t', default=None,
+                        help='The number of scenes that should be averaged in the time axis. If it is not specified, all time steps are averaged.')
     args = vars(parser.parse_args())
 
     infile = args['input']
