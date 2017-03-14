@@ -8,7 +8,7 @@
 This script is intended as a set of generalized processing routines for modularized GAMMA work flows.
 The function parametrization is intended to be applicable to any kind of situation and input data set. Thus, instead of choosing a specific parametrization for the data at hand,
 core parameters are iterated over a set of values in order to find the one best suited for the task.
-The approach of the single routines is likely to still have drawbacks and might fail in certain situation. Testing and suggestions on improvements are very welcome.
+The approach of the single routines is likely to still have drawbacks and might fail in certain situations. Testing and suggestions on improvements are very welcome.
 """
 import os
 import re
@@ -32,7 +32,7 @@ ogr.UseExceptions()
 def process(cmd, outdir=None, logpath=None, inlist=None, void=True):
     log = os.path.join(logpath, cmd[0] + '.log') if logpath else None
     out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False, errorpass=True)
-    gammaErrorHandler(err)
+    gammaErrorHandler(out, err)
     if not void:
         return out, err
 
@@ -480,7 +480,7 @@ def correlate5(master, slave, diffpar, offs, ccp, offsets='-', coffs='-', coffse
 
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=2,
-            func_interp=0, nodata=(0, -99), sarsimulation=True, cleanup=True):
+            func_interp=0, nodata=(0, -99), sarsimulation=True, osvdir=None, cleanup=True):
     """
     scene: the SAR scene to be processed (can be the name of the file or a pyroSAR object)
     dem: the reference DEM in GAMMA format
@@ -494,7 +494,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         2: bicubic-log spline, interpolates log(data)
         3: bicubic-sqrt spline, interpolates sqrt(data)
         NOTE: bicubic-log spline and bicubic-sqrt spline modes should only be used with non-negative data!
-    func_interp: output lookup table values in regions of layover, shadow, or DEM gaps ( see GAMMA command gc_map)
+    func_interp: output lookup table values in regions of layover, shadow, or DEM gaps (see GAMMA command gc_map)
         0: set to (0.,0.)
         1: linear interpolation across these regions
         2: actual value
@@ -520,8 +520,6 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     coffs: culled range and azimuth offset estimates (fcomplex)
     coffsets: culled offset estimates and cross correlation values (text format)
     ccp: cross-correlation of each patch (0.0->1.0) (float)
-
-
     """
     if sarsimulation is True:
         raise RuntimeError('geocoding with cross correlation offset refinement is currently disabled')
@@ -553,7 +551,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
 
     if scene.sensor in ['S1A', 'S1B']:
         print 'updating orbit state vectors..'
-        scene.correctOSV()
+        scene.correctOSV(osvdir)
 
     scene.calibrate()
 
