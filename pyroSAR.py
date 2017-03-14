@@ -5,7 +5,7 @@
 """
 this script is intended to contain several SAR scene identifier classes to read basic metadata from the scene folders/files, convert to GAMMA format and do simple pre-processing
 """
-
+import matplotlib.pyplot as plt
 import os
 import re
 import abc
@@ -27,6 +27,7 @@ from osgeo.gdalconst import GA_ReadOnly, GA_Update
 import envi
 import gamma
 import spatial
+import linesimplify as ls
 from xml_util import getNamespaces
 from ancillary import finder, parse_literal, urlQueryParser
 
@@ -607,6 +608,8 @@ class SAFE(ID):
         if self.compression is not None:
             raise RuntimeError('scene is not yet unpacked')
 
+        blocksize = 2000
+
         # compute noise scaling factor
         if self.meta['IPF_version'] < 2.5:
             knoise = {'IW': 75088.7, 'EW': 56065.87}[self.acquisition_mode]
@@ -627,11 +630,11 @@ class SAFE(ID):
         noisefile.close()
         noiseVectors = noisetree.findall('.//noiseVector')
 
-        # define boundaries of image subsets to be masked (4x the first 2000 lines/samples of the image boundaries)
-        subsets = [(0, 0, 2000, self.lines),
-                   (0, 0, self.samples, 2000),
-                   (self.samples - 2000, 0, self.samples, self.lines),
-                   (0, self.lines - 2000, self.samples, self.lines)]
+        # define boundaries of image subsets to be masked (4x the first lines/samples of the image boundaries)
+        subsets = [(0, 0, blocksize, self.lines),
+                   (0, 0, self.samples, blocksize),
+                   (self.samples - blocksize, 0, self.samples, self.lines),
+                   (0, self.lines - blocksize, self.samples, self.lines)]
 
         # extract row and column indices of noise vectors
         xi = map(int, noiseVectors[0].find('pixel').text.split())
@@ -669,31 +672,35 @@ class SAFE(ID):
 
             # mask out negative values
             def helper1(x):
-                return np.argmax(x > 0)
+                return len(x) - np.argmax(x > 0)
 
             def helper2(x):
                 return len(x) - np.argmax(x[::-1] > 0)
 
-            if subset == (0, 0, 2000, self.lines):
-                test = np.apply_along_axis(helper1, 1, denoisedBlock)
+            if subset == (0, 0, blocksize, self.lines):
+                border = np.apply_along_axis(helper1, 1, denoisedBlock)
+                border = blocksize - np.array(ls.reduce(border))
                 for j in range(0, ydiff):
-                    denoisedBlock[j, :test[j]] = 0
-                    denoisedBlock[j, test[j]:] = 1
-            elif subset == (0, self.lines - 2000, self.samples, self.lines):
-                test = np.apply_along_axis(helper2, 0, denoisedBlock)
+                    denoisedBlock[j, :border[j]] = 0
+                    denoisedBlock[j, border[j]:] = 1
+            elif subset == (0, self.lines - blocksize, self.samples, self.lines):
+                border = np.apply_along_axis(helper2, 0, denoisedBlock)
+                border = ls.reduce(border)
                 for j in range(0, xdiff):
-                    denoisedBlock[test[j]:, j] = 0
-                    denoisedBlock[:test[j], j] = 1
-            elif subset == (self.samples - 2000, 0, self.samples, self.lines):
-                test = np.apply_along_axis(helper2, 1, denoisedBlock)
+                    denoisedBlock[border[j]:, j] = 0
+                    denoisedBlock[:border[j], j] = 1
+            elif subset == (self.samples - blocksize, 0, self.samples, self.lines):
+                border = np.apply_along_axis(helper2, 1, denoisedBlock)
+                border = ls.reduce(border)
                 for j in range(0, ydiff):
-                    denoisedBlock[j, test[j]:] = 0
-                    denoisedBlock[j, :test[j]] = 1
-            elif subset == (0, 0, self.samples, 2000):
-                test = np.apply_along_axis(helper1, 0, denoisedBlock)
+                    denoisedBlock[j, border[j]:] = 0
+                    denoisedBlock[j, :border[j]] = 1
+            elif subset == (0, 0, self.samples, blocksize):
+                border = np.apply_along_axis(helper1, 0, denoisedBlock)
+                border = blocksize - np.array(ls.reduce(border))
                 for j in range(0, xdiff):
-                    denoisedBlock[:test[j], j] = 0
-                    denoisedBlock[test[j]:, j] = 1
+                    denoisedBlock[:border[j], j] = 0
+                    denoisedBlock[border[j]:, j] = 1
 
             mat_master[denoisedBlock == 0] = 0
             # write modified array back to original file
