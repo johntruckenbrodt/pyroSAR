@@ -1,9 +1,9 @@
 ##############################################################
-# core routines for software pythonland
-# John Truckenbrodt 2014-2016
+# core routines for software pyroSAR
+# John Truckenbrodt 2014-2017
 ##############################################################
 """
-This script gathers central functions and object instances for processing SAR images using the software GAMMA within the GUI
+This script gathers central functions and object instances for general applications
 Please refer to the descriptions of the individual functions/instances for details
 """
 
@@ -208,6 +208,17 @@ class ReadPar(object):
                             items[0] = items[0].replace(' ', '_')
                         setattr(self, items[0], entry)
                         self.index.append(items[0])
+
+
+def rescale(inlist, newrange=(0, 1)):
+    """
+    rescale the values in a list between the values in newrange (a tuple with the new minimum and maximum)
+    """
+    OldMax = max(inlist)
+    OldMin = min(inlist)
+    OldRange = OldMax - OldMin
+    NewRange = newrange[1] - newrange[0]
+    return [(((float(x) - OldMin) * NewRange) / OldRange) + newrange[0] for x in inlist]
 
 
 def run(cmd, outdir=None, logfile=None, inlist=None, void=True, errorpass=False):
