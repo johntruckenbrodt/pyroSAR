@@ -6,8 +6,11 @@
 import re
 
 
-def gammaErrorHandler(message):
-    errormessage = message.strip().replace('ERROR: ', '')
+def gammaErrorHandler(out, err):
+    outlines = filter(None, out.split('\n'))
+    errormessages = [x for x in outlines if x.startswith('ERROR')]
+    errormessages.append(err.strip())
+    errormessages = filter(None, [error.replace('ERROR: ', '') for error in errormessages])
     knownErrors = {'image data formats differ': IOError,
                    'cannot open': IOError,
                    'no coverage of SAR image by DEM \(in (?:latitude/northing|longitude/easting)\)': IOError,
@@ -26,7 +29,8 @@ def gammaErrorHandler(message):
                    'multi-look output line:': RuntimeError,
                    'no OPOD state vector found with the required start time!': RuntimeError,
                    'gc_map operates only with slant range geometry, image geometry in SLC_par: GROUND_RANGE': RuntimeError}
-    if errormessage != '':
+    if len(errormessages) > 0:
+        errormessage = errormessages[-1]
         for error in knownErrors:
             if re.search(error, errormessage):
                 errortype = knownErrors[error]
