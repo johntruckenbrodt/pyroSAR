@@ -17,6 +17,7 @@ def gammaErrorHandler(message):
                    'window size < 4': ValueError,
                    'MLI oversampling factor must be 1, 2, 4, 8': ValueError,
                    'no points available for determining average intensity': ValueError,
+                   'p_interp(): time outside of range': RuntimeError,
                    'no overlap with lookup table': RuntimeError,
                    'nominal terrain altitude (m):      0.000': None,
                    'insufficient offset points to determine offset model parameters': RuntimeError,
