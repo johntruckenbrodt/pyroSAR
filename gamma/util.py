@@ -499,7 +499,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         1: linear interpolation across these regions
         2: actual value
         3: nn-thinned
-    nodata: the nodata values for the output files; defined as a tuple with two values, the first for linear, the second for logarithmic scaling, per default (0,-99)
+    nodata: the nodata values for the output files; defined as a tuple with two values, the first for linear, the second for logarithmic scaling, per default (0, -99)
     sarsimulation: perform geocoding with SAR simulation cross correlation? If False, geocoding is performed with the Range-Doppler approach using orbit state vectors
     cleanup: should all files written to the temporary directory during function execution be deleted after processing?
 
@@ -546,12 +546,19 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         scene.scene = os.path.join(tempdir, os.path.basename(scene.file))
         os.makedirs(scene.scene)
 
+    if scene.sensor in ['S1A', 'S1B']:
+        print 'removing border noise..'
+        scene.removeGRDBorderNoise()
+
     print 'converting scene to GAMMA format..'
     scene.convert2gamma(scene.scene)
 
     if scene.sensor in ['S1A', 'S1B']:
         print 'updating orbit state vectors..'
-        scene.correctOSV(osvdir)
+        try:
+            scene.correctOSV(osvdir)
+        except RuntimeError:
+            return
 
     scene.calibrate()
 
@@ -706,14 +713,14 @@ def geocode2(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geob
     coffsets: culled offset estimates and cross correlation values (text format)
     ccp: cross-correlation of each patch (0.0->1.0) (float)
 
-    func_geoback: backward geocoding interpolation mode (GAMMA command geocode_back)
+    func_geoback: backward geocoding interpolation mode (see GAMMA command geocode_back)
         0: nearest-neighbor
         1: bicubic spline
         2: bicubic-log spline, interpolates log(data)
         3: bicubic-sqrt spline, interpolates sqrt(data)
         NOTE: bicubic-log spline and bicubic-sqrt spline modes should only be used with non-negative data!
 
-    func_interp: output lookup table values in regions of layover, shadow, or DEM gaps (enter '-' for default) (GAMMA command gc_map)
+    func_interp: output lookup table values in regions of layover, shadow, or DEM gaps (enter '-' for default) (see GAMMA command gc_map)
         0: set to (0.,0.)
         1: linear interpolation across these regions (default)
         2: actual value
