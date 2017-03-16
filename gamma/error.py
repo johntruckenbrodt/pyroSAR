@@ -7,8 +7,11 @@ import re
 
 
 def gammaErrorHandler(out, err):
-    outlines = filter(None, out.split('\n'))
-    errormessages = [x for x in outlines if x.startswith('ERROR')]
+    if out:
+        outlines = filter(None, out.split('\n'))
+        errormessages = [x for x in outlines if x.startswith('ERROR')]
+    else:
+        errormessages = []
     errormessages.append(err.strip())
     errormessages = filter(None, [error.replace('ERROR: ', '') for error in errormessages])
     knownErrors = {'image data formats differ': IOError,
