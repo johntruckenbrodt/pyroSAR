@@ -16,7 +16,8 @@ import StringIO
 import numpy as np
 import zipfile as zf
 import tarfile as tf
-from urllib2 import urlopen
+import subprocess as sp
+from urllib2 import urlopen, URLError
 import xml.etree.ElementTree as ET
 from time import strptime, strftime
 from datetime import datetime, timedelta
@@ -29,7 +30,7 @@ import gamma
 import spatial
 import linesimplify as ls
 from xml_util import getNamespaces
-from ancillary import finder, parse_literal, urlQueryParser
+from ancillary import finder, parse_literal, urlQueryParser, run
 
 
 def identify(scene):
@@ -54,9 +55,11 @@ def filter_processed(scenelist, outdir, recursive=False):
 # todo: add bounding box info to init and summary methods
 class ID(object):
     """Abstract class for SAR meta data handlers."""
+
     def __init__(self, metadict):
         # additional variables? looks, coordinates, ...
-        locals = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product', 'spacing', 'samples', 'lines']
+        locals = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
+                  'spacing', 'samples', 'lines']
         for item in locals:
             setattr(self, item, metadict[item])
 
@@ -65,7 +68,8 @@ class ID(object):
         if outname is None:
             return spatial.bbox(self.getCorners(), self.projection)
         else:
-            spatial.bbox(self.getCorners(), self.projection, outname=outname, format='ESRI Shapefile', overwrite=overwrite)
+            spatial.bbox(self.getCorners(), self.projection, outname=outname, format='ESRI Shapefile',
+                         overwrite=overwrite)
 
     @abc.abstractmethod
     def calibrate(self, replace=False):
@@ -86,7 +90,7 @@ class ID(object):
         """
         Return the uuid and the metadata that is defined in self.locals as a dictionary
         """
-        metadata = {item:self.meta[item] for item in self.locals}
+        metadata = {item: self.meta[item] for item in self.locals}
         sq_file = os.path.basename(self.file)
         title = os.path.splitext(sq_file)[0]
         metadata['uuid'] = title
@@ -135,7 +139,8 @@ class ID(object):
 
         sq_file = os.path.basename(self.file)
         title = os.path.splitext(sq_file)[0]
-        input = (title, sq_file, self.scene, self.sensor, projection, geom, self.orbit, 'polarisation', 'acquisition', self.start, self.stop)
+        input = (title, sq_file, self.scene, self.sensor, projection, geom, self.orbit, 'polarisation', 'acquisition',
+                 self.start, self.stop)
         try:
             cursor.execute(insert_string, input)
         except sqlite3.IntegrityError as e:
@@ -159,10 +164,12 @@ class ID(object):
 
     def findfiles(self, pattern):
         if os.path.isdir(self.scene):
-            files = [self.scene] if re.search(pattern, os.path.basename(self.scene)) else finder(self.scene, [pattern], regex=True)
+            files = [self.scene] if re.search(pattern, os.path.basename(self.scene)) else finder(self.scene, [pattern],
+                                                                                                 regex=True)
         elif zf.is_zipfile(self.scene):
             with zf.ZipFile(self.scene, 'r') as zip:
-                files = [os.path.join(self.scene, x.strip('/')) for x in zip.namelist() if re.search(pattern, os.path.basename(x.strip('/')))]
+                files = [os.path.join(self.scene, x.strip('/')) for x in zip.namelist() if
+                         re.search(pattern, os.path.basename(x.strip('/')))]
         elif tf.is_tarfile(self.scene):
             tar = tf.open(self.scene)
             files = [os.path.join(self.scene, x) for x in tar.getnames() if re.search(pattern, os.path.basename(x))]
@@ -250,8 +257,10 @@ class ID(object):
             if hasattr(self, 'gammadir'):
                 directory = self.gammadir
             else:
-                raise IOError('directory missing; please provide directory to function or define object attribute "gammadir"')
-        return [x for x in finder(directory, [self.outname_base()], regex=True) if not re.search('\.(?:par|hdr|aux\.xml)$', x)]
+                raise IOError(
+                    'directory missing; please provide directory to function or define object attribute "gammadir"')
+        return [x for x in finder(directory, [self.outname_base()], regex=True) if
+                not re.search('\.(?:par|hdr|aux\.xml)$', x)]
 
     def getHGT(self):
         """
@@ -345,8 +354,20 @@ class ID(object):
                         if item.endswith('/'):
                             os.makedirs(outname)
                         else:
-                            with open(outname, 'w') as outfile:
-                                outfile.write(archive.read(item))
+                            try:
+                                with open(outname, 'w') as outfile:
+                                    outfile.write(archive.read(item))
+                            # note: the following is a pretty ugly workaround. Sentinel-1 Tiffs are occasionally provided with the wrong CRC-32 checksum although the file itself is intact.
+                            # the command unzip unpacks the file first, then throws the error, while the Python zipfile module operates the other way around. If the Python module fails,
+                            # the unzip command can still be operated and the file be used.
+                            # todo: investigate how this can be done any better
+                            except zf.BadZipfile:
+                                cmd = ['unzip', '-j', '-qq', '-o', archive.filename, item, '-d',
+                                       os.path.dirname(outname)]
+                                try:
+                                    sp.check_call(cmd)
+                                except sp.CalledProcessError:
+                                    continue
                 archive.close()
             else:
                 archive.extractall(directory)
@@ -402,6 +423,7 @@ class ID(object):
 
 class ESA(ID):
     """Handle SAR data in ESA format"""
+
     def __init__(self, scene):
 
         self.pattern = r'(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_))_[012B][CP])' \
@@ -439,7 +461,8 @@ class ESA(ID):
         self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
 
         if self.meta['sensor'] == 'ASAR':
-            self.meta['polarizations'] = [y.replace('/', '') for x, y in self.meta.iteritems() if 'TX_RX_POLAR' in x and len(y) == 3]
+            self.meta['polarizations'] = [y.replace('/', '') for x, y in self.meta.iteritems() if
+                                          'TX_RX_POLAR' in x and len(y) == 3]
         elif self.meta['sensor'] in ['ERS1', 'ERS2']:
             self.meta['polarizations'] = ['VV']
 
@@ -489,22 +512,22 @@ class ESA(ID):
         for image in candidates:
             out = image.replace('pri', 'grd')
             gamma.process(['radcal_PRI', image, image + '.par', out, out + '.par', k_db, inc_ref])
-            envi.hdr(out+'.par')
+            envi.hdr(out + '.par')
             if replace:
-                for item in [image, image+'.par', image+'.hdr']:
+                for item in [image, image + '.par', image + '.hdr']:
                     if os.path.isfile(item):
                         os.remove(item)
-        # candidates = [x for x in self.getGammaImages(self.gammadir) if re.search('_slc$', x)]
-        # for image in candidates:
-        #     par = gamma.ISPPar(image+'.par')
-        #     out = image+'_cal'
-        #     fcase = 1 if par.image_format == 'FCOMPLEX' else 3
-        #     gamma.process(['radcal_SLC', image, image + '.par', out, out + '.par', fcase, '-', '-', '-', '-', '-', k_db, inc_ref])
-        #     envi.hdr(out + '.par')
-        #     if replace:
-        #         for item in [image, image+'.par', image+'.hdr']:
-        #             if os.path.isfile(item):
-        #                 os.remove(item)
+                        # candidates = [x for x in self.getGammaImages(self.gammadir) if re.search('_slc$', x)]
+                        # for image in candidates:
+                        #     par = gamma.ISPPar(image+'.par')
+                        #     out = image+'_cal'
+                        #     fcase = 1 if par.image_format == 'FCOMPLEX' else 3
+                        #     gamma.process(['radcal_SLC', image, image + '.par', out, out + '.par', fcase, '-', '-', '-', '-', '-', k_db, inc_ref])
+                        #     envi.hdr(out + '.par')
+                        #     if replace:
+                        #         for item in [image, image+'.par', image+'.hdr']:
+                        #             if os.path.isfile(item):
+                        #                 os.remove(item)
 
     def unpack(self, directory):
         base_file = os.path.basename(self.file).strip('\.zip|\.tar(?:\.gz|)')
@@ -589,7 +612,8 @@ class SAFE(ID):
         ann_xml = self.getFileObj(annotations[0])
         ann_tree = ET.fromstring(ann_xml.read())
         ann_xml.close()
-        self.meta['spacing'] = tuple([float(ann_tree.find('.//{}PixelSpacing'.format(dim)).text) for dim in ['range', 'azimuth']])
+        self.meta['spacing'] = tuple(
+            [float(ann_tree.find('.//{}PixelSpacing'.format(dim)).text) for dim in ['range', 'azimuth']])
         self.meta['samples'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfSamples').text)
         self.meta['lines'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfLines').text)
 
@@ -636,8 +660,7 @@ class SAFE(ID):
                    (self.samples - blocksize, 0, self.samples, self.lines),
                    (0, self.lines - blocksize, self.samples, self.lines)]
 
-        # extract row and column indices of noise vectors
-        xi = map(int, noiseVectors[0].find('pixel').text.split())
+        # extract column indices of noise vectors
         yi = np.array([int(x.find('line').text) for x in noiseVectors])
 
         # create links to the tif files for a master co-polarization and all other polarizations as slaves
@@ -657,10 +680,15 @@ class SAFE(ID):
             noise_interp = np.empty((ydiff, xdiff), dtype=float)
             for i in range(0, len(noiseVectors)):
                 if ymin <= yi[i] <= ymax:
+                    # extract row indices of noise vector
+                    xi = map(int, noiseVectors[i].find('pixel').text.split())
+                    # extract noise values
                     noise = map(float, noiseVectors[i].find('noiseLut').text.split())
+                    # interpolate values along rows
                     noise_interp[yi[i] - ymin, :] = np.interp(range(0, xdiff), xi, noise)
             for i in range(0, xdiff):
                 yi_t = yi[(ymin <= yi) & (yi <= ymax)] - ymin
+                # interpolate values along columns
                 noise_interp[:, i] = np.interp(range(0, ydiff), yi_t, noise_interp[:, i][yi_t])
 
             # read subset of image to array and subtract interpolated noise (denoising)
@@ -679,25 +707,41 @@ class SAFE(ID):
 
             if subset == (0, 0, blocksize, self.lines):
                 border = np.apply_along_axis(helper1, 1, denoisedBlock)
-                border = blocksize - np.array(ls.reduce(border))
+                try:
+                    border = blocksize - np.array(ls.reduce(border))
+                except RuntimeWarning as e:
+                    print e
+                    print self.scene
                 for j in range(0, ydiff):
                     denoisedBlock[j, :border[j]] = 0
                     denoisedBlock[j, border[j]:] = 1
             elif subset == (0, self.lines - blocksize, self.samples, self.lines):
                 border = np.apply_along_axis(helper2, 0, denoisedBlock)
-                border = ls.reduce(border)
+                try:
+                    border = ls.reduce(border)
+                except RuntimeWarning as e:
+                    print e
+                    print self.scene
                 for j in range(0, xdiff):
                     denoisedBlock[border[j]:, j] = 0
                     denoisedBlock[:border[j], j] = 1
             elif subset == (self.samples - blocksize, 0, self.samples, self.lines):
                 border = np.apply_along_axis(helper2, 1, denoisedBlock)
-                border = ls.reduce(border)
+                try:
+                    border = ls.reduce(border)
+                except RuntimeWarning as e:
+                    print e
+                    print self.scene
                 for j in range(0, ydiff):
                     denoisedBlock[j, border[j]:] = 0
                     denoisedBlock[j, :border[j]] = 1
             elif subset == (0, 0, self.samples, blocksize):
                 border = np.apply_along_axis(helper1, 0, denoisedBlock)
-                border = blocksize - np.array(ls.reduce(border))
+                try:
+                    border = blocksize - np.array(ls.reduce(border))
+                except RuntimeWarning as e:
+                    print e
+                    print self.scene
                 for j in range(0, xdiff):
                     denoisedBlock[:border[j], j] = 0
                     denoisedBlock[border[j]:, j] = 1
@@ -760,12 +804,12 @@ class SAFE(ID):
             if product == 'slc':
                 swath = match.group('swath').upper()
                 name = name.replace('{:_<{l}}'.format(self.acquisition_mode, l=len(swath)), swath)
-                cmd = ['par_S1_SLC', tiff, xml_ann, xml_cal, xml_noise, name+'.par', name, name+'.tops_par']
+                cmd = ['par_S1_SLC', tiff, xml_ann, xml_cal, xml_noise, name + '.par', name, name + '.tops_par']
             else:
                 cmd = ['par_S1_GRD', tiff, xml_ann, xml_cal, xml_noise, name + '.par', name]
 
             gamma.process(cmd)
-            envi.hdr(name+'.par')
+            envi.hdr(name + '.par')
             self.gammafiles[product].append(name)
 
     def correctOSV(self, osvdir=None):
@@ -776,10 +820,12 @@ class SAFE(ID):
             osvdir = os.path.join(self.scene, 'osv')
         if not os.path.isdir(osvdir):
             os.makedirs(osvdir)
-        self.getOSV(osvdir)
-        for product in self.gammafiles:
-            for image in self.gammafiles[product]:
-                gamma.process(['OPOD_vec', image + '.par', osvdir], outdir=logdir)
+        try:
+            self.getOSV(osvdir)
+        except URLError:
+            print '..no internet access'
+        for image in self.getGammaImages(self.scene):
+            gamma.process(['OPOD_vec', image + '.par', osvdir], outdir=logdir)
 
     def getCorners(self):
         coordinates = self.meta['coordinates']
@@ -790,8 +836,8 @@ class SAFE(ID):
     def getOSV(self, outdir):
         date = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
 
-        before = (date-timedelta(days=1)).strftime('%Y-%m-%d')
-        after = (date+timedelta(days=1)).strftime('%Y-%m-%d')
+        before = (date - timedelta(days=1)).strftime('%Y-%m-%d')
+        after = (date + timedelta(days=1)).strftime('%Y-%m-%d')
 
         query = dict()
         query['mission'] = self.sensor
@@ -827,16 +873,23 @@ class SAFE(ID):
 
         meta = dict()
         meta['acquisition_mode'] = tree.find('.//s1sarl1:mode', namespaces).text
-        meta['acquisition_time'] = dict([(x, tree.find('.//safe:{}Time'.format(x), namespaces).text) for x in ['start', 'stop']])
+        meta['acquisition_time'] = dict(
+            [(x, tree.find('.//safe:{}Time'.format(x), namespaces).text) for x in ['start', 'stop']])
         meta['start'], meta['stop'] = (self.parse_date(meta['acquisition_time'][x]) for x in ['start', 'stop'])
-        meta['coordinates'] = [tuple([float(y) for y in x.split(',')]) for x in tree.find('.//gml:coordinates', namespaces).text.split()]
+        meta['coordinates'] = [tuple([float(y) for y in x.split(',')]) for x in
+                               tree.find('.//gml:coordinates', namespaces).text.split()]
         meta['orbit'] = tree.find('.//s1:pass', namespaces).text[0]
-        meta['orbitNumbers_abs'] = dict([(x, int(tree.find('.//safe:orbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in ['start', 'stop']])
-        meta['orbitNumbers_rel'] = dict([(x, int(tree.find('.//safe:relativeOrbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in ['start', 'stop']])
+        meta['orbitNumbers_abs'] = dict(
+            [(x, int(tree.find('.//safe:orbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in
+             ['start', 'stop']])
+        meta['orbitNumbers_rel'] = dict(
+            [(x, int(tree.find('.//safe:relativeOrbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in
+             ['start', 'stop']])
         meta['polarizations'] = [x.text for x in tree.findall('.//s1sarl1:transmitterReceiverPolarisation', namespaces)]
         meta['product'] = tree.find('.//s1sarl1:productType', namespaces).text
         meta['category'] = tree.find('.//s1sarl1:productClass', namespaces).text
-        meta['sensor'] = tree.find('.//safe:familyName', namespaces).text.replace('ENTINEL-', '') + tree.find('.//safe:number', namespaces).text
+        meta['sensor'] = tree.find('.//safe:familyName', namespaces).text.replace('ENTINEL-', '') + tree.find(
+            './/safe:number', namespaces).text
         meta['IPF_version'] = float(tree.find('.//safe:software', namespaces).attrib['version'])
 
         return meta
@@ -893,52 +946,121 @@ class SAFE(ID):
 
 
 class Archive(object):
-    def __init__(self, scenelist):
+    def __init__(self, scenelist, header=False, keys=None):
         self.scenelist = scenelist
+        self.reg = {}
+        if keys is None:
+            self.keys = ['sensor', 'acquisition_mode', 'polarizations', 'scene', 'bbox']
         if os.path.isfile(self.scenelist):
-            with open(scenelist, 'r') as infile:
-                self.reg = [os.path.basename(line.split(';')[3]) for line in infile]
+            self.file = open(scenelist, 'a+')
+            if header:
+                self.keys = self.file.readline().strip().split(';')
+            for line in self.file:
+                items = dict(zip(self.keys, line.strip().split(';')))
+                base = os.path.basename(items['scene'])
+                self.reg[base] = items
+            self.file.seek(0)
         else:
-            self.reg = []
+            self.file = open(scenelist, 'w')
+            if header:
+                self.file.write(';'.join(self.keys) + '\n')
+
+    def __enter__(self):
+        return self
 
     def update(self, scenes):
-        scenefile = open(self.scenelist, 'a+' if os.path.isfile(self.scenelist) else 'w')
         for scene in scenes:
             base = os.path.basename(scene)
             if base not in self.reg:
                 try:
                     id = identify(scene)
-                except:
+                except IOError:
+                    print 'failed:', base
                     continue
                 print base
-                items = [id.sensor, id.acquisition_mode, ','.join(id.polarizations), id.scene, id.bbox().convert2wkt()[0]]
-                outline = ';'.join(items) + '\n'
-                scenefile.write(outline)
-                self.reg.append(base)
-        scenefile.close()
+                items = [id.sensor, id.acquisition_mode, ','.join(id.polarizations), id.scene,
+                         id.bbox().convert2wkt()[0]]
+                self.file.write(';'.join(items) + '\n')
+                self.reg[base] = dict(zip(self.keys, items))
 
     def select(self, vectorobject):
         vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
         site_geom = ogr.CreateGeometryFromWkt(vectorobject.convert2wkt()[0])
         selection_site = []
-        with open(self.scenelist, 'r') as infile:
-            for line in infile:
-                scene = line.strip().split(';')[3]
-                geom = ogr.CreateGeometryFromWkt(line.strip().split(';')[4])
-                intersection = geom.Intersection(site_geom)
-                if intersection.GetArea() > 0:
-                    selection_site.append(scene)
+        for entry in self.reg:
+            geom = ogr.CreateGeometryFromWkt(self.reg[entry]['bbox'])
+            intersection = geom.Intersection(site_geom)
+            if intersection.GetArea() > 0:
+                selection_site.append(self.reg[entry]['scene'])
         return selection_site
 
     @property
     def size(self):
         return len(self.reg)
 
-    def change_directory(self, src, dst):
-        src_real = os.path.realpath(src)
-        dst_real = os.path.realpath(dst)
-        with open(self.scenelist, 'rb') as infile:
-            instring = infile.read()
-        outstring = instring.replace(src_real, dst_real)
-        with open(self.scenelist, 'wb') as outfile:
-            outfile.write(outstring)
+    def close(self):
+        self.file.close()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.file.close()
+
+
+# files = finder('/geonfs01_vol1/ve39vem/S1/archive/Egypt', ['S1A*'])
+# af = '/geonfs01_vol1/ve39vem/swos_test/scenelist.txt'
+# with Archive(af, header=True) as archive:
+#     archive.update(files)
+#     select = archive.select(site)
+
+
+# class Archive(object):
+#     def __init__(self, scenelist):
+#         self.scenelist = scenelist
+#         if os.path.isfile(self.scenelist):
+#             with open(scenelist, 'r') as infile:
+#                 self.reg = [os.path.basename(line.split(';')[3]) for line in infile]
+#         else:
+#             self.reg = []
+#
+#     def update(self, scenes):
+#         scenefile = open(self.scenelist, 'a+' if os.path.isfile(self.scenelist) else 'w')
+#         for scene in scenes:
+#             base = os.path.basename(scene)
+#             if base not in self.reg:
+#                 try:
+#                     id = identify(scene)
+#                 except:
+#                     print 'failed:', base
+#                     continue
+#                 print base
+#                 items = [id.sensor, id.acquisition_mode, ','.join(id.polarizations), id.scene,
+#                          id.bbox().convert2wkt()[0]]
+#                 outline = ';'.join(items) + '\n'
+#                 scenefile.write(outline)
+#                 self.reg.append(base)
+#         scenefile.close()
+#
+#     def select(self, vectorobject):
+#         vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
+#         site_geom = ogr.CreateGeometryFromWkt(vectorobject.convert2wkt()[0])
+#         selection_site = []
+#         with open(self.scenelist, 'r') as infile:
+#             for line in infile:
+#                 scene = line.strip().split(';')[3]
+#                 geom = ogr.CreateGeometryFromWkt(line.strip().split(';')[4])
+#                 intersection = geom.Intersection(site_geom)
+#                 if intersection.GetArea() > 0:
+#                     selection_site.append(scene)
+#         return selection_site
+#
+#     @property
+#     def size(self):
+#         return len(self.reg)
+#
+#     def change_directory(self, src, dst):
+#         src_real = os.path.realpath(src)
+#         dst_real = os.path.realpath(dst)
+#         with open(self.scenelist, 'rb') as infile:
+#             instring = infile.read()
+#         outstring = instring.replace(src_real, dst_real)
+#         with open(self.scenelist, 'wb') as outfile:
+#             outfile.write(outstring)
