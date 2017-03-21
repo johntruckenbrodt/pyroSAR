@@ -952,7 +952,7 @@ class Archive(object):
         if keys is None:
             self.keys = ['sensor', 'acquisition_mode', 'polarizations', 'scene', 'bbox']
         if os.path.isfile(self.scenelist):
-            self.file = open(scenelist, 'a+')
+            self.file = open(scenelist, 'a+', 0)
             if header:
                 self.keys = self.file.readline().strip().split(';')
             for line in self.file:
@@ -961,7 +961,7 @@ class Archive(object):
                 self.reg[base] = items
             self.file.seek(0)
         else:
-            self.file = open(scenelist, 'w')
+            self.file = open(scenelist, 'w', 0)
             if header:
                 self.file.write(';'.join(self.keys) + '\n')
 
@@ -994,6 +994,22 @@ class Archive(object):
                 selection_site.append(self.reg[entry]['scene'])
         return selection_site
 
+    def delete(self, filename):
+        for entry in self.reg:
+            if self.reg[entry]['scene'] == filename:
+                del self.reg[entry]
+                break
+        with open(self.scenelist, 'r+') as f:
+            lines = f.readlines()
+            f.seek(0)
+            for line in lines:
+                if not re.search(filename, line):
+                    f.write(line)
+            f.truncate()
+        if os.path.isfile(filename):
+            print filename
+            os.remove(filename)
+
     @property
     def size(self):
         return len(self.reg)
@@ -1004,12 +1020,34 @@ class Archive(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.file.close()
 
-
+# sitename = 'Egypt_Burullus'
+# from spatial import vector
+# from swos.testsites import lookup
+# sites = vector.Vector('/geonfs01_vol1/ve39vem/swos_testsites/Test_Sites_Delimitation_v43.shp')
+# site = sites['Site_Name={}'.format(lookup[sitename])]
 # files = finder('/geonfs01_vol1/ve39vem/S1/archive/Egypt', ['S1A*'])
 # af = '/geonfs01_vol1/ve39vem/swos_test/scenelist.txt'
 # with Archive(af, header=True) as archive:
 #     archive.update(files)
-#     select = archive.select(site)
+#     # archive.delete('/geonfs01_vol1/ve39vem/S1/archive/Egypt/S1A_IW_GRDH_1SDV_20141220T155633_20141220T155658_003805_0048BB_CE9B.zip')
+#     archive.delete('/geonfs01_vol1/ve39vem/S1/archive/Egypt/S1A_IW_GRDH_1SSV_20141216T035207_20141216T035236_003739_004740_D3DD.zip')
+#     # select = archive.select(site)
+#
+#
+# files = finder('/geonfs01_vol3/swos/data/sentinel1/GRD', ['^S1[AB]'], regex=True, recursive=False)
+# invalids = []
+# checkdir = '/geonfs01_vol1/ve39vem/swos_process/zipcheck'
+# for scene in files:
+#     checkfile = os.path.join(checkdir, os.path.basename(scene) + '.txt')
+#     if os.path.isfile(checkfile):
+#         if os.stat(checkfile).st_size > 0:
+#             invalids.append(scene)
+#
+# scenelist = '/geonfs01_vol1/ve39vem/swos_process/SWOS_scenelist'
+# archive = Archive(scenelist)
+# for item in invalids:
+#     archive.delete(item)
+# archive.close()
 
 
 # class Archive(object):
