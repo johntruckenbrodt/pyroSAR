@@ -426,7 +426,7 @@ class ESA(ID):
 
     def __init__(self, scene):
 
-        self.pattern = r'(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_))_[012B][CP])' \
+        self.pattern = r'(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_))_[012B][CP])' \
                        r'(?P<processing_stage_flag>[A-Z])' \
                        r'(?P<originator_ID>[A-Z\-]{3})' \
                        r'(?P<start_day>[0-9]{8})_' \
@@ -441,7 +441,7 @@ class ESA(ID):
                        r'(?P<extension>(?:\.zip|\.tar\.gz|))$'
 
         self.pattern_pid = r'(?P<sat_id>(?:SAR|ASA))_' \
-                           r'(?P<image_mode>(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)))_' \
+                           r'(?P<image_mode>(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_)))_' \
                            r'(?P<processing_level>[012B][CP])'
 
         self.scene = os.path.realpath(scene)
@@ -943,7 +943,6 @@ class SAFE(ID):
 #         antenna = 'antenna_ERS2_UKPAF_x_19970120'
 #     else:
 #         antenna = 'antenna_ERS2'
-
 
 class Archive(object):
     def __init__(self, scenelist, header=False, keys=None):
