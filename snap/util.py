@@ -30,14 +30,15 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     If GeoTiff would directly be selected as output format for multiple polarizations then a multilayer GeoTiff
     is written by SNAP which is considered an unfavorable format
     """
-    orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
-                    'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
 
     id = infile if isinstance(infile, pyroSAR.ID) else pyroSAR.identify(infile)
 
     if id.is_processed(outdir):
         print('scene {} already processed'.format(id.outname_base()))
         return
+
+    ############################################
+    # general setup
 
     if id.sensor in ['ASAR', 'ERS1', 'ERS2']:
         formatName = 'ENVISAT'
@@ -46,14 +47,24 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     else:
         raise RuntimeError('sensor not supported (yet)')
 
-    workflow = parse_recipe('geocode')
-
     if polarizations == 'all':
         polarizations = id.polarizations
     else:
         polarizations = [x for x in polarizations if x in id.polarizations]
 
     format = 'GeoTiff-BigTIFF' if len(polarizations) == 1 else 'ENVI'
+
+    # select DEM type
+    # SRTM 1arcsec is only available between -58 and +60 degrees. If the scene exceeds those latitudes SRTM 3arcsec is selected.
+    if id.getCorners()['xmax'] > 60 or id.getCorners()['xmin'] < -58:
+        demtype = 'SRTM 3Sec'
+    else:
+        demtype = 'SRTM 1Sec HGT'
+
+    ############################################
+    # parse base workflow
+
+    workflow = parse_recipe('geocode')
 
     ############################################
     # Read node configuration
@@ -71,18 +82,26 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     ############################################
     # orbit file application node configuration
 
+    orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
+                    'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
+    orbitType = orbit_lookup[formatName]
+    if formatName == 'ENVISAT' and id.acquisition_mode == 'WSM':
+        orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
+
     orb = workflow.find('.//node[@id="Apply-Orbit-File"]')
-    orb.find('.//parameters/orbitType').text = orbit_lookup[formatName]
+    orb.find('.//parameters/orbitType').text = orbitType
     ############################################
     # calibration node configuration
 
     cal = workflow.find('.//node[@id="Calibration"]')
-    if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
-        cal.find('.//parameters/selectedPolarisations').text = 'Intensity'
+
+    # todo: check whether the following works with Sentinel-1
+    if len(polarizations) > 1:
+        cal.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
+        cal.find('.//parameters/sourceBands').text = ','.join(['Intensity_' + x for x in polarizations])
     else:
         cal.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
-    # todo: check whether the following works with Sentinel-1
-    cal.find('.//parameters/sourceBands').text = ','.join(['Intensity_' + x for x in polarizations])
+        cal.find('.//parameters/sourceBands').text = 'Intensity'
     ############################################
     # terrain flattening node configuration
 
@@ -91,6 +110,7 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
         tf.find('.//parameters/sourceBands').text = 'Beta0'
     else:
         tf.find('.//parameters/sourceBands').text = ','.join(['Beta0_' + x for x in polarizations])
+    tf.find('.//parameters/demName').text = demtype
     ############################################
     # configuration of node sequence for specific geocoding approaches
 
@@ -98,6 +118,7 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
         insert_node(workflow, 'Terrain-Flattening', parse_node('Terrain-Correction'))
         tc = workflow.find('.//node[@id="Terrain-Correction"]')
         tc.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
+        tc.find('.//parameters/demName').text = demtype
     elif geocoding_type == 'SAR simulation cross correlation':
         insert_node(workflow, 'Terrain-Flattening', parse_node('SAR-Simulation'))
         insert_node(workflow, 'SAR-Simulation', parse_node('Cross-Correlation'))
@@ -106,6 +127,7 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
 
         sarsim = workflow.find('.//node[@id="SAR-Simulation"]')
         sarsim.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
+        sarsim.find('.//parameters/demName').text = demtype
     else:
         raise RuntimeError('geocode_type not recognized')
     tc.find('.//parameters/pixelSpacingInMeter').text = str(tr)
