@@ -4,12 +4,12 @@
 ##############################################################
 import os
 import spatial
-from spatial.vector import Vector
 from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt
 import pyroSAR
 
 
-def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB', geocoding_type='Range-Doppler', test=False, removeS1BoderNoise=True, offset=None):
+def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB',
+            geocoding_type='Range-Doppler', removeS1BoderNoise=True, offset=None, externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, test=False):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -21,9 +21,12 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     shapefile: a vector file for subsetting the SAR scene to a test site
     scaling: should the output be in linear of decibel scaling? Input can be single strings e.g. 'dB' or a list of both: ['linear', 'dB']
     geocoding_type: the type of geocoding applied; can be either 'Range-Doppler' or 'SAR simulation cross correlation'
-    test: if set to True the workflow xml file is only written and not executed
     removeS1BoderNoise: enables removal of S1 GRD border noise
     offset: a tuple defining offsets for left, right, top and bottom in pixels, e.g. (100, 100, 0, 0); this variable is overridden if a shapefile is defined
+    externalDEMFile: the absolute path to an external DEM file
+    externalDEMNoDataValue: the no data value of the external DEM. If not specified the function will try to read it from the specified external DEM.
+    externalDEMApplyEGM: apply Earth Gravitational Model to external DEM?
+    test: if set to True the workflow xml file is only written and not executed
 
     If only one polarization is selected the results are directly written to GeoTiff.
     Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTiff files (one for each polarization)
@@ -53,13 +56,6 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
         polarizations = [x for x in polarizations if x in id.polarizations]
 
     format = 'GeoTiff-BigTIFF' if len(polarizations) == 1 else 'ENVI'
-
-    # select DEM type
-    # SRTM 1arcsec is only available between -58 and +60 degrees. If the scene exceeds those latitudes SRTM 3arcsec is selected.
-    if id.getCorners()['xmax'] > 60 or id.getCorners()['xmin'] < -58:
-        demtype = 'SRTM 3Sec'
-    else:
-        demtype = 'SRTM 1Sec HGT'
 
     ############################################
     # parse base workflow
@@ -110,7 +106,6 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
         tf.find('.//parameters/sourceBands').text = 'Beta0'
     else:
         tf.find('.//parameters/sourceBands').text = ','.join(['Beta0_' + x for x in polarizations])
-    tf.find('.//parameters/demName').text = demtype
     ############################################
     # configuration of node sequence for specific geocoding approaches
 
@@ -118,7 +113,6 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
         insert_node(workflow, 'Terrain-Flattening', parse_node('Terrain-Correction'))
         tc = workflow.find('.//node[@id="Terrain-Correction"]')
         tc.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
-        tc.find('.//parameters/demName').text = demtype
     elif geocoding_type == 'SAR simulation cross correlation':
         insert_node(workflow, 'Terrain-Flattening', parse_node('SAR-Simulation'))
         insert_node(workflow, 'SAR-Simulation', parse_node('Cross-Correlation'))
@@ -127,7 +121,6 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
 
         sarsim = workflow.find('.//node[@id="SAR-Simulation"]')
         sarsim.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
-        sarsim.find('.//parameters/demName').text = demtype
     else:
         raise RuntimeError('geocode_type not recognized')
     tc.find('.//parameters/pixelSpacingInMeter').text = str(tr)
@@ -156,7 +149,7 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     ############################################
     # add subset node and add bounding box coordinates of defined shapefile
     if shapefile:
-        shp = shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
+        shp = shapefile if isinstance(shapefile, spatial.vector.Vector) else spatial.vector.Vector(shapefile)
         bounds = spatial.bbox(shp.extent, shp.wkt)
         bounds.reproject(id.projection)
         intersect = spatial.intersect(id.bbox(), bounds)
@@ -196,6 +189,39 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     write = workflow.find('.//node[@id="Write"]')
     write.find('.//parameters/file').text = outname
     write.find('.//parameters/formatName').text = format
+    ############################################
+    ############################################
+    # select DEM type
+
+    if externalDEMFile is not None:
+        if os.path.isfile(externalDEMFile):
+            if externalDEMNoDataValue is None:
+                dem = spatial.raster.Raster(externalDEMFile)
+                if dem.nodata is not None:
+                    externalDEMNoDataValue = dem.nodata
+                else:
+                    raise RuntimeError('Cannot read NoData value from DEM file. Please specify externalDEMNoDataValue')
+        else:
+            raise RuntimeError('specified externalDEMFile does not exist')
+        demname = 'External DEM'
+    else:
+        # SRTM 1arcsec is only available between -58 and +60 degrees. If the scene exceeds those latitudes SRTM 3arcsec is selected.
+        if id.getCorners()['ymax'] > 60 or id.getCorners()['ymin'] < -58:
+            demname = 'SRTM 3Sec'
+        else:
+            demname = 'SRTM 1Sec HGT'
+        externalDEMFile = None
+        externalDEMNoDataValue = 0
+
+    for demName in workflow.findall('.//parameters/demName'):
+        demName.text = demname
+    for externalDEM in workflow.findall('.//parameters/externalDEMFile'):
+        externalDEM.text = externalDEMFile
+    for demNodata in workflow.findall('.//parameters/externalDEMNoDataValue'):
+        demNodata.text = str(externalDEMNoDataValue)
+    for egm in workflow.findall('.//parameters/externalDEMApplyEGM'):
+        egm.text = str(externalDEMApplyEGM).lower()
+    ############################################
     ############################################
     # write workflow to file
     write_recipe(workflow, outname + '_proc')
