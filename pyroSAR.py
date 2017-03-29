@@ -5,7 +5,6 @@
 """
 this script is intended to contain several SAR scene identifier classes to read basic metadata from the scene folders/files, convert to GAMMA format and do simple pre-processing
 """
-import matplotlib.pyplot as plt
 import os
 import re
 import abc
@@ -287,7 +286,10 @@ class ID(object):
         """
         check whether a scene has already been processed and stored in the defined output directory (and subdirectories if recursive)
         """
-        return len(finder(outdir, [self.outname_base()], regex=True, recursive=recursive)) != 0
+        if os.path.isdir(outdir):
+            return len(finder(outdir, [self.outname_base()], regex=True, recursive=recursive)) != 0
+        else:
+            return False
 
     def outname_base(self):
         fields = ('{:_<4}'.format(self.sensor),
@@ -1031,73 +1033,3 @@ class Archive(object):
 #     # archive.delete('/geonfs01_vol1/ve39vem/S1/archive/Egypt/S1A_IW_GRDH_1SDV_20141220T155633_20141220T155658_003805_0048BB_CE9B.zip')
 #     archive.delete('/geonfs01_vol1/ve39vem/S1/archive/Egypt/S1A_IW_GRDH_1SSV_20141216T035207_20141216T035236_003739_004740_D3DD.zip')
 #     # select = archive.select(site)
-#
-#
-# files = finder('/geonfs01_vol3/swos/data/sentinel1/GRD', ['^S1[AB]'], regex=True, recursive=False)
-# invalids = []
-# checkdir = '/geonfs01_vol1/ve39vem/swos_process/zipcheck'
-# for scene in files:
-#     checkfile = os.path.join(checkdir, os.path.basename(scene) + '.txt')
-#     if os.path.isfile(checkfile):
-#         if os.stat(checkfile).st_size > 0:
-#             invalids.append(scene)
-#
-# scenelist = '/geonfs01_vol1/ve39vem/swos_process/SWOS_scenelist'
-# archive = Archive(scenelist)
-# for item in invalids:
-#     archive.delete(item)
-# archive.close()
-
-
-# class Archive(object):
-#     def __init__(self, scenelist):
-#         self.scenelist = scenelist
-#         if os.path.isfile(self.scenelist):
-#             with open(scenelist, 'r') as infile:
-#                 self.reg = [os.path.basename(line.split(';')[3]) for line in infile]
-#         else:
-#             self.reg = []
-#
-#     def update(self, scenes):
-#         scenefile = open(self.scenelist, 'a+' if os.path.isfile(self.scenelist) else 'w')
-#         for scene in scenes:
-#             base = os.path.basename(scene)
-#             if base not in self.reg:
-#                 try:
-#                     id = identify(scene)
-#                 except:
-#                     print 'failed:', base
-#                     continue
-#                 print base
-#                 items = [id.sensor, id.acquisition_mode, ','.join(id.polarizations), id.scene,
-#                          id.bbox().convert2wkt()[0]]
-#                 outline = ';'.join(items) + '\n'
-#                 scenefile.write(outline)
-#                 self.reg.append(base)
-#         scenefile.close()
-#
-#     def select(self, vectorobject):
-#         vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
-#         site_geom = ogr.CreateGeometryFromWkt(vectorobject.convert2wkt()[0])
-#         selection_site = []
-#         with open(self.scenelist, 'r') as infile:
-#             for line in infile:
-#                 scene = line.strip().split(';')[3]
-#                 geom = ogr.CreateGeometryFromWkt(line.strip().split(';')[4])
-#                 intersection = geom.Intersection(site_geom)
-#                 if intersection.GetArea() > 0:
-#                     selection_site.append(scene)
-#         return selection_site
-#
-#     @property
-#     def size(self):
-#         return len(self.reg)
-#
-#     def change_directory(self, src, dst):
-#         src_real = os.path.realpath(src)
-#         dst_real = os.path.realpath(dst)
-#         with open(self.scenelist, 'rb') as infile:
-#             instring = infile.read()
-#         outstring = instring.replace(src_real, dst_real)
-#         with open(self.scenelist, 'wb') as outfile:
-#             outfile.write(outstring)
