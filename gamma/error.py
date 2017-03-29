@@ -7,13 +7,9 @@ import re
 
 
 def gammaErrorHandler(out, err):
-    if out:
-        outlines = filter(None, out.split('\n'))
-        errormessages = [x for x in outlines if x.startswith('ERROR')]
-    else:
-        errormessages = []
-    errormessages.append(err.strip())
-    errormessages = filter(None, [error.replace('ERROR: ', '') for error in errormessages])
+    messages = out.split('\n') if out else []
+    messages.extend(err.strip().split('\n'))
+    errormessages = [x for x in messages if x.startswith('ERROR')]
     knownErrors = {'image data formats differ': IOError,
                    'cannot open': IOError,
                    'no coverage of SAR image by DEM \(in (?:latitude/northing|longitude/easting)\)': IOError,
@@ -25,7 +21,6 @@ def gammaErrorHandler(out, err):
                    'no points available for determining average intensity': ValueError,
                    'p_interp(): time outside of range': RuntimeError,
                    'no overlap with lookup table': RuntimeError,
-                   'nominal terrain altitude (m):      0.000': None,
                    'insufficient offset points to determine offset model parameters': RuntimeError,
                    'insufficient offset points left after culling to determine offset model parameters': RuntimeError,
                    'calloc_1d: number of elements <= 0': ValueError,
