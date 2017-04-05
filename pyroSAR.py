@@ -163,8 +163,7 @@ class ID(object):
 
     def findfiles(self, pattern):
         if os.path.isdir(self.scene):
-            files = [self.scene] if re.search(pattern, os.path.basename(self.scene)) else finder(self.scene, [pattern],
-                                                                                                 regex=True)
+            files = finder(self.scene, [pattern], regex=True)
         elif zf.is_zipfile(self.scene):
             with zf.ZipFile(self.scene, 'r') as zip:
                 files = [os.path.join(self.scene, x.strip('/')) for x in zip.namelist() if
@@ -287,6 +286,7 @@ class ID(object):
         check whether a scene has already been processed and stored in the defined output directory (and subdirectories if recursive)
         """
         if os.path.isdir(outdir):
+            # '{}.*tif$'.format(self.outname_base())
             return len(finder(outdir, [self.outname_base()], regex=True, recursive=recursive)) != 0
         else:
             return False
@@ -378,50 +378,6 @@ class ID(object):
         self.file = os.path.join(self.scene, os.path.basename(self.file))
 
 
-# class CEOS(ID):
-#     # todo: What sensors other than ERS1, ERS2 and Envisat ASAR should be included?
-#     # todo: add a pattern to check if the scene could be handled by CEOS
-#     def __init__(self, scene):
-#
-#         # raise IOError
-#
-#         self.gdalinfo(scene)
-#         self.sensor = self.CEOS_MISSION_ID
-#         self.start = self.CEOS_ACQUISITION_TIME
-#         self.incidence = self.CEOS_INC_ANGLE
-#         self.spacing = (self.CEOS_PIXEL_SPACING_METERS, self.CEOS_LINE_SPACING_METERS)
-#
-#         # todo: check whether this is correct:
-#         self.orbit = 'D' if self.CEOS_PLATFORM_HEADING > 180 else 'A'
-#         self.k_db = -10*math.log(self.CEOS_CALIBRATION_CONSTANT_K, 10)
-#         self.sc_db = {'ERS1': 59.61, 'ERS2': 60}[self.sensor]
-#         self.outname_base = '{0}______{1}'.format(*[self.sensor, self.start])
-#
-#     # todo: change coordinate extraction to the exact boundaries of the image (not outer pixel center points)
-#     def getCorners(self):
-#         lat = [x[1][1] for x in self.gcps]
-#         lon = [x[1][0] for x in self.gcps]
-#         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-#
-#     def convert2gamma(self, directory):
-#         if self.sensor in ['ERS1', 'ERS2']:
-#             outname = os.path.join(directory, self.outname_base+'_VV_slc')
-#             lea = os.path.join(self.scene, 'LEA_01.001')
-#             title = os.path.basename(self.findfiles('\.PS$')[0]).replace('.PS', '')
-#             gamma.process(['par_ESA_ERS', lea, outname+'.par', self.file, outname], inlist=[title])
-#         else:
-#             raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
-#
-#     def unpack(self, directory):
-#         if self.sensor in ['ERS1', 'ERS2']:
-#             outdir = os.path.join(directory, re.sub('\.[EN][12]\.PS$', '', os.path.basename(self.findfiles('\.PS$')[0])))
-#             self._unpack(outdir)
-#         else:
-#             raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
-
-# id = identify('/geonfs01_vol1/ve39vem/ERS/ERS1_0132_2529_20dec95')
-# id = identify('/geonfs01_vol1/ve39vem/ERS/ERS1_0132_2529_20dec95.zip')
-
 class CEOS_ERS(ID):
     """Handle ERS SAR data in CEOS format"""
     def __init__(self, scene):
@@ -438,16 +394,23 @@ class CEOS_ERS(ID):
                        r'(?P<counter>[0-9]{4,})\.' \
                        r'(?P<satellite_ID>[EN][12])' \
                        r'(?P<extension>(?:\.zip|\.tar\.gz|\.PS|))$'
+
         self.pattern_pid = r'(?P<sat_id>(?:SAR|ASA))_' \
                            r'(?P<image_mode>(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_)))_' \
                            r'(?P<processing_level>[012B][CP])'
+
         self.scene = os.path.realpath(scene)
+
         self.examine()
+
         match = re.match(re.compile(self.pattern), os.path.basename(self.file))
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
+
         if re.search('IM__0', match.group('product_id')):
             raise IOError('product level 0 not supported (yet)')
+
         self.meta = self.gdalinfo(self.scene)
+
         self.meta['acquisition_mode'] = match2.group('image_mode')
         self.meta['polarizations'] = ['VV']
         self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
@@ -455,10 +418,45 @@ class CEOS_ERS(ID):
         self.meta['sensor'] = self.meta['CEOS_MISSION_ID']
         self.meta['incidence_angle'] = self.meta['CEOS_INC_ANGLE']
         self.meta['k_db'] = -10*math.log(float(self.meta['CEOS_CALIBRATION_CONSTANT_K']), 10)
+        self.meta['sc_db'] = {'ERS1': 59.61, 'ERS2': 60}[self.meta['sensor']]
+
+        # acquire additional metadata from the file LEA_01.001
         self.meta.update(self.scanLeaderFile())
 
         # register the standardized meta attributes as object attributes
         ID.__init__(self, self.meta)
+
+    # todo: change coordinate extraction to the exact boundaries of the image (not outer pixel center points)
+    def getCorners(self):
+        lat = [x[1][1] for x in self.meta['gcps']]
+        lon = [x[1][0] for x in self.meta['gcps']]
+        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+
+    def unpack(self, directory):
+        if self.sensor in ['ERS1', 'ERS2']:
+            base_file = re.sub('\.PS$', '', os.path.basename(self.file))
+            base_dir = os.path.basename(directory.strip('/'))
+
+            outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
+
+            self._unpack(outdir)
+        else:
+            raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
+
+    def convert2gamma(self, directory):
+        self.gammadir = directory
+        if self.sensor in ['ERS1', 'ERS2']:
+            basename = '{}_{}_{}'.format(self.outname_base(), self.polarizations[0], self.product.lower())
+            outname = os.path.join(directory, basename)
+            if not os.path.isfile(outname):
+                lea = self.findfiles('LEA_01.001')[0]
+                dat = self.findfiles('DAT_01.001')[0]
+                title = re.sub('\.PS$', '', os.path.basename(self.file))
+                gamma.process(['par_ESA_ERS', lea, outname + '.par', dat, outname], inlist=[title])
+            else:
+                print 'scene already converted'
+        else:
+            raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
 
     def scanLeaderFile(self):
         """
