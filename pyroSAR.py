@@ -37,7 +37,7 @@ def identify(scene):
     for handler in ID.__subclasses__():
         try:
             return handler(scene)
-        except IOError:
+        except (IOError, KeyError):
             pass
     raise IOError('data format not supported')
 
@@ -213,7 +213,7 @@ class ID(object):
             entry = [item, parse_literal(gdalmeta[item].strip())]
 
             try:
-                entry[1] = self.parse_date(entry[1])
+                entry[1] = self.parse_date(str(entry[1]))
             except ValueError:
                 pass
 
@@ -421,6 +421,103 @@ class ID(object):
 
 # id = identify('/geonfs01_vol1/ve39vem/ERS/ERS1_0132_2529_20dec95')
 # id = identify('/geonfs01_vol1/ve39vem/ERS/ERS1_0132_2529_20dec95.zip')
+
+class CEOS_ERS(ID):
+    """Handle ERS SAR data in CEOS format"""
+    def __init__(self, scene):
+        self.pattern = r'(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_))_[012B][CP])' \
+                       r'(?P<processing_stage_flag>[A-Z])' \
+                       r'(?P<originator_ID>[A-Z\-]{3})' \
+                       r'(?P<start_day>[0-9]{8})_' \
+                       r'(?P<start_time>[0-9]{6})_' \
+                       r'(?P<duration>[0-9]{8})' \
+                       r'(?P<phase>[0-9A-Z]{1})' \
+                       r'(?P<cycle>[0-9]{3})_' \
+                       r'(?P<relative_orbit>[0-9]{5})_' \
+                       r'(?P<absolute_orbit>[0-9]{5})_' \
+                       r'(?P<counter>[0-9]{4,})\.' \
+                       r'(?P<satellite_ID>[EN][12])' \
+                       r'(?P<extension>(?:\.zip|\.tar\.gz|\.PS|))$'
+        self.pattern_pid = r'(?P<sat_id>(?:SAR|ASA))_' \
+                           r'(?P<image_mode>(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_)))_' \
+                           r'(?P<processing_level>[012B][CP])'
+        self.scene = os.path.realpath(scene)
+        self.examine()
+        match = re.match(re.compile(self.pattern), os.path.basename(self.file))
+        match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
+        if re.search('IM__0', match.group('product_id')):
+            raise IOError('product level 0 not supported (yet)')
+        self.meta = self.gdalinfo(self.scene)
+        self.meta['acquisition_mode'] = match2.group('image_mode')
+        self.meta['polarizations'] = ['VV']
+        self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
+        self.meta['spacing'] = (self.meta['CEOS_PIXEL_SPACING_METERS'], self.meta['CEOS_LINE_SPACING_METERS'])
+        self.meta['sensor'] = self.meta['CEOS_MISSION_ID']
+        self.meta['incidence_angle'] = self.meta['CEOS_INC_ANGLE']
+        self.meta['k_db'] = -10*math.log(float(self.meta['CEOS_CALIBRATION_CONSTANT_K']), 10)
+        self.meta.update(self.scanLeaderFile())
+
+        # register the standardized meta attributes as object attributes
+        ID.__init__(self, self.meta)
+
+    def scanLeaderFile(self):
+        """
+        read the leader file and extract relevant metadata
+        References:
+            ER-IS-EPO-GS-5902-3: Annex C. ERS SAR.SLC/SLC-I. CCT and EXABYTE (ESA 1998)
+        """
+        lea_obj = self.getFileObj(self.findfiles('LEA_01.001')[0])
+        lea = lea_obj.read()
+        lea_obj.close()
+        meta = dict()
+        offset = 720
+        looks_range = float(lea[(offset+1174):(offset+1190)])
+        looks_azimuth = float(lea[(offset+1190):(offset+1206)])
+        meta['looks'] = (looks_range, looks_azimuth)
+        meta['heading'] = float(lea[(offset+468):(offset+476)])
+        meta['orbit'] = 'D' if meta['heading'] > 180 else 'A'
+        orbitNumber, frameNumber = map(int, re.findall('[0-9]+', lea[(offset+36):(offset+68)]))
+        meta['orbitNumber'] = orbitNumber
+        meta['frameNumber'] = frameNumber
+        meta['start'] = self.parse_date(lea[(offset+1814):(offset+1838)])
+        meta['stop'] = self.parse_date(lea[(offset+1862):(offset+1886)])
+        # the following parameters are already read by gdalinfo
+        # meta['sensor'] = lea[(offset+396):(offset+412)].strip()
+        # spacing_azimuth = float(lea[(offset+1686):(offset+1702)])
+        # spacing_range = float(lea[(offset+1702):(offset+1718)])
+        # meta['spacing'] = (spacing_range, spacing_azimuth)
+        # meta['incidence_angle'] = float(lea[(offset+484):(offset+492)])
+        meta['proc_facility'] = lea[(offset+1045):(offset+1061)].strip()
+        meta['proc_system'] = lea[(offset+1061):(offset+1069)].strip()
+        meta['proc_version'] = lea[(offset+1069):(offset+1077)].strip()
+        # text_subset = lea[re.search('FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]', lea).start() - 13:]
+        # meta['k_db'] = -10*math.log(float(text_subset[663:679].strip()), 10)
+        # meta['antenna_flag'] = int(text_subset[659:663].strip())
+        return meta
+
+    # def correctAntennaPattern(self):
+        # the following section is only relevant for PRI products and can be considered future work
+        # select antenna gain correction lookup file from extracted meta information
+        # the lookup files are stored in a subfolder CAL which is included in the pythonland software package
+        # if sensor == 'ERS1':
+        #     if date < 19950717:
+        #         antenna = 'antenna_ERS1_x_x_19950716'
+        #     else:
+        #         if proc_sys == 'VMP':
+        #             antenna = 'antenna_ERS2_VMP_v68_x' if proc_vrs >= 6.8 else 'antenna_ERS2_VMP_x_v67'
+        #         elif proc_fac == 'UKPAF' and date < 19970121:
+        #             antenna = 'antenna_ERS1_UKPAF_19950717_19970120'
+        #         else:
+        #             antenna = 'antenna_ERS1'
+        # else:
+        #     if proc_sys == 'VMP':
+        #         antenna = 'antenna_ERS2_VMP_v68_x' if proc_vrs >= 6.8 else 'antenna_ERS2_VMP_x_v67'
+        #     elif proc_fac == 'UKPAF' and date < 19970121:
+        #         antenna = 'antenna_ERS2_UKPAF_x_19970120'
+        #     else:
+        #         antenna = 'antenna_ERS2'
+
+# id = identify('/geonfs01_vol1/ve39vem/archive/SAR/ERS/DRAGON/ERS1_0132_2529_20dec95.zip')
 
 
 class ESA(ID):
@@ -900,51 +997,6 @@ class SAFE(ID):
         outdir = os.path.join(directory, os.path.basename(self.file))
         self._unpack(outdir)
 
-
-# todo: remove class ERS and change dependencies to class CEOS (scripts: gammaGUI/reader_ers.py)
-# class ERS(object):
-#     def __init__(self, scene):
-#
-#         try:
-#             lea = finder(scene, ['LEA_01.001'])[0]
-#         except IndexError:
-#             raise IOError('wrong input format; no leader file found')
-#         with open(lea, 'r') as infile:
-#             text = infile.read()
-#         # extract frame id
-#         frame_index = re.search('FRAME=', text).end()
-#         self.frame = text[frame_index:frame_index+4]
-#         # extract calibration meta information
-#         stripper = ' \t\r\n\0'
-#         self.sensor = text[(720+395):(720+411)].strip(stripper)
-#         self.date = int(text[(720+67):(720+99)].strip(stripper)[:8])
-#         self.proc_fac = text[(720+1045):(720+1061)].strip(stripper)
-#         self.proc_sys = text[(720+1061):(720+1069)].strip(stripper)
-#         self.proc_vrs = text[(720+1069):(720+1077)].strip(stripper)
-#         text_subset = text[re.search('FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]', text).start()-13:]
-#         self.cal = -10*math.log(float(text_subset[663:679].strip(stripper)), 10)
-#         self.antenna_flag = text_subset[659:663].strip(stripper)
-#
-# the following section is only relevant for PRI products and can be considered future work
-# select antenna gain correction lookup file from extracted meta information
-# the lookup files are stored in a subfolder CAL which is included in the pythonland software package
-# if sensor == 'ERS1':
-#     if date < 19950717:
-#         antenna = 'antenna_ERS1_x_x_19950716'
-#     else:
-#         if proc_sys == 'VMP':
-#             antenna = 'antenna_ERS2_VMP_v68_x' if proc_vrs >= 6.8 else 'antenna_ERS2_VMP_x_v67'
-#         elif proc_fac == 'UKPAF' and date < 19970121:
-#             antenna = 'antenna_ERS1_UKPAF_19950717_19970120'
-#         else:
-#             antenna = 'antenna_ERS1'
-# else:
-#     if proc_sys == 'VMP':
-#         antenna = 'antenna_ERS2_VMP_v68_x' if proc_vrs >= 6.8 else 'antenna_ERS2_VMP_x_v67'
-#     elif proc_fac == 'UKPAF' and date < 19970121:
-#         antenna = 'antenna_ERS2_UKPAF_x_19970120'
-#     else:
-#         antenna = 'antenna_ERS2'
 
 class Archive(object):
     def __init__(self, scenelist, header=False, keys=None):
