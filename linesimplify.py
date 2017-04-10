@@ -1,9 +1,13 @@
+##############################################################
+# Utilities for simplification of lines used by pyroSAR for border noise removal
+# John Truckenbrodt 2017
+##############################################################
 
 from osgeo import ogr
 import numpy as np
 from ancillary import rescale
 from polysimplify import VWSimplifier
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 
 def simplify(x, y, maxpoints=20):
@@ -19,19 +23,23 @@ def simplify(x, y, maxpoints=20):
         out = np.sum((y - np.interp(x, xn, yn)) ** 2)
         sqd.append(out)
     # sqd /= max(sqd)
-    sqd = rescale(sqd)
-    # plt.plot(sqd)
-    # plt.show()
-    # iter = (np.array(iter_range) - 2) / (maxpoints - 2.)
-    # plt.plot(iter_range, sqd, label='residual')
-    # plt.plot(iter_range, iter, color='r', label='iteration')
-    # plt.plot(iter_range, iter + sqd, color='g', label='residual+iteration')
-    # plt.legend(loc='upper center', shadow=True)
-    # plt.show()
-    # npoints = np.argmin(iter + sqd) + 2
-    npoints = np.argmax(np.array(sqd) < 0.01)+2
-    VWpts = simplifier.from_number(npoints)
-    return VWpts
+    if min(sqd) == max(sqd):
+        VWpts = simplifier.from_number(2)
+        return VWpts
+    else:
+        sqd = rescale(sqd)
+        # plt.plot(sqd)
+        # plt.show()
+        # iter = (np.array(iter_range) - 2) / (maxpoints - 2.)
+        # plt.plot(iter_range, sqd, label='residual')
+        # plt.plot(iter_range, iter, color='r', label='iteration')
+        # plt.plot(iter_range, iter + sqd, color='g', label='residual+iteration')
+        # plt.legend(loc='upper center', shadow=True)
+        # plt.show()
+        # npoints = np.argmin(iter + sqd) + 2
+        npoints = np.argmax(np.array(sqd) < 0.01)+2
+        VWpts = simplifier.from_number(npoints)
+        return VWpts
 
 
 def createPoly(xn, yn, xmax, ymax):
@@ -50,6 +58,8 @@ def createPoly(xn, yn, xmax, ymax):
 
 
 def reduce(seq, maxpoints=20, straighten=False):
+    if min(seq) == max(seq):
+        return np.array(seq)
     x = map(float, range(0, len(seq)))
     # plt.plot(seq)
     VWpts = simplify(x, seq, maxpoints)
