@@ -227,6 +227,6 @@ class OSV(object):
             return
         self.retrieve(files_poe, 'POE')
         print '---------------------------------------------------------'
-        files_res = self.catch('RES', start=self.maxdate('POE', 'start'))
+        files_res = self.catch('RES', start=self.maxdate('RES', 'start'))
         self.retrieve(files_res, 'RES')
         self.clean_res()
