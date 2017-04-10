@@ -216,9 +216,14 @@ def rescale(inlist, newrange=(0, 1)):
     """
     OldMax = max(inlist)
     OldMin = min(inlist)
+
+    if OldMin == OldMax:
+        raise RuntimeError('list contains of only one unique value')
+
     OldRange = OldMax - OldMin
     NewRange = newrange[1] - newrange[0]
-    return [(((float(x) - OldMin) * NewRange) / OldRange) + newrange[0] for x in inlist]
+    result = [(((float(x) - OldMin) * NewRange) / OldRange) + newrange[0] for x in inlist]
+    return result
 
 
 def run(cmd, outdir=None, logfile=None, inlist=None, void=True, errorpass=False):
