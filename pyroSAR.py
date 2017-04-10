@@ -152,8 +152,8 @@ class ID(object):
     def convert2gamma(self, directory):
         return
 
-    def examine(self):
-        files = self.findfiles(self.pattern)
+    def examine(self, include_folders=False):
+        files = self.findfiles(self.pattern, include_folders=include_folders)
         if len(files) == 1:
             self.file = files[0]
         elif len(files) == 0:
@@ -161,9 +161,11 @@ class ID(object):
         else:
             raise IOError('file ambiguity detected')
 
-    def findfiles(self, pattern):
+    def findfiles(self, pattern, include_folders=False):
         if os.path.isdir(self.scene):
-            files = finder(self.scene, [pattern], regex=True)
+            files = finder(self.scene, [pattern], regex=True, foldermode=1 if include_folders else 0)
+            if re.search(pattern, os.path.basename(self.scene)) and include_folders:
+                files.append(self.scene)
         elif zf.is_zipfile(self.scene):
             with zf.ZipFile(self.scene, 'r') as zip:
                 files = [os.path.join(self.scene, x.strip('/')) for x in zip.namelist() if
@@ -446,17 +448,20 @@ class CEOS_ERS(ID):
     def convert2gamma(self, directory):
         self.gammadir = directory
         if self.sensor in ['ERS1', 'ERS2']:
-            basename = '{}_{}_{}'.format(self.outname_base(), self.polarizations[0], self.product.lower())
-            outname = os.path.join(directory, basename)
-            if not os.path.isfile(outname):
-                lea = self.findfiles('LEA_01.001')[0]
-                dat = self.findfiles('DAT_01.001')[0]
-                title = re.sub('\.PS$', '', os.path.basename(self.file))
-                gamma.process(['par_ESA_ERS', lea, outname + '.par', dat, outname], inlist=[title])
+            if self.product == 'SLC' and self.meta['proc_system'] in ['PGS-ERS', 'VMP-ERS', 'SPF-ERS']:
+                basename = '{}_{}_{}'.format(self.outname_base(), self.polarizations[0], self.product.lower())
+                outname = os.path.join(directory, basename)
+                if not os.path.isfile(outname):
+                    lea = self.findfiles('LEA_01.001')[0]
+                    dat = self.findfiles('DAT_01.001')[0]
+                    title = re.sub('\.PS$', '', os.path.basename(self.file))
+                    gamma.process(['par_ESA_ERS', lea, outname + '.par', dat, outname], inlist=[title])
+                else:
+                    print 'scene already converted'
             else:
-                print 'scene already converted'
+                raise NotImplementedError('ERS {} product of {} processor in CEOS format not implemented yet'.format(self.product, self.meta['proc_system']))
         else:
-            raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
+            raise NotImplementedError('sensor {} in CEOS format not implemented yet'.format(self.sensor))
 
     def scanLeaderFile(self):
         """
@@ -692,7 +697,7 @@ class SAFE(ID):
                           r'(?P<id>[0-9]{3})' \
                           r'\.xml$'
 
-        self.examine()
+        self.examine(include_folders=True)
 
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
             raise IOError('folder does not match S1 scene naming convention')
@@ -770,6 +775,7 @@ class SAFE(ID):
 
         # iterate over the four image subsets
         for subset in subsets:
+            print subset
             xmin, ymin, xmax, ymax = subset
             xdiff = xmax - xmin
             ydiff = ymax - ymin
@@ -804,41 +810,25 @@ class SAFE(ID):
 
             if subset == (0, 0, blocksize, self.lines):
                 border = np.apply_along_axis(helper1, 1, denoisedBlock)
-                try:
-                    border = blocksize - np.array(ls.reduce(border))
-                except RuntimeWarning as e:
-                    print e
-                    print self.scene
+                border = blocksize - np.array(ls.reduce(border))
                 for j in range(0, ydiff):
                     denoisedBlock[j, :border[j]] = 0
                     denoisedBlock[j, border[j]:] = 1
             elif subset == (0, self.lines - blocksize, self.samples, self.lines):
                 border = np.apply_along_axis(helper2, 0, denoisedBlock)
-                try:
-                    border = ls.reduce(border)
-                except RuntimeWarning as e:
-                    print e
-                    print self.scene
+                border = ls.reduce(border)
                 for j in range(0, xdiff):
                     denoisedBlock[border[j]:, j] = 0
                     denoisedBlock[:border[j], j] = 1
             elif subset == (self.samples - blocksize, 0, self.samples, self.lines):
                 border = np.apply_along_axis(helper2, 1, denoisedBlock)
-                try:
-                    border = ls.reduce(border)
-                except RuntimeWarning as e:
-                    print e
-                    print self.scene
+                border = ls.reduce(border)
                 for j in range(0, ydiff):
                     denoisedBlock[j, border[j]:] = 0
                     denoisedBlock[j, :border[j]] = 1
             elif subset == (0, 0, self.samples, blocksize):
                 border = np.apply_along_axis(helper1, 0, denoisedBlock)
-                try:
-                    border = blocksize - np.array(ls.reduce(border))
-                except RuntimeWarning as e:
-                    print e
-                    print self.scene
+                border = blocksize - np.array(ls.reduce(border))
                 for j in range(0, xdiff):
                     denoisedBlock[:border[j], j] = 0
                     denoisedBlock[border[j]:, j] = 1
