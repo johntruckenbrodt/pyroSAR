@@ -29,7 +29,7 @@ import spatial.auxil
 import spatial.util
 import spatial.vector
 
-from ancillary import dissolve, run
+from ancillary import dissolve, run, multicore
 import envi
 
 os.environ['GDAL_PAM_PROXY_DIR'] = '/tmp'
@@ -470,7 +470,7 @@ def reproject(rasterobject, reference, outname, resampling='bilinear', format='E
                    '-t_srs', projection, rasterobject.filename, outname])
 
 
-def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None, separate=False, overwrite=False, compress=True):
+def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None, separate=False, overwrite=False, compress=True, cores=4):
 
     if layernames is not None:
         if len(layernames) != len(srcfiles):
@@ -547,8 +547,18 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
             os.makedirs(dstfile)
         dstfiles = [os.path.join(dstfile, x)+'.tif' for x in bandnames]
 
-        for src, dst in zip(srcfiles, dstfiles):
-            run(['gdalwarp', '-q', '-multi', arg_overwrite, arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, arg_compression, src, dst])
+        files = [x for x in zip(srcfiles, dstfiles) if not os.path.isfile(x[1])]
+        srcfiles, dstfiles = map(list, zip(*files))
+
+        cmd = ['gdalwarp', '-q', '-multi', arg_overwrite, arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, arg_compression]
+
+        def operator(command, srcfile, dstfile):
+            run(command + [srcfile, dstfile])
+
+        multicore(operator, cores=cores, multiargs={'srcfile': srcfiles, 'dstfile': dstfiles}, command=cmd)
+
+        # for src, dst in files:
+        #     run(['gdalwarp', '-q', '-multi', arg_overwrite, arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, arg_compression, src, dst])
     else:
         # create VRT for stacking
 
