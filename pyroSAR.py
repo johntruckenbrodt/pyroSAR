@@ -381,7 +381,12 @@ class ID(object):
 
 
 class CEOS_ERS(ID):
-    """Handle ERS SAR data in CEOS format"""
+    """
+    Handle ERS SAR data in CEOS format
+    
+    References:
+        ER-IS-EPO-GS-5902-3: Annex C. ERS SAR.SLC/SLC-I. CCT and EXABYTE (ESA 1998)
+    """
     def __init__(self, scene):
         self.pattern = r'(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_))_[012B][CP])' \
                        r'(?P<processing_stage_flag>[A-Z])' \
@@ -466,8 +471,6 @@ class CEOS_ERS(ID):
     def scanLeaderFile(self):
         """
         read the leader file and extract relevant metadata
-        References:
-            ER-IS-EPO-GS-5902-3: Annex C. ERS SAR.SLC/SLC-I. CCT and EXABYTE (ESA 1998)
         """
         lea_obj = self.getFileObj(self.findfiles('LEA_01.001')[0])
         lea = lea_obj.read()
@@ -524,7 +527,9 @@ class CEOS_ERS(ID):
 
 
 class ESA(ID):
-    """Handle SAR data in ESA format"""
+    """
+    Handler class for SAR data in ESA format
+    """
 
     def __init__(self, scene):
 
@@ -986,6 +991,69 @@ class SAFE(ID):
         self._unpack(outdir)
 
 
+class TSX(ID):
+    """
+    Handler class for TerraSAR-X data
+
+    References:
+        TX-GS-DD-3302  TerraSAR-X Basic Product Specification Document
+        TX-GS-DD-3303  TerraSAR-X Experimental Product Description
+        TD-GS-PS-3028  TanDEM-X Experimental Product Description
+    """
+    def __init__(self, scene):
+        self.scene = os.path.realpath(scene)
+
+        self.pattern = r'^(?P<sat>T[DS]X1)_SAR__' \
+                       r'(?P<prod>SSC|MGD|GEC|EEC)_' \
+                       r'(?P<var>____|SE__|RE__|MON1|MON2|BTX1|BRX2)_' \
+                       r'(?P<mode>SM|SL|HS|ST|SC)_' \
+                       r'(?P<pols>[SDTQ])_' \
+                       r'(?:SRA|DRA)_' \
+                       r'(?P<start>[0-9]{8}T[0-9]{6})_' \
+                       r'(?P<stop>[0-9]{8}T[0-9]{6})\.xml$'
+        self.examine(include_folders=False)
+
+        if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
+            raise IOError('folder does not match TSX scene naming convention')
+
+        self.meta = self.scanAnnotation()
+        self.meta['projection'] = 'GEOGCS["WGS 84",' \
+                                  'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
+                                  'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
+                                  'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
+                                  'AUTHORITY["EPSG","4326"]]'
+
+        ID.__init__(self, self.meta)
+
+    def scanAnnotation(self):
+        annotation = self.getFileObj(self.file)
+        namespaces = getNamespaces(annotation)
+        tree = ET.fromstring(annotation.read())
+        annotation.close()
+        meta = dict()
+        meta['sensor'] = tree.find('.//generalHeader/mission', namespaces).text.replace('-', '')
+        meta['product'] = tree.find('.//orderInfo/productVariant', namespaces).text
+        meta['orbit'] = tree.find('.//missionInfo/orbitDirection', namespaces).text[0]
+        meta['polarizations'] = [x.text for x in tree.findall('.//acquisitionInfo/polarisationList/polLayer', namespaces)]
+        meta['orbit_abs'] = int(tree.find('.//missionInfo/absOrbit', namespaces).text)
+        meta['orbit_rel'] = int(tree.find('.//missionInfo/relOrbit', namespaces).text)
+        meta['acquisition_mode'] = tree.find('.//acquisitionInfo/imagingMode', namespaces).text
+        meta['start'] = self.parse_date(tree.find('.//sceneInfo/start/timeUTC', namespaces).text)
+        meta['stop'] = self.parse_date(tree.find('.//sceneInfo/stop/timeUTC', namespaces).text)
+        spacing_row = float(tree.find('.//imageDataInfo/imageRaster/rowSpacing', namespaces).text)
+        spacing_col = float(tree.find('.//imageDataInfo/imageRaster/columnSpacing', namespaces).text)
+        meta['spacing'] = (spacing_col, spacing_row)
+        meta['samples'] = int(tree.find('.//imageDataInfo/imageRaster/numberOfColumns', namespaces).text)
+        meta['lines'] = int(tree.find('.//imageDataInfo/imageRaster/numberOfRows', namespaces).text)
+        rlks = float(tree.find('.//imageDataInfo/imageRaster/rangeLooks', namespaces).text)
+        azlks = float(tree.find('.//imageDataInfo/imageRaster/azimuthLooks', namespaces).text)
+        meta['looks'] = (rlks, azlks)
+        meta['incidence'] = float(tree.find('.//sceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
+        return meta
+
+# id = identify('/geonfs01_vol1/ve39vem/archive/SAR/TerraSAR-X/TSX1_SAR__MGD_SE___SL_S_SRA_20110902T015248_20110902T015249.zip')
+
+
 class Archive(object):
     def __init__(self, scenelist, header=False, keys=None):
         self.scenelist = scenelist
@@ -1060,16 +1128,3 @@ class Archive(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.file.close()
-
-# sitename = 'Egypt_Burullus'
-# from spatial import vector
-# from swos.testsites import lookup
-# sites = vector.Vector('/geonfs01_vol1/ve39vem/swos_testsites/Test_Sites_Delimitation_v43.shp')
-# site = sites['Site_Name={}'.format(lookup[sitename])]
-# files = finder('/geonfs01_vol1/ve39vem/S1/archive/Egypt', ['S1A*'])
-# af = '/geonfs01_vol1/ve39vem/swos_test/scenelist.txt'
-# with Archive(af, header=True) as archive:
-#     archive.update(files)
-#     # archive.delete('/geonfs01_vol1/ve39vem/S1/archive/Egypt/S1A_IW_GRDH_1SDV_20141220T155633_20141220T155658_003805_0048BB_CE9B.zip')
-#     archive.delete('/geonfs01_vol1/ve39vem/S1/archive/Egypt/S1A_IW_GRDH_1SSV_20141216T035207_20141216T035236_003739_004740_D3DD.zip')
-#     # select = archive.select(site)
