@@ -27,7 +27,7 @@ shp = '/path/to/shapefile'
 targetres = 10
 
 # scene archive csv textfile (here all filenames and metadata of the SAR scenes in datadir will be written to)
-archive = '/path/to/archive.csv'
+archive_file = '/path/to/archive.csv'
 
 # search pattern for all the SAR scenes of interest in datadir
 pattern = 'S1*GRDH*zip'
@@ -52,15 +52,14 @@ for dir in [tempdir, outdir]:
 # select the scenes in the datadir based on the define search pattern
 scenes = finder(datadir, [pattern])
 
-# create the archive and update it with scenes (the archive csv will either be newly created or updated with the file names which had not been registered before)
-archive_SAR = Archive(archive)
-archive_SAR.update(scenes)
-
 # load the shapefile
 shpobj = vector.Vector(shp)
 
-# select all scenes which overlap with the shapefile of the study area (reprojection is performed automatically in-memory)
-selection_site = archive_SAR.select(shpobj)
+# create the archive and update it with scenes (the archive csv will either be newly created or updated with the file names which had not been registered before)
+with Archive(archive_file, header=True) as archive:
+    archive.update(scenes)
+    # select all scenes which overlap with the shapefile of the study area (reprojection is performed automatically in-memory)
+    selection_site = archive.select(shpobj)
 
 # load all selected scenes to pyroSAR metadata objects (this might take a little time)
 selection_proc = map(identify, selection_site)
