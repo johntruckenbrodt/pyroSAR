@@ -525,7 +525,11 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     arg_resampling = ['-r', resampling] if resampling is not None else []
     arg_format = ['-of', 'GTiff' if separate else 'ENVI']
     arg_overwrite = ['-overwrite'] if overwrite else []
-    arg_compression = ['-co', 'COMPRESS=DEFLATE', '-co', 'PREDICTOR=2'] if compress else []
+
+    if separate and compress:
+        arg_compression = ['-co', 'COMPRESS=DEFLATE', '-co', 'PREDICTOR=2']
+    else:
+        arg_compression = []
 
     # create VRT files for mosaicing
     vrtlist = []
