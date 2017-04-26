@@ -1014,6 +1014,8 @@ class TSX(ID):
                        r'(?:SRA|DRA)_' \
                        r'(?P<start>[0-9]{8}T[0-9]{6})_' \
                        r'(?P<stop>[0-9]{8}T[0-9]{6})(?:\.xml|)$'
+
+        self.pattern_ds = r'^IMAGE_(?P<pol>HH|HV|VH|VV)_(?:SRA|FWD|AFT)_(?P<beam>[^\.]+)\.(cos|tif)$'
         self.examine(include_folders=False)
 
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
@@ -1027,6 +1029,22 @@ class TSX(ID):
                                   'AUTHORITY["EPSG","4326"]]'
 
         ID.__init__(self, self.meta)
+
+    def convert2gamma(self, directory):
+        images = self.findfiles(self.pattern_ds)
+        pattern = re.compile(self.pattern_ds)
+        for image in images:
+            pol = pattern.match(os.path.basename(image)).group('pol')
+            outname = os.path.join(directory, self.outname_base()+'_'+pol)
+            if self.product == 'SSC':
+                outname += '_slc'
+                gamma.process(['par_TX_SLC', self.file, image, outname + '.par', outname, pol])
+            elif self.product == 'MGD':
+                outname += '_mli'
+                gamma.process(['par_TX_GRD', self.file, image, outname + '.par', outname, pol])
+            else:
+                outname += '_mli_geo'
+                gamma.process(['par_TX_geo', self.file, image, outname + '.par', outname + '_dem.par', outname, pol])
 
     def scanAnnotation(self):
         annotation = self.getFileObj(self.file)
