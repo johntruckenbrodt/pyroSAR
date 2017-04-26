@@ -172,8 +172,11 @@ class ID(object):
                          re.search(pattern, os.path.basename(x.strip('/')))]
         elif tf.is_tarfile(self.scene):
             tar = tf.open(self.scene)
-            files = [os.path.join(self.scene, x) for x in tar.getnames() if re.search(pattern, os.path.basename(x))]
+            files = [x for x in tar.getnames() if re.search(pattern, os.path.basename(x.strip('/')))]
+            if not include_folders:
+                files = [x for x in files if not tar.getmember(x).isdir()]
             tar.close()
+            files = [os.path.join(self.scene, x) for x in files]
         else:
             files = [self.scene] if re.search(pattern, self.scene) else []
         return files
@@ -325,12 +328,14 @@ class ID(object):
 
     # todo: prevent unpacking if target files already exist
     # todo: replace with functionality from module archivist
-    def _unpack(self, directory):
+    def _unpack(self, directory, offset=None):
         if not os.path.isdir(directory):
             os.makedirs(directory)
         if tf.is_tarfile(self.scene):
             archive = tf.open(self.scene, 'r')
             names = archive.getnames()
+            if offset is not None:
+                names = [x for x in names if x.startswith(offset)]
             header = os.path.commonprefix(names)
 
             if header in names:
@@ -338,12 +343,9 @@ class ID(object):
                     for item in sorted(names):
                         if item != header:
                             member = archive.getmember(item)
-                            outname = os.path.join(directory, item.replace(header + '/', ''))
-                            if member.isdir():
-                                os.makedirs(outname)
-                            else:
-                                with open(outname, 'w') as outfile:
-                                    outfile.write(member.tobuf())
+                            if offset is not None:
+                                member.name = member.name.replace(offset+'/', '')
+                            archive.extract(member, directory)
                     archive.close()
                 else:
                     archive.extractall(directory)
@@ -1011,7 +1013,7 @@ class TSX(ID):
                        r'(?P<pols>[SDTQ])_' \
                        r'(?:SRA|DRA)_' \
                        r'(?P<start>[0-9]{8}T[0-9]{6})_' \
-                       r'(?P<stop>[0-9]{8}T[0-9]{6})\.xml$'
+                       r'(?P<stop>[0-9]{8}T[0-9]{6})(?:\.xml|)$'
         self.examine(include_folders=False)
 
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
@@ -1051,6 +1053,13 @@ class TSX(ID):
         meta['looks'] = (rlks, azlks)
         meta['incidence'] = float(tree.find('.//sceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
         return meta
+
+    def unpack(self, directory):
+        match = self.findfiles(self.pattern, True)
+        header = [x for x in match if not x.endswith('xml') and 'iif' not in x][0].replace(self.scene, '').strip('/')
+        outdir = os.path.join(directory, os.path.basename(header))
+        self._unpack(outdir, header)
+
 
 # id = identify('/geonfs01_vol1/ve39vem/archive/SAR/TerraSAR-X/TSX1_SAR__MGD_SE___SL_S_SRA_20110902T015248_20110902T015249.zip')
 
