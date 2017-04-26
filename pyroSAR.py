@@ -159,7 +159,7 @@ class ID(object):
         elif len(files) == 0:
             raise IOError('folder does not match {} scene naming convention'.format(type(self).__name__))
         else:
-            raise IOError('file ambiguity detected')
+            raise IOError('file ambiguity detected:\n{}'.format('\n'.join(files)))
 
     def findfiles(self, pattern, include_folders=False):
         if os.path.isdir(self.scene):
@@ -168,8 +168,12 @@ class ID(object):
                 files.append(self.scene)
         elif zf.is_zipfile(self.scene):
             with zf.ZipFile(self.scene, 'r') as zip:
-                files = [os.path.join(self.scene, x.strip('/')) for x in zip.namelist() if
+                files = [os.path.join(self.scene, x) for x in zip.namelist() if
                          re.search(pattern, os.path.basename(x.strip('/')))]
+                if include_folders:
+                    files = [x.strip('/') for x in files]
+                else:
+                    files = [x for x in files if not x.endswith('/')]
         elif tf.is_tarfile(self.scene):
             tar = tf.open(self.scene)
             files = [x for x in tar.getnames() if re.search(pattern, os.path.basename(x.strip('/')))]
