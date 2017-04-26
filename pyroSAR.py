@@ -245,8 +245,9 @@ class ID(object):
             obj.seek(0)
 
         elif tf.is_tarfile(self.scene):
-            tar = tf.open(self.scene)
-            obj = tar.extractfile(membername)
+            obj = StringIO.StringIO()
+            tar = tf.open(self.scene, 'r:gz')
+            obj.write(tar.extractfile(membername).read())
             tar.close()
         else:
             raise IOError('input must be either a file name or a location in an zip or tar archive')
