@@ -1045,6 +1045,7 @@ class TSX(ID):
             else:
                 outname += '_mli_geo'
                 gamma.process(['par_TX_geo', self.file, image, outname + '.par', outname + '_dem.par', outname, pol])
+            envi.hdr(outname + '.par')
 
     def scanAnnotation(self):
         annotation = self.getFileObj(self.file)
