@@ -109,6 +109,12 @@ class OSV(object):
         self.pattern_fine = 'S1[AB]_OPER_AUX_(?P<type>(?:POE|RES)ORB)_OPOD_(?P<publish>[0-9]{8}T[0-9]{6})_V(?P<start>[0-9]{8}T[0-9]{6})_(?P<stop>[0-9]{8}T[0-9]{6})\.EOF'
         self.sslcontext = ssl._create_unverified_context()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return
+
     def _init_dir(self):
         """
         create directories if they don't exist yet
