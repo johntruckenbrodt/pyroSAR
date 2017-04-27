@@ -327,6 +327,10 @@ class ID(object):
                 print '{0}: {1}'.format(item, getattr(self, item))
 
     @abc.abstractmethod
+    def scanMetadata(self):
+        return
+
+    @abc.abstractmethod
     def unpack(self, directory):
         return
 
@@ -435,7 +439,7 @@ class CEOS_ERS(ID):
         self.meta['sc_db'] = {'ERS1': 59.61, 'ERS2': 60}[self.meta['sensor']]
 
         # acquire additional metadata from the file LEA_01.001
-        self.meta.update(self.scanLeaderFile())
+        self.meta.update(self.scanMetadata())
 
         # register the standardized meta attributes as object attributes
         ID.__init__(self, self.meta)
@@ -475,7 +479,7 @@ class CEOS_ERS(ID):
         else:
             raise NotImplementedError('sensor {} in CEOS format not implemented yet'.format(self.sensor))
 
-    def scanLeaderFile(self):
+    def scanMetadata(self):
         """
         read the leader file and extract relevant metadata
         """
@@ -715,7 +719,7 @@ class SAFE(ID):
             raise IOError('folder does not match S1 scene naming convention')
 
         # scan the manifest.safe file and add selected attributes to a meta dictionary
-        self.meta = self.scanManifest()
+        self.meta = self.scanMetadata()
         self.meta['projection'] = 'GEOGCS["WGS 84",' \
                                   'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
                                   'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
@@ -961,7 +965,7 @@ class SAFE(ID):
                 outfile.write(infile.read())
             infile.close()
 
-    def scanManifest(self):
+    def scanMetadata(self):
         """
         read the manifest.safe file and extract relevant metadata
         """
@@ -1025,7 +1029,7 @@ class TSX(ID):
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
             raise IOError('folder does not match TSX scene naming convention')
 
-        self.meta = self.scanAnnotation()
+        self.meta = self.scanMetadata()
         self.meta['projection'] = 'GEOGCS["WGS 84",' \
                                   'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
                                   'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
@@ -1051,7 +1055,7 @@ class TSX(ID):
                 gamma.process(['par_TX_geo', self.file, image, outname + '.par', outname + '_dem.par', outname, pol])
             envi.hdr(outname + '.par')
 
-    def scanAnnotation(self):
+    def scanMetadata(self):
         annotation = self.getFileObj(self.file)
         namespaces = getNamespaces(annotation)
         tree = ET.fromstring(annotation.read())
