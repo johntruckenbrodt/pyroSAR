@@ -72,7 +72,7 @@ class ID(object):
 
     @abc.abstractmethod
     def calibrate(self, replace=False):
-        return
+        raise NotImplementedError
 
     @property
     def compression(self):
@@ -150,7 +150,7 @@ class ID(object):
 
     @abc.abstractmethod
     def convert2gamma(self, directory):
-        return
+        raise NotImplementedError
 
     def examine(self, include_folders=False):
         files = self.findfiles(self.pattern, include_folders=include_folders)
@@ -232,7 +232,7 @@ class ID(object):
 
     @abc.abstractmethod
     def getCorners(self):
-        return
+        raise NotImplementedError
 
     def getFileObj(self, filename):
         """
@@ -328,11 +328,11 @@ class ID(object):
 
     @abc.abstractmethod
     def scanMetadata(self):
-        return
+        raise NotImplementedError
 
     @abc.abstractmethod
     def unpack(self, directory):
-        return
+        raise NotImplementedError
 
     # todo: prevent unpacking if target files already exist
     # todo: replace with functionality from module archivist
@@ -393,7 +393,7 @@ class ID(object):
 
 class CEOS_ERS(ID):
     """
-    Handle ERS SAR data in CEOS format
+    Handler class for ERS data in CEOS format
     
     References:
         ER-IS-EPO-GS-5902-3: Annex C. ERS SAR.SLC/SLC-I. CCT and EXABYTE (ESA 1998)
@@ -539,7 +539,7 @@ class CEOS_ERS(ID):
 
 class ESA(ID):
     """
-    Handler class for SAR data in ESA format
+    Handler class for SAR data in ESA format (Envisat, ERS)
     """
 
     def __init__(self, scene):
@@ -686,6 +686,9 @@ class ESA(ID):
 
 # todo: check self.file and self.scene assignment after unpacking
 class SAFE(ID):
+    """
+    Handler class for Sentinel-1 data
+    """
     def __init__(self, scene):
 
         self.scene = os.path.realpath(scene)
@@ -1092,6 +1095,9 @@ class TSX(ID):
 
 
 class Archive(object):
+    """
+    Utility for storing relevant SAR image metadata in CSV file based database
+    """
     def __init__(self, scenelist, header=False, keys=None):
         self.scenelist = scenelist
         self.reg = {}
