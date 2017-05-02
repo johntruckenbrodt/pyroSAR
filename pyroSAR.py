@@ -1007,12 +1007,34 @@ class SAFE(ID):
 
 class TSX(ID):
     """
-    Handler class for TerraSAR-X data
+    Handler class for TerraSAR-X and TanDEM-X data
 
     References:
         TX-GS-DD-3302  TerraSAR-X Basic Product Specification Document
         TX-GS-DD-3303  TerraSAR-X Experimental Product Description
         TD-GS-PS-3028  TanDEM-X Experimental Product Description
+        TerraSAR-X Image Product Guide (Airbus Defence and Space)
+    
+    Acquisition modes:
+        ST:    Staring Spotlight
+        HS:    High Resolution SpotLight
+        HS300: High Resolution SpotLight 300 MHz
+        SL:    SpotLight
+        SM:    StripMap
+        SC:    ScanSAR
+        WS:    Wide ScanSAR
+    
+    Polarisation modes:
+        Single (S): all acquisition modes
+        Dual (D):   High Resolution SpotLight (HS), SpotLight (SL) and StripMap (SM)
+        Twin (T):   StripMap (SM) (experimental)
+        Quad (Q):   StripMap (SM) (experimental)
+    
+    Products:
+        SSC: Single Look Slant Range Complex
+        MGD: Multi Look Ground Range Detected
+        GEC: Geocoded Ellipsoid Corrected
+        EEC: Enhanced Ellipsoid Corrected
     """
     def __init__(self, scene):
         self.scene = os.path.realpath(scene)
@@ -1020,7 +1042,7 @@ class TSX(ID):
         self.pattern = r'^(?P<sat>T[DS]X1)_SAR__' \
                        r'(?P<prod>SSC|MGD|GEC|EEC)_' \
                        r'(?P<var>____|SE__|RE__|MON1|MON2|BTX1|BRX2)_' \
-                       r'(?P<mode>SM|SL|HS|ST|SC)_' \
+                       r'(?P<mode>SM|SL|HS|HS300|ST|SC)_' \
                        r'(?P<pols>[SDTQ])_' \
                        r'(?:SRA|DRA)_' \
                        r'(?P<start>[0-9]{8}T[0-9]{6})_' \
