@@ -471,6 +471,28 @@ def reproject(rasterobject, reference, outname, resampling='bilinear', format='E
 
 
 def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None, separate=False, overwrite=False, compress=True, cores=4):
+    """
+    function for mosaicking, resampling and stacking of multiple raster files to a 3D data cube
+    
+    Args:
+        srcfiles: a list of file names or a list of lists; each sub-list is treated as an order to mosaic its containing files
+        dstfile: the destination file (if sesparate) or a directory
+        resampling: the resampling method; see documentation of gdalwarp
+            options: near, bilinear, cubic, cubicspline, lanczos, average, mode, max, min, med, Q1, Q3
+        targetres: a list with two entries for x and y
+        srcnodata: the nodata value of the source files
+        dstnodata: the nodata value of the destination file(s)
+        shapefile: a shapefile for defining the area of the destination files
+        layernames: the names of the output layers; if None, the basenames of the input files is used
+        sortfun: a function for sorting the input files
+        separate: should the files be written to a single raster block or separate files? If separate, each tile is written to geotiff.
+        overwrite: overwrite the file if it already exists?
+        compress: compress the geotiff files?
+        cores: the number of CPU threads to use; this is only relevant if separate = True
+
+    Returns:
+        A single raster stack in ENVI format or multiple geotiff files of same extent.
+    """
 
     if layernames is not None:
         if len(layernames) != len(srcfiles):
