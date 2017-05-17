@@ -9,6 +9,7 @@ import os
 import re
 import abc
 import ssl
+import struct
 import math
 import sqlite3
 import StringIO
@@ -314,7 +315,11 @@ class ID(object):
         this function gathers known time formats provided in the different SAR products and converts them to a common standard of the form YYYYMMDDTHHMMSS
         """
         # todo: check module time for more general approaches
-        for timeformat in ['%d-%b-%Y %H:%M:%S.%f', '%Y%m%d%H%M%S%f', '%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S.%fZ']:
+        for timeformat in ['%d-%b-%Y %H:%M:%S.%f',
+                           '%Y%m%d%H%M%S%f',
+                           '%Y-%m-%dT%H:%M:%S.%f',
+                           '%Y-%m-%dT%H:%M:%S.%fZ',
+                           '%Y%m%d%H:%M:%S.%f']:
             try:
                 return strftime('%Y%m%dT%H%M%S', strptime(x, timeformat))
             except (TypeError, ValueError):
@@ -352,7 +357,7 @@ class ID(object):
                         if item != header:
                             member = archive.getmember(item)
                             if offset is not None:
-                                member.name = member.name.replace(offset+'/', '')
+                                member.name = member.name.replace(offset + '/', '')
                             archive.extract(member, directory)
                     archive.close()
                 else:
@@ -398,6 +403,7 @@ class CEOS_ERS(ID):
     References:
         ER-IS-EPO-GS-5902-3: Annex C. ERS SAR.SLC/SLC-I. CCT and EXABYTE (ESA 1998)
     """
+
     def __init__(self, scene):
         self.pattern = r'(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_))_[012B][CP])' \
                        r'(?P<processing_stage_flag>[A-Z])' \
@@ -435,7 +441,7 @@ class CEOS_ERS(ID):
         self.meta['spacing'] = (self.meta['CEOS_PIXEL_SPACING_METERS'], self.meta['CEOS_LINE_SPACING_METERS'])
         self.meta['sensor'] = self.meta['CEOS_MISSION_ID']
         self.meta['incidence_angle'] = self.meta['CEOS_INC_ANGLE']
-        self.meta['k_db'] = -10*math.log(float(self.meta['CEOS_CALIBRATION_CONSTANT_K']), 10)
+        self.meta['k_db'] = -10 * math.log(float(self.meta['CEOS_CALIBRATION_CONSTANT_K']), 10)
         self.meta['sc_db'] = {'ERS1': 59.61, 'ERS2': 60}[self.meta['sensor']]
 
         # acquire additional metadata from the file LEA_01.001
@@ -475,7 +481,9 @@ class CEOS_ERS(ID):
                 else:
                     print 'scene already converted'
             else:
-                raise NotImplementedError('ERS {} product of {} processor in CEOS format not implemented yet'.format(self.product, self.meta['proc_system']))
+                raise NotImplementedError(
+                    'ERS {} product of {} processor in CEOS format not implemented yet'.format(self.product, self.meta[
+                        'proc_system']))
         else:
             raise NotImplementedError('sensor {} in CEOS format not implemented yet'.format(self.sensor))
 
@@ -488,31 +496,31 @@ class CEOS_ERS(ID):
         lea_obj.close()
         meta = dict()
         offset = 720
-        looks_range = float(lea[(offset+1174):(offset+1190)])
-        looks_azimuth = float(lea[(offset+1190):(offset+1206)])
+        looks_range = float(lea[(offset + 1174):(offset + 1190)])
+        looks_azimuth = float(lea[(offset + 1190):(offset + 1206)])
         meta['looks'] = (looks_range, looks_azimuth)
-        meta['heading'] = float(lea[(offset+468):(offset+476)])
+        meta['heading'] = float(lea[(offset + 468):(offset + 476)])
         meta['orbit'] = 'D' if meta['heading'] > 180 else 'A'
-        orbitNumber, frameNumber = map(int, re.findall('[0-9]+', lea[(offset+36):(offset+68)]))
+        orbitNumber, frameNumber = map(int, re.findall('[0-9]+', lea[(offset + 36):(offset + 68)]))
         meta['orbitNumber'] = orbitNumber
         meta['frameNumber'] = frameNumber
-        meta['start'] = self.parse_date(lea[(offset+1814):(offset+1838)])
-        meta['stop'] = self.parse_date(lea[(offset+1862):(offset+1886)])
+        meta['start'] = self.parse_date(lea[(offset + 1814):(offset + 1838)])
+        meta['stop'] = self.parse_date(lea[(offset + 1862):(offset + 1886)])
         # the following parameters are already read by gdalinfo
         # meta['sensor'] = lea[(offset+396):(offset+412)].strip()
         # spacing_azimuth = float(lea[(offset+1686):(offset+1702)])
         # spacing_range = float(lea[(offset+1702):(offset+1718)])
         # meta['spacing'] = (spacing_range, spacing_azimuth)
         # meta['incidence_angle'] = float(lea[(offset+484):(offset+492)])
-        meta['proc_facility'] = lea[(offset+1045):(offset+1061)].strip()
-        meta['proc_system'] = lea[(offset+1061):(offset+1069)].strip()
-        meta['proc_version'] = lea[(offset+1069):(offset+1077)].strip()
+        meta['proc_facility'] = lea[(offset + 1045):(offset + 1061)].strip()
+        meta['proc_system'] = lea[(offset + 1061):(offset + 1069)].strip()
+        meta['proc_version'] = lea[(offset + 1069):(offset + 1077)].strip()
         # text_subset = lea[re.search('FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]', lea).start() - 13:]
         # meta['k_db'] = -10*math.log(float(text_subset[663:679].strip()), 10)
         # meta['antenna_flag'] = int(text_subset[659:663].strip())
         return meta
 
-    # def correctAntennaPattern(self):
+        # def correctAntennaPattern(self):
         # the following section is only relevant for PRI products and can be considered future work
         # select antenna gain correction lookup file from extracted meta information
         # the lookup files are stored in a subfolder CAL which is included in the pythonland software package
@@ -534,7 +542,211 @@ class CEOS_ERS(ID):
         #     else:
         #         antenna = 'antenna_ERS2'
 
+
 # id = identify('/geonfs01_vol1/ve39vem/archive/SAR/ERS/DRAGON/ERS1_0132_2529_20dec95.zip')
+
+
+class CEOS_PSR(ID):
+    """
+    Handler class for ALOS PALSAR data in CEOS format
+
+    References:
+        NEB-070062B: ALOS/PALSAR Level 1.1/1.5 product Format description (JAXA 2009)
+
+    Products / processing levels:
+        1.0
+        1.1
+        1.5
+
+    Acquisition modes:
+        AB: [SP][HWDPC]
+        A: supplemental remarks of the sensor type:
+            S: Wide observation mode
+            P: all other modes
+        B: observation mode
+            H: Fine mode
+            W: ScanSAR mode
+            D: Direct downlink mode
+            P: Polarimetry mode
+            C: Calibration mode
+    """
+
+    def __init__(self, scene):
+        self.pattern = r'^LED-ALPSR' \
+                       r'(?P<sub>P|S)' \
+                       r'(?P<orbit>[0-9]{5})' \
+                       r'(?P<frame>[0-9]{4})-' \
+                       r'(?P<mode>[HWDPC])' \
+                       r'(?P<level>1\.[015])' \
+                       r'(?P<proc>G|_)' \
+                       r'(?P<proj>[UPML_])' \
+                       r'(?P<orbit_dir>A|D)$'
+
+        self.scene = os.path.realpath(scene)
+
+        self.examine()
+
+        self.meta = self.scanMetadata()
+
+        # register the standardized meta attributes as object attributes
+        ID.__init__(self, self.meta)
+
+    def calibrate(self, replace=False):
+        for image in self.getGammaImages(self.scene):
+            if image.endswith('_slc'):
+                gamma.process(
+                    ['radcal_SLC', image, image + '.par', image + '_cal', image + '_cal.par',
+                     '-', '-', '-', '-', '-', '-', self.meta['k_dB']])
+                envi.hdr(image + '_cal.par')
+
+    def getLeaderfile(self):
+        led_filename = self.findfiles(self.pattern)[0]
+        led_obj = self.getFileObj(led_filename)
+        led = led_obj.read()
+        led_obj.close()
+        return led
+
+    def scanMetadata(self):
+        led_filename = self.findfiles(self.pattern)[0]
+        led_obj = self.getFileObj(led_filename)
+        led = led_obj.read()
+        led_obj.close()
+
+        p0 = 0
+        p1 = 720
+        fileDescriptor = led[p0:p1]
+        # dss_n = int(fileDescriptor[180:186])
+        mpd_n = int(fileDescriptor[192:198])
+        # ppd_n = int(fileDescriptor[204:210])
+        # adr_n = int(fileDescriptor[216:222])
+        # rdr_n = int(fileDescriptor[228:234])
+
+        p0 = p1
+        p1 += 4096
+        dataSetSummary = led[p0:p1]
+
+        if mpd_n == 1:
+            p0 = p1
+            p1 += 1620
+            mapProjectionData = led[p0:p1]
+        else:
+            mapProjectionData = None
+
+        p0 = p1
+        p1 += 4680
+        platformPositionData = led[p0:p1]
+        p0 = p1
+        p1 += 8192
+        attitudeData = led[p0:p1]
+        p0 = p1
+        p1 += 9860
+        radiometricData = led[p0:p1]
+        p0 = p1
+        p1 += 1620
+        dataQualitySummary = led[p0:p1]
+
+        facilityRelatedData = [0] * 11
+        for i in range(0, 10):
+            p0 = p1
+            length = struct.unpack('>i', led[(p0 + 8):(p0 + 12)])[0]
+            p1 += length
+            facilityRelatedData[i] = led[p0:p1]
+
+        facilityRelatedData[10] = led[p1:]
+
+        meta = {}
+        meta['sensor'] = 'PSR1'
+        rlks = float(dataSetSummary[1190:1206])
+        azlks = float(dataSetSummary[1174:1190])
+        meta['looks'] = (rlks, azlks)
+        meta['incidence'] = float(dataSetSummary[484:492])
+        spacing_range = float(dataSetSummary[1702:1718])
+        spacing_azimuth = float(dataSetSummary[1686:1702])
+        meta['spacing'] = (spacing_range, spacing_azimuth)
+
+        match = re.match(re.compile(self.pattern), os.path.basename(led_filename))
+        meta['orbit'] = match.group('orbit_dir')
+        meta['acquisition_mode'] = match.group('sub') + match.group('mode')
+        meta['product'] = match.group('level')
+        meta['proc_facility'] = dataSetSummary[1046:1062].strip()
+        meta['proc_system'] = dataSetSummary[1062:1070].strip()
+        meta['proc_version'] = dataSetSummary[1070:1078].strip()
+        meta['samples'] = int(dataSetSummary[332:340]) * 2
+        meta['lines'] = int(dataSetSummary[324:332]) * 2
+        meta['wavelength'] = float(dataSetSummary[500:516]) * 100  # in cm
+        try:
+            start1, start2 = re.search('Img_SceneStartDateTime[ ="0-9:.]*', led).span()
+            stop1, stop2 = re.search('Img_SceneEndDateTime[ ="0-9:.]*', led).span()
+        except AttributeError:
+            raise IndexError('start and stop time stamps cannot be extracted; see file {}'.format(led_filename))
+        start_string = led[start1:start2]
+        stop_string = led[stop1:stop2]
+        meta['start'] = self.parse_date(re.sub('[a-zA-Z =_"]+', '', start_string))
+        meta['stop'] = self.parse_date(re.sub('[a-zA-Z =_"]+', '', stop_string))
+        meta['polarizations'] = [re.search('[HV]{2}', os.path.basename(x)).group(0) for x in self.findfiles('^IMG-')]
+        meta['projection'] = 'GEOGCS["WGS 84",' \
+                             'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
+                             'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
+                             'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
+                             'AUTHORITY["EPSG","4326"]]'
+        meta['k_dB'] = float(radiometricData[20:36])
+        return meta
+
+        # id = CEOS_PSR('/geonfs01_vol1/ve39vem/archive/SAR/PALSAR-1/ALPSRP224031000-H1.1__A.zip')
+
+    def convert2gamma(self, directory):
+        images = self.findfiles('^IMG-')
+        if self.product == '1.0':
+            raise RuntimeError('PALSAR-1 level 1.0 products are not supported')
+        for image in images:
+            polarization = re.search('[HV]{2}', os.path.basename(image)).group(0)
+            if self.product == '1.1':
+                outname_base = '{}_{}_slc'.format(self.outname_base(), polarization)
+                outname = os.path.join(directory, outname_base)
+                gamma.process(['par_EORC_PALSAR', self.file, outname + '.par', image, outname])
+            else:
+                outname_base = '{}_{}_mli_geo'.format(self.outname_base(), polarization)
+                outname = os.path.join(directory, outname_base)
+                gamma.process(
+                    ['par_EORC_PALSAR_geo', self.file, outname + '.par', outname + '_dem.par', image, outname])
+            envi.hdr(outname + '.par')
+
+    def unpack(self, directory):
+        outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
+        self._unpack(outdir)
+
+    def getCorners(self):
+
+        img_filename = self.findfiles('IMG')[0]
+        img_obj = self.getFileObj(img_filename)
+        imageFileDescriptor = img_obj.read(720)
+
+        lineRecordLength = int(imageFileDescriptor[186:192])  # byte per line + 412
+        numberOfRecords = int(imageFileDescriptor[180:186])
+
+        signalDataDescriptor1 = img_obj.read(412)
+        img_obj.seek(720 + lineRecordLength * (numberOfRecords-1))
+        signalDataDescriptor2 = img_obj.read()
+
+        img_obj.close()
+
+        y11 = struct.unpack('>i', signalDataDescriptor1[192:196])[0] / 1000000.
+        y12 = struct.unpack('>i', signalDataDescriptor1[200:204])[0] / 1000000.
+        x11 = struct.unpack('>i', signalDataDescriptor1[204:208])[0] / 1000000.
+        x12 = struct.unpack('>i', signalDataDescriptor1[212:216])[0] / 1000000.
+
+        y21 = struct.unpack('>i', signalDataDescriptor2[192:196])[0] / 1000000.
+        y22 = struct.unpack('>i', signalDataDescriptor2[200:204])[0] / 1000000.
+        x21 = struct.unpack('>i', signalDataDescriptor2[204:208])[0] / 1000000.
+        x22 = struct.unpack('>i', signalDataDescriptor2[212:216])[0] / 1000000.
+
+        lat = [y11, y12, y21, y22]
+        lon = [x11, x12, x21, x22]
+
+        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+
+
+# id = CEOS_PSR('/geonfs01_vol1/ve39vem/archive/SAR/PALSAR-1/ALPSRP224031000-H1.1__A.zip')
 
 
 class ESA(ID):
@@ -689,6 +901,7 @@ class SAFE(ID):
     """
     Handler class for Sentinel-1 data
     """
+
     def __init__(self, scene):
 
         self.scene = os.path.realpath(scene)
@@ -1036,6 +1249,7 @@ class TSX(ID):
         GEC: Geocoded Ellipsoid Corrected
         EEC: Enhanced Ellipsoid Corrected
     """
+
     def __init__(self, scene):
         self.scene = os.path.realpath(scene)
 
@@ -1068,7 +1282,7 @@ class TSX(ID):
         pattern = re.compile(self.pattern_ds)
         for image in images:
             pol = pattern.match(os.path.basename(image)).group('pol')
-            outname = os.path.join(directory, self.outname_base()+'_'+pol)
+            outname = os.path.join(directory, self.outname_base() + '_' + pol)
             if self.product == 'SSC':
                 outname += '_slc'
                 gamma.process(['par_TX_SLC', self.file, image, outname + '.par', outname, pol])
@@ -1089,7 +1303,8 @@ class TSX(ID):
         meta['sensor'] = tree.find('.//generalHeader/mission', namespaces).text.replace('-', '')
         meta['product'] = tree.find('.//orderInfo/productVariant', namespaces).text
         meta['orbit'] = tree.find('.//missionInfo/orbitDirection', namespaces).text[0]
-        meta['polarizations'] = [x.text for x in tree.findall('.//acquisitionInfo/polarisationList/polLayer', namespaces)]
+        meta['polarizations'] = [x.text for x in
+                                 tree.findall('.//acquisitionInfo/polarisationList/polLayer', namespaces)]
         meta['orbit_abs'] = int(tree.find('.//missionInfo/absOrbit', namespaces).text)
         meta['orbit_rel'] = int(tree.find('.//missionInfo/relOrbit', namespaces).text)
         meta['acquisition_mode'] = tree.find('.//acquisitionInfo/imagingMode', namespaces).text
@@ -1115,11 +1330,12 @@ class TSX(ID):
 
 # id = identify('/geonfs01_vol1/ve39vem/archive/SAR/TerraSAR-X/TSX1_SAR__MGD_SE___SL_S_SRA_20110902T015248_20110902T015249.zip')
 
-
+# todo: add method export2shp
 class Archive(object):
     """
-    Utility for storing relevant SAR image metadata in CSV file based database
+    Utility for storing relevant SAR image metadata in a CSV file based database
     """
+
     def __init__(self, scenelist, header=False, keys=None):
         self.scenelist = scenelist
         self.reg = {}
