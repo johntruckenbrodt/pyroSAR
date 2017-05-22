@@ -8,6 +8,7 @@ this script is intended to contain several SAR scene identifier classes to read 
 import os
 import re
 import abc
+import ast
 import ssl
 import struct
 import math
@@ -158,7 +159,7 @@ class ID(object):
         if len(files) == 1:
             self.file = files[0]
         elif len(files) == 0:
-            raise IOError('folder does not match {} scene naming convention'.format(type(self).__name__))
+            raise IOError('scene does not match {} naming convention'.format(type(self).__name__))
         else:
             raise IOError('file ambiguity detected:\n{}'.format('\n'.join(files)))
 
@@ -319,7 +320,7 @@ class ID(object):
                            '%Y%m%d%H%M%S%f',
                            '%Y-%m-%dT%H:%M:%S.%f',
                            '%Y-%m-%dT%H:%M:%S.%fZ',
-                           '%Y%m%d%H:%M:%S.%f']:
+                           '%Y%m%d %H:%M:%S.%f']:
             try:
                 return strftime('%Y%m%dT%H%M%S', strptime(x, timeformat))
             except (TypeError, ValueError):
@@ -572,19 +573,41 @@ class CEOS_PSR(ID):
     """
 
     def __init__(self, scene):
-        self.pattern = r'^LED-ALPSR' \
-                       r'(?P<sub>P|S)' \
-                       r'(?P<orbit>[0-9]{5})' \
-                       r'(?P<frame>[0-9]{4})-' \
-                       r'(?P<mode>[HWDPC])' \
-                       r'(?P<level>1\.[015])' \
-                       r'(?P<proc>G|_)' \
-                       r'(?P<proj>[UPML_])' \
-                       r'(?P<orbit_dir>A|D)$'
 
         self.scene = os.path.realpath(scene)
 
-        self.examine()
+        patterns = [r'^LED-ALPSR'
+                    r'(?P<sub>P|S)'
+                    r'(?P<orbit>[0-9]{5})'
+                    r'(?P<frame>[0-9]{4})-'
+                    r'(?P<mode>[HWDPC])'
+                    r'(?P<level>1\.[015])'
+                    r'(?P<proc>G|_)'
+                    r'(?P<proj>[UPML_])'
+                    r'(?P<orbit_dir>A|D)$',
+                    r'^LED-ALOS2'
+                    r'(?P<orbit>[0-9]{5})'
+                    r'(?P<frame>[0-9]{4})-'
+                    r'(?P<date>[0-9]{6})-'
+                    r'(?P<mode>SBS|UBS|UBD|HBS|HBD|HBQ|FBS|FBD|FBQ|WBS|WBD|WWS|WWD|VBS|VBD)'
+                    r'(?P<look_dir>L|R)'
+                    r'(?P<level>1\.0|1\.1|1\.5|2\.1|3\.1)'
+                    r'(?P<proc>[GR_])'
+                    r'(?P<proj>[UPML_])'
+                    r'(?P<orbit_dir>A|D)$']
+
+        for i, pattern in enumerate(patterns):
+            self.pattern = pattern
+            try:
+                self.examine()
+                break
+            except IOError as e:
+                if i+1 == len(patterns):
+                    raise e
+                else:
+                    continue
+
+        self.summaryFileContent = self.parseSummary()
 
         self.meta = self.scanMetadata()
 
@@ -606,93 +629,176 @@ class CEOS_PSR(ID):
         led_obj.close()
         return led
 
+    def parseSummary(self):
+        try:
+            summary_file = self.getFileObj(self.findfiles('summary|workreport')[0])
+        except IndexError:
+            return None
+        text = summary_file.read().strip()
+        summary_file.close()
+        summary = ast.literal_eval('{"' + re.sub('\s*=', '":', text).replace('\n', ',"') + '}')
+        for x, y in summary.iteritems():
+            summary[x] = parse_literal(y)
+        return summary
+
     def scanMetadata(self):
         led_filename = self.findfiles(self.pattern)[0]
         led_obj = self.getFileObj(led_filename)
         led = led_obj.read()
         led_obj.close()
 
+        meta = {}
+
         p0 = 0
-        p1 = 720
+        p1 = struct.unpack('>i', led[8:12])[0]
         fileDescriptor = led[p0:p1]
-        # dss_n = int(fileDescriptor[180:186])
+        dss_n = int(fileDescriptor[180:186])
+        dss_l = int(fileDescriptor[186:192])
         mpd_n = int(fileDescriptor[192:198])
-        # ppd_n = int(fileDescriptor[204:210])
-        # adr_n = int(fileDescriptor[216:222])
-        # rdr_n = int(fileDescriptor[228:234])
+        mpd_l = int(fileDescriptor[198:204])
+        ppd_n = int(fileDescriptor[204:210])
+        ppd_l = int(fileDescriptor[210:216])
+        adr_n = int(fileDescriptor[216:222])
+        adr_l = int(fileDescriptor[222:228])
+        rdr_n = int(fileDescriptor[228:234])
+        rdr_l = int(fileDescriptor[234:240])
+        dqs_n = int(fileDescriptor[252:258])
+        dqs_l = int(fileDescriptor[258:264])
+        meta['sensor'] = {'AL1': 'PSR1', 'AL2': 'PSR2'}[fileDescriptor[48:51]]
 
         p0 = p1
-        p1 += 4096
+        p1 += dss_l * dss_n
         dataSetSummary = led[p0:p1]
 
-        if mpd_n == 1:
+        if mpd_n > 0:
             p0 = p1
-            p1 += 1620
+            p1 += mpd_l * mpd_n
             mapProjectionData = led[p0:p1]
+
+            lat = map(float, [mapProjectionData[1072:1088],
+                              mapProjectionData[1104:1120],
+                              mapProjectionData[1136:1152],
+                              mapProjectionData[1168:1184]])
+            lon = map(float, [mapProjectionData[1088:1104],
+                              mapProjectionData[1120:1136],
+                              mapProjectionData[1152:1168],
+                              mapProjectionData[1184:1200]])
+            meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+
+            # https://github.com/datalyze-solutions/LandsatProcessingPlugin/blob/master/src/metageta/formats/alos.py
+
+            src_srs = osr.SpatialReference()
+            # src_srs.SetGeogCS('GRS 1980','GRS 1980','GRS 1980',6378137.00000,298.2572220972)
+            src_srs.SetWellKnownGeogCS("WGS84")
+            # Proj CS
+            projdesc = mapProjectionData[412:444].strip()
+            epsg = 0  # default
+            if projdesc == 'UTM-PROJECTION':
+                nZone = int(mapProjectionData[476:480])
+                dfFalseNorthing = float(mapProjectionData[496:512])
+                if dfFalseNorthing > 0.0:
+                    bNorth = False
+                    epsg = 32700 + nZone
+                else:
+                    bNorth = True
+                    epsg = 32600 + nZone
+                src_srs.ImportFromEPSG(epsg)
+                # src_srs.SetUTM(nZone,bNorth) #generates WKT that osr.SpatialReference.AutoIdentifyEPSG() doesn't return an EPSG for
+            elif projdesc == 'UPS-PROJECTION':
+                dfCenterLon = float(mapProjectionData[624, 640])
+                dfCenterLat = float(mapProjectionData[640, 656])
+                dfScale = float(mapProjectionData[656, 672])
+                src_srs.SetPS(dfCenterLat, dfCenterLon, dfScale, 0.0, 0.0)
+            elif projdesc == 'MER-PROJECTION':
+                dfCenterLon = float(mapProjectionData[736, 752])
+                dfCenterLat = float(mapProjectionData[752, 768])
+                src_srs.SetMercator(dfCenterLat, dfCenterLon, 0, 0, 0)
+            elif projdesc == 'LCC-PROJECTION':
+                dfCenterLon = float(mapProjectionData[736, 752])
+                dfCenterLat = float(mapProjectionData[752, 768])
+                dfStdP1 = float(mapProjectionData[768, 784])
+                dfStdP2 = float(mapProjectionData[784, 800])
+                src_srs.SetLCC(dfStdP1, dfStdP2, dfCenterLat, dfCenterLon, 0, 0)
+            meta['projection'] = src_srs.ExportToWkt()
+
         else:
-            mapProjectionData = None
+            meta['projection'] = 'GEOGCS["WGS 84",' \
+                                 'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
+                                 'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
+                                 'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
+                                 'AUTHORITY["EPSG","4326"]]'
 
         p0 = p1
-        p1 += 4680
+        p1 += ppd_l * ppd_n
         platformPositionData = led[p0:p1]
         p0 = p1
-        p1 += 8192
+        p1 += adr_l * adr_n
         attitudeData = led[p0:p1]
         p0 = p1
-        p1 += 9860
+        p1 += rdr_l * rdr_n
         radiometricData = led[p0:p1]
         p0 = p1
-        p1 += 1620
+        p1 += dqs_l * dqs_n
         dataQualitySummary = led[p0:p1]
 
-        facilityRelatedData = [0] * 11
-        for i in range(0, 10):
+        facilityRelatedData = []
+
+        while p1 < len(led):
             p0 = p1
             length = struct.unpack('>i', led[(p0 + 8):(p0 + 12)])[0]
             p1 += length
-            facilityRelatedData[i] = led[p0:p1]
+            facilityRelatedData.append(led[p0:p1])
 
-        facilityRelatedData[10] = led[p1:]
+        # for i in range(0, 10):
+        #     p0 = p1
+        #     length = struct.unpack('>i', led[(p0 + 8):(p0 + 12)])[0]
+        #     print length
+        #     p1 += length
+        #     facilityRelatedData[i] = led[p0:p1]
+        #
+        # facilityRelatedData[10] = led[p1:]
 
-        meta = {}
-        meta['sensor'] = 'PSR1'
-        rlks = float(dataSetSummary[1190:1206])
-        azlks = float(dataSetSummary[1174:1190])
-        meta['looks'] = (rlks, azlks)
+        meta['lines'] = int(dataSetSummary[324:332]) * 2
+        meta['samples'] = int(dataSetSummary[332:340]) * 2
         meta['incidence'] = float(dataSetSummary[484:492])
-        spacing_range = float(dataSetSummary[1702:1718])
-        spacing_azimuth = float(dataSetSummary[1686:1702])
-        meta['spacing'] = (spacing_range, spacing_azimuth)
-
-        match = re.match(re.compile(self.pattern), os.path.basename(led_filename))
-        meta['orbit'] = match.group('orbit_dir')
-        meta['acquisition_mode'] = match.group('sub') + match.group('mode')
-        meta['product'] = match.group('level')
+        meta['wavelength'] = float(dataSetSummary[500:516]) * 100  # in cm
         meta['proc_facility'] = dataSetSummary[1046:1062].strip()
         meta['proc_system'] = dataSetSummary[1062:1070].strip()
         meta['proc_version'] = dataSetSummary[1070:1078].strip()
-        meta['samples'] = int(dataSetSummary[332:340]) * 2
-        meta['lines'] = int(dataSetSummary[324:332]) * 2
-        meta['wavelength'] = float(dataSetSummary[500:516]) * 100  # in cm
+
+        azlks = float(dataSetSummary[1174:1190])
+        rlks = float(dataSetSummary[1190:1206])
+        meta['looks'] = (rlks, azlks)
+
+        meta['orbit'] = dataSetSummary[1534:1542].strip()[0]
+
+        spacing_azimuth = float(dataSetSummary[1686:1702])
+        spacing_range = float(dataSetSummary[1702:1718])
+        meta['spacing'] = (spacing_range, spacing_azimuth)
+
+        match = re.match(re.compile(self.pattern), os.path.basename(led_filename))
+
+        if meta['sensor'] == 'PSR1':
+            meta['acquisition_mode'] = match.group('sub') + match.group('mode')
+        else:
+            meta['acquisition_mode'] = match.group('mode')
+        meta['product'] = match.group('level')
+
         try:
-            start1, start2 = re.search('Img_SceneStartDateTime[ ="0-9:.]*', led).span()
-            stop1, stop2 = re.search('Img_SceneEndDateTime[ ="0-9:.]*', led).span()
-        except AttributeError:
-            raise IndexError('start and stop time stamps cannot be extracted; see file {}'.format(led_filename))
-        start_string = led[start1:start2]
-        stop_string = led[stop1:stop2]
-        meta['start'] = self.parse_date(re.sub('[a-zA-Z =_"]+', '', start_string))
-        meta['stop'] = self.parse_date(re.sub('[a-zA-Z =_"]+', '', stop_string))
+            meta['start'] = self.parse_date(self.summaryFileContent['Img_SceneStartDateTime'])
+            meta['stop'] = self.parse_date(self.summaryFileContent['Img_SceneEndDateTime'])
+        except (AttributeError, KeyError):
+            try:
+                start_string = re.search('Img_SceneStartDateTime[ ="0-9:.]*', led).group()
+                stop_string = re.search('Img_SceneEndDateTime[ ="0-9:.]*', led).group()
+                meta['start'] = self.parse_date(re.search('\d+\s[\d:.]+', start_string).group())
+                meta['stop'] = self.parse_date(re.search('\d+\s[\d:.]+', stop_string).group())
+            except AttributeError:
+                raise IndexError('start and stop time stamps cannot be extracted; see file {}'.format(led_filename))
+
         meta['polarizations'] = [re.search('[HV]{2}', os.path.basename(x)).group(0) for x in self.findfiles('^IMG-')]
-        meta['projection'] = 'GEOGCS["WGS 84",' \
-                             'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
-                             'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
-                             'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
-                             'AUTHORITY["EPSG","4326"]]'
         meta['k_dB'] = float(radiometricData[20:36])
         return meta
-
-        # id = CEOS_PSR('/geonfs01_vol1/ve39vem/archive/SAR/PALSAR-1/ALPSRP224031000-H1.1__A.zip')
 
     def convert2gamma(self, directory):
         images = self.findfiles('^IMG-')
@@ -717,36 +823,42 @@ class CEOS_PSR(ID):
 
     def getCorners(self):
 
-        img_filename = self.findfiles('IMG')[0]
-        img_obj = self.getFileObj(img_filename)
-        imageFileDescriptor = img_obj.read(720)
+        if 'corners' not in self.meta.keys():
+            if self.summaryFileContent:
+                lat = [y for x, y in self.summaryFileContent.iteritems() if 'Latitude' in x]
+                lon = [y for x, y in self.summaryFileContent.iteritems() if 'Longitude' in x]
+            else:
 
-        lineRecordLength = int(imageFileDescriptor[186:192])  # byte per line + 412
-        numberOfRecords = int(imageFileDescriptor[180:186])
+                # todo: add option to read from map projection data record in led file if it exists
+                img_filename = self.findfiles('IMG')[0]
+                img_obj = self.getFileObj(img_filename)
+                imageFileDescriptor = img_obj.read(720)
 
-        signalDataDescriptor1 = img_obj.read(412)
-        img_obj.seek(720 + lineRecordLength * (numberOfRecords-1))
-        signalDataDescriptor2 = img_obj.read()
+                lineRecordLength = int(imageFileDescriptor[186:192])  # bytes per line + 412
+                numberOfRecords = int(imageFileDescriptor[180:186])
 
-        img_obj.close()
+                signalDataDescriptor1 = img_obj.read(412)
+                img_obj.seek(720 + lineRecordLength * (numberOfRecords - 1))
+                signalDataDescriptor2 = img_obj.read()
 
-        y11 = struct.unpack('>i', signalDataDescriptor1[192:196])[0] / 1000000.
-        y12 = struct.unpack('>i', signalDataDescriptor1[200:204])[0] / 1000000.
-        x11 = struct.unpack('>i', signalDataDescriptor1[204:208])[0] / 1000000.
-        x12 = struct.unpack('>i', signalDataDescriptor1[212:216])[0] / 1000000.
+                img_obj.close()
 
-        y21 = struct.unpack('>i', signalDataDescriptor2[192:196])[0] / 1000000.
-        y22 = struct.unpack('>i', signalDataDescriptor2[200:204])[0] / 1000000.
-        x21 = struct.unpack('>i', signalDataDescriptor2[204:208])[0] / 1000000.
-        x22 = struct.unpack('>i', signalDataDescriptor2[212:216])[0] / 1000000.
+                lat = [signalDataDescriptor1[192:196], signalDataDescriptor1[200:204],
+                       signalDataDescriptor2[192:196], signalDataDescriptor2[200:204]]
 
-        lat = [y11, y12, y21, y22]
-        lon = [x11, x12, x21, x22]
+                lon = [signalDataDescriptor1[204:208], signalDataDescriptor1[212:216],
+                       signalDataDescriptor2[204:208], signalDataDescriptor2[212:216]]
 
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+                lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
+                lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
+
+            self.meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+
+        return self.meta['corners']
 
 
 # id = CEOS_PSR('/geonfs01_vol1/ve39vem/archive/SAR/PALSAR-1/ALPSRP224031000-H1.1__A.zip')
+# id = CEOS_PSR('/geonfs01_vol1/ve39vem/archive/SAR/PALSAR-2/ALOS2048992750-150420-FBDR1.5RUD.zip')
 
 
 class ESA(ID):
