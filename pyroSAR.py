@@ -59,9 +59,9 @@ class ID(object):
 
     def __init__(self, metadict):
         # additional variables? looks, coordinates, ...
-        locals = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
-                  'spacing', 'samples', 'lines']
-        for item in locals:
+        self.locals = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
+                       'spacing', 'samples', 'lines']
+        for item in self.locals:
             setattr(self, item, metadict[item])
 
     def bbox(self, outname=None, overwrite=True):
@@ -328,9 +328,8 @@ class ID(object):
         raise ValueError('unknown time format; check function ID.parse_date')
 
     def summary(self):
-        for item in sorted(self.__dict__.keys()):
-            if item != 'meta':
-                print '{0}: {1}'.format(item, getattr(self, item))
+        for item in sorted(self.locals):
+            print '{0}: {1}'.format(item, getattr(self, item))
 
     @abc.abstractmethod
     def scanMetadata(self):
@@ -544,12 +543,12 @@ class CEOS_ERS(ID):
         #         antenna = 'antenna_ERS2'
 
 
-# id = identify('/geonfs01_vol1/ve39vem/archive/SAR/ERS/DRAGON/ERS1_0132_2529_20dec95.zip')
+# id = CEOS_ERS('/geonfs01_vol1/ve39vem/archive/SAR/ERS/DRAGON/ERS1_0132_2529_20dec95.zip')
 
 
 class CEOS_PSR(ID):
     """
-    Handler class for ALOS PALSAR data in CEOS format
+    Handler class for ALOS-PALSAR data in CEOS format
 
     PALSAR-1:
 
@@ -631,12 +630,10 @@ class CEOS_PSR(ID):
                 self.examine()
                 break
             except IOError as e:
-                if i+1 == len(patterns):
+                if i + 1 == len(patterns):
                     raise e
                 else:
                     continue
-
-        self.summaryFileContent = self.parseSummary()
 
         self.meta = self.scanMetadata()
 
@@ -662,7 +659,7 @@ class CEOS_PSR(ID):
         try:
             summary_file = self.getFileObj(self.findfiles('summary|workreport')[0])
         except IndexError:
-            return None
+            return {}
         text = summary_file.read().strip()
         summary_file.close()
         summary = ast.literal_eval('{"' + re.sub('\s*=', '":', text).replace('\n', ',"') + '}')
@@ -676,7 +673,7 @@ class CEOS_PSR(ID):
         led = led_obj.read()
         led_obj.close()
 
-        meta = {}
+        meta = self.parseSummary()
 
         p0 = 0
         p1 = struct.unpack('>i', led[8:12])[0]
@@ -814,8 +811,8 @@ class CEOS_PSR(ID):
         meta['product'] = match.group('level')
 
         try:
-            meta['start'] = self.parse_date(self.summaryFileContent['Img_SceneStartDateTime'])
-            meta['stop'] = self.parse_date(self.summaryFileContent['Img_SceneEndDateTime'])
+            meta['start'] = self.parse_date(self.meta['Img_SceneStartDateTime'])
+            meta['stop'] = self.parse_date(self.meta['Img_SceneEndDateTime'])
         except (AttributeError, KeyError):
             try:
                 start_string = re.search('Img_SceneStartDateTime[ ="0-9:.]*', led).group()
@@ -850,15 +847,12 @@ class CEOS_PSR(ID):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir)
 
+    # todo: create summary/workreport entries for coordinates if they were read from an IMG file
     def getCorners(self):
-
         if 'corners' not in self.meta.keys():
-            if self.summaryFileContent:
-                lat = [y for x, y in self.summaryFileContent.iteritems() if 'Latitude' in x]
-                lon = [y for x, y in self.summaryFileContent.iteritems() if 'Longitude' in x]
-            else:
-
-                # todo: add option to read from map projection data record in led file if it exists
+            lat = [y for x, y in self.meta.iteritems() if 'Latitude' in x]
+            lon = [y for x, y in self.meta.iteritems() if 'Longitude' in x]
+            if len(lat) == 0 or len(lon) == 0:
                 img_filename = self.findfiles('IMG')[0]
                 img_obj = self.getFileObj(img_filename)
                 imageFileDescriptor = img_obj.read(720)
@@ -892,7 +886,7 @@ class CEOS_PSR(ID):
 
 class ESA(ID):
     """
-    Handler class for SAR data in ESA format (Envisat, ERS)
+    Handler class for SAR data in ESA format (Envisat ASAR, ERS)
     """
 
     def __init__(self, scene):
@@ -951,7 +945,7 @@ class ESA(ID):
         lat = [self.meta[x] for x in self.meta if re.search('LAT', x)]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
 
-    # todo: prevent conversion if target files already exists
+    # todo: prevent conversion if target files already exist
     def convert2gamma(self, directory):
         """
         the command par_ASAR also accepts a K_dB argument in which case the resulting image names will carry the suffix GRD;
@@ -1007,34 +1001,6 @@ class ESA(ID):
         outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
 
         self._unpack(outdir)
-
-
-# class RS2(ID):
-#     def __init__(self, scene):
-#
-#         raise IOError
-#
-#         self.pattern = r'^(?:RS2|RSAT2)_(?:OK[0-9]+)_(?:PK[0-9]+)_(?:DK[0-9]+)_' \
-#                        r'(?P<beam>[0-9A-Z]+)_' \
-#                        r'(?P<date>[0-9]{8})_' \
-#                        r'(?P<time>[0-9]{6})_' \
-#                        r'(?P<pols>[HV]{2}_' \
-#                        r'(?P<level>SLC|SGX|SGF|SCN|SCW|SSG|SPG)$'
-#
-#         self.sensor = 'RS2'
-#         self.scene = os.path.realpath(scene)
-#         self.gdalinfo(self.scene)
-#         self.start = self.ACQUISITION_START_TIME
-#         self.incidence = (self.FAR_RANGE_INCIDENCE_ANGLE + self.NEAR_RANGE_INCIDENCE_ANGLE)/2
-#         self.spacing = (self.PIXEL_SPACING, self.LINE_SPACING)
-#         self.orbit = self.ORBIT_DIRECTION[0]
-#
-#     def getCorners(self):
-#         lat = [x[1][1] for x in self.gcps]
-#         lon = [x[1][0] for x in self.gcps]
-#         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-
-# id = identify('/geonfs01_vol1/ve39vem/RS2/RS2_OK53107_PK504800_DK448361_FQ1_20140606_055403_HH_VV_HV_VH_SLC.zip')
 
 
 # todo: check self.file and self.scene assignment after unpacking
