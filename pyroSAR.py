@@ -551,25 +551,54 @@ class CEOS_PSR(ID):
     """
     Handler class for ALOS PALSAR data in CEOS format
 
-    References:
-        NEB-070062B: ALOS/PALSAR Level 1.1/1.5 product Format description (JAXA 2009)
+    PALSAR-1:
 
-    Products / processing levels:
-        1.0
-        1.1
-        1.5
-
-    Acquisition modes:
-        AB: [SP][HWDPC]
-        A: supplemental remarks of the sensor type:
-            S: Wide observation mode
-            P: all other modes
-        B: observation mode
-            H: Fine mode
-            W: ScanSAR mode
-            D: Direct downlink mode
-            P: Polarimetry mode
-            C: Calibration mode
+        References:
+            NEB-070062B: ALOS/PALSAR Level 1.1/1.5 product Format description (JAXA 2009)
+    
+        Products / processing levels:
+            1.0
+            1.1
+            1.5
+    
+        Acquisition modes:
+            AB: [SP][HWDPC]
+            A: supplemental remarks of the sensor type:
+                S: Wide observation mode
+                P: all other modes
+            B: observation mode
+                H: Fine mode
+                W: ScanSAR mode
+                D: Direct downlink mode
+                P: Polarimetry mode
+                C: Calibration mode
+    
+    PALSAR-2:
+    
+        References:
+            ALOS-2/PALSAR-2 Level 1.1/1.5/2.1/3.1 CEOS SAR Product Format Description
+        
+        Products / processing levels:
+            1.0
+            1.1
+            1.5
+        
+        Acquisition modes:
+            SBS: Spotlight mode 
+            UBS: Ultra-fine mode Single polarization 
+            UBD: Ultra-fine mode Dual polarization 
+            HBS: High-sensitive mode Single polarization
+            HBD: High-sensitive mode Dual polarization 
+            HBQ: High-sensitive mode Full (Quad.) polarimetry 
+            FBS: Fine mode Single polarization 
+            FBD: Fine mode Dual polarization 
+            FBQ: Fine mode Full (Quad.) polarimetry 
+            WBS: Scan SAR nominal [14MHz] mode Single polarization 
+            WBD: Scan SAR nominal [14MHz] mode Dual polarization 
+            WWS: Scan SAR nominal [28MHz] mode Single polarization 
+            WWD: Scan SAR nominal [28MHz] mode Dual polarization 
+            VBS: Scan SAR wide mode Single polarization 
+            VBD: Scan SAR wide mode Dual polarization
     """
 
     def __init__(self, scene):
