@@ -10,8 +10,10 @@ import re
 import abc
 import ast
 import ssl
+import inspect
 import struct
 import math
+import progressbar as pb
 import sqlite3
 import StringIO
 import numpy as np
@@ -1447,7 +1449,7 @@ class Archive(object):
         self.scenelist = scenelist
         self.reg = {}
         if keys is None:
-            self.keys = ['sensor', 'acquisition_mode', 'polarizations', 'scene', 'bbox']
+            self.keys = ['sensor', 'acquisition_mode', 'polarizations', 'scene', 'bbox', 'outname_base']
         if os.path.isfile(self.scenelist):
             self.file = open(scenelist, 'a+', 0)
             if header:
@@ -1464,6 +1466,29 @@ class Archive(object):
 
     def __enter__(self):
         return self
+
+    def add_attribute(self, attribute):
+        self.close()
+        with open(self.scenelist, 'r+') as f:
+            lines = f.readlines()
+            header = lines[0].strip().split(';')
+            header.append(attribute)
+            del lines[0]
+            f.seek(0)
+            f.truncate()
+            f.write(';'.join(header) + '\n')
+            pbar = pb.ProgressBar(maxval=len(lines)).start()
+            for i, line in enumerate(lines):
+                items = dict(zip(header, line.strip().split(';')))
+                id = identify(items['scene'])
+                attr = getattr(id, attribute)
+                value = attr() if inspect.ismethod(attr) else attr
+                items[attribute] = value
+                line = line.replace('\n', ';'+value+'\n')
+                f.write(line)
+                pbar.update(i+1)
+            pbar.finish()
+        self.__init__(self.scenelist)
 
     def update(self, scenes):
         for scene in scenes:
