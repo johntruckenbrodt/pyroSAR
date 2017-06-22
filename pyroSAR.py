@@ -5,6 +5,7 @@
 """
 this script is intended to contain several SAR scene identifier classes to read basic metadata from the scene folders/files, convert to GAMMA format and do simple pre-processing
 """
+from __future__ import print_function
 import os
 import re
 import abc
@@ -24,6 +25,8 @@ from urllib2 import urlopen, URLError
 import xml.etree.ElementTree as ET
 from time import strptime, strftime
 from datetime import datetime, timedelta
+from pysqlite2 import dbapi2 as sqlite3
+
 
 from osgeo import gdal, ogr, osr
 from osgeo.gdalconst import GA_ReadOnly, GA_Update
@@ -35,6 +38,9 @@ import linesimplify as ls
 from xml_util import getNamespaces
 from ancillary import finder, parse_literal, urlQueryParser, run
 
+__LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
+             'spacing', 'samples', 'lines']
+
 
 def identify(scene):
     """Return a metadata handler of the given scene."""
@@ -44,6 +50,26 @@ def identify(scene):
         except (IOError, KeyError):
             pass
     raise IOError('data format not supported')
+
+
+def identify_many(scenes):
+    """
+    return metadata handlers of all valid scenes in a list
+    """
+    idlist = []
+    pbar = pb.ProgressBar(maxval=len(scenes)).start()
+    for i, scene in enumerate(scenes):
+        if isinstance(scene, ID):
+            idlist.append(scene)
+        else:
+            try:
+                id = identify(scene)
+                idlist.append(id)
+            except IOError:
+                continue
+        pbar.update(i + 1)
+    pbar.finish()
+    return idlist
 
 
 def filter_processed(scenelist, outdir, recursive=False):
@@ -61,8 +87,7 @@ class ID(object):
 
     def __init__(self, metadict):
         # additional variables? looks, coordinates, ...
-        self.locals = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
-                       'spacing', 'samples', 'lines']
+        self.locals = __LOCAL__
         for item in self.locals:
             setattr(self, item, metadict[item])
 
@@ -103,13 +128,12 @@ class ID(object):
         """
         Export the most important metadata in a sqlite database which is located in the same folder as the source file.
         """
-        print 'Begin export'
+        print('Begin export')
         if self.compression is None:
             raise RuntimeError('Uncompressed data is not suitable for the metadata base')
 
         database = os.path.join(os.path.dirname(self.scene), 'data.db') if target is None else target
         conn = sqlite3.connect(database)
-        # todo: following line doesn't work:
         conn.enable_load_extension(True)
         conn.execute('SELECT load_extension("libspatialite")')
         conn.execute('SELECT InitSpatialMetaData();')
@@ -147,7 +171,7 @@ class ID(object):
         try:
             cursor.execute(insert_string, input)
         except sqlite3.IntegrityError as e:
-            print 'SQL error:', e
+            print('SQL error:', e)
 
         conn.commit()
         conn.close()
@@ -331,7 +355,7 @@ class ID(object):
 
     def summary(self):
         for item in sorted(self.locals):
-            print '{0}: {1}'.format(item, getattr(self, item))
+            print('{0}: {1}'.format(item, getattr(self, item)))
 
     @abc.abstractmethod
     def scanMetadata(self):
@@ -481,7 +505,7 @@ class CEOS_ERS(ID):
                     title = re.sub('\.PS$', '', os.path.basename(self.file))
                     gamma.process(['par_ESA_ERS', lea, outname + '.par', dat, outname], inlist=[title])
                 else:
-                    print 'scene already converted'
+                    print('scene already converted')
             else:
                 raise NotImplementedError(
                     'ERS {} product of {} processor in CEOS format not implemented yet'.format(self.product, self.meta[
@@ -885,7 +909,7 @@ class CEOS_PSR(ID):
 # id = CEOS_PSR('/geonfs01_vol1/ve39vem/archive/SAR/PALSAR-1/ALPSRP224031000-H1.1__A.zip')
 # id = CEOS_PSR('/geonfs01_vol1/ve39vem/archive/SAR/PALSAR-2/ALOS2048992750-150420-FBDR1.5RUD.zip')
 
-#todo: check this file: '/geonfs01_vol1/ve39vem/swos_archive/SAR_IMP_1P2ASI19910729_203023_00000017A906_00129_00183_1771.E1.zip'
+# todo: check this file: '/geonfs01_vol1/ve39vem/swos_archive/SAR_IMP_1P2ASI19910729_203023_00000017A906_00129_00183_1771.E1.zip'
 class ESA(ID):
     """
     Handler class for SAR data in ESA format (Envisat ASAR, ERS)
@@ -1116,7 +1140,7 @@ class SAFE(ID):
 
         # iterate over the four image subsets
         for subset in subsets:
-            print subset
+            print(subset)
             xmin, ymin, xmax, ymax = subset
             xdiff = xmax - xmin
             ydiff = ymax - ymin
@@ -1193,7 +1217,7 @@ class SAFE(ID):
             ras = None
 
     def calibrate(self, replace=False):
-        print 'calibration already performed during import'
+        print('calibration already performed during import')
 
     def convert2gamma(self, directory, noiseremoval=True):
         if self.compression is not None:
@@ -1251,7 +1275,7 @@ class SAFE(ID):
         try:
             self.getOSV(osvdir)
         except URLError:
-            print '..no internet access'
+            print('..no internet access')
         for image in self.getGammaImages(self.scene):
             gamma.process(['OPOD_vec', image + '.par', osvdir], outdir=logdir)
 
@@ -1439,105 +1463,248 @@ class TSX(ID):
 
 # id = identify('/geonfs01_vol1/ve39vem/archive/SAR/TerraSAR-X/TSX1_SAR__MGD_SE___SL_S_SRA_20110902T015248_20110902T015249.zip')
 
+
 # todo: add method export2shp
 class Archive(object):
     """
-    Utility for storing relevant SAR image metadata in a CSV file based database
+    Utility for storing SAR image metadata in a spatialite database
     """
 
-    def __init__(self, scenelist, header=False, keys=None):
-        self.scenelist = scenelist
-        self.reg = {}
-        if keys is None:
-            self.keys = ['sensor', 'acquisition_mode', 'polarizations', 'scene', 'bbox', 'outname_base']
-        if os.path.isfile(self.scenelist):
-            self.file = open(scenelist, 'a+', 0)
-            if header:
-                self.keys = self.file.readline().strip().split(';')
-            for line in self.file:
-                items = dict(zip(self.keys, line.strip().split(';')))
-                base = os.path.basename(items['scene'])
-                self.reg[base] = items
-            self.file.seek(0)
+    def __init__(self, dbfile):
+        self.dbfile = dbfile
+        self.conn = sqlite3.connect(self.dbfile)
+        self.conn.enable_load_extension(True)
+        self.conn.execute('SELECT load_extension("libspatialite")')
+        if 'spatial_ref_sys' not in self.get_tablenames():
+            self.conn.execute('SELECT InitSpatialMetaData();')
+
+        self.lookup = {'sensor': 'TEXT',
+                       'projection': 'TEXT',
+                       'orbit': 'TEXT',
+                       'polarizations': 'TEXT',
+                       'acquisition_mode': 'TEXT',
+                       'start': 'TEXT',
+                       'stop': 'TEXT',
+                       'product': 'TEXT',
+                       'samples': 'INTEGER',
+                       'lines': 'INTEGER',
+                       'outname_base': 'TEXT PRIMARY KEY',
+                       'scene': 'TEXT'}
+        create_string = '''CREATE TABLE if not exists data ({})'''.format(
+            ', '.join([' '.join(x) for x in self.lookup.items()]))
+        cursor = self.conn.cursor()
+        cursor.execute(create_string)
+        if 'bbox' not in self.get_colnames():
+            cursor.execute('SELECT AddGeometryColumn("data","bbox" , 4326, "POLYGON", "XY", 0)')
+        self.conn.commit()
+
+    def __prepare_insertion(self, scene):
+        id = scene if isinstance(scene, ID) else identify(scene)
+        insertion = []
+        colnames = self.get_colnames()
+        for attribute in colnames:
+            if attribute == 'bbox':
+                geom = id.bbox().convert2wkt()[0]
+                insertion.append(geom)
+            elif attribute == 'polarizations':
+                insertion.append(', '.join(id.polarizations))
+            else:
+                attr = getattr(id, attribute)
+                value = attr() if inspect.ismethod(attr) else attr
+                insertion.append(value)
+        insert_string = '''INSERT INTO data({0}) VALUES({1})''' \
+            .format(', '.join(colnames),
+                    ', '.join(['GeomFromText(?, 4326)' if x == 'bbox' else '?' for x in colnames]))
+        return insert_string, tuple(insertion)
+
+    def insert(self, scene_in, verbose=False):
+
+        if isinstance(scene_in, (ID, str)):
+            scenes = [scene_in if isinstance(scene_in, ID) else identify(scene_in)]
+        elif isinstance(scene_in, list):
+            print('filtering scenes by name...')
+            scenes = self.filter_scenelist(scene_in)
+            print('extracting scene metadata...')
+            scenes = identify_many(scenes)
         else:
-            self.file = open(scenelist, 'w', 0)
-            if header:
-                self.file.write(';'.join(self.keys) + '\n')
+            raise RuntimeError('scene_in must either be a string pointing to a file, a pyroSAR.ID object '
+                               'or a list containing several of either')
+
+        pbar = pb.ProgressBar(maxval=len(scenes)).start()
+        for i, id in enumerate(scenes):
+            insert_string, insertion = self.__prepare_insertion(id)
+            try:
+                self.conn.execute(insert_string, insertion)
+                self.conn.commit()
+            except sqlite3.IntegrityError as e:
+                if str(e) == 'UNIQUE constraint failed: data.outname_base':
+                    cursor = self.conn.execute('SELECT scene FROM data WHERE outname_base=?', (id.outname_base(),))
+                    scene = cursor.fetchone()[0].encode('ascii')
+                    if verbose:
+                        print('scene is already registered in the database at this location:', scene)
+                else:
+                    raise e
+            pbar.update(i + 1)
+        pbar.finish()
+
+    def filter_scenelist(self, scenelist):
+        """
+        filter a list of scenes by their filenames.
+
+        Args:
+            scenelist: a list of scenes (absolute path strings or pyroSAR.ID objects)
+
+        Returns: a list which only contains files whose basename is not yet registered in the database
+
+        """
+        cursor = self.conn.execute('SELECT scene FROM data')
+        registered = [os.path.basename(x[0].encode('ascii')) for x in cursor.fetchall()]
+        return [x for x in scenelist if os.path.basename(x) not in registered]
+
+    def get_colnames(self):
+        cursor = self.conn.execute('''PRAGMA table_info(data)''')
+        return [x[1].encode('ascii') for x in cursor.fetchall()]
+
+    def get_tablenames(self):
+        cursor = self.conn.execute('''SELECT * FROM sqlite_master WHERE type="table"''')
+        return [x[1].encode('ascii') for x in cursor.fetchall()]
+
+    def select(self, vectorobject=None, **args):
+        arg_valid = [x for x in args.keys() if x in self.get_colnames()]
+        arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
+        if len(arg_invalid) > 0:
+            print('the following arguments will be ignored as they are not registered in the data base: {}'.format(
+                ', '.join(arg_invalid)))
+        arg_format = []
+        vals = []
+        for key in arg_valid:
+            if isinstance(args[key], (float, int, str)):
+                arg_format.append('{0}="{1}"'.format(key, args[key]))
+            elif isinstance(args[key], (tuple, list)):
+                arg_format.append('{0} IN ("{1}")'.format(key, '", "'.join(map(str, args[key]))))
+        if vectorobject:
+            vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
+            site_geom = vectorobject.convert2wkt(set3D=False)[0]
+            arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
+            vals.append(site_geom)
+
+        query = '''SELECT scene FROM data WHERE {}'''.format(' AND '.join(arg_format))
+        print(query)
+        cursor = self.conn.execute(query, tuple(vals))
+        return [x[0].encode('ascii') for x in cursor.fetchall()]
+
+    @property
+    def size(self):
+        cursor = self.conn.execute('''SELECT Count(*) FROM data''')
+        return cursor.fetchone()[0]
 
     def __enter__(self):
         return self
 
-    def add_attribute(self, attribute):
-        self.close()
-        with open(self.scenelist, 'r+') as f:
-            lines = f.readlines()
-            header = lines[0].strip().split(';')
-            header.append(attribute)
-            del lines[0]
-            f.seek(0)
-            f.truncate()
-            f.write(';'.join(header) + '\n')
-            pbar = pb.ProgressBar(maxval=len(lines)).start()
-            for i, line in enumerate(lines):
-                items = dict(zip(header, line.strip().split(';')))
-                id = identify(items['scene'])
-                attr = getattr(id, attribute)
-                value = attr() if inspect.ismethod(attr) else attr
-                items[attribute] = value
-                line = line.replace('\n', ';'+value+'\n')
-                f.write(line)
-                pbar.update(i+1)
-            pbar.finish()
-        self.__init__(self.scenelist)
-
-    def update(self, scenes):
-        for scene in scenes:
-            base = os.path.basename(scene)
-            if base not in self.reg:
-                try:
-                    id = identify(scene)
-                except IOError:
-                    print 'failed:', base
-                    continue
-                print base
-                items = [id.sensor, id.acquisition_mode, ','.join(id.polarizations), id.scene,
-                         id.bbox().convert2wkt()[0]]
-                self.file.write(';'.join(items) + '\n')
-                self.reg[base] = dict(zip(self.keys, items))
-
-    def select(self, vectorobject):
-        vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
-        site_geom = ogr.CreateGeometryFromWkt(vectorobject.convert2wkt()[0])
-        selection_site = []
-        for entry in self.reg:
-            geom = ogr.CreateGeometryFromWkt(self.reg[entry]['bbox'])
-            intersection = geom.Intersection(site_geom)
-            if intersection.GetArea() > 0:
-                selection_site.append(self.reg[entry]['scene'])
-        return selection_site
-
-    def delete(self, filename):
-        for entry in self.reg:
-            if self.reg[entry]['scene'] == filename:
-                del self.reg[entry]
-                break
-        with open(self.scenelist, 'r+') as f:
-            lines = f.readlines()
-            f.seek(0)
-            for line in lines:
-                if not re.search(filename, line):
-                    f.write(line)
-            f.truncate()
-        if os.path.isfile(filename):
-            print filename
-            os.remove(filename)
-
-    @property
-    def size(self):
-        return len(self.reg)
-
     def close(self):
-        self.file.close()
+        self.conn.close()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.file.close()
+        self.conn.close()
+
+# class Archive(object):
+#     """
+#     Utility for storing relevant SAR image metadata in a CSV file based database
+#     """
+#
+#     def __init__(self, scenelist, header=False, keys=None):
+#         self.scenelist = scenelist
+#         self.reg = {}
+#         if keys is None:
+#             self.keys = ['sensor', 'acquisition_mode', 'polarizations', 'scene', 'bbox', 'outname_base']
+#         if os.path.isfile(self.scenelist):
+#             self.file = open(scenelist, 'a+', 0)
+#             if header:
+#                 self.keys = self.file.readline().strip().split(';')
+#             for line in self.file:
+#                 items = dict(zip(self.keys, line.strip().split(';')))
+#                 base = os.path.basename(items['scene'])
+#                 self.reg[base] = items
+#             self.file.seek(0)
+#         else:
+#             self.file = open(scenelist, 'w', 0)
+#             if header:
+#                 self.file.write(';'.join(self.keys) + '\n')
+#
+#     def __enter__(self):
+#         return self
+#
+#     def add_attribute(self, attribute):
+#         self.close()
+#         with open(self.scenelist, 'r+') as f:
+#             lines = f.readlines()
+#             header = lines[0].strip().split(';')
+#             header.append(attribute)
+#             del lines[0]
+#             f.seek(0)
+#             f.truncate()
+#             f.write(';'.join(header) + '\n')
+#             pbar = pb.ProgressBar(maxval=len(lines)).start()
+#             for i, line in enumerate(lines):
+#                 items = dict(zip(header, line.strip().split(';')))
+#                 id = identify(items['scene'])
+#                 attr = getattr(id, attribute)
+#                 value = attr() if inspect.ismethod(attr) else attr
+#                 items[attribute] = value
+#                 line = line.replace('\n', ';' + value + '\n')
+#                 f.write(line)
+#                 pbar.update(i + 1)
+#             pbar.finish()
+#         self.__init__(self.scenelist)
+#
+#     def update(self, scenes):
+#         for scene in scenes:
+#             base = os.path.basename(scene)
+#             if base not in self.reg:
+#                 try:
+#                     id = identify(scene)
+#                 except IOError:
+#                     print('failed:', base)
+#                     continue
+#                 print(base)
+#                 items = [id.sensor, id.acquisition_mode, ','.join(id.polarizations), id.scene,
+#                          id.bbox().convert2wkt()[0]]
+#                 self.file.write(';'.join(items) + '\n')
+#                 self.reg[base] = dict(zip(self.keys, items))
+#
+#     def select(self, vectorobject):
+#         vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
+#         site_geom = ogr.CreateGeometryFromWkt(vectorobject.convert2wkt()[0])
+#         selection_site = []
+#         for entry in self.reg:
+#             geom = ogr.CreateGeometryFromWkt(self.reg[entry]['bbox'])
+#             intersection = geom.Intersection(site_geom)
+#             if intersection.GetArea() > 0:
+#                 selection_site.append(self.reg[entry]['scene'])
+#         return selection_site
+#
+#     def delete(self, filename):
+#         for entry in self.reg:
+#             if self.reg[entry]['scene'] == filename:
+#                 del self.reg[entry]
+#                 break
+#         with open(self.scenelist, 'r+') as f:
+#             lines = f.readlines()
+#             f.seek(0)
+#             for line in lines:
+#                 if not re.search(filename, line):
+#                     f.write(line)
+#             f.truncate()
+#         if os.path.isfile(filename):
+#             print(filename)
+#             os.remove(filename)
+#
+#     @property
+#     def size(self):
+#         return len(self.reg)
+#
+#     def close(self):
+#         self.file.close()
+#
+#     def __exit__(self, exc_type, exc_val, exc_tb):
+#         self.file.close()
