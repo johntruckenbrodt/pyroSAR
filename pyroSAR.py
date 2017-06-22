@@ -1569,7 +1569,7 @@ class Archive(object):
         cursor = self.conn.execute('''SELECT * FROM sqlite_master WHERE type="table"''')
         return [x[1].encode('ascii') for x in cursor.fetchall()]
 
-    def select(self, vectorobject=None, **args):
+    def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None, recursive=False, **args):
         arg_valid = [x for x in args.keys() if x in self.get_colnames()]
         arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
@@ -1582,16 +1582,37 @@ class Archive(object):
                 arg_format.append('{0}="{1}"'.format(key, args[key]))
             elif isinstance(args[key], (tuple, list)):
                 arg_format.append('{0} IN ("{1}")'.format(key, '", "'.join(map(str, args[key]))))
+        if mindate:
+            if re.search('[0-9]{8}T[0-9]{6}', mindate):
+                arg_format.append('start>=?')
+                vals.append(mindate)
+            else:
+                print('argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
+        if maxdate:
+            if re.search('[0-9]{8}T[0-9]{6}', maxdate):
+                arg_format.append('stop<=?')
+                vals.append(maxdate)
+            else:
+                print('argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
         if vectorobject:
-            vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
-            site_geom = vectorobject.convert2wkt(set3D=False)[0]
-            arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
-            vals.append(site_geom)
+            if isinstance(vectorobject, spatial.vector.Vector):
+                vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
+                site_geom = vectorobject.convert2wkt(set3D=False)[0]
+                arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
+                vals.append(site_geom)
+            else:
+                print('argument vectorobject is ignored, must be of type spatial.vector.Vector')
 
-        query = '''SELECT scene FROM data WHERE {}'''.format(' AND '.join(arg_format))
+        query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
         print(query)
         cursor = self.conn.execute(query, tuple(vals))
-        return [x[0].encode('ascii') for x in cursor.fetchall()]
+        if processdir:
+            scenes = [x for x in cursor.fetchall()
+                      if len(finder(processdir, [x[1]], regex=True, recursive=recursive)) == 0]
+        else:
+            scenes = cursor.fetchall()
+        return [x[0].encode('ascii') for x in scenes]
+
 
     @property
     def size(self):
