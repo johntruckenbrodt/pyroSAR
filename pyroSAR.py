@@ -1481,7 +1481,6 @@ class Archive(object):
         self.lookup = {'sensor': 'TEXT',
                        'projection': 'TEXT',
                        'orbit': 'TEXT',
-                       'polarizations': 'TEXT',
                        'acquisition_mode': 'TEXT',
                        'start': 'TEXT',
                        'stop': 'TEXT',
@@ -1489,7 +1488,11 @@ class Archive(object):
                        'samples': 'INTEGER',
                        'lines': 'INTEGER',
                        'outname_base': 'TEXT PRIMARY KEY',
-                       'scene': 'TEXT'}
+                       'scene': 'TEXT',
+                       'hh': 'TEXT',
+                       'vv': 'TEXT',
+                       'hv': 'TEXT',
+                       'vh': 'TEXT'}
         create_string = '''CREATE TABLE if not exists data ({})'''.format(
             ', '.join([' '.join(x) for x in self.lookup.items()]))
         cursor = self.conn.cursor()
@@ -1500,14 +1503,15 @@ class Archive(object):
 
     def __prepare_insertion(self, scene):
         id = scene if isinstance(scene, ID) else identify(scene)
+        pols = [x.lower() for x in id.polarizations]
         insertion = []
         colnames = self.get_colnames()
         for attribute in colnames:
             if attribute == 'bbox':
                 geom = id.bbox().convert2wkt()[0]
                 insertion.append(geom)
-            elif attribute == 'polarizations':
-                insertion.append(', '.join(id.polarizations))
+            elif attribute in ['hh', 'vv', 'hv', 'vh']:
+                insertion.append(1 if attribute in pols else 0)
             else:
                 attr = getattr(id, attribute)
                 value = attr() if inspect.ismethod(attr) else attr
@@ -1569,7 +1573,20 @@ class Archive(object):
         cursor = self.conn.execute('''SELECT * FROM sqlite_master WHERE type="table"''')
         return [x[1].encode('ascii') for x in cursor.fetchall()]
 
-    def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None, recursive=False, **args):
+    def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None, recursive=False, polarizations=None, **args):
+        """
+
+        Args:
+            vectorobject:
+            mindate:
+            maxdate:
+            processdir:
+            recursive:
+            **args:
+
+        Returns:
+
+        """
         arg_valid = [x for x in args.keys() if x in self.get_colnames()]
         arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
@@ -1594,6 +1611,12 @@ class Archive(object):
                 vals.append(maxdate)
             else:
                 print('argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
+
+        if polarizations:
+            for pol in polarizations:
+                if pol in ['HH', 'VV', 'HV', 'VH']:
+                    arg_format.append('{}=1'.format(pol.lower()))
+
         if vectorobject:
             if isinstance(vectorobject, spatial.vector.Vector):
                 vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
