@@ -1508,7 +1508,7 @@ class Archive(object):
         colnames = self.get_colnames()
         for attribute in colnames:
             if attribute == 'bbox':
-                geom = id.bbox().convert2wkt()[0]
+                geom = id.bbox().convert2wkt(set3D=False)[0]
                 insertion.append(geom)
             elif attribute in ['hh', 'vv', 'hv', 'vh']:
                 insertion.append(1 if attribute in pols else 0)
@@ -1534,6 +1534,7 @@ class Archive(object):
             raise RuntimeError('scene_in must either be a string pointing to a file, a pyroSAR.ID object '
                                'or a list containing several of either')
 
+        print('inserting scenes into the database...')
         pbar = pb.ProgressBar(maxval=len(scenes)).start()
         for i, id in enumerate(scenes):
             insert_string, insertion = self.__prepare_insertion(id)
@@ -1621,6 +1622,7 @@ class Archive(object):
             if isinstance(vectorobject, spatial.vector.Vector):
                 vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
                 site_geom = vectorobject.convert2wkt(set3D=False)[0]
+                print(site_geom)
                 arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
                 vals.append(site_geom)
             else:
@@ -1635,7 +1637,6 @@ class Archive(object):
         else:
             scenes = cursor.fetchall()
         return [x[0].encode('ascii') for x in scenes]
-
 
     @property
     def size(self):
