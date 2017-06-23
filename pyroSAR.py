@@ -1489,10 +1489,10 @@ class Archive(object):
                        'lines': 'INTEGER',
                        'outname_base': 'TEXT PRIMARY KEY',
                        'scene': 'TEXT',
-                       'hh': 'TEXT',
-                       'vv': 'TEXT',
-                       'hv': 'TEXT',
-                       'vh': 'TEXT'}
+                       'hh': 'INTEGER',
+                       'vv': 'INTEGER',
+                       'hv': 'INTEGER',
+                       'vh': 'INTEGER'}
         create_string = '''CREATE TABLE if not exists data ({})'''.format(
             ', '.join([' '.join(x) for x in self.lookup.items()]))
         cursor = self.conn.cursor()
@@ -1511,7 +1511,7 @@ class Archive(object):
                 geom = id.bbox().convert2wkt(set3D=False)[0]
                 insertion.append(geom)
             elif attribute in ['hh', 'vv', 'hv', 'vh']:
-                insertion.append(1 if attribute in pols else 0)
+                insertion.append(int(attribute in pols))
             else:
                 attr = getattr(id, attribute)
                 value = attr() if inspect.ismethod(attr) else attr
@@ -1578,14 +1578,14 @@ class Archive(object):
         """
 
         Args:
-            vectorobject:
-            mindate:
-            maxdate:
-            processdir:
-            recursive:
-            **args:
+            vectorobject: an object of type spatial.vector.Vector
+            mindate: a date string of format YYYYmmddTHHMMSS
+            maxdate: a date string of format YYYYmmddTHHMMSS
+            processdir: a directory to be scanned for already processed scenes; the selected scenes will be filtered to those that have not yet been processed
+            recursive: should also the subdirectories of the processdir be scanned?
+            **args: any further arguments (columns), which are registered in the database. See Archive.get_colnames()
 
-        Returns:
+        Returns: a list of strings pointing to the file locations of the selected scenes
 
         """
         arg_valid = [x for x in args.keys() if x in self.get_colnames()]
