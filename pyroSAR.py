@@ -1478,7 +1478,6 @@ class Archive(object):
             self.conn.execute('SELECT InitSpatialMetaData();')
 
         self.lookup = {'sensor': 'TEXT',
-                       'projection': 'TEXT',
                        'orbit': 'TEXT',
                        'acquisition_mode': 'TEXT',
                        'start': 'TEXT',
