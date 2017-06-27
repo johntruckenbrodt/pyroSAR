@@ -45,7 +45,7 @@ def triangle_areas_from_array(arr):
     '''
 
     result = np.empty((len(arr),), arr.dtype)
-    result[0] = np.inf;
+    result[0] = np.inf
     result[-1] = np.inf
 
     p1 = arr[:-2]
@@ -255,10 +255,10 @@ except ImportError:
         """
 
         def __init__(*args, **kwargs):
-            print """
+            print("""
                   django.contrib.gis.gdal not found.
                   GDALSimplifier not available.
-                  """
+                  """)
 else:
     from json import loads
     import re
@@ -319,7 +319,7 @@ else:
                 self.buildfunc = self.multibuild
                 self.fromnumfunc = self.notimplemented
             else:
-                raise OGRGeometryError("""
+                raise RuntimeError("""
              Only types LINESTRING, POLYGON and MULTIPOLYGON
              supported, but got %s""" % name)
             # sets self.simplifiers to a list of VWSimplifiers
@@ -396,7 +396,7 @@ else:
             return ret_func(result)
 
         def notimplemented(self, n):
-            print "This function is not yet implemented"
+            print('This function is not yet implemented')
 
         def from_threshold(self, threshold):
             precision = self.precision
@@ -445,7 +445,7 @@ if __name__ == "__main__":
     simplifier = VWSimplifier(pts)
     pts = simplifier.from_number(1000)
     end = time()
-    print "%s vertices removed in %02f seconds" % (n - len(pts), end - start)
+    print("%s vertices removed in %02f seconds" % (n - len(pts), end - start))
 
     import matplotlib
 
@@ -454,5 +454,5 @@ if __name__ == "__main__":
 
     plot.plot(pts[:, 0], pts[:, 1], color='r')
     plot.savefig('visvalingam.png')
-    print "saved visvalingam.png"
+    print("saved visvalingam.png")
     # plot.show()
