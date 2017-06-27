@@ -36,8 +36,8 @@ def main():
     """
     legacy compatibility to gammaGUI interface; will be remove in the future
     """
-    print '#############################################'
-    print 'preparing SRTM mosaic:'
+    print('#############################################')
+    print('preparing SRTM mosaic:')
     # read parameter textfile
     par = ReadPar(os.path.join(os.getcwd(), 'PAR/srtm.par'))
 
@@ -67,7 +67,7 @@ def main():
 
     # perform mosaicing if multiple files are found
     if len(demlist) > 1:
-        print 'mosaicing...'
+        print('mosaicing...')
         dem = os.path.join(path_dem, 'mosaic')
         mosaic(demlist, dem)
     else:
@@ -78,10 +78,10 @@ def main():
 
     # transform DEM to UTM
     if par.utm == 'True':
-        print 'transforming to UTM...'
+        print('transforming to UTM...')
         transform(dem, dem+'_utm', int(par.targetres))
         hdr(dem+'_utm.par')
-    print '...done'
+    print('...done')
 
 
 def fill(dem, dem_out, logpath=None, replace=False):
@@ -319,11 +319,11 @@ def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
     extras = [os.path.join(outdir, x) for x in target_ids if os.path.isfile(os.path.join(outdir, x)) and not re.search(x, '\n'.join(targets))]
     targets.extend(extras)
 
-    print 'found {} relevant SRTM tiles...'.format(len(targets))
+    print('found {} relevant SRTM tiles...'.format(len(targets)))
 
     # search server for all required tiles, which were not found in the local directories
     if len(targets) < len(target_ids):
-        print 'searching for additional SRTM tiles on the server...'
+        print('searching for additional SRTM tiles on the server...')
         onlines = []
 
         if arcsec == 1:
@@ -347,7 +347,7 @@ def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
 
         # if additional tiles have been found online, download and unzip them to the local directory
         if len(onlines) > 0:
-            print 'downloading {} SRTM tiles...'.format(len(onlines))
+            print('downloading {} SRTM tiles...'.format(len(onlines)))
             for candidate in onlines:
                 localname = os.path.join(outdir, re.findall(pattern, candidate)[0]+'.hgt')
                 infile = urlopen(candidate)
