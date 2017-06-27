@@ -15,7 +15,7 @@ from ancillary import run
 shp = '/.../testsite.shp'
 
 # define the output name of the DEM (no file extension like .tif etc.!)
-outname = '/.../..'
+outname = '/path/to/demfile'
 
 # define a buffer in degree around the study area boundaries (in degrees)
 buffer = 0.01
@@ -45,7 +45,7 @@ if not os.path.isdir(tmpdir):
     os.makedirs(tmpdir)
 
 # define a name for a temporary DEM file
-dem_tmp = os.path.join(tmpdir + 'srtm_tmp.tif')
+dem_tmp = os.path.join(tmpdir, 'srtm_tmp.tif')
 
 # create a DEM mosaic for the study site
 run(['gdalwarp', '-q', '-of', 'GTiff', '-te', ext['xmin'], ext['ymin'], ext['xmax'], ext['ymax'], srtm_vrt, dem_tmp])

@@ -4,12 +4,12 @@
 ##############################################################
 import os
 import spatial
-from spatial.vector import Vector
 from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt
 import pyroSAR
 
 
-def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB', geocoding_type='Range-Doppler', test=False, removeS1BoderNoise=True, offset=None):
+def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB',
+            geocoding_type='Range-Doppler', removeS1BoderNoise=True, offset=None, externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, test=False):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -21,23 +21,27 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     shapefile: a vector file for subsetting the SAR scene to a test site
     scaling: should the output be in linear of decibel scaling? Input can be single strings e.g. 'dB' or a list of both: ['linear', 'dB']
     geocoding_type: the type of geocoding applied; can be either 'Range-Doppler' or 'SAR simulation cross correlation'
-    test: if set to True the workflow xml file is only written and not executed
     removeS1BoderNoise: enables removal of S1 GRD border noise
     offset: a tuple defining offsets for left, right, top and bottom in pixels, e.g. (100, 100, 0, 0); this variable is overridden if a shapefile is defined
+    externalDEMFile: the absolute path to an external DEM file
+    externalDEMNoDataValue: the no data value of the external DEM. If not specified the function will try to read it from the specified external DEM.
+    externalDEMApplyEGM: apply Earth Gravitational Model to external DEM?
+    test: if set to True the workflow xml file is only written and not executed
 
     If only one polarization is selected the results are directly written to GeoTiff.
     Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTiff files (one for each polarization)
     If GeoTiff would directly be selected as output format for multiple polarizations then a multilayer GeoTiff
     is written by SNAP which is considered an unfavorable format
     """
-    orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
-                    'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
 
     id = infile if isinstance(infile, pyroSAR.ID) else pyroSAR.identify(infile)
 
     if id.is_processed(outdir):
         print('scene {} already processed'.format(id.outname_base()))
         return
+
+    ############################################
+    # general setup
 
     if id.sensor in ['ASAR', 'ERS1', 'ERS2']:
         formatName = 'ENVISAT'
@@ -46,14 +50,17 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     else:
         raise RuntimeError('sensor not supported (yet)')
 
-    workflow = parse_recipe('geocode')
-
     if polarizations == 'all':
         polarizations = id.polarizations
     else:
         polarizations = [x for x in polarizations if x in id.polarizations]
 
     format = 'GeoTiff-BigTIFF' if len(polarizations) == 1 else 'ENVI'
+
+    ############################################
+    # parse base workflow
+
+    workflow = parse_recipe('geocode')
 
     ############################################
     # Read node configuration
@@ -71,18 +78,26 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     ############################################
     # orbit file application node configuration
 
+    orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
+                    'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
+    orbitType = orbit_lookup[formatName]
+    if formatName == 'ENVISAT' and id.acquisition_mode == 'WSM':
+        orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
+
     orb = workflow.find('.//node[@id="Apply-Orbit-File"]')
-    orb.find('.//parameters/orbitType').text = orbit_lookup[formatName]
+    orb.find('.//parameters/orbitType').text = orbitType
     ############################################
     # calibration node configuration
 
     cal = workflow.find('.//node[@id="Calibration"]')
-    if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
-        cal.find('.//parameters/selectedPolarisations').text = 'Intensity'
+
+    # todo: check whether the following works with Sentinel-1
+    if len(polarizations) > 1:
+        cal.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
+        cal.find('.//parameters/sourceBands').text = ','.join(['Intensity_' + x for x in polarizations])
     else:
         cal.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
-    # todo: check whether the following works with Sentinel-1
-    cal.find('.//parameters/sourceBands').text = ','.join(['Intensity_' + x for x in polarizations])
+        cal.find('.//parameters/sourceBands').text = 'Intensity'
     ############################################
     # terrain flattening node configuration
 
@@ -134,7 +149,7 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     ############################################
     # add subset node and add bounding box coordinates of defined shapefile
     if shapefile:
-        shp = shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
+        shp = shapefile if isinstance(shapefile, spatial.vector.Vector) else spatial.vector.Vector(shapefile)
         bounds = spatial.bbox(shp.extent, shp.wkt)
         bounds.reproject(id.projection)
         intersect = spatial.intersect(id.bbox(), bounds)
@@ -174,6 +189,39 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     write = workflow.find('.//node[@id="Write"]')
     write.find('.//parameters/file').text = outname
     write.find('.//parameters/formatName').text = format
+    ############################################
+    ############################################
+    # select DEM type
+
+    if externalDEMFile is not None:
+        if os.path.isfile(externalDEMFile):
+            if externalDEMNoDataValue is None:
+                dem = spatial.raster.Raster(externalDEMFile)
+                if dem.nodata is not None:
+                    externalDEMNoDataValue = dem.nodata
+                else:
+                    raise RuntimeError('Cannot read NoData value from DEM file. Please specify externalDEMNoDataValue')
+        else:
+            raise RuntimeError('specified externalDEMFile does not exist')
+        demname = 'External DEM'
+    else:
+        # SRTM 1arcsec is only available between -58 and +60 degrees. If the scene exceeds those latitudes SRTM 3arcsec is selected.
+        if id.getCorners()['ymax'] > 60 or id.getCorners()['ymin'] < -58:
+            demname = 'SRTM 3Sec'
+        else:
+            demname = 'SRTM 1Sec HGT'
+        externalDEMFile = None
+        externalDEMNoDataValue = 0
+
+    for demName in workflow.findall('.//parameters/demName'):
+        demName.text = demname
+    for externalDEM in workflow.findall('.//parameters/externalDEMFile'):
+        externalDEM.text = externalDEMFile
+    for demNodata in workflow.findall('.//parameters/externalDEMNoDataValue'):
+        demNodata.text = str(externalDEMNoDataValue)
+    for egm in workflow.findall('.//parameters/externalDEMApplyEGM'):
+        egm.text = str(externalDEMApplyEGM).lower()
+    ############################################
     ############################################
     # write workflow to file
     write_recipe(workflow, outname + '_proc')

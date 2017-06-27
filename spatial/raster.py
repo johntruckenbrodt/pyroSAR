@@ -14,6 +14,7 @@ object itself). Upon initializing a Raster object only metadata is loaded, the a
 
 import os
 import re
+import shutil
 import subprocess as sp
 from math import sqrt
 from time import gmtime, strftime
@@ -28,7 +29,7 @@ import spatial.auxil
 import spatial.util
 import spatial.vector
 
-from ancillary import dissolve, run
+from ancillary import dissolve, run, multicore
 import envi
 
 os.environ['GDAL_PAM_PROXY_DIR'] = '/tmp'
@@ -469,7 +470,29 @@ def reproject(rasterobject, reference, outname, resampling='bilinear', format='E
                    '-t_srs', projection, rasterobject.filename, outname])
 
 
-def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None, separate=False, overwrite=False):
+def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None, separate=False, overwrite=False, compress=True, cores=4):
+    """
+    function for mosaicking, resampling and stacking of multiple raster files to a 3D data cube
+    
+    Args:
+        srcfiles: a list of file names or a list of lists; each sub-list is treated as an order to mosaic its containing files
+        dstfile: the destination file (if sesparate) or a directory
+        resampling: the resampling method; see documentation of gdalwarp
+            options: near, bilinear, cubic, cubicspline, lanczos, average, mode, max, min, med, Q1, Q3
+        targetres: a list with two entries for x and y
+        srcnodata: the nodata value of the source files
+        dstnodata: the nodata value of the destination file(s)
+        shapefile: a shapefile for defining the area of the destination files
+        layernames: the names of the output layers; if None, the basenames of the input files is used
+        sortfun: a function for sorting the input files
+        separate: should the files be written to a single raster block or separate files? If separate, each tile is written to geotiff.
+        overwrite: overwrite the file if it already exists?
+        compress: compress the geotiff files?
+        cores: the number of CPU threads to use; this is only relevant if separate = True
+
+    Returns:
+        A single raster stack in ENVI format or multiple geotiff files of same extent.
+    """
 
     if layernames is not None:
         if len(layernames) != len(srcfiles):
@@ -511,6 +534,12 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     else:
         arg_ext = []
 
+    # create temporary directory for writing intermediate files
+    dst_base = os.path.splitext(dstfile)[0]
+    tmpdir = dst_base+'__tmp'
+    if not os.path.isdir(tmpdir):
+        os.makedirs(tmpdir)
+
     # define warping arguments
     arg_targetres = dissolve(['-tr', targetres]) if targetres is not None else []
     arg_srcnodata = ['-srcnodata', srcnodata] if srcnodata is not None else []
@@ -519,11 +548,16 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     arg_format = ['-of', 'GTiff' if separate else 'ENVI']
     arg_overwrite = ['-overwrite'] if overwrite else []
 
+    if separate and compress:
+        arg_compression = ['-co', 'COMPRESS=DEFLATE', '-co', 'PREDICTOR=2']
+    else:
+        arg_compression = []
+
     # create VRT files for mosaicing
     vrtlist = []
     for i in range(len(srcfiles)):
         base = srcfiles[i][0] if isinstance(srcfiles[i], list) else srcfiles[i]
-        vrt = os.path.join(os.path.dirname(dstfile), os.path.splitext(os.path.basename(base))[0]+'.vrt')
+        vrt = os.path.join(tmpdir, os.path.splitext(os.path.basename(base))[0]+'.vrt')
         run(['gdalbuildvrt', '-overwrite', arg_srcnodata, arg_ext, vrt, srcfiles[i]])
         srcfiles[i] = vrt
         vrtlist.append(vrt)
@@ -539,15 +573,23 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
             os.makedirs(dstfile)
         dstfiles = [os.path.join(dstfile, x)+'.tif' for x in bandnames]
 
-        arg_compression = ['-co', 'COMPRESS=DEFLATE', '-co', 'PREDICTOR=2']
+        files = [x for x in zip(srcfiles, dstfiles) if not os.path.isfile(x[1])]
+        srcfiles, dstfiles = map(list, zip(*files))
 
-        for i in range(len(srcfiles)):
-            run(['gdalwarp', '-q', '-multi', '-overwrite', arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, arg_compression, srcfiles[i], dstfiles[i]])
+        cmd = ['gdalwarp', '-q', '-multi', arg_overwrite, arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, arg_compression]
+
+        def operator(command, srcfile, dstfile):
+            run(command + [srcfile, dstfile])
+
+        multicore(operator, cores=cores, multiargs={'srcfile': srcfiles, 'dstfile': dstfiles}, command=cmd)
+
+        # for src, dst in files:
+        #     run(['gdalwarp', '-q', '-multi', arg_overwrite, arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, arg_compression, src, dst])
     else:
         # create VRT for stacking
-        vrt = os.path.splitext(dstfile)[0]+'.vrt'
+
+        vrt = os.path.join(tmpdir, os.path.basename(dst_base)+'.vrt')
         run(['gdalbuildvrt', '-q', arg_overwrite, '-separate', arg_srcnodata, arg_ext, vrt, srcfiles])
-        vrtlist.append(vrt)
 
         # warp files
         run(['gdalwarp', '-q', '-multi', arg_overwrite, arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, vrt, dstfile])
@@ -558,6 +600,5 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
         par.band_names = bandnames
         envi.hdr(par)
 
-    # remove VRT files
-    for vrt in vrtlist:
-        os.remove(vrt)
+    # remove temporary directory and files
+    shutil.rmtree(tmpdir)
