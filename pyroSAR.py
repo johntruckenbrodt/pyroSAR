@@ -15,7 +15,6 @@ import inspect
 import struct
 import math
 import progressbar as pb
-import sqlite3
 import StringIO
 import numpy as np
 import zipfile as zf
@@ -1552,6 +1551,9 @@ class Archive(object):
             pbar.update(i + 1)
         pbar.finish()
 
+    def export2shp(self, shp):
+        run(['ogr2ogr', '-f', '"ESRI Shapefile"', shp, self.dbfile])
+
     def filter_scenelist(self, scenelist):
         """
         filter a list of scenes by their filenames.
@@ -1622,7 +1624,6 @@ class Archive(object):
             if isinstance(vectorobject, spatial.vector.Vector):
                 vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
                 site_geom = vectorobject.convert2wkt(set3D=False)[0]
-                print(site_geom)
                 arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
                 vals.append(site_geom)
             else:
