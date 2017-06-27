@@ -1,9 +1,10 @@
 
+import math
 import os
 import re
-import math
-from ancillary import parse_literal
 import subprocess as sp
+
+from pyroSAR.ancillary import parse_literal
 
 
 class ISPPar(object):

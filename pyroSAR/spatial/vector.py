@@ -10,9 +10,12 @@ by the OGR python binding
 """
 
 import os
+
 from osgeo import ogr, osr
-from ancillary import parse_literal
-import auxil
+
+from . import crsConvert
+
+from ..ancillary import parse_literal
 
 ogr.UseExceptions()
 osr.UseExceptions()
@@ -98,7 +101,7 @@ class Vector(object):
         """
         type can be either "epsg", "wkt", "proj4" or "osr"
         """
-        return auxil.crsConvert(self.layer.GetSpatialRef(), type)
+        return crsConvert(self.layer.GetSpatialRef(), type)
 
     @property
     def proj4(self):
@@ -180,7 +183,7 @@ class Vector(object):
 
     def reproject(self, projection):
 
-        srs_out = auxil.crsConvert(projection, "osr")
+        srs_out = crsConvert(projection, "osr")
 
         # create the CoordinateTransformation
         coordTrans = osr.CoordinateTransformation(self.srs, srs_out)
@@ -239,7 +242,7 @@ class Vector(object):
 
 def feature2vector(feature, ref, layername=None):
     layername = layername if layername is not None else ref.layername
-    vec = Vector(driver="Memory")
+    vec = Vector(driver='Memory')
     vec.addlayer(layername, ref.srs, ref.geomType)
     feat_def = feature.GetDefnRef()
     fields = [feat_def.GetFieldDefn(x) for x in range(0, feat_def.GetFieldCount())]
@@ -247,3 +250,67 @@ def feature2vector(feature, ref, layername=None):
     vec.layer.CreateFeature(feature)
     vec.init_features()
     return vec
+
+
+def bbox(coordinates, crs, outname=None, format='ESRI Shapefile', overwrite=True):
+    """
+    create a bounding box vector object or shapefile from coordinates and coordinate reference system
+    coordinates must be provided in a dictionary containing numerical variables with names 'xmin', 'xmax', 'ymin' and 'ymax'
+    the coordinate reference system can be in either WKT, EPSG or PROJ4 format
+    """
+    srs = crsConvert(crs, 'osr')
+
+    ring = ogr.Geometry(ogr.wkbLinearRing)
+
+    ring.AddPoint(coordinates['xmin'], coordinates['ymin'])
+    ring.AddPoint(coordinates['xmin'], coordinates['ymax'])
+    ring.AddPoint(coordinates['xmax'], coordinates['ymax'])
+    ring.AddPoint(coordinates['xmax'], coordinates['ymin'])
+    ring.CloseRings()
+
+    geom = ogr.Geometry(ogr.wkbPolygon)
+    geom.AddGeometry(ring)
+
+    geom.FlattenTo2D()
+
+    bbox = Vector(driver='Memory')
+    bbox.addlayer('bbox', srs, ogr.wkbPolygon)
+    bbox.addfield('id', width=4)
+    bbox.addfeature(geom, 'id', 1)
+    geom.Destroy()
+    if outname is None:
+        return bbox
+    else:
+        bbox.write(outname, format, overwrite)
+
+
+def centerdist(obj1, obj2):
+    if not isinstance(obj1, Vector) or isinstance(obj2, Vector):
+        raise IOError('object must be of type Vector')
+
+    feature1 = obj1[0]
+    geometry1 = feature1.GetGeometryRef()
+    center1 = geometry1.Centroid()
+
+    feature2 = obj2[0]
+    geometry2 = feature2.GetGeometryRef()
+    center2 = geometry2.Centroid()
+
+    return center1.Distance(center2)
+
+
+def intersect(obj1, obj2):
+    if not isinstance(obj1, Vector) or isinstance(obj2, Vector):
+        raise IOError('object must be of type Vector')
+
+    obj1.reproject(obj2.srs)
+
+    feature1 = obj1[0]
+    geometry1 = feature1.GetGeometryRef()
+
+    feature2 = obj2[0]
+    geometry2 = feature2.GetGeometryRef()
+
+    intersect = geometry2.Intersection(geometry1)
+
+    return intersect if intersect.GetArea() > 0 else None

@@ -10,21 +10,21 @@ The function parametrization is intended to be applicable to any kind of situati
 core parameters are iterated over a set of values in order to find the one best suited for the task.
 The approach of the single routines is likely to still have drawbacks and might fail in certain situations. Testing and suggestions on improvements are very welcome.
 """
+import math
 import os
 import re
-import math
 import shutil
 import subprocess as sp
 from collections import OrderedDict
-from osgeo import ogr
 
-import envi
+from .. import envi
+from osgeo import ogr
+from ..spatial import haversine
+
+import pyroSAR
+from pyroSAR.ancillary import run, Stack, union, finder
 from . import ISPPar, Spacing, Namespace
 from .error import gammaErrorHandler
-from ancillary import run, Stack, union, finder
-from spatial import haversine
-import pyroSAR
-
 
 ogr.UseExceptions()
 

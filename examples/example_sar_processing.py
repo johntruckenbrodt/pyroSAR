@@ -2,11 +2,13 @@
 Demonstration script for the usage of the pyroSAR processing with gamma
 """
 import os
-from spatial import vector
 from datetime import datetime
-from ancillary import finder, multicore
+
 from gamma import geocode
+from spatial import vector
+
 from pyroSAR import identify, Archive
+from pyroSAR.ancillary import finder, multicore
 
 # Path to the SRTM in the GAMMA format
 srtm = '/path/to/srtmfile'

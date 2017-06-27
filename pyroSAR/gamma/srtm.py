@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ##############################################################
 # preparation of srtm data for use in gamma
-# module of software gammaGUI
+# module of software pyroSAR
 # John Truckenbrodt 2014-17
 ##############################################################
 
@@ -23,13 +23,13 @@ import shutil
 import zipfile as zf
 from urllib2 import urlopen
 
-from ancillary import finder, run, ReadPar
-from envi import HDRobject, hdr
-import gamma
-import pyroSAR
-from spatial import raster
+# import gamma
+from .envi import HDRobject, hdr
+from .spatial import raster
+from . import ISPPar, process, UTM, slc_corners
 
-# todo: move to module gamma or remove gamma dependency
+import pyroSAR
+from pyroSAR.ancillary import finder, run, ReadPar
 
 
 def main():
@@ -86,7 +86,7 @@ def main():
 
 def fill(dem, dem_out, logpath=None, replace=False):
 
-    width = gamma.ISPPar(dem+'.par').width
+    width = ISPPar(dem + '.par').width
 
     path_dem = os.path.dirname(dem_out)
 
@@ -96,18 +96,18 @@ def fill(dem, dem_out, logpath=None, replace=False):
     # replace values
     value = 0
     new_value = 1
-    gamma.process(['replace_values', dem, value, new_value, dem + '_temp', width, rpl_flg, dtype], path_dem, logpath)
+    process(['replace_values', dem, value, new_value, dem + '_temp', width, rpl_flg, dtype], path_dem, logpath)
 
     value = -32768
     new_value = 0
-    gamma.process(['replace_values', dem + '_temp', value, new_value, dem + '_temp2', width, rpl_flg, dtype], path_dem, logpath)
+    process(['replace_values', dem + '_temp', value, new_value, dem + '_temp2', width, rpl_flg, dtype], path_dem, logpath)
 
     # interpolate missing values
     r_max = 9
     np_min = 40
     np_max = 81
     w_mode = 2
-    gamma.process(['interp_ad', dem + '_temp2', dem_out, width, r_max, np_min, np_max, w_mode, dtype], path_dem, logpath)
+    process(['interp_ad', dem + '_temp2', dem_out, width, r_max, np_min, np_max, w_mode, dtype], path_dem, logpath)
 
     # remove temporary files
     os.remove(dem+'_temp')
@@ -129,10 +129,10 @@ def transform(infile, outfile, posting=90):
     transform SRTM DEM from EQA to UTM projection
     """
     # read DEM parameter file
-    par = gamma.ISPPar(infile+'.par')
+    par = ISPPar(infile + '.par')
 
     # transform corner coordinate to UTM
-    utm = gamma.UTM(infile+'.par')
+    utm = UTM(infile + '.par')
 
     for item in [outfile, outfile+'.par']:
         if os.path.isfile(item):
@@ -143,10 +143,10 @@ def transform(infile, outfile, posting=90):
 
     # create new DEM parameter file with UTM projection details
     inlist = ['UTM', 'WGS84', 1, utm.zone, falsenorthing, os.path.basename(outfile), '', '', '', '', '', '-{0} {0}'.format(posting), '']
-    gamma.process(['create_dem_par', outfile + '.par'], inlist=inlist)
+    process(['create_dem_par', outfile + '.par'], inlist=inlist)
 
     # transform dem
-    gamma.process(['dem_trans', infile + '.par', infile, outfile + '.par', outfile, '-', '-', '-', 1])
+    process(['dem_trans', infile + '.par', infile, outfile + '.par', outfile, '-', '-', '-', 1])
     hdr(outfile+'.par')
 
 
@@ -189,7 +189,7 @@ def dempar(dem, logpath=None):
         parlist = [projection, ellipsoid, 1, os.path.basename(dem), dtype, 0, 1, rast.cols, rast.rows, posting, latlon]
 
     # execute GAMMA command
-    gamma.process(['create_dem_par', os.path.splitext(dem)[0] + '.par'], os.path.dirname(dem), logpath, inlist=parlist)
+    process(['create_dem_par', os.path.splitext(dem)[0] + '.par'], os.path.dirname(dem), logpath, inlist=parlist)
 
 
 def swap(data, outname):
@@ -203,7 +203,7 @@ def swap(data, outname):
     dtype_lookup = {'Int16': 2, 'CInt16': 2, 'Int32': 4, 'Float32': 4, 'CFloat32': 4, 'Float64': 8}
     if dtype not in dtype_lookup:
         raise IOError('data type {} not supported'.format(dtype))
-    gamma.process(['swap_bytes', data, outname, str(dtype_lookup[dtype])])
+    process(['swap_bytes', data, outname, str(dtype_lookup[dtype])])
     header = HDRobject(data+'.hdr')
     header.byte_order = 1
     hdr(header, outname+'.hdr')
@@ -243,7 +243,7 @@ def hgt(parfiles):
         if isinstance(parfile, pyroSAR.ID):
             corners = parfile.getCorners()
         elif parfile.endswith('.par'):
-            corners = gamma.slc_corners(parfile)
+            corners = slc_corners(parfile)
         lat += [int(float(corners[x]) // 1) for x in ['ymin', 'ymax']]
         lon += [int(float(corners[x]) // 1) for x in ['xmin', 'xmax']]
 
@@ -288,7 +288,7 @@ def makeSRTM(scenes, srtmdir, outname):
 
     run(['gdal_translate', '-of', 'ENVI', '-a_nodata', -32768, srtm_vrt, srtm_temp])
 
-    gamma.process(['srtm2dem', srtm_temp, srtm_final, srtm_final+'.par', 2, '-'], outdir=tempdir)
+    process(['srtm2dem', srtm_temp, srtm_final, srtm_final + '.par', 2, '-'], outdir=tempdir)
 
     shutil.move(srtm_final, outname)
     shutil.move(srtm_final+'.par', outname+'.par')

@@ -1,3 +1,27 @@
+#!/usr/bin/env python2.7
+
+# Copyright (c) 2017, John Truckenbrodt
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL JOHN TRUCKENBRODT BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 ##############################################################
 # Reading and Organizing system for SAR images
 # John Truckenbrodt, Felix Cremer 2016-2017
@@ -6,36 +30,40 @@
 this script is intended to contain several SAR scene identifier classes to read basic metadata from the scene folders/files, convert to GAMMA format and do simple pre-processing
 """
 from __future__ import print_function
-import os
-import re
+
+import StringIO
 import abc
 import ast
-import ssl
 import inspect
-import struct
 import math
-import progressbar as pb
-import StringIO
-import numpy as np
-import zipfile as zf
-import tarfile as tf
+import os
+import re
+import ssl
+import struct
 import subprocess as sp
-from urllib2 import urlopen, URLError
+import tarfile as tf
 import xml.etree.ElementTree as ET
-from time import strptime, strftime
+import zipfile as zf
 from datetime import datetime, timedelta
-from pysqlite2 import dbapi2 as sqlite3
+from time import strptime, strftime
+from urllib2 import urlopen, URLError
 
-
-from osgeo import gdal, ogr, osr
+import numpy as np
+import progressbar as pb
+from osgeo import gdal, osr
 from osgeo.gdalconst import GA_ReadOnly, GA_Update
 
-import envi
-import gamma
-import spatial
-import linesimplify as ls
-from xml_util import getNamespaces
-from ancillary import finder, parse_literal, urlQueryParser, run
+try:
+    from pysqlite2 import dbapi2 as sqlite3
+except ImportError:
+    import sqlite3
+
+from . import envi
+from . import gamma
+from . import linesimplify as ls
+from . import spatial
+from .ancillary import finder, parse_literal, urlQueryParser, run
+from .xml_util import getNamespaces
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines']

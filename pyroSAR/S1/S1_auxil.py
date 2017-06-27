@@ -7,11 +7,13 @@ import re
 import ssl
 import sys
 import time
-from ancillary import finder, dissolve
 from datetime import datetime
 from urllib import urlopen, urlencode
 from urlparse import urlparse, urlunparse
+
 import gamma
+
+from pyroSAR.ancillary import finder, dissolve
 
 try:
     import argparse

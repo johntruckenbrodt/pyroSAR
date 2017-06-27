@@ -3,9 +3,10 @@
 # John Truckenbrodt, 2016-2017
 ##############################################################
 import os
-import spatial
-from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt
+
 import pyroSAR
+from pyroSAR import spatial
+from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt
 
 
 def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB',

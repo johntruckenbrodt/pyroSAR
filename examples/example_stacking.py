@@ -6,9 +6,10 @@ import os
 import re
 from time import mktime, strptime
 
-from ancillary import finder
-from spatial.vector import Vector
 from spatial.raster import stack
+from spatial.vector import Vector
+
+from pyroSAR.ancillary import finder
 
 
 # function to extract time stamp from file name. Images processed with pyroSAR functionalities via module snap or gamma will contain this information.

@@ -4,12 +4,9 @@
 ##############################################################
 
 import os
-import re
 import sys
 import tarfile
-import zipfile
 from urllib2 import urlopen
-from install.auxil import *
 
 # the number of CPUs used for compilation
 cores = 20

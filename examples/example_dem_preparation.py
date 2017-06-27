@@ -4,12 +4,14 @@
 ##############################################################
 
 import os
-import gamma
-import srtm
 import shutil
+
+import gamma
 from envi import hdr
+from gamma import srtm
 from spatial import vector
-from ancillary import run
+
+from pyroSAR.ancillary import run
 
 # define a shapefile for the study area
 shp = '/.../testsite.shp'
@@ -51,7 +53,7 @@ dem_tmp = os.path.join(tmpdir, 'srtm_tmp.tif')
 run(['gdalwarp', '-q', '-of', 'GTiff', '-te', ext['xmin'], ext['ymin'], ext['xmax'], ext['ymax'], srtm_vrt, dem_tmp])
 
 # transform the DEM to GAMMA format (including EGM96 geoid to WGS84 ellipsoid height reference correction)
-gamma.process(['srtm2dem', dem_tmp, outname, outname+'.par', 2, '-'], outdir=tmpdir)
+gamma.process(['srtm2dem', dem_tmp, outname, outname + '.par', 2, '-'], outdir=tmpdir)
 
 # create an ENVI header file
 hdr(outname+'.par')
@@ -61,4 +63,4 @@ shutil.rmtree(tmpdir)
 
 # optional: transform DEM to UTM projection
 # the UTM zone is automatically computed for the center of the DEM file
-srtm.transform(outname, outname+'_utm', posting=20)
+srtm.transform(outname, outname + '_utm', posting=20)

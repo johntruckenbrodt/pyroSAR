@@ -3,7 +3,7 @@
 # John Truckenbrodt 2016
 ##############################################################
 
-from ancillary import dictmerge
+from .ancillary import dictmerge
 
 
 def getNamespaces(xml):

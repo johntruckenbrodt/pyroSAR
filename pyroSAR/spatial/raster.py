@@ -19,18 +19,12 @@ import subprocess as sp
 from math import sqrt
 from time import gmtime, strftime
 
+from .. import envi
 import numpy as np
+from . import Vector, bbox, crsConvert
+from ..ancillary import dissolve, run, multicore
 from osgeo import gdal, osr
 from osgeo.gdalconst import *
-
-# from auxil import crsConvert
-# from util import bbox, intersect
-import spatial.auxil
-import spatial.util
-import spatial.vector
-
-from ancillary import dissolve, run, multicore
-import envi
 
 os.environ['GDAL_PAM_PROXY_DIR'] = '/tmp'
 
@@ -57,7 +51,7 @@ class Raster(object):
         self.srs = osr.SpatialReference(wkt=self.projection)
         self.proj4 = self.srs.ExportToProj4()
         try:
-            self.epsg = spatial.auxil.crsConvert(self.srs, 'epsg')
+            self.epsg = crsConvert(self.srs, 'epsg')
         except RuntimeError:
             self.epsg = None
         self.geogcs = self.srs.GetAttrValue('geogcs')
@@ -115,9 +109,9 @@ class Raster(object):
 
     def bbox(self, outname=None, format='ESRI Shapefile', overwrite=True):
         if outname is None:
-            return spatial.util.bbox(self.geo, self.proj4)
+            return bbox(self.geo, self.proj4)
         else:
-            spatial.util.bbox(self.geo, self.proj4, outname=outname, format=format, overwrite=overwrite)
+            bbox(self.geo, self.proj4, outname=outname, format=format, overwrite=overwrite)
 
     @staticmethod
     def dtypes(typestring):
@@ -417,15 +411,6 @@ class Extent(object):
         self.area = abs(self.xmax - self.xmin) * abs(self.ymax - self.ymin)
 
 
-# def init(rasterobject, outname):
-#     rows, cols, bands = rasterobject.dim
-#     outDataset = rasterobject.driver.Create(outname, cols, rows, bands, rasterobject.dtypes(rasterobject.dtype))
-#     if rasterobject.geotransform is not None:
-#         outDataset.SetGeoTransform(rasterobject.raster.GetGeoTransform())
-#     if rasterobject.projection is not None:
-#         outDataset.SetProjection(rasterobject.projection)
-#     return outDataset
-
 def intersect(obj1, obj2):
     """
     compute the geographical intersection between two objects of type Raster or Extent
@@ -516,14 +501,14 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
 
     # read shapefile bounding coordinates and reduce list of rasters to those overlapping with the shapefile
     if shapefile is not None:
-        shp = shapefile if isinstance(shapefile, spatial.vector.Vector) else spatial.vector.Vector(shapefile)
+        shp = shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
         shp.reproject(srs)
         ext = shp.extent
         arg_ext = ['-te', ext['xmin'], ext['ymin'], ext['xmax'], ext['ymax']]
 
         for i in range(len(srcfiles)):
             group = sorted(srcfiles[i], key=sortfun) if isinstance(srcfiles[i], list) else [srcfiles[i]]
-            group = [x for x in group if spatial.util.intersect(shp, Raster(x))]
+            group = [x for x in group if intersect(shp, Raster(x))]
             if len(group) > 1:
                 srcfiles[i] = group
             elif len(group) == 1:

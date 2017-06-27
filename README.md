@@ -25,5 +25,5 @@ This README would normally document whatever steps are necessary to get your app
 
 ### Who do I talk to? ###
 
-Just ask John. 
+Just ask John.
 * Other community or team contact

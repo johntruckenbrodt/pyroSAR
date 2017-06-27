@@ -2,17 +2,18 @@
 import os
 import re
 import shutil
-import pyroSAR
-import zipfile as zf
-from ftplib import FTP
-from time import strftime,gmtime
-from urllib2 import urlopen, HTTPError
-import xml.etree.ElementTree as ET
-from xml.dom import minidom
-from cStringIO import StringIO
-from pyroSAR import identify
-from ancillary import dissolve, finder
 import subprocess as sp
+import xml.etree.ElementTree as ET
+import zipfile as zf
+from cStringIO import StringIO
+from ftplib import FTP
+from time import strftime, gmtime
+from urllib2 import urlopen, HTTPError
+from xml.dom import minidom
+
+import pyroSAR
+from pyroSAR import identify
+from pyroSAR.ancillary import dissolve, finder
 
 suffix_lookup = {'Apply-Orbit-File': 'orb',
                  'Calibration': 'cal',
