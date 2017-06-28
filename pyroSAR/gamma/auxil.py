@@ -4,7 +4,7 @@ import os
 import re
 import subprocess as sp
 
-from pyroSAR.ancillary import parse_literal
+from ..ancillary import parse_literal
 
 
 class ISPPar(object):

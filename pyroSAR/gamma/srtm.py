@@ -24,8 +24,8 @@ import zipfile as zf
 from urllib2 import urlopen
 
 # import gamma
-from .envi import HDRobject, hdr
-from .spatial import raster
+from ..envi import HDRobject, hdr
+from ..spatial import raster
 from . import ISPPar, process, UTM, slc_corners
 
 import pyroSAR

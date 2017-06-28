@@ -17,12 +17,12 @@ import shutil
 import subprocess as sp
 from collections import OrderedDict
 
-from .. import envi
 from osgeo import ogr
+
+from .. import envi
 from ..spatial import haversine
 
-import pyroSAR
-from pyroSAR.ancillary import run, Stack, union, finder
+from ..ancillary import run, Stack, union, finder
 from . import ISPPar, Spacing, Namespace
 from .error import gammaErrorHandler
 
