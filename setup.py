@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(name='pyroSAR',
       packages=find_packages(),
       version='0.1',
-      description='The funniest joke in the world',
+      description='a framework for large-scale SAR satellite data processing',
       classifiers=[
           'Programming Language :: Python :: 2.7',
       ],
