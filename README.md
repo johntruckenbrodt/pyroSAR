@@ -37,4 +37,5 @@ the Sentinel-1 satellites is exploited in order to derive high temporal resoluti
 realized by applying clustering techniques in the temporal image domain of all available datasets.
 
 
-Just ask John.
+This software used to run on a local server and is currently being restructured into a Python package.
+Not everything is working properly, stay tuned...
