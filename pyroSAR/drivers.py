@@ -147,57 +147,14 @@ class ID(object):
         metadata['uuid'] = title
         return metadata
 
-    def export2sqlite(self, target=None):
+    def export2sqlite(self, dbfile):
         """
-        Export the most important metadata in a sqlite database which is located in the same folder as the source file.
+        Export relevant metadata to a sqlite database
+        :param dbfile: the database file
+        :return: None
         """
-        print('Begin export')
-        if self.compression is None:
-            raise RuntimeError('Uncompressed data is not suitable for the metadata base')
-
-        database = os.path.join(os.path.dirname(self.scene), 'data.db') if target is None else target
-        conn = sqlite3.connect(database)
-        conn.enable_load_extension(True)
-        conn.execute('SELECT load_extension("libspatialite")')
-        conn.execute('SELECT InitSpatialMetaData();')
-        cursor = conn.cursor()
-        create_string = '''CREATE TABLE if not exists data (
-                            title TEXT NOT NULL,
-                            file TEXT NOT NULL,
-                            scene TEXT,
-                            sensor TEXT,
-                            projection TEXT,
-                            orbit TEXT,
-                            polarisation TEXT,
-                            acquisition_mode TEXT,
-                            start TEXT,
-                            stop TEXT,
-                            CONSTRAINT pk_data
-                            PRIMARY KEY(file, scene)
-                            )'''
-
-        cursor.execute(create_string)
-        cursor.execute('SELECT AddGeometryColumn("data","bbox" , 4326, "POLYGON", "XY", 0)')
-        conn.commit()
-        insert_string = '''
-                        INSERT INTO data
-                        (title, file, scene, sensor, projection, bbox, orbit, polarisation, acquisition_mode, start, stop)
-                        VALUES( ?,?,?,?,?,GeomFromText(?, 4326),?,?,?,?,?)
-                        '''
-        geom = self.bbox().convert2wkt()[0]
-        projection = spatial.crsConvert(self.projection, 'wkt')
-
-        sq_file = os.path.basename(self.file)
-        title = os.path.splitext(sq_file)[0]
-        input = (title, sq_file, self.scene, self.sensor, projection, geom, self.orbit, 'polarisation', 'acquisition',
-                 self.start, self.stop)
-        try:
-            cursor.execute(insert_string, input)
-        except sqlite3.IntegrityError as e:
-            print('SQL error:', e)
-
-        conn.commit()
-        conn.close()
+        with Archive(dbfile) as archive:
+            archive.insert(self)
 
     def examine(self, include_folders=False):
         files = self.findfiles(self.pattern, include_folders=include_folders)
