@@ -27,7 +27,8 @@
 # John Truckenbrodt, Felix Cremer 2016-2017
 ##############################################################
 """
-this script is intended to contain several SAR scene identifier classes to read basic metadata from the scene folders/files, convert to GAMMA format and do simple pre-processing
+this script is intended to contain several SAR scene identifier classes to read basic metadata from the scene
+folders/files, convert to GAMMA format and do simple pre-processing
 """
 from __future__ import print_function
 
@@ -59,7 +60,6 @@ except ImportError:
     import sqlite3
 
 from . import envi
-from . import gamma
 from . import linesimplify as ls
 from . import spatial
 from .ancillary import finder, parse_literal, urlQueryParser, run
@@ -125,10 +125,6 @@ class ID(object):
         else:
             spatial.bbox(self.getCorners(), self.projection, outname=outname, format='ESRI Shapefile',
                          overwrite=overwrite)
-
-    @abc.abstractmethod
-    def calibrate(self, replace=False):
-        raise NotImplementedError
 
     @property
     def compression(self):
@@ -202,10 +198,6 @@ class ID(object):
 
         conn.commit()
         conn.close()
-
-    @abc.abstractmethod
-    def convert2gamma(self, directory):
-        raise NotImplementedError
 
     def examine(self, include_folders=False):
         files = self.findfiles(self.pattern, include_folders=include_folders)
@@ -520,26 +512,6 @@ class CEOS_ERS(ID):
         else:
             raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
 
-    def convert2gamma(self, directory):
-        self.gammadir = directory
-        if self.sensor in ['ERS1', 'ERS2']:
-            if self.product == 'SLC' and self.meta['proc_system'] in ['PGS-ERS', 'VMP-ERS', 'SPF-ERS']:
-                basename = '{}_{}_{}'.format(self.outname_base(), self.polarizations[0], self.product.lower())
-                outname = os.path.join(directory, basename)
-                if not os.path.isfile(outname):
-                    lea = self.findfiles('LEA_01.001')[0]
-                    dat = self.findfiles('DAT_01.001')[0]
-                    title = re.sub('\.PS$', '', os.path.basename(self.file))
-                    gamma.process(['par_ESA_ERS', lea, outname + '.par', dat, outname], inlist=[title])
-                else:
-                    print('scene already converted')
-            else:
-                raise NotImplementedError(
-                    'ERS {} product of {} processor in CEOS format not implemented yet'.format(self.product, self.meta[
-                        'proc_system']))
-        else:
-            raise NotImplementedError('sensor {} in CEOS format not implemented yet'.format(self.sensor))
-
     def scanMetadata(self):
         """
         read the leader file and extract relevant metadata
@@ -692,14 +664,6 @@ class CEOS_PSR(ID):
 
         # register the standardized meta attributes as object attributes
         ID.__init__(self, self.meta)
-
-    def calibrate(self, replace=False):
-        for image in self.getGammaImages(self.scene):
-            if image.endswith('_slc'):
-                gamma.process(
-                    ['radcal_SLC', image, image + '.par', image + '_cal', image + '_cal.par',
-                     '-', '-', '-', '-', '-', '-', self.meta['k_dB']])
-                envi.hdr(image + '_cal.par')
 
     def getLeaderfile(self):
         led_filename = self.findfiles(self.pattern)[0]
@@ -879,23 +843,6 @@ class CEOS_PSR(ID):
         meta['k_dB'] = float(radiometricData[20:36])
         return meta
 
-    def convert2gamma(self, directory):
-        images = self.findfiles('^IMG-')
-        if self.product == '1.0':
-            raise RuntimeError('PALSAR-1 level 1.0 products are not supported')
-        for image in images:
-            polarization = re.search('[HV]{2}', os.path.basename(image)).group(0)
-            if self.product == '1.1':
-                outname_base = '{}_{}_slc'.format(self.outname_base(), polarization)
-                outname = os.path.join(directory, outname_base)
-                gamma.process(['par_EORC_PALSAR', self.file, outname + '.par', image, outname])
-            else:
-                outname_base = '{}_{}_mli_geo'.format(self.outname_base(), polarization)
-                outname = os.path.join(directory, outname_base)
-                gamma.process(
-                    ['par_EORC_PALSAR_geo', self.file, outname + '.par', outname + '_dem.par', image, outname])
-            envi.hdr(outname + '.par')
-
     def unpack(self, directory):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir)
@@ -939,7 +886,7 @@ class CEOS_PSR(ID):
 # todo: check this file: '/geonfs01_vol1/ve39vem/swos_archive/SAR_IMP_1P2ASI19910729_203023_00000017A906_00129_00183_1771.E1.zip'
 class ESA(ID):
     """
-    Handler class for SAR data in ESA format (Envisat ASAR, ERS)
+    Handler class for SAR data in ESA format (Envisat ASAR, ERS-1/2)
     """
 
     def __init__(self, scene):
@@ -998,55 +945,6 @@ class ESA(ID):
         lat = [self.meta[x] for x in self.meta if re.search('LAT', x)]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
 
-    # todo: prevent conversion if target files already exist
-    def convert2gamma(self, directory):
-        """
-        the command par_ASAR also accepts a K_dB argument in which case the resulting image names will carry the suffix GRD;
-        this is not implemented here but instead in method calibrate
-        """
-        self.gammadir = directory
-        outname = os.path.join(directory, self.outname_base())
-        if len(self.getGammaImages(directory)) == 0:
-            gamma.process(['par_ASAR', os.path.basename(self.file), outname], os.path.dirname(self.file))
-            os.remove(outname + '.hdr')
-            for item in finder(directory, [os.path.basename(outname)], regex=True):
-                ext = '.par' if item.endswith('.par') else ''
-                base = os.path.basename(item).strip(ext)
-                base = base.replace('.', '_')
-                base = base.replace('PRI', 'pri')
-                base = base.replace('SLC', 'slc')
-                newname = os.path.join(directory, base + ext)
-                os.rename(item, newname)
-                if newname.endswith('.par'):
-                    envi.hdr(newname)
-        else:
-            raise IOError('scene already processed')
-
-    def calibrate(self, replace=False):
-        k_db = {'ASAR': 55., 'ERS1': 58.24, 'ERS2': 59.75}[self.sensor]
-        inc_ref = 90. if self.sensor == 'ASAR' else 23.
-        # candidates = [x for x in self.getGammaImages(self.gammadir) if not re.search('_(?:cal|grd)$', x)]
-        candidates = [x for x in self.getGammaImages(self.gammadir) if re.search('_pri$', x)]
-        for image in candidates:
-            out = image.replace('pri', 'grd')
-            gamma.process(['radcal_PRI', image, image + '.par', out, out + '.par', k_db, inc_ref])
-            envi.hdr(out + '.par')
-            if replace:
-                for item in [image, image + '.par', image + '.hdr']:
-                    if os.path.isfile(item):
-                        os.remove(item)
-                        # candidates = [x for x in self.getGammaImages(self.gammadir) if re.search('_slc$', x)]
-                        # for image in candidates:
-                        #     par = gamma.ISPPar(image+'.par')
-                        #     out = image+'_cal'
-                        #     fcase = 1 if par.image_format == 'FCOMPLEX' else 3
-                        #     gamma.process(['radcal_SLC', image, image + '.par', out, out + '.par', fcase, '-', '-', '-', '-', '-', k_db, inc_ref])
-                        #     envi.hdr(out + '.par')
-                        #     if replace:
-                        #         for item in [image, image+'.par', image+'.hdr']:
-                        #             if os.path.isfile(item):
-                        #                 os.remove(item)
-
     def unpack(self, directory):
         base_file = os.path.basename(self.file).strip('\.zip|\.tar(?:\.gz|)')
         base_dir = os.path.basename(directory.strip('/'))
@@ -1054,6 +952,8 @@ class ESA(ID):
         outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
 
         self._unpack(outdir)
+
+# id = ESA('/geonfs01_vol1/ve39vem/swos_archive/ASA_APP_1PNUPA20050123_092033_000000162034_00079_15163_0289.N1.zip')
 
 
 # todo: check self.file and self.scene assignment after unpacking
@@ -1243,69 +1143,6 @@ class SAFE(ID):
         for ras in ras_slaves:
             ras = None
 
-    def calibrate(self, replace=False):
-        print('calibration already performed during import')
-
-    def convert2gamma(self, directory, noiseremoval=True):
-        if self.compression is not None:
-            raise RuntimeError('scene is not yet unpacked')
-        if self.product == 'OCN':
-            raise IOError('Sentinel-1 OCN products are not supported')
-        if self.meta['category'] == 'A':
-            raise IOError('Sentinel-1 annotation-only products are not supported')
-
-        if not os.path.isdir(directory):
-            os.makedirs(directory)
-
-        for xml_ann in finder(os.path.join(self.scene, 'annotation'), [self.pattern_ds], regex=True):
-            base = os.path.basename(xml_ann)
-            match = re.compile(self.pattern_ds).match(base)
-
-            tiff = os.path.join(self.scene, 'measurement', base.replace('.xml', '.tiff'))
-            xml_cal = os.path.join(self.scene, 'annotation', 'calibration', 'calibration-' + base)
-
-            product = match.group('product')
-
-            # specify noise calibration file
-            # L1 GRD product: thermal noise already subtracted, specify xml_noise to add back thermal noise
-            # SLC products: specify noise file to remove noise
-            # xml_noise = '-': noise file not specified
-            if (noiseremoval and product == 'slc') or (not noiseremoval and product == 'grd'):
-                xml_noise = os.path.join(self.scene, 'annotation', 'calibration', 'noise-' + base)
-            else:
-                xml_noise = '-'
-
-            fields = (self.outname_base(),
-                      match.group('pol').upper(),
-                      product)
-            name = os.path.join(directory, '_'.join(fields))
-
-            if product == 'slc':
-                swath = match.group('swath').upper()
-                name = name.replace('{:_<{l}}'.format(self.acquisition_mode, l=len(swath)), swath)
-                cmd = ['par_S1_SLC', tiff, xml_ann, xml_cal, xml_noise, name + '.par', name, name + '.tops_par']
-            else:
-                cmd = ['par_S1_GRD', tiff, xml_ann, xml_cal, xml_noise, name + '.par', name]
-
-            gamma.process(cmd)
-            envi.hdr(name + '.par')
-            self.gammafiles[product].append(name)
-
-    def correctOSV(self, osvdir=None):
-        logdir = os.path.join(self.scene, 'logfiles')
-        if not os.path.isdir(logdir):
-            os.makedirs(logdir)
-        if osvdir is None:
-            osvdir = os.path.join(self.scene, 'osv')
-        if not os.path.isdir(osvdir):
-            os.makedirs(osvdir)
-        try:
-            self.getOSV(osvdir)
-        except URLError:
-            print('..no internet access')
-        for image in self.getGammaImages(self.scene):
-            gamma.process(['OPOD_vec', image + '.par', osvdir], outdir=logdir)
-
     def getCorners(self):
         coordinates = self.meta['coordinates']
         lat = [x[0] for x in coordinates]
@@ -1377,6 +1214,8 @@ class SAFE(ID):
         outdir = os.path.join(directory, os.path.basename(self.file))
         self._unpack(outdir)
 
+# id = SAFE('/geonfs01_vol1/ve39vem/swos_archive/S1A_IW_GRDH_1SDV_20170201T165238_20170201T165303_015093_018AC1_A8E9.zip')
+
 
 class TSX(ID):
     """
@@ -1437,23 +1276,6 @@ class TSX(ID):
 
         ID.__init__(self, self.meta)
 
-    def convert2gamma(self, directory):
-        images = self.findfiles(self.pattern_ds)
-        pattern = re.compile(self.pattern_ds)
-        for image in images:
-            pol = pattern.match(os.path.basename(image)).group('pol')
-            outname = os.path.join(directory, self.outname_base() + '_' + pol)
-            if self.product == 'SSC':
-                outname += '_slc'
-                gamma.process(['par_TX_SLC', self.file, image, outname + '.par', outname, pol])
-            elif self.product == 'MGD':
-                outname += '_mli'
-                gamma.process(['par_TX_GRD', self.file, image, outname + '.par', outname, pol])
-            else:
-                outname += '_mli_geo'
-                gamma.process(['par_TX_geo', self.file, image, outname + '.par', outname + '_dem.par', outname, pol])
-            envi.hdr(outname + '.par')
-
     def scanMetadata(self):
         annotation = self.getFileObj(self.file)
         namespaces = getNamespaces(annotation)
@@ -1488,10 +1310,9 @@ class TSX(ID):
         self._unpack(outdir, header)
 
 
-# id = identify('/geonfs01_vol1/ve39vem/archive/SAR/TerraSAR-X/TSX1_SAR__MGD_SE___SL_S_SRA_20110902T015248_20110902T015249.zip')
+# id = TSX('/geonfs01_vol1/ve39vem/archive/SAR/TerraSAR-X/TSX1_SAR__MGD_SE___SL_S_SRA/TSX1_SAR__MGD_SE___SL_S_SRA_20110902T015248_20110902T015249.zip')
 
 
-# todo: add method export2shp
 class Archive(object):
     """
     Utility for storing SAR image metadata in a spatialite database
@@ -1679,105 +1500,3 @@ class Archive(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.conn.close()
-
-# class Archive(object):
-#     """
-#     Utility for storing relevant SAR image metadata in a CSV file based database
-#     """
-#
-#     def __init__(self, scenelist, header=False, keys=None):
-#         self.scenelist = scenelist
-#         self.reg = {}
-#         if keys is None:
-#             self.keys = ['sensor', 'acquisition_mode', 'polarizations', 'scene', 'bbox', 'outname_base']
-#         if os.path.isfile(self.scenelist):
-#             self.file = open(scenelist, 'a+', 0)
-#             if header:
-#                 self.keys = self.file.readline().strip().split(';')
-#             for line in self.file:
-#                 items = dict(zip(self.keys, line.strip().split(';')))
-#                 base = os.path.basename(items['scene'])
-#                 self.reg[base] = items
-#             self.file.seek(0)
-#         else:
-#             self.file = open(scenelist, 'w', 0)
-#             if header:
-#                 self.file.write(';'.join(self.keys) + '\n')
-#
-#     def __enter__(self):
-#         return self
-#
-#     def add_attribute(self, attribute):
-#         self.close()
-#         with open(self.scenelist, 'r+') as f:
-#             lines = f.readlines()
-#             header = lines[0].strip().split(';')
-#             header.append(attribute)
-#             del lines[0]
-#             f.seek(0)
-#             f.truncate()
-#             f.write(';'.join(header) + '\n')
-#             pbar = pb.ProgressBar(maxval=len(lines)).start()
-#             for i, line in enumerate(lines):
-#                 items = dict(zip(header, line.strip().split(';')))
-#                 id = identify(items['scene'])
-#                 attr = getattr(id, attribute)
-#                 value = attr() if inspect.ismethod(attr) else attr
-#                 items[attribute] = value
-#                 line = line.replace('\n', ';' + value + '\n')
-#                 f.write(line)
-#                 pbar.update(i + 1)
-#             pbar.finish()
-#         self.__init__(self.scenelist)
-#
-#     def update(self, scenes):
-#         for scene in scenes:
-#             base = os.path.basename(scene)
-#             if base not in self.reg:
-#                 try:
-#                     id = identify(scene)
-#                 except IOError:
-#                     print('failed:', base)
-#                     continue
-#                 print(base)
-#                 items = [id.sensor, id.acquisition_mode, ','.join(id.polarizations), id.scene,
-#                          id.bbox().convert2wkt()[0]]
-#                 self.file.write(';'.join(items) + '\n')
-#                 self.reg[base] = dict(zip(self.keys, items))
-#
-#     def select(self, vectorobject):
-#         vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
-#         site_geom = ogr.CreateGeometryFromWkt(vectorobject.convert2wkt()[0])
-#         selection_site = []
-#         for entry in self.reg:
-#             geom = ogr.CreateGeometryFromWkt(self.reg[entry]['bbox'])
-#             intersection = geom.Intersection(site_geom)
-#             if intersection.GetArea() > 0:
-#                 selection_site.append(self.reg[entry]['scene'])
-#         return selection_site
-#
-#     def delete(self, filename):
-#         for entry in self.reg:
-#             if self.reg[entry]['scene'] == filename:
-#                 del self.reg[entry]
-#                 break
-#         with open(self.scenelist, 'r+') as f:
-#             lines = f.readlines()
-#             f.seek(0)
-#             for line in lines:
-#                 if not re.search(filename, line):
-#                     f.write(line)
-#             f.truncate()
-#         if os.path.isfile(filename):
-#             print(filename)
-#             os.remove(filename)
-#
-#     @property
-#     def size(self):
-#         return len(self.reg)
-#
-#     def close(self):
-#         self.file.close()
-#
-#     def __exit__(self, exc_type, exc_val, exc_tb):
-#         self.file.close()

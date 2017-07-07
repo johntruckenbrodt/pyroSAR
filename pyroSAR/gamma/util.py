@@ -20,6 +20,7 @@ from collections import OrderedDict
 from osgeo import ogr
 
 from .. import envi
+from ..drivers import *
 from ..spatial import haversine
 
 from ..ancillary import run, Stack, union, finder
@@ -35,6 +36,196 @@ def process(cmd, outdir=None, logpath=None, inlist=None, void=True):
     gammaErrorHandler(out, err)
     if not void:
         return out, err
+
+
+def calibrate(id, directory, replace=False):
+
+    if isinstance(id, CEOS_PSR):
+        for image in id.getGammaImages(directory):
+            if image.endswith('_slc'):
+                process(
+                    ['radcal_SLC', image, image + '.par', image + '_cal', image + '_cal.par',
+                     '-', '-', '-', '-', '-', '-', id.meta['k_dB']])
+                envi.hdr(image + '_cal.par')
+
+    elif isinstance(id, ESA):
+        k_db = {'ASAR': 55., 'ERS1': 58.24, 'ERS2': 59.75}[id.sensor]
+        inc_ref = 90. if id.sensor == 'ASAR' else 23.
+        candidates = [x for x in id.getGammaImages(directory) if re.search('_pri$', x)]
+        for image in candidates:
+            out = image.replace('pri', 'grd')
+            process(['radcal_PRI', image, image + '.par', out, out + '.par', k_db, inc_ref])
+            envi.hdr(out + '.par')
+            if replace:
+                for item in [image, image + '.par', image + '.hdr']:
+                    if os.path.isfile(item):
+                        os.remove(item)
+
+    elif isinstance(id, SAFE):
+        print('calibration already performed during import')
+
+    else:
+        raise NotImplementedError('calibration for class {} is not implemented yet'.format(type(id).__name__))
+
+
+def convert2gamma(id, directory, S1_noiseremoval=True):
+    """
+    general function for converting SAR images to Gamma format
+
+    :param id: an object of type pyroSAR.ID or any subclass
+    :param directory: the output directory for the converted images
+    :param S1_noiseremoval: only Sentinel-1: should noise removal be applied to the image?
+    :return: None
+    """
+
+    if not isinstance(id, ID):
+        raise IOError('id must be of type pyroSAR.ID')
+
+    if id.compression is not None:
+        raise RuntimeError('scene is not yet unpacked')
+
+    if not os.path.isdir(directory):
+        os.makedirs(directory)
+
+    if isinstance(id, CEOS_ERS):
+        if id.sensor in ['ERS1', 'ERS2']:
+            if id.product == 'SLC' and id.meta['proc_system'] in ['PGS-ERS', 'VMP-ERS', 'SPF-ERS']:
+                basename = '{}_{}_{}'.format(id.outname_base(), id.polarizations[0], id.product.lower())
+                outname = os.path.join(directory, basename)
+                if not os.path.isfile(outname):
+                    lea = id.findfiles('LEA_01.001')[0]
+                    dat = id.findfiles('DAT_01.001')[0]
+                    title = re.sub('\.PS$', '', os.path.basename(id.file))
+                    process(['par_ESA_ERS', lea, outname + '.par', dat, outname], inlist=[title])
+                else:
+                    print('scene already converted')
+            else:
+                raise NotImplementedError('ERS {} product of {} processor in CEOS format not implemented yet'
+                                          .format(id.product, id.meta['proc_system']))
+        else:
+            raise NotImplementedError('sensor {} in CEOS format not implemented yet'.format(id.sensor))
+
+    elif isinstance(id, CEOS_PSR):
+        images = id.findfiles('^IMG-')
+        if id.product == '1.0':
+            raise RuntimeError('PALSAR level 1.0 products are not supported')
+        for image in images:
+            polarization = re.search('[HV]{2}', os.path.basename(image)).group(0)
+            if id.product == '1.1':
+                outname_base = '{}_{}_slc'.format(id.outname_base(), polarization)
+                outname = os.path.join(directory, outname_base)
+                process(['par_EORC_PALSAR', id.file, outname + '.par', image, outname])
+            else:
+                outname_base = '{}_{}_mli_geo'.format(id.outname_base(), polarization)
+                outname = os.path.join(directory, outname_base)
+                process(
+                    ['par_EORC_PALSAR_geo', id.file, outname + '.par', outname + '_dem.par', image, outname])
+            envi.hdr(outname + '.par')
+
+    elif isinstance(id, ESA):
+        """
+        the command par_ASAR also accepts a K_dB argument for calibration in which case the resulting image names will carry the suffix GRD;
+        this is not implemented here but instead in function calibrate
+        """
+        outname = os.path.join(directory, id.outname_base())
+        if not id.is_processed(directory):
+            process(['par_ASAR', os.path.basename(id.file), outname], os.path.dirname(id.file))
+            os.remove(outname + '.hdr')
+            for item in finder(directory, [os.path.basename(outname)], regex=True):
+                ext = '.par' if item.endswith('.par') else ''
+                base = os.path.basename(item).strip(ext)
+                base = base.replace('.', '_')
+                base = base.replace('PRI', 'pri')
+                base = base.replace('SLC', 'slc')
+                newname = os.path.join(directory, base + ext)
+                os.rename(item, newname)
+                if newname.endswith('.par'):
+                    envi.hdr(newname)
+        else:
+            raise IOError('scene already processed')
+
+    elif isinstance(id, SAFE):
+        if id.product == 'OCN':
+            raise IOError('Sentinel-1 OCN products are not supported')
+        if id.meta['category'] == 'A':
+            raise IOError('Sentinel-1 annotation-only products are not supported')
+
+        for xml_ann in finder(os.path.join(id.scene, 'annotation'), [id.pattern_ds], regex=True):
+            base = os.path.basename(xml_ann)
+            match = re.compile(id.pattern_ds).match(base)
+
+            tiff = os.path.join(id.scene, 'measurement', base.replace('.xml', '.tiff'))
+            xml_cal = os.path.join(id.scene, 'annotation', 'calibration', 'calibration-' + base)
+
+            product = match.group('product')
+
+            # specify noise calibration file
+            # L1 GRD product: thermal noise already subtracted, specify xml_noise to add back thermal noise
+            # SLC products: specify noise file to remove noise
+            # xml_noise = '-': noise file not specified
+            if (S1_noiseremoval and product == 'slc') or (not S1_noiseremoval and product == 'grd'):
+                xml_noise = os.path.join(id.scene, 'annotation', 'calibration', 'noise-' + base)
+            else:
+                xml_noise = '-'
+
+            fields = (id.outname_base(),
+                      match.group('pol').upper(),
+                      product)
+            name = os.path.join(directory, '_'.join(fields))
+
+            if product == 'slc':
+                swath = match.group('swath').upper()
+                name = name.replace('{:_<{l}}'.format(id.acquisition_mode, l=len(swath)), swath)
+                cmd = ['par_S1_SLC', tiff, xml_ann, xml_cal, xml_noise, name + '.par', name, name + '.tops_par']
+            else:
+                cmd = ['par_S1_GRD', tiff, xml_ann, xml_cal, xml_noise, name + '.par', name]
+
+            process(cmd)
+            envi.hdr(name + '.par')
+
+    elif isinstance(id, TSX):
+        images = id.findfiles(id.pattern_ds)
+        pattern = re.compile(id.pattern_ds)
+        for image in images:
+            pol = pattern.match(os.path.basename(image)).group('pol')
+            outname = os.path.join(directory, id.outname_base() + '_' + pol)
+            if id.product == 'SSC':
+                outname += '_slc'
+                process(['par_TX_SLC', id.file, image, outname + '.par', outname, pol])
+            elif id.product == 'MGD':
+                outname += '_mli'
+                process(['par_TX_GRD', id.file, image, outname + '.par', outname, pol])
+            else:
+                outname += '_mli_geo'
+                process(['par_TX_geo', id.file, image, outname + '.par', outname + '_dem.par', outname, pol])
+            envi.hdr(outname + '.par')
+
+    else:
+        raise NotImplementedError('conversion for class {} is not implemented yet'.format(type(id).__name__))
+
+
+def correctOSV(id, osvdir=None):
+
+    if not isinstance(id, ID):
+        raise IOError('id must be of type pyroSAR.ID')
+
+    logdir = os.path.join(id.scene, 'logfiles')
+    if not os.path.isdir(logdir):
+        os.makedirs(logdir)
+    if osvdir is None:
+        osvdir = os.path.join(id.scene, 'osv')
+    if not os.path.isdir(osvdir):
+        os.makedirs(osvdir)
+    try:
+        id.getOSV(osvdir)
+    except URLError:
+        print('..no internet access')
+
+    if isinstance(id, SAFE):
+        for image in id.getGammaImages(id.scene):
+            process(['OPOD_vec', image + '.par', osvdir], outdir=logdir)
+    else:
+        raise NotImplementedError('OSV refinement for class {} is not implemented yet'.format(type(id).__name__))
 
 
 def slc_corners(parfile):
@@ -238,7 +429,7 @@ def cc_fit(offs, ccp, diffpar, mode, coffs='-', coffsets='-', thres=.15, npoly=4
     for line in out.split('\n'):
         if line.startswith('final model fit std. dev.'):
             fit = tuple(map(float, re.findall('[0-9]+.[0-9]+', line)))
-    print 'final model fit std. dev. (range, azimuth):', fit
+    print('final model fit std. dev. (range, azimuth):', fit)
     if not fit:
         raise RuntimeError(
             'failed at fitting offset estimation; command:\n{}'.format(' '.join(cmd)))
@@ -290,9 +481,9 @@ def cc(master, slave, diffpar, offs, ccp, mode, offsets='-', nr=400, naz=400, th
         else:
             break
         winsize *= 2
-    print 'optimal window size:', bestwin
+    print('optimal window size:', bestwin)
     ratio = cc_find(master, slave, diffpar, offs, ccp, bestwin, mode, n_ovr=8)
-    print 'offset acceptance ratio:', ratio
+    print('offset acceptance ratio:', ratio)
     return bestwin
 
 
@@ -344,13 +535,13 @@ def correlate2(master, slave, diffpar, offs, ccp, offsets='-', coffs='-', coffse
             os.makedirs(path_log)
     mode = 'SLC' if ISPPar(master + '.par').image_format in ['FCOMPLEX',
                                                              'SCOMPLEX'] else 'MLI'
-    print '#####################################\ncross-correlation offset estimation'
+    print('#####################################\ncross-correlation offset estimation')
     for i in range(0, niter):
-        print '#############\niteration {}'.format(i + 1)
+        print('#############\niteration {}'.format(i + 1))
         cc(master, slave, diffpar, offs, ccp, mode, offsets, thres=thres, minwin=minwin,
            maxwin=maxwin)
         cc_fit(offs, ccp, diffpar, mode, coffs, coffsets, thres, npoly)
-    print '#############\n...done\n#####################################'
+    print('#############\n...done\n#####################################')
 
 
 def find_poly(offs, ccp, diffpar, mode, coffs, coffsets, thres=.15):
@@ -364,7 +555,7 @@ def find_poly(offs, ccp, diffpar, mode, coffs, coffsets, thres=.15):
                 bestfit = fit
         except RuntimeError:
             continue
-    print 'best polynomial order:', bestpoly
+    print('best polynomial order:', bestpoly)
     return cc_fit2(offs, ccp, diffpar, mode, coffs, coffsets, thres, bestpoly)
 
 
@@ -380,12 +571,12 @@ def find_poly(offs, ccp, diffpar, mode, coffs, coffsets, thres=.15):
 #     n_ovr = 2
 #     thres = .15
 #     # cc_find2(master, slave, diffpar, offs, ccp, rwin, azwin, mode, offsets, n_ovr, nr, naz, thres)
-#     # print find_poly(offs, ccp, diffpar, mode, coffs, coffsets, thres)
+#     # print(find_poly(offs, ccp, diffpar, mode, coffs, coffsets, thres))
 #     # # cc_find2(master, slave, diffpar, offs, ccp, rwin/2, azwin/2, mode, offsets, n_ovr, nr*2, naz*2, thres)
 #     # # fit2 = find_poly(offs, ccp, diffpar, mode, coffs, coffsets, thres)
 #     #
 #     cc_find2(master, slave, diffpar, offs, ccp, 8, 8, mode, offsets, n_ovr, 1000, 1000, thres)
-#     print find_poly(offs, ccp, diffpar, mode, coffs, coffsets, thres)
+#     print(find_poly(offs, ccp, diffpar, mode, coffs, coffsets, thres))
 
 
 def correlate4(master, slave, diffpar, offs, ccp, offsets='-', coffs='-', coffsets='-'):
@@ -415,22 +606,22 @@ def correlate4(master, slave, diffpar, offs, ccp, offsets='-', coffs='-', coffse
             continue
     if bestwinsize == 0:
         bestwinsize = 8
-    print 'optimal window size:', bestwinsize
+    print('optimal window size:', bestwinsize)
     if bestnoffs < 1000:
-        print 'initial number of offsets:', int(bestnoffs)
+        print('initial number of offsets:', int(bestnoffs))
         # offset search refinement
         nr = (par.range_samples // 1000 * 1000) / (bestwinsize / 8)
         naz = (par.azimuth_lines // 1000 * 1000) / (bestwinsize / 8)
         nr = nr if nr <= 4000 else 4000
         naz = naz if naz <= 4000 else 4000
-        print 'new number of windows:', nr, naz
+        print('new number of windows:', nr, naz)
         bestnoffs = cc_find2(master, slave, diffpar, offs, ccp, bestwinsize, bestwinsize,
                              mode, offsets, 8, nr, naz)
-        print 'final number of offsets:', int(bestnoffs)
+        print('final number of offsets:', int(bestnoffs))
     else:
-        print 'number of offsets:', int(bestnoffs)
+        print('number of offsets:', int(bestnoffs))
     fit = find_poly(offs, ccp, diffpar, mode, coffs, coffsets)
-    print 'achieved fit:', fit
+    print('achieved fit:', fit)
 
 
 def correlate5(master, slave, diffpar, offs, ccp, offsets='-', coffs='-', coffsets='-'):
@@ -448,17 +639,17 @@ def correlate5(master, slave, diffpar, offs, ccp, offsets='-', coffs='-', coffse
     overlap = .5
     noffsets = 0
     while winsize >= 8:
-        print 'window size:', winsize
+        print('window size:', winsize)
         nr = int(round((float(par.range_samples) / winsize) * (1 + overlap)))
         naz = int(int(nr) * dim_ratio)
-        print 'number of search windows (range, azimuth):', nr, naz
+        print('number of search windows (range, azimuth):', nr, naz)
         try:
             noffsets = cc_find2(master, slave, diffpar, offs, ccp, winsize, winsize, mode,
                                 offsets, 2, nr, naz)
-            print 'number of found offsets:', noffsets
+            print('number of found offsets:', noffsets)
             if noffsets > 50:
                 fit = find_poly(offs, ccp, diffpar, mode, coffs, coffsets)
-                print 'polynomial fit (range, azimuth):', fit
+                print('polynomial fit (range, azimuth):', fit)
                 if sum(fit) > 1.5:
                     raise RuntimeError
                 else:
@@ -468,15 +659,15 @@ def correlate5(master, slave, diffpar, offs, ccp, offsets='-', coffs='-', coffse
             winsize /= 2
             continue
     if winsize == 4 and noffsets < 50:
-        print 'window size:', 8
+        print('window size:', 8)
         nr = (par.range_samples // 1000 * 1000)
         naz = (par.azimuth_lines // 1000 * 1000)
-        print 'number of search windows (range, azimuth):', nr, naz
+        print('number of search windows (range, azimuth):', nr, naz)
         noffsets = cc_find2(master, slave, diffpar, offs, ccp, 8, 8, mode, offsets, 8, nr,
                             naz)
-        print 'number of found offsets:', noffsets
+        print('number of found offsets:', noffsets)
         fit = find_poly(offs, ccp, diffpar, mode, coffs, coffsets)
-        print 'polynomial fit (range, azimuth):', fit
+        print('polynomial fit (range, azimuth):', fit)
 
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=2,
@@ -524,7 +715,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if sarsimulation is True:
         raise RuntimeError('geocoding with cross correlation offset refinement is currently disabled')
 
-    scene = scene if isinstance(scene, pyroSAR.ID) else pyroSAR.identify(scene)
+    scene = scene if isinstance(scene, ID) else identify(scene)
 
     for dir in [tempdir, outdir]:
         if not os.path.isdir(dir):
@@ -540,27 +731,27 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         raise IOError('wrong input type for parameter scaling')
 
     if scene.compression is not None:
-        print 'unpacking scene..'
+        print('unpacking scene..')
         scene.unpack(tempdir)
     else:
         scene.scene = os.path.join(tempdir, os.path.basename(scene.file))
         os.makedirs(scene.scene)
 
     if scene.sensor in ['S1A', 'S1B']:
-        print 'removing border noise..'
+        print('removing border noise..')
         scene.removeGRDBorderNoise()
 
-    print 'converting scene to GAMMA format..'
-    scene.convert2gamma(scene.scene)
+    print('converting scene to GAMMA format..')
+    convert2gamma(scene, scene.scene)
 
     if scene.sensor in ['S1A', 'S1B']:
-        print 'updating orbit state vectors..'
+        print('updating orbit state vectors..')
         try:
-            scene.correctOSV(osvdir)
+            correctOSV(scene, osvdir)
         except RuntimeError:
             return
 
-    scene.calibrate()
+    calibrate(scene, scene.scene)
 
     images = [x for x in scene.getGammaImages(scene.scene) if x.endswith('_grd') or x.endswith('_slc_cal')]
 
@@ -625,21 +816,21 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         # correlate(master, pixel_area_coarse, diffpar, offs, ccp, coffs=coffs, coffsets=coffsets, offsets=offsets, path_log=path_log, maxwin=256)
         # correlate2(master, pixel_area_coarse, diffpar, offs, ccp, offsets=offsets, coffs=coffs, coffsets=coffsets, path_log=path_log)
         # correlate3(master, pixel_area_coarse, diffpar, offs, ccp, offsets=offsets, coffs=coffs, coffsets=coffsets)
-        print '#####################################'
-        print 'cross correlation step 1'
+        print('#####################################')
+        print('cross correlation step 1')
         correlate5(n.pixel_area_coarse, master, n.diff_par, n.offs, n.ccp, n.offsets, n.coffs, n.coffsets)
-        print '#####################################'
-        print 'cross correlation step 2'
+        print('#####################################')
+        print('cross correlation step 2')
         correlate5(n.pixel_area_coarse, master, n.diff_par, n.offs, n.ccp, n.offsets, n.coffs, n.coffsets)
-        print '#####################################'
-        # print 'cross correlation step 3'
+        print('#####################################')
+        # print('cross correlation step 3')
         # correlate4(pixel_area_coarse, master, diffpar, offs, ccp, offsets, coffs, coffsets)
-        # print '#####################################'
+        # print('#####################################')
         ######################################################################
         try:
             process(['gc_map_fine', n.lut_coarse, sim_width, n.diff_par, n.lut_fine, 0], logpath=path_log)
         except sp.CalledProcessError:
-            print '...failed'
+            print('...failed')
             return
         lut_final = n.lut_fine
     else:
@@ -745,7 +936,7 @@ def geocode2(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geob
 
     ######################################################################################
     # load scene into pyroSAR and check whether it has already been processed
-    scene = scene if isinstance(scene, pyroSAR.ID) else pyroSAR.identify(scene)
+    scene = scene if isinstance(scene, ID) else identify(scene)
 
     if len(finder(outdir, [scene.outname_base()], regex=True, recursive=False)) != 0:
         print('scene {} already processed'.format(scene.outname_base()))
@@ -825,18 +1016,18 @@ def geocode2(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geob
         # correlate(master, pixel_area_coarse, diffpar, offs, ccp, coffs=coffs, coffsets=coffsets, offsets=offsets, path_log=path_log, maxwin=256)
         # correlate2(master, pixel_area_coarse, diffpar, offs, ccp, offsets=offsets, coffs=coffs, coffsets=coffsets, path_log=path_log)
         # correlate3(master, pixel_area_coarse, diffpar, offs, ccp, offsets=offsets, coffs=coffs, coffsets=coffsets)
-        print '#####################################'
-        print 'cross correlation step 1'
+        print('#####################################')
+        print('cross correlation step 1')
         correlate5(n.pix_dem, master, n.diff_par, n.offs, n.ccp, n.offsets, n.coffs,
                    n.coffsets)
-        print '#####################################'
-        print 'cross correlation step 2'
+        print('#####################################')
+        print('cross correlation step 2')
         correlate5(n.pix_dem, master, n.diff_par, n.offs, n.ccp, n.offsets, n.coffs,
                    n.coffsets)
-        print '#####################################'
-        # print 'cross correlation step 3'
+        print('#####################################')
+        # print('cross correlation step 3')
         # correlate4(pix_dem, master, diffpar, offs, ccp, offsets, coffs, coffsets)
-        # print '#####################################'
+        # print('#####################################')
         ##################################################################################
 
         # lookup table and pixel area refinement
