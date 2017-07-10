@@ -673,44 +673,48 @@ def correlate5(master, slave, diffpar, offs, ccp, offsets='-', coffs='-', coffse
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=2,
             func_interp=0, nodata=(0, -99), sarsimulation=True, osvdir=None, cleanup=True):
     """
-    scene: the SAR scene to be processed (can be the name of the file or a pyroSAR object)
-    dem: the reference DEM in GAMMA format
-    tempdir: a temporary directory for writing intermediate files
-    outdir: the directory for the final GeoTiff output files
-    targetres: the target resolution in meters
-    scaling: can be either 'linear', 'db' or a list of both (i.e. ['linear', 'db'])
-    func_geoback: backward geocoding interpolation mode (see GAMMA command geocode_back)
+    general function for geocoding SAR images with GAMMA
+
+    :param scene: the SAR scene to be processed (can be the name of the file or a pyroSAR object)
+    :param dem: the reference DEM in GAMMA format
+    :param tempdir: a temporary directory for writing intermediate files
+    :param outdir: the directory for the final GeoTiff output files
+    :param targetres: the target resolution in meters
+    :param scaling: can be either 'linear', 'db' or a list of both (i.e. ['linear', 'db'])
+    :param func_geoback: backward geocoding interpolation mode (see GAMMA command geocode_back)
         0: nearest-neighbor
         1: bicubic spline
         2: bicubic-log spline, interpolates log(data)
         3: bicubic-sqrt spline, interpolates sqrt(data)
         NOTE: bicubic-log spline and bicubic-sqrt spline modes should only be used with non-negative data!
-    func_interp: output lookup table values in regions of layover, shadow, or DEM gaps (see GAMMA command gc_map)
+    :param func_interp: output lookup table values in regions of layover, shadow, or DEM gaps (see GAMMA command gc_map)
         0: set to (0.,0.)
         1: linear interpolation across these regions
         2: actual value
         3: nn-thinned
-    nodata: the nodata values for the output files; defined as a tuple with two values, the first for linear, the second for logarithmic scaling, per default (0, -99)
-    sarsimulation: perform geocoding with SAR simulation cross correlation? If False, geocoding is performed with the Range-Doppler approach using orbit state vectors
-    cleanup: should all files written to the temporary directory during function execution be deleted after processing?
+    :param nodata: the nodata values for the output files; defined as a tuple with two values, the first for linear, the second for logarithmic scaling, per default (0, -99)
+    :param sarsimulation: perform geocoding with SAR simulation cross correlation? If False, geocoding is performed with the Range-Doppler approach using orbit state vectors
+    :param osvdir:
+    :param cleanup: should all files written to the temporary directory during function execution be deleted after processing?
+    :return: None
 
     intermediate output files (named <master_MLI>_<suffix>):
-    dem: dem subsetted to the extent of the SAR image
-    lut: rough geocoding lookup table
-    lut_fine: fine geocoding lookup table
-    sim_map: simulated SAR backscatter image in DEM geometry
-    sim_sar: simulated SAR backscatter image in SAR geometry
-    u: zenith angle of surface normal vector n (angle between z and n)
-    v: orientation angle of n (between x and projection of n in xy plane)
-    inc: local incidence angle (between surface normal and look vector)
-    psi: projection angle (between surface normal and image plane normal)
-    pix: pixel area normalization factor
-    ls_map: layover and shadow map (in map projection)
-    diffpar: ISP offset/interferogram parameter file
-    offs: offset estimates (fcomplex)
-    coffs: culled range and azimuth offset estimates (fcomplex)
-    coffsets: culled offset estimates and cross correlation values (text format)
-    ccp: cross-correlation of each patch (0.0->1.0) (float)
+    - dem_seg: dem subsetted to the extent of the SAR image
+    - lut: rough geocoding lookup table
+    - lut_fine: fine geocoding lookup table
+    - sim_map: simulated SAR backscatter image in DEM geometry
+    - sim_sar: simulated SAR backscatter image in SAR geometry
+    - u: zenith angle of surface normal vector n (angle between z and n)
+    - v: orientation angle of n (between x and projection of n in xy plane)
+    - inc: local incidence angle (between surface normal and look vector)
+    - psi: projection angle (between surface normal and image plane normal)
+    - pix: pixel area normalization factor
+    - ls_map: layover and shadow map (in map projection)
+    - diffpar: ISP offset/interferogram parameter file
+    - offs: offset estimates (fcomplex)
+    - coffs: culled range and azimuth offset estimates (fcomplex)
+    - coffsets: culled offset estimates and cross correlation values (text format)
+    - ccp: cross-correlation of each patch (0.0->1.0) (float)
     """
     if sarsimulation is True:
         raise RuntimeError('geocoding with cross correlation offset refinement is currently disabled')
@@ -755,6 +759,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
 
     images = [x for x in scene.getGammaImages(scene.scene) if x.endswith('_grd') or x.endswith('_slc_cal')]
 
+    print('multilooking..')
     for image in images:
         multilook(image, image + '_mli', targetres)
 
@@ -781,6 +786,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                    ovs_lat, ovs_lon, n.sim_map, n.u, n.v, n.inc, n.psi, n.pix, n.ls_map,
                    8, func_interp]
 
+    print('SAR image simulation from DEM..')
     if master_par.image_geometry == 'GROUND_RANGE':
         process(['gc_map_grd', master + '.par'] + gc_map_args, logpath=path_log)
     else:
@@ -839,6 +845,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     ######################################################################
     # normalization and backward geocoding approach 1 ####################
     ######################################################################
+    print('geocoding and normalization..')
     for image in images:
         process(['geocode_back', image, master_par.range_samples, lut_final, image + '_geo', sim_width, '-', func_geoback], logpath=path_log)
         process(['product', image + '_geo', n.pix, image + '_geo_pan', sim_width, 1, 1, 0], logpath=path_log)
@@ -859,7 +866,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     #     process(['sigma2gamma', image+'_pan_geo_flat', inc, image+'_geo_norm', sim_width], logpath=path_log)
     #     envi.hdr(dem_seg+'.par', image+'_geo_norm.hdr')
     ######################################################################
-    # conversion to (dB and) geotiff
+    print('conversion to (dB and) geotiff..')
     for image in images:
         for scale in scaling:
             if scale == 'db':
@@ -878,6 +885,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         shutil.copyfile(os.path.join(scene.scene, 'manifest.safe'),
                         os.path.join(outdir, scene.outname_base() + '_manifest.safe'))
     if cleanup:
+        print('cleaning up temporary files..')
         shutil.rmtree(scene.scene)
 
 
