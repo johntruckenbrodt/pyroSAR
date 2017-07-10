@@ -41,7 +41,6 @@ import os
 import re
 import ssl
 import struct
-import subprocess as sp
 import tarfile as tf
 import xml.etree.ElementTree as ET
 import zipfile as zf
@@ -59,7 +58,6 @@ try:
 except ImportError:
     import sqlite3
 
-from . import envi
 from . import linesimplify as ls
 from . import spatial
 from .ancillary import finder, parse_literal, urlQueryParser, run
@@ -341,11 +339,13 @@ class ID(object):
     def unpack(self, directory):
         raise NotImplementedError
 
-    # todo: prevent unpacking if target files already exist
     # todo: replace with functionality from module archivist
     def _unpack(self, directory, offset=None):
         if not os.path.isdir(directory):
             os.makedirs(directory)
+        else:
+            print('target scene directory already exists: {}'.format(directory))
+            return
         if tf.is_tarfile(self.scene):
             archive = tf.open(self.scene, 'r')
             names = archive.getnames()
@@ -379,23 +379,19 @@ class ID(object):
                             try:
                                 with open(outname, 'w') as outfile:
                                     outfile.write(archive.read(item))
-                            # note: the following is a pretty ugly workaround. Sentinel-1 Tiffs are occasionally provided with the wrong CRC-32 checksum although the file itself is intact.
-                            # the command unzip unpacks the file first, then throws the error, while the Python zipfile module operates the other way around. If the Python module fails,
-                            # the unzip command can still be operated and the file be used.
-                            # todo: investigate how this can be done any better
                             except zf.BadZipfile:
-                                cmd = ['unzip', '-j', '-qq', '-o', archive.filename, item, '-d',
-                                       os.path.dirname(outname)]
-                                try:
-                                    sp.check_call(cmd)
-                                except sp.CalledProcessError:
-                                    continue
+                                print('corrupt archive, unpacking failed')
+                                continue
                 archive.close()
             else:
                 archive.extractall(directory)
                 archive.close()
+        else:
+            print('unpacking is only supported for TAR and ZIP archives')
+            return
         self.scene = directory
-        self.file = os.path.join(self.scene, os.path.basename(self.file))
+        main = os.path.join(self.scene, os.path.basename(self.file))
+        self.file = main if os.path.isfile(main) else self.scene
 
 
 class CEOS_ERS(ID):
@@ -913,7 +909,6 @@ class ESA(ID):
 # id = ESA('/geonfs01_vol1/ve39vem/swos_archive/ASA_APP_1PNUPA20050123_092033_000000162034_00079_15163_0289.N1.zip')
 
 
-# todo: check self.file and self.scene assignment after unpacking
 class SAFE(ID):
     """
     Handler class for Sentinel-1 data
@@ -1266,7 +1261,6 @@ class TSX(ID):
         outdir = os.path.join(directory, os.path.basename(header))
         self._unpack(outdir, header)
 
-
 # id = TSX('/geonfs01_vol1/ve39vem/archive/SAR/TerraSAR-X/TSX1_SAR__MGD_SE___SL_S_SRA/TSX1_SAR__MGD_SE___SL_S_SRA_20110902T015248_20110902T015249.zip')
 
 
@@ -1279,7 +1273,7 @@ class Archive(object):
         self.dbfile = dbfile
         self.conn = sqlite3.connect(self.dbfile)
         self.conn.enable_load_extension(True)
-        self.conn.execute('SELECT load_extension("libspatialite")')
+        self.conn.load_extension('libspatialite')
         if 'spatial_ref_sys' not in self.get_tablenames():
             self.conn.execute('SELECT InitSpatialMetaData();')
 
