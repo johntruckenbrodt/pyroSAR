@@ -10,5 +10,4 @@ con = sqlite3.connect(':memory:')
 
 con.enable_load_extension(True)
 
-con.execute('SELECT load_extension("libspatialite")')
-
+con.load_extension('libspatialite')
