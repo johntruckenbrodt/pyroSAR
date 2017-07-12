@@ -1,5 +1,5 @@
 progressbar==2.3
-pathos==0.2a1.dev0
+pathos>=0.2
 numpy
 pysqlite2
-GDAL>=2.0
+scoop
