@@ -8,9 +8,10 @@ root='/home/user/test'
 downloaddir=$root/originals
 packagedir=$root/packages
 
-# define the installation directory
+# define the installation directory; This needs to be outside of the root directory so that the latter can be deleted in the end
+# in case installdir is set to a location outside of /usr/*, the following installation commands do not need to be run with administration rights (sudo)
 #installdir=/usr/local
-installdir=$root/local
+installdir=/home/user/local
 
 # the version of GDAL and its dependencies
 gdal_version=2.1.1
@@ -90,6 +91,7 @@ make -j$threads
 sudo make install
 ########################################################################################################################
 # install GDAL Python binding
+# this needs swig to be installed
 
 cd $packagedir/gdal*/swig/python
 make -j$threads
@@ -97,6 +99,7 @@ sudo python setup.py install --prefix=$installdir
 ########################################################################################################################
 ########################################################################################################################
 # install pysqlite2 python package with static sqlite3 build
+# this needs git to be installed
 
 cd $packagedir
 git clone https://github.com/ghaering/pysqlite.git
