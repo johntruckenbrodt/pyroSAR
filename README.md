@@ -64,7 +64,7 @@ Alternatively, you can build GDAL and the dependencies from source. The script `
 While sqlite3 and its Python binding are usually already installed, the spatialite extension needs to be added. Two packages exist, libspatialite and mod_spatialite. Both can be used by pyroSAR.
 mod_spatialite has been found to be easier to install by apt:
 ```sh
-sudo apt-get install sqlite3-mod-spatialite
+sudo apt-get install libsqlite3-mod-spatialite
 ```
 
 The following can be run in Python to test the functionality needed:
