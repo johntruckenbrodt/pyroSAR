@@ -61,6 +61,12 @@ Starting with Debian 9 (Strech) GDAL is available in version >2.1 in the officia
 ###### Building from source
 Alternatively, you can build GDAL and the dependencies from source. The script `pyroSAR/install/install_deps.sh` gives specific instructions on how to do it. It is not yet intended to run this script via shell, but rather to follow the instructions step by step.
 ##### SQLite + SpatiaLite
+While sqlite3 and its Python binding is usually already installed, the spatialite extension needs to be added. Two packages exist, libspatialite and mod_spatialite. Both can be used by pyroSAR.
+mod_spatialite has been found to be easier to install by apt:
+```sh
+sudo apt-get install sqlite3-mod-spatialite
+```
+
 The following can be run in Python to test the functionality needed:
 ```Python
 import sqlite3
@@ -68,7 +74,10 @@ import sqlite3
 con=sqlite3.connect(':memory:')
 # enable loading extensions and load spatialite
 con.enable_load_extension(True)
-con.load_extension('libspatialite')
+try:
+    con.load_extension('mod_spatialite')
+except sqlite3.OperationalError:
+    con.load_extension('libspatialite')
 ```
 In case loading extensions is not permitted you might need to install the package `pysqlite2`. See the script `pyroSAR/install/install_deps.sh` for instructions. There you can also find instructions on how to install spatialite from source.
 To test `pysqlite2` you can import it as follows and then run the test above:
