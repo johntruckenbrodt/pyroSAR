@@ -39,3 +39,8 @@ realized by applying clustering techniques in the temporal image domain of all a
 
 This software used to run on a local server and is currently being restructured into a Python package.
 Not everything is working properly, stay tuned...
+
+### Installation ###
+pyroSAR depends on GDAL>=2.1, SQLite and Spatialite as well as their respective Python bindings.
+It has proven difficult to meet the specific requirements by installation from apt-get and pip.
+The script pyroSAR/install/install_deps.sh gives specific instructions on how to do it.
