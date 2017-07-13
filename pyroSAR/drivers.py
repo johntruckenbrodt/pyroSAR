@@ -1255,12 +1255,12 @@ class Archive(object):
         self.conn.enable_load_extension(True)
         try:
             self.conn.load_extension('mod_spatialite')
-            arg = '1'
+            if 'spatial_ref_sys' not in self.get_tablenames():
+                self.conn.execute('SELECT InitSpatialMetaData(1);')
         except sqlite3.OperationalError:
             self.conn.load_extension('libspatialite')
-            arg = ''
-        if 'spatial_ref_sys' not in self.get_tablenames():
-            self.conn.execute('SELECT InitSpatialMetaData(?);', (arg,))
+            if 'spatial_ref_sys' not in self.get_tablenames():
+                self.conn.execute('SELECT InitSpatialMetaData();')
 
         self.lookup = {'sensor': 'TEXT',
                        'orbit': 'TEXT',
