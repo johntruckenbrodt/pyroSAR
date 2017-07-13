@@ -1,0 +1,3 @@
+
+include pyroSAR/snap/recipes/*
+include examples/*
