@@ -135,7 +135,7 @@ class OSV(object):
         else:
             return self.remote_res, self.outdir_res
 
-    def catch(self, type='POE', start=None):
+    def catch(self, type='POE', start=None, stop=None):
         """
         check a server for files
         """
@@ -144,8 +144,14 @@ class OSV(object):
         query = {'page': 1}
         files = []
         if start is not None:
-            date = datetime.strptime(start, '%Y%m%dT%H%M%S').strftime('%Y-%m-%d')
-            query['validity_start_time'] = '{0}..{1}'.format(date, time.strftime('%Y-%m-%d'))
+            date_start = datetime.strptime(start, '%Y%m%dT%H%M%S').strftime('%Y-%m-%d')
+        else:
+            date_start = '2014-08-22'
+        if stop is not None:
+            date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S').strftime('%Y-%m-%d')
+        else:
+            date_stop = time.strftime('%Y-%m-%d')
+        query['validity_start_time'] = '{0}..{1}'.format(date_start, date_stop)
         print 'searching for new {} files'.format(type)
         while True:
             subaddress = urlunparse(address_parse._replace(query=urlencode(query)))
@@ -197,6 +203,14 @@ class OSV(object):
         address, directory = self._typeEvaluate(type)
         files = finder(directory, [self.pattern], regex=True)
         return max([self.date(x, datetype) for x in files]) if len(files) > 0 else None
+
+    def mindate(self, type='POE', datetype='start'):
+        """
+        return the latest date of POE/RES files; datetypes: 'publish', 'start', 'stop'
+        """
+        address, directory = self._typeEvaluate(type)
+        files = finder(directory, [self.pattern], regex=True)
+        return min([self.date(x, datetype) for x in files]) if len(files) > 0 else None
 
     def match(self, timestamp):
         """
