@@ -1,3 +1,2 @@
-include pyroSAR/snap/recipes/*
-include pyroSAR/snap/recipes/nodes/*
-include examples/*
+recursive-include pyroSAR/snap *.xml
+recursive-include examples *
