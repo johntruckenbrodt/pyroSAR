@@ -1,0 +1,5 @@
+# this file can be used to set up environment variables
+# certain directories can be lost during the scoop call and it might be necessary to explicitly add them
+# defining the .bashrc at startup in script start.sh might also fulfill this purpose
+
+export LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH

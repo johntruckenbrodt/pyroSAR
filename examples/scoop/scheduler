@@ -1,0 +1,8 @@
+# this script tells scoop which cluster nodes to use; they must all be accessible via ssh without a password
+# the first entry of each line is the name of a node, the second the number of processes
+# one is enough for our case as each process is further parallelized by pathos on the node
+node1 1
+node2 1
+node3 1
+node4 1
+node5 1
