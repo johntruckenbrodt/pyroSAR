@@ -8,13 +8,17 @@ root='/home/user/test'
 downloaddir=$root/originals
 packagedir=$root/packages
 
-# define the installation directory; This needs to be outside of the root directory so that the latter can be deleted in the end
-# in case installdir is set to a location outside of /usr/*, the following installation commands do not need to be run with administration rights (sudo)
+# define the installation directory; This needs to be outside of the root directory so that the latter can be deleted in the end.
+# In case installdir is set to a location outside of /usr/*, the following installation commands do not need to be run with a
+# dministration rights (sudo)
 #installdir=/usr/local
 installdir=/home/user/local
 
 # the version of GDAL and its dependencies
 gdal_version=2.1.1
+
+# these versions are not quite as important. If you use already installed them you might need to define their location
+# for the configuration of GDAL
 geos_version=3.5.0
 proj_version=4.9.2
 
@@ -77,6 +81,9 @@ sudo make install
 ########################################################################################################################
 # install GDAL
 
+# please check the output of configure to make sure that the GEOS and PROJ drivers are enabled
+# otherwise you might need to define the locations of the packages
+
 cd $packagedir/gdal*
 ./configure --without-python --prefix $installdir \
             --with-geos=$installdir/bin/geos-config \
@@ -129,6 +136,7 @@ cd $packagedir/libspatialite-amalgamation-2.4.0
 
 make -j$threads
 sudo make install
+########################################################################################################################
 ########################################################################################################################
 # finishing the process
 
