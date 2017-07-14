@@ -45,7 +45,8 @@ Not everything is working properly, stay tuned...
 ##### GDAL
 pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as the GDAL Python binding.
 ###### Ubuntu
-Currently Ubuntu comes with GDAL 1.11. By adding the ubuntugis repository to e.g. apt you can install version >2.1:
+Currently Ubuntu comes with GDAL 1.11. By adding the ubuntugis repository to e.g. apt you can install 
+version >2.1:
 ```sh
 sudo add-apt-repository ppa:ubuntugis/ppa
 sudo apt-get update
@@ -59,15 +60,18 @@ gdalinfo --version
 ###### Debian
 Starting with Debian 9 (Strech) GDAL is available in version >2.1 in the official repository.
 ###### Building from source
-Alternatively, you can build GDAL and the dependencies from source. The script `pyroSAR/install/install_deps.sh` gives specific instructions on how to do it. It is not yet intended to run this script via shell, but rather to follow the instructions step by step.
+Alternatively, you can build GDAL and the dependencies from source. The script `pyroSAR/install/install_deps.sh` 
+gives specific instructions on how to do it. It is not yet intended to run this script via shell, but rather to 
+follow the instructions step by step.
 ##### SQLite + SpatiaLite
-While sqlite3 and its Python binding are usually already installed, the spatialite extension needs to be added. Two packages exist, libspatialite and mod_spatialite. Both can be used by pyroSAR.
-mod_spatialite has been found to be easier to install by apt:
+While sqlite3 and its Python binding are usually already installed, the spatialite extension needs to be 
+added. Two packages exist, libspatialite and mod_spatialite. Both can be used by pyroSAR.
+mod_spatialite has been found to be easier to setup with sqlite and can be installed via apt:
 ```sh
 sudo apt-get install libsqlite3-mod-spatialite
 ```
 
-The following can be run in Python to test the functionality needed:
+The following can be run in Python to test the needed functionality:
 ```Python
 import sqlite3
 # setup an in-memory database
@@ -79,10 +83,22 @@ try:
 except sqlite3.OperationalError:
     con.load_extension('libspatialite')
 ```
-In case loading extensions is not permitted you might need to install the package `pysqlite2`. See the script `pyroSAR/install/install_deps.sh` for instructions. 
+In case loading extensions is not permitted you might need to install the package `pysqlite2`. 
+See the script `pyroSAR/install/install_deps.sh` for instructions. 
 There you can also find instructions on how to install spatialite from source.
 To test `pysqlite2` you can import it as follows and then run the test above:
 ```Python
 from pysqlite2 import dbapi2 as sqlite3
 ```
-Installing this package is likely to cause problems with the sqlite3 library installed on the system. Thus, it is safer to build a static sqlite3 library for pysqlite (see installation script).
+Installing this package is likely to cause problems with the sqlite3 library installed on the system. 
+Thus, it is safer to build a static sqlite3 library for it (see installation script).
+### Installation of pyroSAR
+Once everything is set up, pyroSAR is ready to be installed:
+```sh
+sudo pip install git+https://github.com/johntruckenbrodt/pyroSAR.git
+```
+You might need to install pip and git for this to work:
+```sh
+sudo apt-get install python-pip
+sudo apt-get install git
+```
