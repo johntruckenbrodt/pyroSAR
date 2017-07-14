@@ -1,5 +1,4 @@
 progressbar==2.3
 pathos>=0.2
 numpy
-pysqlite2
 scoop
