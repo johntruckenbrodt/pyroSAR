@@ -21,7 +21,7 @@ def main():
     # define the output name of the DEM (no file extension like .tif etc.!)
     outname = '/path/to/demfile'
 
-    # define a buffer in degree around the study area boundaries (in degrees)
+    # define a buffer around the study area boundaries (in degrees)
     buffer = 0.01
 
     # load the defined shapefile
@@ -30,9 +30,9 @@ def main():
     # reproject the shapefile to latlon (in-memory, no file written or modified)
     site.reproject('+proj=longlat +datum=WGS84 +no_defs ')
 
-    # the GDAL VRT file containing all SRTM tiles (they are all present in /geonfs02_vol1/SRTM_1_HGT)
+    # define a GDAL VRT file containing all SRTM tiles
     # this file has all hgt tiles in the same directory registered and is used for subsetting/mosaicing
-    srtm_vrt = 'SRTM_1_HGT.vrt'
+    srtm_vrt = '/path/to/SRTM_1_HGT.vrt'
 
     # extract the extent (bounding box) of the shapefile
     ext = site.extent
