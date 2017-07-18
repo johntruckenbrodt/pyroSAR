@@ -24,7 +24,7 @@ The following tasks are performed:
 - a cluster job is setup using package 'scoop', which assigns a list of testsites to different cluster nodes
 - for each site:
     - query the SAR scenes, which overlap with your testsite and match certain criteria (e.g. sensor, acquisition mode etc.)
-    - filter the selected scenes by thos that have already been processed and saved to the defined output directory
+    - filter the selected scenes by those that have already been processed and saved to the defined output directory
     - do parallelized processing using package 'pathos'
 """
 
@@ -109,16 +109,14 @@ def worker(sitename):
 
 if __name__ == '__main__':
     #######################################################################################
-    # update SAR scene archive database
+    # update Sentinel-1 GRD scene archive database
 
-    archive_s1 = '/geonfs01_vol3/swos/data/sentinel1/GRD'
+    # define a directory containing zipped scene archives and list all files starting with 'S1A' or 'S1B'
+    archive_s1 = '/path/sentinel1/GRD'
     scenes_s1 = finder(archive_s1, ['^S1[AB]'], regex=True, recursive=False)
 
-    archive_ers_asar = '/geonfs01_vol1/ve39vem/swos_archive'
-    scenes_ers_asar = finder(archive_ers_asar, ['*zip'])
-
     with Archive(dbfile) as archive:
-        archive.insert(scenes_s1 + scenes_ers_asar)
+        archive.insert(scenes_s1)
     #######################################################################################
     # download the latest orbit state vector files
     with OSV(osvdir_poe, osvdir_res) as osv:
