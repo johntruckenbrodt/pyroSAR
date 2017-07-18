@@ -11,6 +11,7 @@ The pyroSAR package aims at providing a complete solution for the scalable organ
 This software used to run on a local server and is currently being restructured into a Python package.
 Not everything is working properly, stay tuned...
 
+
 ### Installation of dependencies
 
 ##### GDAL
@@ -75,7 +76,7 @@ sudo apt-get install git
 ```
 
 
-##### Long Description
+### Long Description
 
 The launch of recent satellite missions, the Sentinel fleet of ESA’s Copernicus programme in particular, has led to a
 tremendous increase in available earth observation data provided at no cost. The increase in data availability opens up
