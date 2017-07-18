@@ -47,7 +47,11 @@ def worker(sitename):
     # setup general processing parameters
 
     resolution = 20
+
+    # number of processes for Python pathos framework (multiple scenes in parallel)
     parallel1 = 6
+
+    # number of parallel OpenMP threads; this is used by GAMMA internally
     parallel2 = 6
     os.environ['OMP_NUM_THREADS'] = str(parallel2)
     #######################################################################################
