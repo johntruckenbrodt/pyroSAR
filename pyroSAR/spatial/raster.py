@@ -567,9 +567,6 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
             run(command + [srcfile, dstfile])
 
         multicore(operator, cores=cores, multiargs={'srcfile': srcfiles, 'dstfile': dstfiles}, command=cmd)
-
-        # for src, dst in files:
-        #     run(['gdalwarp', '-q', '-multi', arg_overwrite, arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, arg_compression, src, dst])
     else:
         # create VRT for stacking
 
