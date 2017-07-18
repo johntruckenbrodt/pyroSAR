@@ -3,15 +3,15 @@ import socket
 from scoop import futures
 
 from pyroSAR.S1 import OSV
-from pyroSAR.gamma import geocode
+from pyroSAR.snap import geocode
 from pyroSAR.spatial import vector
 from swos.testsites import lookup
 
 from pyroSAR import Archive
-from pyroSAR.ancillary import finder, multicore
+from pyroSAR.ancillary import finder
 
 """
-This script is an example usage for processing Sentinel-1 scenes with GAMMA
+This script is an example usage for processing Sentinel-1 scenes with SNAP
 
 Run this script by calling the 'start_gamma.sh' scipt.
 
@@ -36,10 +36,6 @@ dbfile = '/geonfs01_vol1/ve39vem/swos_process/SWOS_scenelist.db'
 
 # the main directory for storing the processed results
 maindir = '/geonfs01_vol1/ve39vem/swos_process'
-
-# the directories for Sentinel-1 POE and RES orbit state vector files
-osvdir_poe = '/geonfs02_vol2/.gamma/auxdata/Orbits/Sentinel-1/POEORB'
-osvdir_res = '/geonfs02_vol2/.gamma/auxdata/Orbits/Sentinel-1/RESORB'
 
 
 def worker(sitename):
@@ -80,30 +76,12 @@ def worker(sitename):
 
     print('{0}: {1} scenes found for site {2}'.format(socket.gethostname(), len(selection_proc), sitename))
     #######################################################################################
-    # define the DEM file
-    demfile = '{0}/{1}/DEM/{1}_srtm_utm'.format(maindir, sitename)
-    if not os.path.isfile(demfile):
-        print('DEM missing for site {}'.format(sitename))
-        return
-    #######################################################################################
     # call to processing utility
     if len(selection_proc) > 1:
         print('start processing')
-    if len(selection_proc) > 1:
-        if len(selection_proc) < parallel1:
-            parallel1 = len(selection_proc)
-        # run the function on multiple cores in parallel
-        multicore(geocode, cores=parallel1, multiargs={'scene': selection_proc}, dem=demfile,
-                  tempdir=tempdir, outdir=outdir,
-                  targetres=resolution, scaling='db',
-                  func_geoback=2, func_interp=0, sarsimulation=False, osvdir=osvdir_poe, cleanup=True)
-    elif len(selection_proc) == 1:
-        scene = selection_proc[0]
-        # run the function on a single core
-        geocode(scene, dem=demfile,
-                tempdir=tempdir, outdir=outdir,
-                targetres=resolution, scaling='db',
-                func_geoback=2, func_interp=0, sarSimCC=False, osvdir=osvdir_poe, cleanup=True)
+
+        for scene in selection_proc:
+            geocode(infile=scene, outdir=outdir, tr=resolution, scaling='db')
     return len(selection_proc)
 
 
@@ -119,10 +97,6 @@ if __name__ == '__main__':
 
     with Archive(dbfile) as archive:
         archive.insert(scenes_s1 + scenes_ers_asar)
-    #######################################################################################
-    # download the latest orbit state vector files
-    with OSV(osvdir_poe, osvdir_res) as osv:
-        osv.update()
     #######################################################################################
     # start the processing
     results = list(futures.map(worker, sites))
