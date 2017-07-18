@@ -5,7 +5,6 @@ from scoop import futures
 from pyroSAR.S1 import OSV
 from pyroSAR.gamma import geocode
 from pyroSAR.spatial import vector
-from swos.testsites import lookup
 
 from pyroSAR import Archive
 from pyroSAR.ancillary import finder, multicore
@@ -29,17 +28,20 @@ The following tasks are performed:
 """
 
 # the sites to be processed
+# this is just an exemplary use case assuming a shapefile with different geometries for the test sites
 sites = ['Egypt_Burullus', 'France_Camargue', 'Kenya_Lorian_Olbolossat', 'Sweden_Skogaryd', 'Sweden_Store-Mosse']
 
 # the pyroSAR database file
-dbfile = '/geonfs01_vol1/ve39vem/swos_process/SWOS_scenelist.db'
+dbfile = '/.../SWOS_scenelist.db'
 
 # the main directory for storing the processed results
-maindir = '/geonfs01_vol1/ve39vem/swos_process'
+maindir = '/.../swos_process'
 
 # the directories for Sentinel-1 POE and RES orbit state vector files
-osvdir_poe = '/geonfs02_vol2/.gamma/auxdata/Orbits/Sentinel-1/POEORB'
-osvdir_res = '/geonfs02_vol2/.gamma/auxdata/Orbits/Sentinel-1/RESORB'
+# this is intended to be a fixed directory structure similar to that of ESA SNAP
+# in the future all auxiliary data files will be stored in a structure defined by pyroSAR
+osvdir_poe = '/.../.gamma/auxdata/Orbits/Sentinel-1/POEORB'
+osvdir_res = '/.../.gamma/auxdata/Orbits/Sentinel-1/RESORB'
 
 
 def worker(sitename):
@@ -67,10 +69,10 @@ def worker(sitename):
     outdir = os.path.join(sitedir, 'proc_out')
     #######################################################################################
     # load the test site geometry into a vector object
-    sites = vector.Vector('/path/to/your/testsites.shp')
+    sites = vector.Vector('/.../testsites.shp')
 
     # query the test site by name; a column name 'Site_Name' must be saved in your shapefile
-    site = sites['Site_Name={}'.format(lookup[sitename])]
+    site = sites['Site_Name={}'.format(sitename)]
     #######################################################################################
     # query the database for scenes to be processed
     with Archive(dbfile) as archive:
@@ -116,7 +118,7 @@ if __name__ == '__main__':
     # update Sentinel-1 GRD scene archive database
 
     # define a directory containing zipped scene archives and list all files starting with 'S1A' or 'S1B'
-    archive_s1 = '/path/sentinel1/GRD'
+    archive_s1 = '/.../sentinel1/GRD'
     scenes_s1 = finder(archive_s1, ['^S1[AB]'], regex=True, recursive=False)
 
     with Archive(dbfile) as archive:
