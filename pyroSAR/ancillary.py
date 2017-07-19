@@ -13,6 +13,7 @@ import fnmatch
 import inspect
 import os
 import subprocess as sp
+from time import mktime, strptime
 from StringIO import StringIO
 from urllib import urlencode
 from urlparse import urlparse, urlunparse
@@ -83,6 +84,32 @@ def finder(folder, matchlist, foldermode=0, regex=False, recursive=True):
     if foldermode == 2:
         out = [x for x in out if os.path.isdir(x)]
     return sorted(out)
+
+
+def groupbyTime(images, function, time):
+    """
+    function to group images by their acquisition time difference
+
+    :param images: a list of image names
+    :param function: a function to derive the time from the image names
+    :param time: a time difference in seconds by which to group the images
+    :return: a list of sub-lists containing the grouped images
+    """
+    # sort images by time stamp
+    srcfiles = sorted(images, key=function)
+
+    groups = []
+    temp = []
+    for item in srcfiles:
+        if len(temp) == 0:
+            temp.append(item)
+        else:
+            if 0 < abs(seconds(item)-seconds(temp[-1])) < time:
+                temp.append(item)
+            else:
+                groups.append(temp) if len(temp) > 1 else groups.append(temp[0])
+                temp = [item]
+    return groups
 
 
 def multicore(function, cores, multiargs, **singleargs):
@@ -245,6 +272,17 @@ def run(cmd, outdir=None, logfile=None, inlist=None, void=True, errorpass=False)
         log.close()
     if not void:
         return out, err
+
+
+def seconds(filename):
+    """
+    function to extract time in seconds from a file name.
+    the format must follow a fixed pattern: YYYYmmddTHHMMSS
+    Images processed with pyroSAR functionalities via module snap or gamma will contain this information.
+    :param filename: the name of a file from which to extract the time from
+    :return:
+    """
+    return mktime(strptime(re.findall('[0-9T]{15}', filename)[0], '%Y%m%dT%H%M%S'))
 
 
 class Stack(object):
