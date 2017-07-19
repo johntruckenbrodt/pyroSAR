@@ -104,7 +104,7 @@ def groupbyTime(images, function, time):
         if len(temp) == 0:
             temp.append(item)
         else:
-            if 0 < abs(seconds(item)-seconds(temp[-1])) < time:
+            if 0 < abs(function(item)-function(temp[-1])) < time:
                 temp.append(item)
             else:
                 groups.append(temp) if len(temp) > 1 else groups.append(temp[0])
