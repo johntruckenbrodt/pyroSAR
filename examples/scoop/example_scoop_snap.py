@@ -28,7 +28,7 @@ The following tasks are performed:
 sites = ['Egypt_Burullus', 'France_Camargue', 'Kenya_Lorian_Olbolossat', 'Sweden_Skogaryd', 'Sweden_Store-Mosse']
 
 # the pyroSAR database file
-dbfile = '/.../SWOS_scenelist.db'
+dbfile = '/.../scenelist.db'
 
 # the main directory for storing the processed results
 maindir = '/.../swos_process'
