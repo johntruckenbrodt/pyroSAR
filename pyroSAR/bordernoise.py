@@ -8,7 +8,7 @@ Notice: these functions are not intended for direct application. Please use the 
 
 import numpy as np
 from osgeo import ogr
-from polysimplify import VWSimplifier
+from .polysimplify import VWSimplifier
 
 
 def simplify(x, y, maxpoints=20):
@@ -88,7 +88,7 @@ def crop(seq, maxpoints=20, proximity=100, straighten=False):
                     dy = abs(yn[j] - yn[indices[i + 1]])
                     if dx > dy:
                         seg_y = yn[j:indices[i + 1]+1]
-                        print seg_y
+                        print(seg_y)
                         for k in range(j, indices[i + 1]+1):
                             yn[k] = min(seg_y)
     return np.interp(x, xn, yn)
