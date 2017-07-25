@@ -135,15 +135,18 @@ def multicore(function, cores, multiargs, **singleargs):
 
     # compare the function arguments with the multi and single arguments and raise errors if mismatches occur
     function_check = inspect.getargspec(function)
-    multiargs_check = [x for x in multiargs if x not in function_check[0]]
-    singleargs_check = [x for x in singleargs if x not in function_check[0]]
-    if len(multiargs_check) > 0:
-        raise AttributeError('incompatible multi arguments: {0}'.format(', '.join(multiargs_check)))
-    if len(singleargs_check) > 0:
-        raise AttributeError('incompatible single arguments: {0}'.format(', '.join(singleargs_check)))
+    keywords = function_check[2]
+    varargs = function_check[1]
+    if not varargs and not keywords:
+        multiargs_check = [x for x in multiargs if x not in function_check[0]]
+        singleargs_check = [x for x in singleargs if x not in function_check[0]]
+        if len(multiargs_check) > 0:
+            raise AttributeError('incompatible multi arguments: {0}'.format(', '.join(multiargs_check)))
+        if len(singleargs_check) > 0:
+            raise AttributeError('incompatible single arguments: {0}'.format(', '.join(singleargs_check)))
 
     # compare the list lengths of the multi arguments and raise errors if they are of different length
-    arglengths = list(set([len(x) for x in multiargs]))
+    arglengths = list(set([len(multiargs[x]) for x in multiargs]))
     if len(arglengths) > 1:
         raise AttributeError('multi argument lists of different length')
 
