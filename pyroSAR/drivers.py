@@ -18,6 +18,7 @@ import math
 import os
 import re
 import ssl
+import shutil
 import struct
 import tarfile as tf
 import xml.etree.ElementTree as ET
@@ -329,12 +330,21 @@ class ID(object):
         raise NotImplementedError
 
     # todo: replace with functionality from module archivist
-    def _unpack(self, directory, offset=None):
-        if not os.path.isdir(directory):
-            os.makedirs(directory)
-        else:
-            print('target scene directory already exists: {}'.format(directory))
-            return
+    def _unpack(self, directory, offset=None, overwrite=False):
+        """
+        general function for unpacking scene archives
+        :param directory: the name of the directory in which the files are written
+        :param offset: an archive directory offset; to be define if only a subdirectory is to be unpacked (see e.g. TSX:unpack)
+        :param overwrite: should an existing directory be overwritten?
+        :return: None
+        """
+        if os.path.isdir(directory):
+            if overwrite:
+                shutil.rmtree(directory)
+            else:
+                raise RuntimeError('target scene directory already exists: {}'.format(directory))
+        os.makedirs(directory)
+
         if tf.is_tarfile(self.scene):
             archive = tf.open(self.scene, 'r')
             names = archive.getnames()
@@ -354,6 +364,7 @@ class ID(object):
                 else:
                     archive.extractall(directory)
                     archive.close()
+
         elif zf.is_zipfile(self.scene):
             archive = zf.ZipFile(self.scene, 'r')
             names = archive.namelist()
@@ -375,9 +386,11 @@ class ID(object):
             else:
                 archive.extractall(directory)
                 archive.close()
+
         else:
             print('unpacking is only supported for TAR and ZIP archives')
             return
+
         self.scene = directory
         main = os.path.join(self.scene, os.path.basename(self.file))
         self.file = main if os.path.isfile(main) else self.scene
@@ -443,14 +456,14 @@ class CEOS_ERS(ID):
         lon = [x[1][0] for x in self.meta['gcps']]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
 
-    def unpack(self, directory):
+    def unpack(self, directory, overwrite=False):
         if self.sensor in ['ERS1', 'ERS2']:
             base_file = re.sub('\.PS$', '', os.path.basename(self.file))
             base_dir = os.path.basename(directory.strip('/'))
 
             outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
 
-            self._unpack(outdir)
+            self._unpack(outdir, overwrite=overwrite)
         else:
             raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
 
@@ -782,9 +795,9 @@ class CEOS_PSR(ID):
         meta['k_dB'] = float(radiometricData[20:36])
         return meta
 
-    def unpack(self, directory):
+    def unpack(self, directory, overwrite=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
-        self._unpack(outdir)
+        self._unpack(outdir, overwrite=overwrite)
 
     # todo: create summary/workreport file entries for coordinates if they were read from an IMG file
     def getCorners(self):
@@ -880,13 +893,13 @@ class ESA(ID):
         lat = [self.meta[x] for x in self.meta if re.search('LAT', x)]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
 
-    def unpack(self, directory):
+    def unpack(self, directory, overwrite=False):
         base_file = os.path.basename(self.file).strip('\.zip|\.tar(?:\.gz|)')
         base_dir = os.path.basename(directory.strip('/'))
 
         outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
 
-        self._unpack(outdir)
+        self._unpack(outdir, overwrite=overwrite)
 
 
 class SAFE(ID):
@@ -1146,9 +1159,9 @@ class SAFE(ID):
 
         return meta
 
-    def unpack(self, directory):
+    def unpack(self, directory, overwrite=False):
         outdir = os.path.join(directory, os.path.basename(self.file))
-        self._unpack(outdir)
+        self._unpack(outdir, overwrite=overwrite)
 
 
 class TSX(ID):
@@ -1237,11 +1250,11 @@ class TSX(ID):
         meta['incidence'] = float(tree.find('.//sceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
         return meta
 
-    def unpack(self, directory):
+    def unpack(self, directory, overwrite=False):
         match = self.findfiles(self.pattern, True)
         header = [x for x in match if not x.endswith('xml') and 'iif' not in x][0].replace(self.scene, '').strip('/')
         outdir = os.path.join(directory, os.path.basename(header))
-        self._unpack(outdir, header)
+        self._unpack(outdir, offset=header, overwrite=overwrite)
 
 
 class Archive(object):
