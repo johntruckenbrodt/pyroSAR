@@ -300,9 +300,8 @@ def centerdist(obj1, obj2):
 
 
 def intersect(obj1, obj2):
-    if not isinstance(obj1, Vector) or isinstance(obj2, Vector):
+    if not (isinstance(obj1, Vector) or isinstance(obj2, Vector)):
         raise IOError('object must be of type Vector')
-
     obj1.reproject(obj2.srs)
 
     feature1 = obj1[0]
