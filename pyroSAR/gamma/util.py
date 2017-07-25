@@ -278,13 +278,13 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     - ccp: cross-correlation of each patch (0.0->1.0) (float)
     """
 
-    if id.sensor not in ['S1A', 'S1B']:
+    scene = scene if isinstance(scene, ID) else identify(scene)
+
+    if scene.sensor not in ['S1A', 'S1B']:
         raise IOError('this method is currently only available for Sentinel-1. Please stay tuned...')
 
     if sarSimCC:
         raise IOError('geocoding with cross correlation offset refinement is still in the making. Please stay tuned...')
-
-    scene = scene if isinstance(scene, ID) else identify(scene)
 
     for dir in [tempdir, outdir]:
         if not os.path.isdir(dir):
@@ -301,7 +301,11 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
 
     if scene.compression is not None:
         print('unpacking scene..')
-        scene.unpack(tempdir)
+        try:
+            scene.unpack(tempdir)
+        except RuntimeError:
+            print('scene was attempted to be processed before, exiting')
+            return
     else:
         scene.scene = os.path.join(tempdir, os.path.basename(scene.file))
         os.makedirs(scene.scene)
