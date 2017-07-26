@@ -229,4 +229,7 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
 
     # execute the newly written workflow
     if not test:
-        gpt(outname + '_proc.xml')
+        try:
+            gpt(outname + '_proc.xml')
+        except RuntimeError:
+            os.remove(outname + '_proc.xml')
