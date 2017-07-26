@@ -145,7 +145,11 @@ class Vector(object):
         """
         features = self.getfeatures()
         for feature in features:
-            feature.geometry().Set3D(set3D)
+            try:
+                feature.geometry().Set3D(set3D)
+            except AttributeError as e:
+                print('apparently you are using a GDAL version lower than 2.1')
+                raise e
 
         return [feature.geometry().ExportToWkt() for feature in features]
 
@@ -300,7 +304,7 @@ def centerdist(obj1, obj2):
 
 
 def intersect(obj1, obj2):
-    if not (isinstance(obj1, Vector) and isinstance(obj2, Vector)):
+    if not isinstance(obj1, Vector) or not isinstance(obj2, Vector):
         raise IOError('object must be of type Vector')
     obj1.reproject(obj2.srs)
 

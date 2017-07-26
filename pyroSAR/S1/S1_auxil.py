@@ -90,6 +90,7 @@ def deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False, pa
 class OSV(object):
     """
     interface for management of S1 Orbit State Vector (OSV) files
+
     input are two directories, one for Precise Orbit Ephemerides (POE) and one for Restituted Orbit (RES) files; these directories are created if they do not exist
     actions performed upon calling the main function 'update':
     -the ESA Quality Control (QC) server is checked for any POE files not in the local directory
@@ -185,7 +186,7 @@ class OSV(object):
         """
         maxdate_poe = self.maxdate('POE', 'stop')
         depreceated = [x for x in self.getLocals('RES') if self.date(x, 'stop') < maxdate_poe]
-        print 'deleting {0} RES files'.format(len(depreceated))
+        print('deleting {0} RES files'.format(len(depreceated)))
         for item in depreceated:
             os.remove(item)
 
@@ -229,26 +230,29 @@ class OSV(object):
         if not os.access(outdir, os.W_OK):
             raise RuntimeError('insufficient directory permissions')
         downloads = [x for x in files if not os.path.isfile(os.path.join(outdir, os.path.basename(x)))]
-        print 'downloading {0} {1} files to {2}'.format(len(downloads), type, outdir)
+        print('downloading {0} {1} files to {2}'.format(len(downloads), type, outdir))
         for item in downloads:
             infile = urlopen(item, context=self.sslcontext)
             with open(os.path.join(outdir, os.path.basename(item)), 'wb') as outfile:
                 outfile.write(infile.read())
             infile.close()
 
-    def update(self):
+    def update(self, update_res=True):
         """
-        perform creating/updating operations for POE and RES files: 
+        perform creating/updating operations for POE and RES files:
         download newest POE and RES files, delete RES files which can be replaced by newly downloaded POE files
+        :param update_res: should the RES files also be updated (or just the POE files)
+        :return: None
         """
         self._init_dir()
         try:
             files_poe = self.catch('POE', start=self.maxdate('POE', 'start'))
         except RuntimeError:
-            print 'no internet connection'
+            print('no internet connection')
             return
         self.retrieve(files_poe, 'POE')
-        print '---------------------------------------------------------'
-        files_res = self.catch('RES', start=self.maxdate('RES', 'start'))
-        self.retrieve(files_res, 'RES')
-        self.clean_res()
+        if update_res:
+            print('---------------------------------------------------------')
+            files_res = self.catch('RES', start=self.maxdate('RES', 'start'))
+            self.retrieve(files_res, 'RES')
+            self.clean_res()

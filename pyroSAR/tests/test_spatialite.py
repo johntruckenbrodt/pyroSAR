@@ -10,4 +10,7 @@ con = sqlite3.connect(':memory:')
 
 con.enable_load_extension(True)
 
-con.load_extension('libspatialite')
+try:
+    con.load_extension('mod_spatialite')
+except sqlite3.OperationalError:
+    con.load_extension('libspatialite')
