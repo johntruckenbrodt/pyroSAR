@@ -290,7 +290,7 @@ def bbox(coordinates, crs, outname=None, format='ESRI Shapefile', overwrite=True
 
 def centerdist(obj1, obj2):
     if not isinstance(obj1, Vector) or isinstance(obj2, Vector):
-        raise IOError('object must be of type Vector')
+        raise IOError('both objects must be of type Vector')
 
     feature1 = obj1[0]
     geometry1 = feature1.GetGeometryRef()
@@ -305,7 +305,8 @@ def centerdist(obj1, obj2):
 
 def intersect(obj1, obj2):
     if not isinstance(obj1, Vector) or not isinstance(obj2, Vector):
-        raise IOError('object must be of type Vector')
+        raise IOError('both objects must be of type Vector')
+
     obj1.reproject(obj2.srs)
 
     feature1 = obj1[0]
