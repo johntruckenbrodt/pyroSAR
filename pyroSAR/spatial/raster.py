@@ -21,8 +21,8 @@ from time import gmtime, strftime
 
 from .. import envi
 import numpy as np
-from . import Vector, bbox, crsConvert
-from ..ancillary import dissolve, run, multicore
+from . import Vector, bbox, crsConvert, intersect, warp, buildvrt
+from ..ancillary import dissolve, multicore
 from osgeo import gdal, osr
 from osgeo.gdalconst import *
 
@@ -395,59 +395,6 @@ class Raster(object):
         #     sp.check_call([str(x) for x in cmd])
 
 
-class Extent(object):
-    """
-    object containing the outer coordinates of a raster object as well as the enclosed area in square map units
-    input can be a raster object or a list
-    """
-
-    def __init__(self, geoobject):
-        if type(geoobject) == Raster:
-            gt = geoobject.geo
-            self.proj4 = geoobject.proj4
-            self.all = [gt['xmin'], gt['ymin'], gt['xmax'], gt['ymax']]
-        elif type(geoobject) == list:
-            geoobject = [float(x) for x in geoobject]
-            if geoobject[0] > geoobject[2] or geoobject[1] > geoobject[3]:
-                raise ValueError('wrong order of elements; must be [xmin, ymin, xmax, ymax]')
-            self.all = geoobject
-        self.xmin, self.ymin, self.xmax, self.ymax = self.all
-        self.area = abs(self.xmax - self.xmin) * abs(self.ymax - self.ymin)
-
-
-def intersect(obj1, obj2):
-    """
-    compute the geographical intersection between two objects of type Raster or Extent
-    """
-    if type(obj1) == Raster:
-        ext1 = Extent(obj1)
-        proj1 = obj1.proj4
-    elif type(obj1) == Extent:
-        ext1 = obj1
-        if hasattr(obj1, 'proj4'):
-            proj1 = obj1.proj4
-    else:
-        raise IOError('type Raster or Extent expected as first argument')
-    if type(obj2) == Raster:
-        ext2 = Extent(obj2)
-        proj2 = obj2.proj4
-    elif type(obj2) == Extent:
-        ext2 = obj2
-        if hasattr(obj2, 'proj4'):
-            proj2 = obj2.proj4
-    else:
-        raise IOError('type Raster or Extent expected as second argument')
-    # if proj1 != proj2:
-    #     raise IOError('different projections')
-    try:
-        intersection = Extent([max(ext1.xmin, ext2.xmin), max(ext1.ymin, ext2.ymin), min(ext1.xmax, ext2.xmax),
-                               min(ext1.ymax, ext2.ymax)])
-        # intersection.proj4 = proj1
-        return intersection
-    except ValueError:
-        return None
-
-
 def reproject(rasterobject, reference, outname, resampling='bilinear', format='ENVI'):
     """
     reproject a raster file
@@ -529,16 +476,6 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     tmpdir = dst_base + '__tmp'
     if not os.path.isdir(tmpdir):
         os.makedirs(tmpdir)
-
-    # a simple wrapper for gdal.Warp
-    def warp(src, dst, options):
-        out = gdal.Warp(dst, src, options=gdal.WarpOptions(**options))
-        out = None
-
-    # a simple wrapper for gdal.BuildVRT
-    def buildvrt(src, dst, options):
-        out = gdal.BuildVRT(dst, src, options=gdal.BuildVRTOptions(**options))
-        out = None
 
     options_warp = {'options': ['-q'],
                     'format': 'GTiff' if separate else 'ENVI',
