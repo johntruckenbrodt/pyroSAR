@@ -4,10 +4,12 @@
 ##############################################################
 
 """
-This is intended as a raster meta information handler with options for reading and writing raster data in a convenient manner by simplifying the numerous options provided
-by the GDAL python binding.
-Several functions are provided along with this module to directly modify the raster object in memory or directly write a newly created file to disk (without modifying the raster
-object itself). Upon initializing a Raster object only metadata is loaded, the actual data can be, for example, loaded to memory by calling functions matrix or load.
+This is intended as a raster meta information handler with options for reading and writing raster data in a
+convenient manner by simplifying the numerous options provided by the GDAL python binding.
+Several functions are provided along with this module to directly modify the raster object in memory or directly
+write a newly created file to disk (without modifying the rasterobject itself).
+Upon initializing a Raster object only metadata is loaded, the actual data can be, for example,
+loaded to memory by calling functions matrix or load.
 """
 # todo: function to write data with the same metadata as a given file
 # todo: documentation
@@ -21,7 +23,7 @@ from time import gmtime, strftime
 
 from .. import envi
 import numpy as np
-from . import Vector, bbox, crsConvert, intersect, warp, buildvrt
+from . import Vector, bbox, crsConvert, intersect, gdalwarp, gdalbuildvrt
 from ..ancillary import dissolve, multicore
 from osgeo import gdal, osr
 from osgeo.gdalconst import *
@@ -496,7 +498,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     for i in range(len(srcfiles)):
         base = srcfiles[i][0] if isinstance(srcfiles[i], list) else srcfiles[i]
         vrt = os.path.join(tmpdir, os.path.splitext(os.path.basename(base))[0] + '.vrt')
-        buildvrt(srcfiles[i], vrt, options_buildvrt)
+        gdalbuildvrt(srcfiles[i], vrt, options_buildvrt)
         srcfiles[i] = vrt
 
     # if no specific layernames are defined and sortfun is not set to None,
@@ -520,15 +522,15 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
                 return
         srcfiles, dstfiles = map(list, zip(*files))
 
-        multicore(warp, cores=cores, multiargs={'src': srcfiles, 'dst': dstfiles}, options=options_warp)
+        multicore(gdalwarp, cores=cores, multiargs={'src': srcfiles, 'dst': dstfiles}, options=options_warp)
     else:
         # create VRT for stacking
         vrt = os.path.join(tmpdir, os.path.basename(dst_base) + '.vrt')
         options_buildvrt['options'] = ['-separate']
-        buildvrt(srcfiles, vrt, options_buildvrt)
+        gdalbuildvrt(srcfiles, vrt, options_buildvrt)
 
         # warp files
-        warp(vrt, dstfile, options_warp)
+        gdalwarp(vrt, dstfile, options_warp)
 
         # edit ENVI HDR files to contain specific layer names
         par = envi.HDRobject(dstfile + '.hdr')

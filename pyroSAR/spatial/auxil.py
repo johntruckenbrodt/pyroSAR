@@ -62,12 +62,24 @@ def haversine(lat1, lon1, lat2, lon2):
 
 
 # a simple wrapper for gdal.Warp
-def warp(src, dst, options):
+def gdalwarp(src, dst, options):
     out = gdal.Warp(dst, src, options=gdal.WarpOptions(**options))
     out = None
 
 
 # a simple wrapper for gdal.BuildVRT
-def buildvrt(src, dst, options):
+def gdalbuildvrt(src, dst, options):
     out = gdal.BuildVRT(dst, src, options=gdal.BuildVRTOptions(**options))
+    out = None
+
+
+# a simple wrapper for gdal.Translate
+def gdal_translate(src, dst, options):
+    out = gdal.Translate(dst, src, options=gdal.TranslateOptions(**options))
+    out = None
+
+
+# a simple wrapper for gdal.VectorTranslate aka ogr2ogr
+def ogr2ogr(src, dst, options):
+    out = gdal.VectorTranslate(dst, src, options=gdal.VectorTranslateOptions(**options))
     out = None
