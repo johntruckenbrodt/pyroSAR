@@ -4,7 +4,7 @@
 ##############################################################
 import math
 import os
-from osgeo import osr
+from osgeo import osr, gdal
 
 osr.UseExceptions()
 
@@ -59,3 +59,15 @@ def haversine(lat1, lon1, lat2, lon2):
     a = math.sin((lat2-lat1)/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2-lon1)/2)**2
     c = 2 * math.asin(math.sqrt(a))
     return radius * c
+
+
+# a simple wrapper for gdal.Warp
+def warp(src, dst, options):
+    out = gdal.Warp(dst, src, options=gdal.WarpOptions(**options))
+    out = None
+
+
+# a simple wrapper for gdal.BuildVRT
+def buildvrt(src, dst, options):
+    out = gdal.BuildVRT(dst, src, options=gdal.BuildVRTOptions(**options))
+    out = None
