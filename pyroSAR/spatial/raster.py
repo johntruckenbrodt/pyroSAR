@@ -56,7 +56,8 @@ class Raster(object):
             self.epsg = None
         self.geogcs = self.srs.GetAttrValue('geogcs')
         self.projcs = self.srs.GetAttrValue('projcs') if self.srs.IsProjected() else None
-        self.geo = dict(zip(['xmin', 'xres', 'rotation_x', 'ymax', 'rotation_y', 'yres'], self.raster.GetGeoTransform()))
+        self.geo = dict(
+            zip(['xmin', 'xres', 'rotation_x', 'ymax', 'rotation_y', 'yres'], self.raster.GetGeoTransform()))
 
         # note: yres is negative!
         self.geo['xmax'] = self.geo['xmin'] + self.geo['xres'] * self.cols
@@ -105,7 +106,8 @@ class Raster(object):
             self.geo['ymax'] += dim[1] * self.geo['yres']
             self.geo['xmax'] = self.geo['xmin'] + self.geo['xres'] * self.cols
             self.geo['ymin'] = self.geo['ymax'] + self.geo['yres'] * self.rows
-            self.raster.SetGeoTransform([self.geo[x] for x in ['xmin', 'xres', 'rotation_x', 'ymax', 'rotation_y', 'yres']])
+            self.raster.SetGeoTransform(
+                [self.geo[x] for x in ['xmin', 'xres', 'rotation_x', 'ymax', 'rotation_y', 'yres']])
 
     def bbox(self, outname=None, format='ESRI Shapefile', overwrite=True):
         if outname is None:
@@ -124,7 +126,8 @@ class Raster(object):
         Returns:
 
         """
-        dictionary = {'Byte': GDT_Byte, 'Int16': GDT_Int16, 'UInt16': GDT_UInt16, 'Int32': GDT_Int32, 'UInt32': GDT_UInt32, 'Float32': GDT_Float32, 'Float64': GDT_Float64}
+        dictionary = {'Byte': GDT_Byte, 'Int16': GDT_Int16, 'UInt16': GDT_UInt16, 'Int32': GDT_Int32,
+                      'UInt32': GDT_UInt32, 'Float32': GDT_Float32, 'Float64': GDT_Float64}
         return dictionary[typestring]
 
     def extract(self, px, py, radius=1, no_data=0):
@@ -189,7 +192,7 @@ class Raster(object):
                     counter += 1
 
         if sum > 0:
-            return sum/weightsum
+            return sum / weightsum
         else:
             if counter > 0:
                 return 0
@@ -378,18 +381,18 @@ class Raster(object):
             outDataset.SetMetadataItem('TIFFTAG_DATETIME', strftime('%Y:%m:%d %H:%M:%S', gmtime()))
         outDataset = None
 
-    # write a png image of three raster bands (provided in a list of 1-based integers); percent controls the size ratio of input and output
-    # def png(self, bands, outname, percent=10):
-    #     if len(bands) != 3 or max(bands) not in range(1, self.bands+1) or min(bands) not in range(1, self.bands+1):
-    #         print 'band indices out of range'
-    #         return
-    #     if not outname.endswith('.png'):
-    #         outname += '.png'
-    #     exp_bands = ' '.join(['-b '+str(x) for x in bands]).split()
-    #     exp_scale = [['-scale', self.getstat('min', x), self.getstat('max', x), 0, 255] for x in bands]
-    #     exp_size = ['-outsize', str(percent)+'%', str(percent)+'%']
-    #     cmd = dissolve([['gdal_translate', '-q', '-of', 'PNG', '-ot', 'Byte'], exp_size, exp_bands, exp_scale, self.filename, outname])
-    #     sp.check_call([str(x) for x in cmd])
+        # write a png image of three raster bands (provided in a list of 1-based integers); percent controls the size ratio of input and output
+        # def png(self, bands, outname, percent=10):
+        #     if len(bands) != 3 or max(bands) not in range(1, self.bands+1) or min(bands) not in range(1, self.bands+1):
+        #         print 'band indices out of range'
+        #         return
+        #     if not outname.endswith('.png'):
+        #         outname += '.png'
+        #     exp_bands = ' '.join(['-b '+str(x) for x in bands]).split()
+        #     exp_scale = [['-scale', self.getstat('min', x), self.getstat('max', x), 0, 255] for x in bands]
+        #     exp_size = ['-outsize', str(percent)+'%', str(percent)+'%']
+        #     cmd = dissolve([['gdal_translate', '-q', '-of', 'PNG', '-ot', 'Byte'], exp_size, exp_bands, exp_scale, self.filename, outname])
+        #     sp.check_call([str(x) for x in cmd])
 
 
 class Extent(object):
@@ -397,6 +400,7 @@ class Extent(object):
     object containing the outer coordinates of a raster object as well as the enclosed area in square map units
     input can be a raster object or a list
     """
+
     def __init__(self, geoobject):
         if type(geoobject) == Raster:
             gt = geoobject.geo
@@ -436,7 +440,8 @@ def intersect(obj1, obj2):
     # if proj1 != proj2:
     #     raise IOError('different projections')
     try:
-        intersection = Extent([max(ext1.xmin, ext2.xmin), max(ext1.ymin, ext2.ymin), min(ext1.xmax, ext2.xmax), min(ext1.ymax, ext2.ymax)])
+        intersection = Extent([max(ext1.xmin, ext2.xmin), max(ext1.ymin, ext2.ymin), min(ext1.xmax, ext2.xmax),
+                               min(ext1.ymax, ext2.ymax)])
         # intersection.proj4 = proj1
         return intersection
     except ValueError:
@@ -455,10 +460,11 @@ def reproject(rasterobject, reference, outname, resampling='bilinear', format='E
                    '-t_srs', projection, rasterobject.filename, outname])
 
 
-def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None, separate=False, overwrite=False, compress=True, cores=4):
+def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None,
+          separate=False, overwrite=False, compress=True, cores=4):
     """
-    function for mosaicking, resampling and stacking of multiple raster files to a 3D data cube
-    
+    function for mosaicking, resampling and stacking of multiple raster files into a 3D data cube
+
     Args:
         srcfiles: a list of file names or a list of lists; each sub-list is treated as an order to mosaic its containing files
         dstfile: the destination file (if sesparate) or a directory
@@ -469,7 +475,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
         dstnodata: the nodata value of the destination file(s)
         shapefile: a shapefile for defining the area of the destination files
         layernames: the names of the output layers; if None, the basenames of the input files is used
-        sortfun: a function for sorting the input files
+        sortfun: a function for sorting the input files; this is needed for defining the mosaicking order
         separate: should the files be written to a single raster block or separate files? If separate, each tile is written to geotiff.
         overwrite: overwrite the file if it already exists?
         compress: compress the geotiff files?
@@ -486,11 +492,11 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     if not isinstance(targetres, list) and len(targetres) != 2:
         raise IOError('targetres must be a list with two entries for x and y resolution')
 
-    # todo: bug in situation when srcfiles contains only one list of files to be mosaicked
-    if len(srcfiles) == 1:
+    if len(srcfiles) == 1 and not isinstance(srcfiles[0], list):
         raise IOError('only one file specified; nothing to be done')
 
-    if resampling not in ['near', 'bilinear', 'cubic', 'cubicspline', 'lanczos', 'average', 'mode',  'max', 'min', 'med', 'Q1', 'Q3']:
+    if resampling not in ['near', 'bilinear', 'cubic', 'cubicspline', 'lanczos', 'average', 'mode', 'max', 'min', 'med',
+                          'Q1', 'Q3']:
         raise IOError('resampling method not supported')
 
     projections = list(set([Raster(x).projection for x in dissolve(srcfiles)]))
@@ -504,78 +510,88 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
         shp = shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
         shp.reproject(srs)
         ext = shp.extent
-        arg_ext = ['-te', ext['xmin'], ext['ymin'], ext['xmax'], ext['ymax']]
-
+        arg_ext = (ext['xmin'], ext['ymin'], ext['xmax'], ext['ymax'])
         for i in range(len(srcfiles)):
             group = sorted(srcfiles[i], key=sortfun) if isinstance(srcfiles[i], list) else [srcfiles[i]]
-            group = [x for x in group if intersect(shp, Raster(x))]
+            group = [x for x in group if intersect(shp, Raster(x).bbox())]
             if len(group) > 1:
                 srcfiles[i] = group
             elif len(group) == 1:
                 srcfiles[i] = group[0]
             else:
                 srcfiles[i] = None
-        srcfiles = [x for x in srcfiles if x is not None]
+        srcfiles = filter(None, srcfiles)
     else:
-        arg_ext = []
+        arg_ext = None
 
     # create temporary directory for writing intermediate files
     dst_base = os.path.splitext(dstfile)[0]
-    tmpdir = dst_base+'__tmp'
+    tmpdir = dst_base + '__tmp'
     if not os.path.isdir(tmpdir):
         os.makedirs(tmpdir)
 
-    # define warping arguments
-    arg_targetres = dissolve(['-tr', targetres]) if targetres is not None else []
-    arg_srcnodata = ['-srcnodata', srcnodata] if srcnodata is not None else []
-    arg_dstnodata = ['-dstnodata', dstnodata] if dstnodata is not None else []
-    arg_resampling = ['-r', resampling] if resampling is not None else []
-    arg_format = ['-of', 'GTiff' if separate else 'ENVI']
-    arg_overwrite = ['-overwrite'] if overwrite else []
+    # a simple wrapper for gdal.Warp
+    def warp(src, dst, options):
+        out = gdal.Warp(dst, src, options=gdal.WarpOptions(**options))
+        out = None
+
+    # a simple wrapper for gdal.BuildVRT
+    def buildvrt(src, dst, options):
+        out = gdal.BuildVRT(dst, src, options=gdal.BuildVRTOptions(**options))
+        out = None
+
+    options_warp = {'options': ['-q'],
+                    'format': 'GTiff' if separate else 'ENVI',
+                    'outputBounds': arg_ext, 'multithread': True,
+                    'srcNodata': srcnodata, 'dstNodata': dstnodata,
+                    'xRes': targetres[0], 'yRes': targetres[1],
+                    'resampleAlg': resampling}
+
+    if overwrite:
+        options_warp['options'] += ['-overwrite']
 
     if separate and compress:
-        arg_compression = ['-co', 'COMPRESS=DEFLATE', '-co', 'PREDICTOR=2']
-    else:
-        arg_compression = []
+        options_warp['options'] += ['-co', 'COMPRESS=DEFLATE', '-co', 'PREDICTOR=2']
+
+    options_buildvrt = {'outputBounds': arg_ext, 'srcNodata': srcnodata}
 
     # create VRT files for mosaicing
-    vrtlist = []
     for i in range(len(srcfiles)):
         base = srcfiles[i][0] if isinstance(srcfiles[i], list) else srcfiles[i]
-        vrt = os.path.join(tmpdir, os.path.splitext(os.path.basename(base))[0]+'.vrt')
-        run(['gdalbuildvrt', '-overwrite', arg_srcnodata, arg_ext, vrt, srcfiles[i]])
+        vrt = os.path.join(tmpdir, os.path.splitext(os.path.basename(base))[0] + '.vrt')
+        buildvrt(srcfiles[i], vrt, options_buildvrt)
         srcfiles[i] = vrt
-        vrtlist.append(vrt)
 
-    # if no specific layernames are defined and sortfun is not set to None, sort files by custom function or, by default, the basename of the raster/VRT file
+    # if no specific layernames are defined and sortfun is not set to None,
+    # sort files by custom function or, by default, the basename of the raster/VRT file
     if layernames is None and sortfun is not None:
         srcfiles = sorted(srcfiles, key=sortfun if sortfun else os.path.basename)
 
     bandnames = [os.path.splitext(os.path.basename(x))[0] for x in srcfiles] if layernames is None else layernames
 
-    if separate:
+    if separate or len(srcfiles) == 1:
         if not os.path.isdir(dstfile):
             os.makedirs(dstfile)
-        dstfiles = [os.path.join(dstfile, x)+'.tif' for x in bandnames]
-
-        files = [x for x in zip(srcfiles, dstfiles) if not os.path.isfile(x[1])]
+        dstfiles = [os.path.join(dstfile, x) + '.tif' for x in bandnames]
+        if overwrite:
+            files = [x for x in zip(srcfiles, dstfiles)]
+        else:
+            files = [x for x in zip(srcfiles, dstfiles) if not os.path.isfile(x[1])]
+            if len(files) == 0:
+                print('all target tiff files already exist, nothing to be done')
+                shutil.rmtree(tmpdir)
+                return
         srcfiles, dstfiles = map(list, zip(*files))
 
-        cmd = ['gdalwarp', '-q', '-multi', arg_overwrite, arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, arg_compression]
-
-        def operator(command, srcfile, dstfile):
-            run(command + [srcfile, dstfile])
-
-        multicore(operator, cores=cores, multiargs={'srcfile': srcfiles, 'dstfile': dstfiles}, command=cmd)
+        multicore(warp, cores=cores, multiargs={'src': srcfiles, 'dst': dstfiles}, options=options_warp)
     else:
         # create VRT for stacking
-
-        vrt = os.path.join(tmpdir, os.path.basename(dst_base)+'.vrt')
-        run(['gdalbuildvrt', '-q', arg_overwrite, '-separate', arg_srcnodata, arg_ext, vrt, srcfiles])
+        vrt = os.path.join(tmpdir, os.path.basename(dst_base) + '.vrt')
+        options_buildvrt['options'] = ['-separate']
+        buildvrt(srcfiles, vrt, options_buildvrt)
 
         # warp files
-        run(['gdalwarp', '-q', '-multi', arg_overwrite, arg_resampling, arg_format, arg_srcnodata, arg_dstnodata, arg_targetres, vrt, dstfile])
-        # ['--config', 'GDAL_CACHEMAX', 2000, '-wm', 6000, '-co', 'INTERLEAVE='+interleave]
+        warp(vrt, dstfile, options_warp)
 
         # edit ENVI HDR files to contain specific layer names
         par = envi.HDRobject(dstfile + '.hdr')
