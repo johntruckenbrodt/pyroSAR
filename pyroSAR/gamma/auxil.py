@@ -4,7 +4,8 @@ import os
 import re
 import subprocess as sp
 
-from ..ancillary import parse_literal
+from ..ancillary import parse_literal, run
+from .error import gammaErrorHandler
 
 
 class ISPPar(object):
@@ -89,6 +90,14 @@ class UTM(object):
                 self.index = list(set(self.index+["zone", "northing", "easting"]))
 
 
+def process(cmd, outdir=None, logpath=None, inlist=None, void=True):
+    log = os.path.join(logpath, cmd[0] + '.log') if logpath else None
+    out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False, errorpass=True)
+    gammaErrorHandler(out, err)
+    if not void:
+        return out, err
+
+
 class Spacing(object):
     def __init__(self, par, targetres="automatic"):
         """
@@ -150,3 +159,19 @@ class Namespace(object):
 
     def get(self, key):
         return getattr(self, key)
+
+
+def slc_corners(parfile):
+    """
+    extract the corner soordinates of a SAR scene
+    """
+    out, err = process(['SLC_corners', parfile], void=False)
+    pts = {}
+    for line in out.split('\n'):
+        if line.startswith('min. latitude'):
+            pts['ymin'], pts['ymax'] = [float(x) for x in
+                                        re.findall('[0-9]+\.[0-9]+', line)]
+        elif line.startswith('min. longitude'):
+            pts['xmin'], pts['xmax'] = [float(x) for x in
+                                        re.findall('[0-9]+\.[0-9]+', line)]
+    return pts

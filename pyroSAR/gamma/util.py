@@ -23,19 +23,10 @@ from .. import envi
 from ..drivers import *
 from ..spatial import haversine
 
-from ..ancillary import run, Stack, union, finder
-from . import ISPPar, Spacing, Namespace
-from .error import gammaErrorHandler
+from ..ancillary import union, finder
+from . import ISPPar, Namespace, process
 
 ogr.UseExceptions()
-
-
-def process(cmd, outdir=None, logpath=None, inlist=None, void=True):
-    log = os.path.join(logpath, cmd[0] + '.log') if logpath else None
-    out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False, errorpass=True)
-    gammaErrorHandler(out, err)
-    if not void:
-        return out, err
 
 
 def calibrate(id, directory, replace=False):
