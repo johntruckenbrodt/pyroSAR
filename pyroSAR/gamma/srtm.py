@@ -16,12 +16,17 @@ The following tasks are performed by executing this script:
 -replacement and interpolation of missing values
 -transformation from equiangular (EQA) to UTM projection using a SLC parameter file
 """
+import sys
+
+if sys.version_info >= (3, 0):
+    from urllib.request import urlopen
+else:
+    from urllib2 import urlopen
 
 import os
 import re
 import shutil
 import zipfile as zf
-from urllib2 import urlopen
 
 from ..envi import HDRobject, hdr
 from ..spatial import raster

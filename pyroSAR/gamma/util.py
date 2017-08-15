@@ -10,12 +10,12 @@ The function parametrization is intended to be applicable to any kind of situati
 core parameters are iterated over a set of values in order to find the one best suited for the task.
 The approach of the single routines is likely to still have drawbacks and might fail in certain situations. Testing and suggestions on improvements are very welcome.
 """
-import math
-import os
-import re
-import shutil
-import subprocess as sp
-from collections import OrderedDict
+import sys
+
+if sys.version_info >= (3, 0):
+    from urllib.error import URLError
+else:
+    from urllib2 import URLError
 
 from osgeo import ogr
 

@@ -1,13 +1,21 @@
+import sys
+
+if sys.version_info >= (3, 0):
+    from io import StringIO
+    from urllib.request import urlopen
+    from urllib.error import HTTPError
+else:
+    from cStringIO import StringIO
+    from urllib2 import urlopen, HTTPError
+
 import os
 import re
 import shutil
 import subprocess as sp
 import xml.etree.ElementTree as ET
 import zipfile as zf
-from cStringIO import StringIO
 from ftplib import FTP
 from time import strftime, gmtime
-from urllib2 import urlopen, HTTPError
 from xml.dom import minidom
 
 import pyroSAR

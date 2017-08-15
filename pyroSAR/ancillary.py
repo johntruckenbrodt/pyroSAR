@@ -6,6 +6,15 @@
 This script gathers central functions and object instances for general applications
 Please refer to the descriptions of the individual functions/instances for details
 """
+import sys
+
+if sys.version_info >= (3, 0):
+    from io import StringIO
+    from urllib.parse import urlparse, urlunparse, urlencode
+else:
+    from urllib import urlencode
+    from StringIO import StringIO
+    from urlparse import urlparse, urlunparse
 
 import re
 import sys
@@ -14,9 +23,6 @@ import inspect
 import os
 import subprocess as sp
 from time import mktime, strptime
-from StringIO import StringIO
-from urllib import urlencode
-from urlparse import urlparse, urlunparse
 
 try:
     import pathos.multiprocessing as mp

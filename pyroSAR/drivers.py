@@ -10,7 +10,15 @@ folders/files, convert to GAMMA format and do simple pre-processing
 """
 from __future__ import print_function
 
-import StringIO
+import sys
+
+if sys.version_info >= (3, 0):
+    from io import StringIO
+    from urllib.request import urlopen
+else:
+    from StringIO import StringIO
+    from urllib2 import urlopen
+
 import abc
 import ast
 import inspect
@@ -25,7 +33,6 @@ import xml.etree.ElementTree as ET
 import zipfile as zf
 from datetime import datetime, timedelta
 from time import strptime, strftime
-from urllib2 import urlopen, URLError
 
 import numpy as np
 import progressbar as pb
@@ -231,20 +238,20 @@ class ID(object):
         load a file into a readable file object
         if the scene is unpacked this will be a regular 'file' object
         for a tarfile this is an object of type 'tarfile.ExtFile'
-        for a zipfile this is an StringIO.StringIO object (the zipfile.ExtFile object does not support setting file pointers via function 'seek', which is needed later on)
+        for a zipfile this is an StringIO object (the zipfile.ExtFile object does not support setting file pointers via function 'seek', which is needed later on)
         """
         membername = filename.replace(self.scene, '').strip('/')
 
         if os.path.isdir(self.scene):
             obj = open(filename)
         elif zf.is_zipfile(self.scene):
-            obj = StringIO.StringIO()
+            obj = StringIO()
             with zf.ZipFile(self.scene, 'r') as zip:
                 obj.write(zip.open(membername).read())
             obj.seek(0)
 
         elif tf.is_tarfile(self.scene):
-            obj = StringIO.StringIO()
+            obj = StringIO()
             tar = tf.open(self.scene, 'r:gz')
             obj.write(tar.extractfile(membername).read())
             tar.close()

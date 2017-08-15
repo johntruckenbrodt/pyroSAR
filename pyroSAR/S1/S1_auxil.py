@@ -2,14 +2,20 @@
 # general utilities for Sentinel-1
 # John Truckenbrodt 2016-2017
 ##############################################################
+import sys
+
+if sys.version_info >= (3, 0):
+    from urllib.parse import urlparse, urlunparse, urlencode
+    from urllib.request import urlopen
+else:
+    from urllib import urlopen, urlencode
+    from urlparse import urlparse, urlunparse
+
 import os
 import re
 import ssl
-import sys
 import time
 from datetime import datetime
-from urllib import urlopen, urlencode
-from urlparse import urlparse, urlunparse
 
 from .. import gamma
 from ..ancillary import finder, dissolve
@@ -153,12 +159,12 @@ class OSV(object):
         else:
             date_stop = time.strftime('%Y-%m-%d')
         query['validity_start_time'] = '{0}..{1}'.format(date_start, date_stop)
-        print 'searching for new {} files'.format(type)
+        print('searching for new {} files'.format(type))
         while True:
             subaddress = urlunparse(address_parse._replace(query=urlencode(query)))
             try:
                 response = urlopen(subaddress, context=self.sslcontext).read()
-                print subaddress
+                print(subaddress)
             except IOError as e:
                 raise RuntimeError(e)
             remotes = [os.path.join(address, x) for x in sorted(set(re.findall(self.pattern, response)))]
