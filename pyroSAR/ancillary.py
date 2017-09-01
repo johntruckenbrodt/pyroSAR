@@ -25,10 +25,12 @@ import itertools
 import os
 import subprocess as sp
 from datetime import datetime
-
+import logging
+log = logging.getLogger(__name__)
 try:
     import pathos.multiprocessing as mp
 except ImportError:
+    log.warning("The library pathos is not installed, multiprocessing will not be available.")
     pass
 
 
@@ -61,7 +63,7 @@ def dissolve(inlist):
         out.extend(dissolve(i)) if isinstance(i, list) else out.append(i)
     return out
 
-
+# todo How do we have to handle the logging?
 def enablePrint():
     """
     reverse console stdout print suppression from function blockPrint
@@ -151,7 +153,11 @@ def multicore(function, cores, multiargs, **singleargs):
     multicore(add, cores=2, multiargs={'x': [1, 2], 'y': [5, 6]}, z=9)
     -> returns [15, 17]
     """
-
+    try:
+        mp.__name__
+    except NameError:
+        log.error("You need to install pathos to use the multicore function.")
+        return
     # compare the function arguments with the multi and single arguments and raise errors if mismatches occur
     function_check = inspect.getargspec(function)
     keywords = function_check[2]
