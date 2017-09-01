@@ -24,6 +24,7 @@ import inspect
 import math
 import os
 import re
+import ssl
 import shutil
 import struct
 import tarfile as tf
@@ -31,6 +32,7 @@ import xml.etree.ElementTree as ET
 import zipfile as zf
 from datetime import datetime, timedelta
 from time import strptime, strftime
+from urllib2 import urlopen, URLError
 
 import numpy as np
 import progressbar as pb
@@ -47,6 +49,11 @@ from .S1 import OSV
 from . import spatial
 from .ancillary import finder, parse_literal, run
 from .xml_util import getNamespaces
+
+# Add Logger
+import logging
+log = logging.getLogger(__name__)
+
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines']
@@ -101,6 +108,7 @@ def identify_many(scenes):
                 id = identify(scene)
                 idlist.append(id)
             except RuntimeError:
+                log.warn("Can not open the scene {}".format(id))
                 continue
         pbar.update(i + 1)
     pbar.finish()
@@ -359,12 +367,16 @@ class ID(object):
 
     def getHGT(self):
         """
+<<<<<<< HEAD
         get the names of all SRTM HGT tiles overlapping with the SAR scene
 
         Returns
         -------
         list
             names of the SRTM HGT tiles
+=======
+        Returns: names of all SRTM hgt tiles overlapping with the SAR scene
+>>>>>>> Add logging to drivers.py
         """
 
         corners = self.getCorners()
@@ -534,7 +546,7 @@ class ID(object):
                                 with open(outname, 'wb') as outfile:
                                     outfile.write(archive.read(item))
                             except zf.BadZipfile:
-                                print('corrupt archive, unpacking failed')
+                                log.error('corrupt archive, unpacking failed')
                                 continue
                 archive.close()
             else:
@@ -542,7 +554,7 @@ class ID(object):
                 archive.close()
 
         else:
-            print('unpacking is only supported for TAR and ZIP archives')
+            log.error('unpacking is only supported for TAR and ZIP archives')
             return
 
         self.scene = directory
@@ -756,6 +768,8 @@ class CEOS_PSR(ID):
             except IOError as e:
                 if i + 1 == len(patterns):
                     raise e
+                else:
+                    continue
 
         self.meta = self.scanMetadata()
 
@@ -938,8 +952,8 @@ class CEOS_PSR(ID):
         meta['product'] = match.group('level')
 
         try:
-            meta['start'] = self.parse_date(meta['Img_SceneStartDateTime'])
-            meta['stop'] = self.parse_date(meta['Img_SceneEndDateTime'])
+            meta['start'] = self.parse_date(self.meta['Img_SceneStartDateTime'])
+            meta['stop'] = self.parse_date(self.meta['Img_SceneEndDateTime'])
         except (AttributeError, KeyError):
             try:
                 start_string = re.search('Img_SceneStartDateTime[ ="0-9:.]*', led).group()
@@ -1259,6 +1273,7 @@ class SAFE(ID):
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
 
+<<<<<<< HEAD
     def getOSV(self, outdir, osvType='POE'):
         """
         download Orbit State Vector files for the scene
@@ -1294,6 +1309,36 @@ class SAFE(ID):
                 if len(files) == 0:
                     files = osv.catch('RES', before, after)
                 osv.retrieve(files)
+=======
+    def getOSV(self, outdir):
+        date = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
+
+        before = (date - timedelta(days=1)).strftime('%Y-%m-%d')
+        after = (date + timedelta(days=1)).strftime('%Y-%m-%d')
+
+        query = dict()
+        query['mission'] = self.sensor
+        query['validity_start_time'] = '{0}..{1}'.format(before, after)
+
+        remote_poe = 'https://qc.sentinel1.eo.esa.int/aux_poeorb/'
+
+        pattern = 'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
+
+        sslcontext = ssl._create_unverified_context()
+
+        subaddress = urlQueryParser(remote_poe, query)
+        response = urlopen(subaddress, context=sslcontext).read()
+        remotes = [os.path.join(remote_poe, x) for x in sorted(set(re.findall(pattern, response)))]
+
+        if not os.access(outdir, os.W_OK):
+            raise RuntimeError('insufficient directory permissions, unable to write')
+        downloads = [x for x in remotes if not os.path.isfile(os.path.join(outdir, os.path.basename(x)))]
+        for item in downloads:
+            infile = urlopen(item, context=sslcontext)
+            with open(os.path.join(outdir, os.path.basename(item)), 'wb') as outfile:
+                outfile.write(infile.read())
+            infile.close()
+>>>>>>> Add logging to drivers.py
 
     def scanMetadata(self):
         manifest = self.getFileObj(self.findfiles('manifest.safe')[0]).getvalue()
@@ -1836,13 +1881,13 @@ class Archive(object):
                 arg_format.append('start>=?')
                 vals.append(mindate)
             else:
-                print('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
+                log.warning('argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
         if maxdate:
             if re.search('[0-9]{8}T[0-9]{6}', maxdate):
                 arg_format.append('stop<=?')
                 vals.append(maxdate)
             else:
-                print('WARNING: argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
+                log.warning('argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
 
         if polarizations:
             for pol in polarizations:
@@ -1856,11 +1901,11 @@ class Archive(object):
                 arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
                 vals.append(site_geom)
             else:
-                print('WARNING: argument vectorobject is ignored, must be of type spatial.vector.Vector')
+                log.warning('argument vectorobject is ignored, must be of type spatial.vector.Vector')
 
         query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
         if verbose:
-            print(query)
+            log.info(query)
         cursor = self.conn.execute(query, tuple(vals))
         if processdir and os.path.isdir(processdir):
             scenes = [x for x in cursor.fetchall()
