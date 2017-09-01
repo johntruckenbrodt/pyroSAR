@@ -8,6 +8,7 @@
 # todo: documentation
 
 from __future__ import division
+import logging
 import os
 import re
 import shutil
@@ -27,6 +28,8 @@ from osgeo import (gdal, gdal_array, osr)
 from osgeo.gdalconst import (GA_ReadOnly, GDT_Byte, GDT_Int16, GDT_UInt16,
                              GDT_Int32, GDT_UInt32, GDT_Float32, GDT_Float64)
 
+log = logging.getLogger(__name__)
+
 os.environ['GDAL_PAM_PROXY_DIR'] = '/tmp'
 
 gdal.UseExceptions()
@@ -45,10 +48,16 @@ class Raster(object):
     def __init__(self, filename):
         if os.path.isfile(filename):
             self.filename = filename if os.path.isabs(filename) else os.path.join(os.getcwd(), filename)
+            log.debug("Opening the raster object {}".format(filename))
             self.raster = gdal.Open(filename, GA_ReadOnly)
         else:
+<<<<<<< HEAD
             raise OSError('file does not exist')
 
+=======
+            raise IOError('file does not exist')
+        log.debug("Declare metadata")
+>>>>>>> Add logging to raster.py
         self.cols = self.raster.RasterXSize
         self.rows = self.raster.RasterYSize
         self.bands = self.raster.RasterCount
@@ -59,6 +68,7 @@ class Raster(object):
         self.projection = self.raster.GetProjection()
         self.srs = osr.SpatialReference(wkt=self.projection)
         self.proj4 = self.srs.ExportToProj4()
+        log.debug("Convert projection information to EPSG")
         try:
             self.epsg = crsConvert(self.srs, 'epsg')
         except RuntimeError:
@@ -487,6 +497,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     Returns
     -------
     """
+    log.info('Beginning of Stacking')
     if len(dissolve(srcfiles)) == 0:
         raise IOError('no input files provided to function raster.stack')
 
@@ -584,7 +595,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
         else:
             files = [x for x in zip(srcfiles, dstfiles) if not os.path.isfile(x[1])]
             if len(files) == 0:
-                print('all target tiff files already exist, nothing to be done')
+                log.info('all target tiff files already exist, nothing to be done')
                 shutil.rmtree(tmpdir)
                 return
         srcfiles, dstfiles = map(list, zip(*files))
