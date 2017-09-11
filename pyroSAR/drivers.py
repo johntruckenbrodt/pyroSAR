@@ -1415,6 +1415,33 @@ class Archive(object):
         cursor = self.conn.execute('''SELECT * FROM sqlite_master WHERE type="table"''')
         return [x[1].encode('ascii') for x in cursor.fetchall()]
 
+    def move(self, scenelist, directory):
+        """
+        move a list of files which are registered in the database to a different directory and change the database entry accordingly
+
+        :param scenelist: a list of file locations
+        :param directory: a folder to which the files are moved
+        :return: None
+        """
+        if not os.access(directory, os.W_OK):
+            raise RuntimeError('directory cannot be written to')
+        failed = []
+        pbar = pb.ProgressBar(maxval=len(scenelist)).start()
+        for i, scene in enumerate(scenelist):
+            new = os.path.join(directory, os.path.basename(scene))
+            try:
+                shutil.move(scene, directory)
+            except shutil.Error:
+                failed.append(scene)
+                continue
+            finally:
+                pbar.update(i + 1)
+            self.conn.execute('''UPDATE data SET scene=? WHERE scene=?''', (new, scene))
+            self.conn.commit()
+        pbar.finish()
+        if len(failed) > 0:
+            print('the following scenes could not be moved:\n{}'.format('\n'.join(failed)))
+
     def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None, recursive=False, polarizations=None, **args):
         """
         select scenes from the database
