@@ -1304,6 +1304,11 @@ class Archive(object):
             cursor.execute('SELECT AddGeometryColumn("data","bbox" , 4326, "POLYGON", "XY", 0)')
         self.conn.commit()
 
+        create_string = '''CREATE TABLE if not exists duplicates (outname_base TEXT, scene TEXT)'''
+        cursor = self.conn.cursor()
+        cursor.execute(create_string)
+        self.conn.commit()
+
     def __prepare_insertion(self, scene):
         """
         read scene metadata and parse a string for inserting it into the database
@@ -1347,13 +1352,17 @@ class Archive(object):
             if verbose:
                 print('filtering scenes by name...')
             scenes = self.filter_scenelist(scene_in)
-            if verbose:
-                print('extracting scene metadata...')
-            scenes = identify_many(scenes)
+            if len(scenes) > 0:
+                if verbose:
+                    print('extracting scene metadata...')
+                scenes = identify_many(scenes)
+            else:
+                print('all scenes are already registered')
+                return
         else:
             raise RuntimeError('scene_in must either be a string pointing to a file, a pyroSAR.ID object '
                                'or a list containing several of either')
-
+        duplicates_counter = 0
         if verbose:
             print('inserting scenes into the database...')
             pbar = pb.ProgressBar(maxval=len(scenes)).start()
@@ -1364,15 +1373,20 @@ class Archive(object):
                 self.conn.commit()
             except sqlite3.IntegrityError as e:
                 if str(e) == 'UNIQUE constraint failed: data.outname_base':
-                    cursor = self.conn.execute('SELECT scene FROM data WHERE outname_base=?', (id.outname_base(),))
-                    scene = cursor.fetchone()[0].encode('ascii')
-                    print('scene is already registered in the database at this location:', scene)
+                    self.conn.execute('INSERT INTO duplicates(outname_base, scene) VALUES(?, ?)',
+                                      (id.outname_base(), id.scene))
+                    self.conn.commit()
+                    duplicates_counter += 1
                 else:
                     raise e
             if verbose:
                 pbar.update(i + 1)
         if verbose:
             pbar.finish()
+        print('{} duplicates detected and registered'.format(duplicates_counter))
+
+    def is_registered(self, scene):
+        return len(self.select(scene=scene)) != 0 or len(self.select_duplicates(scene=scene)) != 0
 
     def export2shp(self, shp):
         """
@@ -1395,7 +1409,9 @@ class Archive(object):
         """
         cursor = self.conn.execute('SELECT scene FROM data')
         registered = [os.path.basename(x[0].encode('ascii')) for x in cursor.fetchall()]
-        return [x for x in scenelist if os.path.basename(x) not in registered]
+        cursor = self.conn.execute('SELECT scene FROM duplicates')
+        duplicates = [os.path.basename(x[0].encode('ascii')) for x in cursor.fetchall()]
+        return [x for x in scenelist if os.path.basename(x) not in registered+duplicates]
 
     def get_colnames(self):
         """
@@ -1417,7 +1433,9 @@ class Archive(object):
 
     def move(self, scenelist, directory):
         """
-        move a list of files which are registered in the database to a different directory and change the database entry accordingly
+        move a list of files while keeping the database entries up to date
+        if a scene is registered in the database (in either the data or duplicates table),
+        the scene entry is directly changed to the new location
 
         :param scenelist: a list of file locations
         :param directory: a folder to which the files are moved
@@ -1436,8 +1454,17 @@ class Archive(object):
                 continue
             finally:
                 pbar.update(i + 1)
-            self.conn.execute('''UPDATE data SET scene=? WHERE scene=?''', (new, scene))
-            self.conn.commit()
+            if self.select(scene=scene) != 0:
+                table = 'data'
+            else:
+                cursor = self.conn.execute('''SELECT scene FROM duplicates WHERE scene=?''', (scene,))
+                if len(cursor.fetchall()) != 0:
+                    table = 'duplicates'
+                else:
+                    table = None
+            if table:
+                self.conn.execute('''UPDATE {} SET scene=? WHERE scene=?'''.format(table), (new, scene))
+                self.conn.commit()
         pbar.finish()
         if len(failed) > 0:
             print('the following scenes could not be moved:\n{}'.format('\n'.join(failed)))
@@ -1506,6 +1533,22 @@ class Archive(object):
             scenes = cursor.fetchall()
         return [x[0].encode('ascii') for x in scenes]
 
+    def select_duplicates(self, outname_base=None, scene=None):
+        if not outname_base and not scene:
+            cursor = self.conn.execute('SELECT * from duplicates')
+        else:
+            cond = []
+            arg = []
+            if outname_base:
+                cond.append('outname_base=?')
+                arg.append(outname_base)
+            if scene:
+                cond.append('scene=?')
+                arg.append(scene)
+            query = 'SELECT * from duplicates WHERE {}'.format(' AND '.join(cond))
+            cursor = self.conn.execute(query, tuple(arg))
+        return cursor.fetchall()
+
     @property
     def size(self):
         """
@@ -1513,8 +1556,9 @@ class Archive(object):
 
         :return: the number of scenes (integer)
         """
-        cursor = self.conn.execute('''SELECT Count(*) FROM data''')
-        return cursor.fetchone()[0]
+        cursor1 = self.conn.execute('''SELECT Count(*) FROM data''')
+        cursor2 = self.conn.execute('''SELECT Count(*) FROM duplicates''')
+        return (cursor1.fetchone()[0], cursor2.fetchone()[0])
 
     def __enter__(self):
         return self
