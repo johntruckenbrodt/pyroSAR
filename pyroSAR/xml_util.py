@@ -14,9 +14,10 @@ class XMLHandler(object):
         errormessage = 'xmlfile must be a string pointing to an existing file, ' \
                        'a string from which an xml can be parsed or a file object'
         if 'readline' in dir(xml):
-            self.infile = xml.name
-            self.text = self.infile.read()
-            self.infile.seek(0)
+            self.infile = xml.name if hasattr(xml, 'name') else None
+            xml.seek(0)
+            self.text = xml.read()
+            xml.seek(0)
         elif isinstance(xml, str):
             if os.path.isfile(xml):
                 self.infile = xml
@@ -32,7 +33,7 @@ class XMLHandler(object):
                     raise IOError(errormessage)
         else:
             raise IOError(errormessage)
-        defs = re.findall('xmlns:[a-z0-9]+="[a-z/.0-9:]*"', self.text)
+        defs = re.findall('xmlns:[a-z0-9]+="[^"]*"', self.text)
         dictstring = '{{{}}}'.format(re.sub(r'xmlns:([a-z0-9]*)=', r'"\1":', ', '.join(defs)))
         self.namespaces = ast.literal_eval(dictstring)
 
