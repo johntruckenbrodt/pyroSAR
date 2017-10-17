@@ -327,6 +327,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
 
     master = images[0]
 
+    # create output names for files to be written
+    # appreciated files will be written
+    # depreciated files will be set to '-' in the GAMMA funtion call and are thus not written
     n = Namespace(scene.scene, scene.outname_base())
     n.appreciate(['dem_seg', 'lut_coarse', 'lut_fine', 'pix', 'ccp', 'inc', 'ls_map'])
     n.depreciate(['sim_map', 'u', 'v', 'psi'])
