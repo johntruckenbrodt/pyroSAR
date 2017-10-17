@@ -83,3 +83,9 @@ def gdal_translate(src, dst, options):
 def ogr2ogr(src, dst, options):
     out = gdal.VectorTranslate(dst, src, options=gdal.VectorTranslateOptions(**options))
     out = None
+
+
+# a simple wrapper for gdal.Rasterize
+def gdal_rasterize(src, dst, options):
+    out = gdal.Rasterize(dst, src, options=gdal.RasterizeOptions(**options))
+    out = None
