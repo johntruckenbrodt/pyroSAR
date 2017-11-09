@@ -8,9 +8,10 @@
 this script is intended to contain several SAR scene identifier classes to read basic metadata from the scene
 folders/files, convert to GAMMA format and do simple pre-processing
 """
-from __future__ import print_function
+from __future__ import print_function, division
 
 import sys
+
 
 if sys.version_info >= (3, 0):
     from io import StringIO
@@ -39,15 +40,18 @@ import progressbar as pb
 from osgeo import gdal, osr
 from osgeo.gdalconst import GA_ReadOnly, GA_Update
 
+####################################################
+# Vielleicht in den __init__ rein?
 try:
     from pysqlite2 import dbapi2 as sqlite3
 except ImportError:
     import sqlite3
+####################################################
 
-from . import linesimplify as ls
-from . import spatial
-from .ancillary import finder, parse_literal, urlQueryParser, run
-from .xml_util import getNamespaces
+from pyroSAR import linesimplify as ls
+from pyroSAR import spatial
+from pyroSAR.ancillary import finder, parse_literal, urlQueryParser, run
+from pyroSAR.xml_util import getNamespaces
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines']
