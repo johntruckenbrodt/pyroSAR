@@ -13,9 +13,8 @@ import os
 
 from osgeo import ogr, osr
 
-from . import crsConvert
-
-from ..ancillary import parse_literal
+from pyroSAR.spatial.auxil import crsConvert
+from pyroSAR.ancillary import parse_literal
 
 ogr.UseExceptions()
 osr.UseExceptions()
