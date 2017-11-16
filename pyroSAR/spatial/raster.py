@@ -433,6 +433,8 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     Returns:
         A single raster stack in ENVI format or multiple geotiff files of same extent.
     """
+    if len(dissolve(srcfiles)) == 0:
+        raise IOError('no input files provided to function raster.stack')
 
     if layernames is not None:
         if len(layernames) != len(srcfiles):
@@ -451,6 +453,8 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     projections = list(set([Raster(x).projection for x in dissolve(srcfiles)]))
     if len(projections) > 1:
         raise IOError('raster projection mismatch')
+    elif len(projections) == 0:
+        raise RuntimeError('could not retrieve the projection from any of the {} input images'.format(len(srcfiles)))
     else:
         srs = projections[0]
 
