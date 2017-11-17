@@ -7,6 +7,8 @@ Created on Thu Nov 09 11:42:39 2017
 from __future__ import division
 import numpy as np
 from pathlib import Path
+from shutil import copy2
+import os
 
 # ------- Result and Memorize Classes ------- #
 class Memorize(dict):
@@ -196,21 +198,40 @@ def test_string(data):
 def test_tuple(data):
     return isinstance(data, tuple)
 
+def test_list(data):
+    return isinstance(data, list)
+
 def check_executable(name):
     """Check whether executable is on PATH."""
     from distutils.spawn import find_executable
     
     executable_list = []
-    if test_tuple(name):
+    if test_tuple(name) or test_list(name):
         for item in name:
             executable_temp = find_executable(item) is not None
             executable_list.append(executable_temp)
             
-        return np.any(np.asarray(executable_list) == True)
+        return np.any(np.asarray(executable_list) == True), find_executable(name[np.where(np.asarray(executable_list) == True)[0][0]])
     
     else:
         return find_executable(name) is not None
 
+def read_snap_directory_etc(name):
+    _, path = check_executable(name)
+    if _:
+        try:
+            result = Memorize(installed=_,
+                              exe_path=path,
+                              path=os.path.dirname(path),
+                              etc_path=os.path.join(os.path.dirname(os.path.dirname(path)), 'etc'),
+                              etc_list_dir=os.listdir(os.path.join(os.path.dirname(os.path.dirname(path)), 'etc')),
+                              auxdata=os.path.join(os.path.join(os.path.dirname(os.path.dirname(path)), 'etc'), [s for s in os.listdir(os.path.join(os.path.dirname(os.path.dirname(path)), 'etc')) if "snap.auxdata.properties" in s][0]))
+            
+            return result
+        except:
+            print('etc path does not exist.')
+            return None
+    
 def check_is_file(files):
     # This is only temporary. Insert here the DIR path with DEMs.
     dir_name = "C:\\Users\\ibari\\Documents"
@@ -224,17 +245,32 @@ def check_is_file(files):
     else:
         print ("File exist")
 
+def change_dem_dir(filename, new_dir):
+    # Got some troubles with permissions to write!!!!
+    old_dir = 'demPath = ${AuxDataPath}/dem'
+    with open(filename) as f:
+        s = f.read()
+        if old_dir not in s:
+            print '"{old_dir}" not found in {filename}.'.format(**locals())
+        else:
+#            copy2(filename, filename + '_BACKUP')
+
+            with open(filename, 'w') as f:
+                print 'Changing "{old_dir}" to "{new_dir}" in {filename}'.format(**locals())
+                s = s.replace(old_dir, new_dir)
+                f.write(s)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
+# Test
+#name_list = ['snap64.exe', 'snap84.snap', 'snap.exe']
+#
+#_, path = check_executable(name_list)
+#
+#snap = read_snap_directory_etc(name_list)
+#
+#change_dem_dir(snap.auxdata, 'new_dem\place\dem')
+#matching = [s for s in snap.etc_list_dir if "snap.auxdata.properties" in s]
+#files = os.path.join(snap.etc_path, matching[0])
+#
+#with open(files, 'r') as myfile:
+#    data=myfile.read()
