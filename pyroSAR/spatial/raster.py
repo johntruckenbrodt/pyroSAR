@@ -118,7 +118,11 @@ class Raster(object):
                          extension.
         Returns
         -------
-        Result class instance
+        SpatialResults class instance
+        
+        See Also
+        --------
+        SpatialResults
         """
 
         driver = gdal.GetDriverByName('ENVI')

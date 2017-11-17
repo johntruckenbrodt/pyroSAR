@@ -56,7 +56,6 @@ from pyroSAR.xml_util import getNamespaces
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines']
 
-
 def identify(scene):
     """Return a metadata handler of the given scene."""
     for handler in ID.__subclasses__():
