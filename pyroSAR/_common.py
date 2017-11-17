@@ -7,6 +7,7 @@ Created on Thu Nov 09 11:42:39 2017
 from __future__ import division
 import numpy as np
 
+# ------- Result and Memorize Classes ------- #
 class Memorize(dict):
     """ Memorize results.
     """
@@ -32,41 +33,58 @@ class Memorize(dict):
     
 class SpatialResults(dict):
     """ Represents the statistical result.
-    
-    
+
     Returns
     ----------
     Note:
             The returns are attributes.
             
-    slope :         float or ndarray
-                    Slope of the regression line.
+    data : ndarray or tuple
+        Imported image arrays.
 
-    intersect1 :    float or ndarray
-                    If the input are complex, int1 represents the first
-                    intersection point with the complex plain.
+    filename : str or tuple
+        Filenames of imported images.
 
-    intersect2 :    float or ndarray
-                    If the input are complex, int2 represents the second
-                    intersection  point with the complex plain.
+    size : int or tuple
+        Pixelsize of imported images
     
-    intercept :     float or ndarray
-                    Intercept of the regression line.
+    geotransform : tuple
+        Geotransform information.
                     
-    rvalue :        float or ndarray
-                    correlation coefficient
+    projection : tuple
+        Projection information.
                     
-    pvalue :        float or ndarray
-                    two-sided p-value for a hypothesis test whose null 
-                    hypothesis is that the slope is zero.
+    pixel_width : int, float or tuple
+        Pixel width size.
                     
-    stderr :        float or ndarray
-                    Standard error of the estimated gradient.
+    pixel_height : int, float or tuple
+        Pixel height size.
 
+    origin_x : int or tuple
+        Origin x coordinate.
+
+    origin_y : int or tuple
+        Origin y coordinate.
+        
+    dataset : gdal_object
+        gdal.Open instance.
+        
+    bands : int or tuple
+        Image bands.
+
+    np_dtype : np.dtype
+        Numpy datatype.
+        
+    gdal_dtype : gdal.dtype
+        Gdal datatype.
+     
+    working_dir : str
+        Workind directory. 
+        
     Notes
     -----
     There may be additional attributes not listed above depending of the
-    specific solver. Since this class is essentially a subclass of dict
+    specific module. Since this class is essentially a subclass of dict
     with attribute accessors, one can see which attributes are available
     using the `keys()` method.
     """
@@ -105,11 +123,12 @@ def subset (data, x, y):
     
     Parameters
     ----------
-    data:            array
-                     Data to subset.
+    data : array
+        Data to subset.
     
-    area:            tuple with lists
-                     Subset coordinates like ([450,477], [0,10]).
+    area : tuple with lists
+        Subset coordinates like (... x = [450,477], y = [0,10]).
+
     Returns
     -------
     array_like
@@ -131,7 +150,7 @@ def subset (data, x, y):
 
     return data
 
-# ------- Data Tests ------- #
+# ------- Data and Executable Tests ------- #
 def test_data(data, verbose=1):
     """Data Test
     Test if the imported data fulfilled the requirements. Requires a ImportResult class instance
@@ -175,3 +194,37 @@ def test_string(data):
 
 def test_tuple(data):
     return isinstance(data, tuple)
+
+def check_executable(name):
+    """Check whether executable is on PATH."""
+    from distutils.spawn import find_executable
+    
+    executable_list = []
+    if test_tuple(name):
+        for item in name:
+            executable_temp = find_executable(item) is not None
+            executable_list.append(executable_temp)
+            
+        return np.any(np.asarray(executable_list) == True)
+    
+    else:
+        return find_executable(name) is not None
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
