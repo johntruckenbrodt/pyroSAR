@@ -1264,6 +1264,7 @@ class TSX(ID):
         self._unpack(outdir, offset=header, overwrite=overwrite)
 
 
+# todo: handle error in case of parallel access: 'pysqlite2.dbapi2.OperationalError: database is locked'
 class Archive(object):
     """
     Utility for storing SAR image metadata in a spatialite database
@@ -1444,9 +1445,13 @@ class Archive(object):
         if not os.access(directory, os.W_OK):
             raise RuntimeError('directory cannot be written to')
         failed = []
+        double = []
         pbar = pb.ProgressBar(maxval=len(scenelist)).start()
         for i, scene in enumerate(scenelist):
             new = os.path.join(directory, os.path.basename(scene))
+            if os.path.isfile(new):
+                double.append(new)
+                continue
             try:
                 shutil.move(scene, directory)
             except shutil.Error:
@@ -1468,8 +1473,10 @@ class Archive(object):
         pbar.finish()
         if len(failed) > 0:
             print('the following scenes could not be moved:\n{}'.format('\n'.join(failed)))
+        if len(double) > 0:
+            print('the following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
 
-    def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None, recursive=False, polarizations=None, **args):
+    def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None, recursive=False, polarizations=None, verbose=False, **args):
         """
         select scenes from the database
 
@@ -1501,13 +1508,13 @@ class Archive(object):
                 arg_format.append('start>=?')
                 vals.append(mindate)
             else:
-                print('argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
+                print('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
         if maxdate:
             if re.search('[0-9]{8}T[0-9]{6}', maxdate):
                 arg_format.append('stop<=?')
                 vals.append(maxdate)
             else:
-                print('argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
+                print('WARNING: argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
 
         if polarizations:
             for pol in polarizations:
@@ -1521,14 +1528,15 @@ class Archive(object):
                 arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
                 vals.append(site_geom)
             else:
-                print('argument vectorobject is ignored, must be of type spatial.vector.Vector')
+                print('WARNING: argument vectorobject is ignored, must be of type spatial.vector.Vector')
 
         query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
-        print(query)
+        if verbose:
+            print(query)
         cursor = self.conn.execute(query, tuple(vals))
-        if processdir:
-            scenes = [x for x in cursor.fetchall()
-                      if len(finder(processdir, [x[1]], regex=True, recursive=recursive)) == 0]
+        if processdir and os.path.isdir(processdir):
+                scenes = [x for x in cursor.fetchall()
+                          if len(finder(processdir, [x[1]], regex=True, recursive=recursive)) == 0]
         else:
             scenes = cursor.fetchall()
         return [x[0].encode('ascii') for x in scenes]
