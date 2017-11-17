@@ -41,23 +41,30 @@ def gammaErrorHandler(out, err):
                    'calloc_1d: number of elements <= 0': ValueError,
                    'multi-look output line:': RuntimeError,
                    'no OPOD state vector found with the required start time!': RuntimeError,
-                   'gc_map operates only with slant range geometry, image geometry in SLC_par: GROUND_RANGE': RuntimeError}
+                   'gc_map operates only with slant range geometry, image geometry in SLC_par: GROUND_RANGE': RuntimeError,
+                   'OPOD state vector data ends before start of the state vector time window': RuntimeError}
 
-    # raise a known error or GammaUnknownError
+    # check if the error message is known and throw the mapped error from knownErrors accordingly.
+    # Otherwise throw an GammaUnknownError.
+    # The actual message is passed to the error and thus visible for backtracing
     if len(errormessages) > 0:
         errormessage = errormessages[-1]
+        err_out = re.sub('ERROR:[ ]*', '', errormessage)
         for error in knownErrors:
             if re.search(error, errormessage):
                 errortype = knownErrors[error]
                 if errortype:
-                    raise knownErrors[error](errormessage)
+                    raise errortype(err_out)
                 else:
                     return
-        raise GammaUnknownError(errormessage)
+        raise GammaUnknownError(err_out)
 
 
-# this is a general error, which is raised if the error message is not yet integrated into the known errors of function gammaErrorHandler
-# if this error occurs the message should be included in function gammaErrorHandler
 class GammaUnknownError(Exception):
+    """
+    This is a general error, which is raised if the error message is not yet integrated
+    into the known errors of function gammaErrorHandler.
+    If this error occurs the message should be included in function gammaErrorHandler.
+    """
     def __init__(self, errormessage):
         Exception.__init__(self, errormessage)
