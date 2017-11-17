@@ -616,8 +616,6 @@ class CEOS_PSR(ID):
             except IOError as e:
                 if i + 1 == len(patterns):
                     raise e
-                else:
-                    continue
 
         self.meta = self.scanMetadata()
 
