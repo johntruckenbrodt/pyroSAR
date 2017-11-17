@@ -6,6 +6,7 @@ Created on Thu Nov 09 11:42:39 2017
 """
 from __future__ import division
 import numpy as np
+from pathlib import Path
 
 # ------- Result and Memorize Classes ------- #
 class Memorize(dict):
@@ -210,9 +211,18 @@ def check_executable(name):
     else:
         return find_executable(name) is not None
 
-
-
-
+def check_is_file(files):
+    # This is only temporary. Insert here the DIR path with DEMs.
+    dir_name = "C:\\Users\\ibari\\Documents"
+    files = Path(dir_name + '\\' + files)
+    try:
+        my_abs_path = files.resolve()
+    except WindowsError:
+        
+        # Maybe Download the DEM File?
+        print ("File doesn´t exist")# doesn't exist
+    else:
+        print ("File exist")
 
 
 
