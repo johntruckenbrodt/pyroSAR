@@ -42,14 +42,15 @@ def gammaErrorHandler(out, err):
                    'multi-look output line:': RuntimeError,
                    'no OPOD state vector found with the required start time!': RuntimeError,
                    'gc_map operates only with slant range geometry, image geometry in SLC_par: GROUND_RANGE': RuntimeError,
-                   'OPOD state vector data ends before start of the state vector time window': RuntimeError}
+                   'OPOD state vector data ends before start of the state vector time window': RuntimeError,
+                   'non-zero exit status': RuntimeError}
 
     # check if the error message is known and throw the mapped error from knownErrors accordingly.
     # Otherwise throw an GammaUnknownError.
     # The actual message is passed to the error and thus visible for backtracing
     if len(errormessages) > 0:
         errormessage = errormessages[-1]
-        err_out = re.sub('ERROR:[ ]*', '', errormessage)
+        err_out = '\n\n'.join([re.sub('ERROR[: ]*', '', x) for x in errormessages])
         for error in knownErrors:
             if re.search(error, errormessage):
                 errortype = knownErrors[error]
