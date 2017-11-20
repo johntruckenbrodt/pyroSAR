@@ -42,7 +42,7 @@ class Test_Metadata():
 
 def test_identify_fail():
     with pytest.raises(IOError):
-        pyroSAR.identify("")
+        pyroSAR.identify("/")
 
 def test_export2dict():
     pass
