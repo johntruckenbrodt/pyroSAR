@@ -54,7 +54,11 @@ __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode
 
 
 def identify(scene):
-    """Return a metadata handler of the given scene."""
+    """
+    Return a metadata handler of the given scene
+    :param scene: a file name
+    :return: a pyroSAR metadata handler
+    """
     for handler in ID.__subclasses__():
         try:
             return handler(scene)
@@ -65,7 +69,10 @@ def identify(scene):
 
 def identify_many(scenes):
     """
-    return metadata handlers of all valid scenes in a list
+    return metadata handlers of all valid scenes in a list, similar to function identify
+    prints a progressbar
+    :param scenes: a list of file names
+    :return: a list of pyroSAR metadata handlers
     """
     idlist = []
     pbar = pb.ProgressBar(maxval=len(scenes)).start()
@@ -88,6 +95,10 @@ def filter_processed(scenelist, outdir, recursive=False):
     filter a list of pyroSAR objects to those that have not yet been processed and stored in the defined directory
     the search for processed scenes is either done in the directory only or recursively into subdirectories
     the scenes must have been processed with pyroSAR in order to follow the right naming scheme
+    :param scenelist: a list of pyroSAR objects
+    :param outdir: the processing directory
+    :param recursive: scan outdir recursively into subdirectories?
+    :return: a list of those scenes, which have not been processed yet
     """
     return [x for x in scenelist if not x.is_processed(outdir, recursive)]
 
@@ -152,6 +163,13 @@ class ID(object):
             archive.insert(self)
 
     def examine(self, include_folders=False):
+        """
+        check whether any items in the SAR scene structure match the regular expression pattern defined by the class
+
+        :param include_folders: also match folder (or just files)?
+        :return: None
+        :raises: IOError
+        """
         files = self.findfiles(self.pattern, include_folders=include_folders)
         if len(files) == 1:
             self.file = files[0]
@@ -161,6 +179,13 @@ class ID(object):
             raise IOError('file ambiguity detected:\n{}'.format('\n'.join(files)))
 
     def findfiles(self, pattern, include_folders=False):
+        """
+        find files in the scene archive, which match a pattern
+
+        :param pattern: the regular expression to match
+        :param include_folders: also match folder (or just files)?
+        :return a list of file names
+        """
         if os.path.isdir(self.scene):
             files = finder(self.scene, [pattern], regex=True, foldermode=1 if include_folders else 0)
             if re.search(pattern, os.path.basename(self.scene)) and include_folders:
@@ -186,10 +211,9 @@ class ID(object):
 
     def gdalinfo(self, scene):
         """
-        Args:
-            scene: an archive containing a SAR scene
-
-        returns a dictionary of metadata attributes
+        read metadata directly from the GDAL SAR image drivers
+        :param scene: an archive containing a SAR scene
+        :return a dictionary of metadata attributes
         """
         self.scene = os.path.realpath(scene)
         files = self.findfiles('(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)')
@@ -231,6 +255,11 @@ class ID(object):
 
     @abc.abstractmethod
     def getCorners(self):
+        """
+        abstract method for deriving the corner coordinates from a SAR scene
+        to be implemented by individual format drivers
+        :return dictionary with keys xmin, xmax, ymin and ymax
+        """
         raise NotImplementedError
 
     def getFileObj(self, filename):
@@ -239,6 +268,9 @@ class ID(object):
         if the scene is unpacked this will be a regular 'file' object
         for a tarfile this is an object of type 'tarfile.ExtFile'
         for a zipfile this is an StringIO object (the zipfile.ExtFile object does not support setting file pointers via function 'seek', which is needed later on)
+
+        :param filename a name of a file in the scene archive, easiest to get with method ID.findfiles
+        :return: a regular file object or tarfile.ExtFile or StringIO
         """
         membername = filename.replace(self.scene, '').strip('/')
 
@@ -260,6 +292,12 @@ class ID(object):
         return obj
 
     def getGammaImages(self, directory=None):
+        """
+        list all files processed by GAMMA
+        :param directory: the directory to be scanned; if left empty self.gammadir is scanned
+        :return: a list of images processed by GAMMA
+        :raises IOError
+        """
         if directory is None:
             if hasattr(self, 'gammadir'):
                 directory = self.gammadir
@@ -271,7 +309,8 @@ class ID(object):
 
     def getHGT(self):
         """
-        Returns: names of all SRTM hgt tiles overlapping with the SAR scene
+        get the names of all SRTM HGT tiles overlapping with the SAR scene
+        :return names of the SRTM HGT tiles
         """
 
         corners = self.getCorners()
@@ -293,6 +332,8 @@ class ID(object):
     def is_processed(self, outdir, recursive=False):
         """
         check whether a scene has already been processed and stored in the defined output directory (and subdirectories if recursive)
+        :param outdir the directory to be checked
+        :return does an image matching the scene pattern exist?
         """
         if os.path.isdir(outdir):
             # '{}.*tif$'.format(self.outname_base())
@@ -301,6 +342,10 @@ class ID(object):
             return False
 
     def outname_base(self):
+        """
+        parse a string containing basic information about the scene in standardized format
+        :return: a standardized name string unique to the scene
+        """
         fields = ('{:_<4}'.format(self.sensor),
                   '{:_<4}'.format(self.acquisition_mode),
                   self.orbit,
@@ -311,6 +356,8 @@ class ID(object):
     def parse_date(x):
         """
         this function gathers known time formats provided in the different SAR products and converts them to a common standard of the form YYYYMMDDTHHMMSS
+        :param x a string containing the time stamp
+        :return a string containing the converted time stamp in format YYYYmmddTHHMMSS
         """
         # todo: check module time for more general approaches
         for timeformat in ['%d-%b-%Y %H:%M:%S.%f',
@@ -325,23 +372,42 @@ class ID(object):
         raise ValueError('unknown time format; check function ID.parse_date')
 
     def summary(self):
+        """
+        print the standardized set of scene attributes; see ID.__init__ for values
+        :return: None
+        """
         for item in sorted(self.locals):
             print('{0}: {1}'.format(item, getattr(self, item)))
 
     @abc.abstractmethod
     def scanMetadata(self):
+        """
+        abstract method to scan SAR scenes for metadata attributes
+        the returning dictionary is to be registered as attribute meta in the object and is checked by ID.__init__ for
+        a selection of standardized names
+        :return: a dictionary containing the derived attributes
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
     def unpack(self, directory):
+        """
+        abstract method for unpacking SAR scenes into a defined directory
+        this method differs between the individual drivers as the name of the directory is derived
+        from different file/folder names of the scene
+        Furthermore, the individual implementations are required to call ID._unpack to perform the actual unpacking
+        once the name and folder structure are determined
+        :param directory: the directory to which the scene is unpacked
+        :return: None
+        """
         raise NotImplementedError
 
     # todo: replace with functionality from module archivist
     def _unpack(self, directory, offset=None, overwrite=False):
         """
-        general function for unpacking scene archives
+        general function for unpacking scene archives; to be called by implementations of ID.unpack
         :param directory: the name of the directory in which the files are written
-        :param offset: an archive directory offset; to be define if only a subdirectory is to be unpacked (see e.g. TSX:unpack)
+        :param offset: an archive directory offset; to be defined if only a subdirectory is to be unpacked (see e.g. TSX:unpack)
         :param overwrite: should an existing directory be overwritten?
         :return: None
         """
@@ -637,7 +703,7 @@ class CEOS_PSR(ID):
         text = summary_file.read().strip()
         summary_file.close()
         summary = ast.literal_eval('{"' + re.sub('\s*=', '":', text).replace('\n', ',"') + '}')
-        for x, y in summary.iteritems():
+        for x, y in summary.items():
             summary[x] = parse_literal(y)
         return summary
 
