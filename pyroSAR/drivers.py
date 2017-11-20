@@ -1227,6 +1227,8 @@ class SAFE(ID):
         meta['sensor'] = tree.find('.//safe:familyName', namespaces).text.replace('ENTINEL-', '') + tree.find(
             './/safe:number', namespaces).text
         meta['IPF_version'] = float(tree.find('.//safe:software', namespaces).attrib['version'])
+        meta['sliceNumber'] = int(tree.find('.//s1sarl1:sliceNumber', namespaces).text)
+        meta['totalSlices'] = int(tree.find('.//s1sarl1:totalSlices', namespaces).text)
 
         return meta
 
