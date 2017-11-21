@@ -7,7 +7,7 @@ Created on Thu Nov 09 11:42:39 2017
 from __future__ import division
 import numpy as np
 from pathlib import Path
-from shutil import copy2
+#from shutil import copy2
 import os
 
 # ------- Result and Memorize Classes ------- #
@@ -232,10 +232,8 @@ def read_snap_directory_etc(name):
             print('etc path does not exist.')
             return None
     
-def check_is_file(files):
-    # This is only temporary. Insert here the DIR path with DEMs.
-    dir_name = "C:\\Users\\ibari\\Documents"
-    files = Path(dir_name + '\\' + files)
+def check_file_exist(files, path):
+    files = Path(path + '\\' + files)
     try:
         my_abs_path = files.resolve()
     except WindowsError:
