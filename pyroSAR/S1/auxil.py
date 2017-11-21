@@ -60,7 +60,7 @@ def init_parser():
 
 def deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False, path_log=None):
     """
-    debursting of S1 SLC imagery
+    debursting of S1 SLC imagery in GAMMA
     the procedure consists of two steps. First antenna pattern deramping and then mosaicing of the single deramped bursts
     for mosaicing, the burst boundaries are calculated from the number of looks in range (rlks) and azimuth (azlks), in this case 5 range looks and 1 azimuth looks.
     Alternately 10 range looks and 2 azimuth looks could be used.
