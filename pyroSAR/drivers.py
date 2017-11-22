@@ -45,6 +45,7 @@ except ImportError:
     import sqlite3
 
 from . import linesimplify as ls
+from .S1 import OSV
 from . import spatial
 from .ancillary import finder, parse_literal, urlQueryParser, run
 from .xml_util import getNamespaces
@@ -1169,34 +1170,15 @@ class SAFE(ID):
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
 
-    def getOSV(self, outdir):
+    def getOSV(self, outdir, type='POE'):
         date = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
 
-        before = (date - timedelta(days=1)).strftime('%Y-%m-%d')
-        after = (date + timedelta(days=1)).strftime('%Y-%m-%d')
+        before = (date - timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
+        after = (date + timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
 
-        query = dict()
-        query['mission'] = self.sensor
-        query['validity_start_time'] = '{0}..{1}'.format(before, after)
-
-        remote_poe = 'https://qc.sentinel1.eo.esa.int/aux_poeorb/'
-
-        pattern = 'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
-
-        sslcontext = ssl._create_unverified_context()
-
-        subaddress = urlQueryParser(remote_poe, query)
-        response = urlopen(subaddress, context=sslcontext).read()
-        remotes = [os.path.join(remote_poe, x) for x in sorted(set(re.findall(pattern, response)))]
-
-        if not os.access(outdir, os.W_OK):
-            raise RuntimeError('insufficient directory permissions, unable to write')
-        downloads = [x for x in remotes if not os.path.isfile(os.path.join(outdir, os.path.basename(x)))]
-        for item in downloads:
-            infile = urlopen(item, context=sslcontext)
-            with open(os.path.join(outdir, os.path.basename(item)), 'wb') as outfile:
-                outfile.write(infile.read())
-            infile.close()
+        with OSV(outdir) as osv:
+            files = osv.catch(type, before, after)
+            osv.retrieve(files)
 
     def scanMetadata(self):
         """
