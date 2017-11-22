@@ -20,6 +20,7 @@ else:
 from osgeo import ogr
 
 from .. import envi
+from ..S1 import OSV
 from ..drivers import *
 from ..spatial import haversine
 
@@ -59,6 +60,7 @@ def calibrate(id, directory, replace=False):
         raise NotImplementedError('calibration for class {} is not implemented yet'.format(type(id).__name__))
 
 
+# todo integrate parameter logpath
 def convert2gamma(id, directory, S1_noiseremoval=True):
     """
     general function for converting SAR images to Gamma format
@@ -195,7 +197,15 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
         raise NotImplementedError('conversion for class {} is not implemented yet'.format(type(id).__name__))
 
 
-def correctOSV(id, osvdir=None):
+def correctOSV(id, osvdir=None, logpath=None, osvType='POE'):
+    """
+    correct GAMMA parameter files with orbit state vector information from dedicated OSV files
+    :param id: a pyroSAR.ID object
+    :param osvdir: the directory of OSV files; subdirectories POEORB and RESORB are created automatically
+    :param logpath: a path to write logfiles to
+    :param osvType: the type of orbit file either 'POE', 'RES' or a list of both
+    :return: None
+    """
 
     if not isinstance(id, ID):
         raise IOError('id must be of type pyroSAR.ID')
@@ -203,21 +213,26 @@ def correctOSV(id, osvdir=None):
     if id.sensor not in ['S1A', 'S1B']:
         raise IOError('this method is currently only available for Sentinel-1. Please stay tuned...')
 
-    logdir = os.path.join(id.scene, 'logfiles')
-    if not os.path.isdir(logdir):
-        os.makedirs(logdir)
+    if not os.path.isdir(logpath):
+        os.makedirs(logpath)
+
     if osvdir is None:
         osvdir = os.path.join(id.scene, 'osv')
-    if not os.path.isdir(osvdir):
-        os.makedirs(osvdir)
-    try:
-        id.getOSV(osvdir)
-    except URLError:
-        print('..no internet access')
+        if not os.path.isdir(osvdir):
+            os.makedirs(osvdir)
+        try:
+            id.getOSV(osvdir, osvType)
+        except URLError:
+            print('..no internet access')
 
-    if isinstance(id, SAFE):
-        for image in id.getGammaImages(id.scene):
-            process(['OPOD_vec', image + '.par', osvdir], outdir=logdir)
+    for image in id.getGammaImages(id.scene):
+        par = ISPPar(image + '.par')
+        timestamp = datetime(*map(int, par.date)).strftime('%Y%m%dT%H%M%S')
+        with OSV(osvdir) as osv:
+            osvfile = osv.match(timestamp, osvType)
+        if not osvfile:
+            raise RuntimeError('no Orbit State Vector file found')
+        process(['S1_OPOD_vec', image + '.par', osvfile], outdir=logpath)
     else:
         raise NotImplementedError('OSV refinement for class {} is not implemented yet'.format(type(id).__name__))
 
@@ -277,7 +292,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if sarSimCC:
         raise IOError('geocoding with cross correlation offset refinement is still in the making. Please stay tuned...')
 
-    for dir in [tempdir, outdir]:
+    logdir = os.path.join(scene.scene, 'logfiles')
+
+    for dir in [tempdir, outdir, logdir]:
         if not os.path.isdir(dir):
             os.makedirs(dir)
 
@@ -311,7 +328,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if scene.sensor in ['S1A', 'S1B']:
         print('updating orbit state vectors..')
         try:
-            correctOSV(scene, osvdir)
+            correctOSV(scene, osvdir, logdir)
         except RuntimeError:
             return
 
@@ -477,3 +494,38 @@ def multilook(infile, outfile, targetres):
         # multilooking for MLI images
         process(['multi_look_MLI', infile, infile + '.par', outfile, outfile + '.par', rlks, azlks])
     envi.hdr(outfile + '.par')
+
+
+def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False, path_log=None):
+    """
+    debursting of S1 SLC imagery in GAMMA
+    the procedure consists of two steps. First antenna pattern deramping and then mosaicing of the single deramped bursts
+    for mosaicing, the burst boundaries are calculated from the number of looks in range (rlks) and azimuth (azlks), in this case 5 range looks and 1 azimuth looks.
+    Alternately 10 range looks and 2 azimuth looks could be used.
+    if replace is set to True, the original files will be deleted
+    """
+    for burst in [burst1, burst2, burst3]:
+        if not os.path.isfile(burst) or not os.path.isfile(burst + '.par') or not os.path.isfile(burst + '.tops_par'):
+            raise IOError('input files missing; parameter files must be named e.g. {burst1}.par and {burst1}.tops_par')
+    outpath = os.path.dirname(name_out)
+    if not os.path.isdir(outpath):
+        os.makedirs(outpath)
+    tab_in = os.path.join(outpath, 'tab_deramp1')
+    tab_out = os.path.join(outpath, 'tab_deramp2')
+    with open(tab_in, 'w') as out1:
+        with open(tab_out, 'w') as out2:
+            for item in [burst1, burst2, burst3]:
+                out1.write(item + '\t' + item + '.par\t' + item + '.tops_par\n')
+                out2.write(item + '_drp\t' + item + '_drp.par\t' + item + '_drp.tops_par\n')
+    process(['SLC_deramp_S1_TOPS', tab_in, tab_out, 0, 0], logpath=path_log)
+    process(['SLC_mosaic_S1_TOPS', tab_out, name_out, name_out + '.par', rlks, azlks], logpath=path_log)
+
+    if replace:
+        for item in [burst1, burst2, burst3]:
+            for subitem in [item + x for x in ['', '.par', '.tops_par']]:
+                os.remove(subitem)
+    for item in [burst1, burst2, burst3]:
+        for subitem in [item + x for x in ['_drp', '_drp.par', '_drp.tops_par']]:
+            os.remove(subitem)
+    os.remove(tab_in)
+    os.remove(tab_out)
