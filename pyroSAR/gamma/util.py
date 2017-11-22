@@ -297,9 +297,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if sarSimCC:
         raise IOError('geocoding with cross correlation offset refinement is still in the making. Please stay tuned...')
 
-    logdir = os.path.join(scene.scene, 'logfiles')
-
-    for dir in [tempdir, outdir, logdir]:
+    for dir in [tempdir, outdir]:
         if not os.path.isdir(dir):
             os.makedirs(dir)
 
@@ -322,6 +320,10 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     else:
         scene.scene = os.path.join(tempdir, os.path.basename(scene.file))
         os.makedirs(scene.scene)
+
+    logdir = os.path.join(scene.scene, 'logfiles')
+    if not os.path.isdir(logdir):
+        os.makedirs(logdir)
 
     if scene.sensor in ['S1A', 'S1B']:
         print('removing border noise..')
