@@ -186,19 +186,29 @@ class OSV(object):
     def match(self, timestamp, type='POE'):
         """
         return the corresponding OSV file for the provided time stamp
-
+        the file return is on which covers the acquisition time and, if multiple exist, the one which was published last
+        in case a list of options is provided as type, the file of higher accuracy (i.e. POE over RES) is returned
+        :param timestamp: a string in the format 'YYYmmddTHHMMSS'
+        :param type: the type of orbit file either 'POE', 'RES' or a list of both
+        :return: the best matching orbit file
         """
         # list all locally existing files of the defined type
-        locals = self.getLocals(type)
-        # filter the files to those which contain data for the defined time stamp
-        files = [x for x in locals if self.date(x, 'start') <= timestamp <= self.date(x, 'stop')]
-        if len(files) > 0:
-            # select the file which was published last
-            best = self.sortByDate(files, 'publish')[-1]
+        if type in ['POE', 'RES']:
+            locals = self.getLocals(type)
+            # filter the files to those which contain data for the defined time stamp
+            files = [x for x in locals if self.date(x, 'start') <= timestamp <= self.date(x, 'stop')]
+            if len(files) > 0:
+                # select the file which was published last
+                best = self.sortByDate(files, 'publish')[-1]
+                return best
+            elif len(files) == 1:
+                return files[0]
+            return None
+        elif sorted(type) == ['POE', 'RES']:
+            best = self.match(timestamp, 'POE')
+            if not best:
+                best = self.match(timestamp, 'RES')
             return best
-        elif len(files) == 1:
-            return files[0]
-        return None
 
     def retrieve(self, files):
         """
