@@ -17,8 +17,7 @@ import ssl
 import time
 from datetime import datetime
 
-from .. import gamma
-from ..ancillary import finder, dissolve
+from ..ancillary import finder
 
 try:
     import argparse
@@ -58,41 +57,8 @@ def init_parser():
     return parser
 
 
-def deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False, path_log=None):
-    """
-    debursting of S1 SLC imagery in GAMMA
-    the procedure consists of two steps. First antenna pattern deramping and then mosaicing of the single deramped bursts
-    for mosaicing, the burst boundaries are calculated from the number of looks in range (rlks) and azimuth (azlks), in this case 5 range looks and 1 azimuth looks.
-    Alternately 10 range looks and 2 azimuth looks could be used.
-    if replace is set to True, the original files will be deleted
-    """
-    for burst in [burst1, burst2, burst3]:
-        if not os.path.isfile(burst) or not os.path.isfile(burst + '.par') or not os.path.isfile(burst + '.tops_par'):
-            raise IOError('input files missing; parameter files must be named e.g. {burst1}.par and {burst1}.tops_par')
-    outpath = os.path.dirname(name_out)
-    if not os.path.isdir(outpath):
-        os.makedirs(outpath)
-    tab_in = os.path.join(outpath, 'tab_deramp1')
-    tab_out = os.path.join(outpath, 'tab_deramp2')
-    with open(tab_in, 'w') as out1:
-        with open(tab_out, 'w') as out2:
-            for item in [burst1, burst2, burst3]:
-                out1.write(item + '\t' + item + '.par\t' + item + '.tops_par\n')
-                out2.write(item + '_drp\t' + item + '_drp.par\t' + item + '_drp.tops_par\n')
-    gamma.process(['SLC_deramp_S1_TOPS', tab_in, tab_out, 0, 0], logpath=path_log)
-    gamma.process(['SLC_mosaic_S1_TOPS', tab_out, name_out, name_out + '.par', rlks, azlks], logpath=path_log)
-
-    if replace:
-        for item in [burst1, burst2, burst3]:
-            for subitem in [item + x for x in ['', '.par', '.tops_par']]:
-                os.remove(subitem)
-    for item in [burst1, burst2, burst3]:
-        for subitem in [item + x for x in ['_drp', '_drp.par', '_drp.tops_par']]:
-            os.remove(subitem)
-    os.remove(tab_in)
-    os.remove(tab_out)
-
-
+# todo check existence not by file name but by start and stop time; files are sometimes re-published
+# todo consider handling with only one directory
 class OSV(object):
     """
     interface for management of S1 Orbit State Vector (OSV) files
@@ -106,13 +72,11 @@ class OSV(object):
     using function 'match' the corresponding POE (priority) or RES file is returned for a timestamp
     timestamps are always handled in the format YYYYMMDDThhmmss
     """
-    def __init__(self, outdir_poe, outdir_res):
+    def __init__(self, osvdir):
         self.remote_poe = 'https://qc.sentinel1.eo.esa.int/aux_poeorb/'
         self.remote_res = 'https://qc.sentinel1.eo.esa.int/aux_resorb/'
-        if outdir_poe == outdir_res:
-            raise IOError('POE and RES directories must be different')
-        self.outdir_poe = outdir_poe
-        self.outdir_res = outdir_res
+        self.outdir_poe = os.path.join(osvdir, 'POEORB')
+        self.outdir_res = os.path.join(osvdir, 'RESORB')
         self.pattern = 'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
         self.pattern_fine = 'S1[AB]_OPER_AUX_(?P<type>(?:POE|RES)ORB)_OPOD_(?P<publish>[0-9]{8}T[0-9]{6})_V(?P<start>[0-9]{8}T[0-9]{6})_(?P<stop>[0-9]{8}T[0-9]{6})\.EOF'
         self.sslcontext = ssl._create_unverified_context()
@@ -219,29 +183,41 @@ class OSV(object):
         files = finder(directory, [self.pattern], regex=True)
         return min([self.date(x, datetype) for x in files]) if len(files) > 0 else None
 
-    def match(self, timestamp):
+    def match(self, timestamp, type='POE'):
         """
         return the corresponding OSV file for the provided time stamp
+
         """
-        for item in dissolve([self.getLocals('POE'), self.getLocals('RES')]):
-            if self.date(item, 'start') <= timestamp <= self.date(item, 'stop'):
-                return item
+        # list all locally existing files of the defined type
+        locals = self.getLocals(type)
+        # filter the files to those which contain data for the defined time stamp
+        files = [x for x in locals if self.date(x, 'start') <= timestamp <= self.date(x, 'stop')]
+        if len(files) > 0:
+            # select the file which was published last
+            best = self.sortByDate(files, 'publish')[-1]
+            return best
+        elif len(files) == 1:
+            return files[0]
         return None
 
-    def retrieve(self, files, type='POE'):
+    def retrieve(self, files):
         """
-        download the newest files
+        download a list of remote files
         """
-        address, outdir = self._typeEvaluate(type)
-        if not os.access(outdir, os.W_OK):
-            raise RuntimeError('insufficient directory permissions')
-        downloads = [x for x in files if not os.path.isfile(os.path.join(outdir, os.path.basename(x)))]
-        print('downloading {0} {1} files to {2}'.format(len(downloads), type, outdir))
-        for item in downloads:
-            infile = urlopen(item, context=self.sslcontext)
-            with open(os.path.join(outdir, os.path.basename(item)), 'wb') as outfile:
-                outfile.write(infile.read())
-            infile.close()
+        self._init_dir()
+        for type in ['POE', 'RES']:
+            address, outdir = self._typeEvaluate(type)
+            downloads = [x for x in files
+                         if re.search('{}ORB'.format(type), x) and
+                         not os.path.isfile(os.path.join(outdir, os.path.basename(x)))]
+            for item in downloads:
+                infile = urlopen(item, context=self.sslcontext)
+                with open(os.path.join(outdir, os.path.basename(item)), 'wb') as outfile:
+                    outfile.write(infile.read())
+                infile.close()
+
+    def sortByDate(self, files, datetype='start'):
+        return sorted(files, key=lambda x: self.date(x, datetype))
 
     def update(self, update_res=True):
         """
@@ -256,9 +232,9 @@ class OSV(object):
         except RuntimeError:
             print('no internet connection')
             return
-        self.retrieve(files_poe, 'POE')
+        self.retrieve(files_poe)
         if update_res:
             print('---------------------------------------------------------')
             files_res = self.catch('RES', start=self.maxdate('RES', 'start'))
-            self.retrieve(files_res, 'RES')
+            self.retrieve(files_res)
             self.clean_res()
