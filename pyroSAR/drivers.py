@@ -1170,15 +1170,30 @@ class SAFE(ID):
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
 
-    def getOSV(self, outdir, type='POE'):
+    def getOSV(self, outdir, osvType='POE'):
+        """
+        download Orbit State Vector files for the scene
+        :param outdir: the directory of OSV files; subdirectories POEORB and RESORB are created automatically
+        :param osvType: the type of orbit file either 'POE', 'RES' or a list of both
+        :return: None
+        """
         date = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
 
+        # create a time span with one day before and one after the acquisition
         before = (date - timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
         after = (date + timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
 
-        with OSV(outdir) as osv:
-            files = osv.catch(type, before, after)
-            osv.retrieve(files)
+        # download the files
+        if type in ['POE', 'RES']:
+            with OSV(outdir) as osv:
+                files = osv.catch(osvType, before, after)
+                osv.retrieve(files)
+        elif sorted(type) == ['POE', 'RES']:
+            with OSV(outdir) as osv:
+                files = osv.catch('POE', before, after)
+                if len(files) == 0:
+                    files = osv.catch('RES', before, after)
+                osv.retrieve(files)
 
     def scanMetadata(self):
         """
