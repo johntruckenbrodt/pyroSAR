@@ -226,19 +226,23 @@ def correctOSV(id, osvdir=None, logpath=None, osvType='POE'):
             print('..no internet access')
 
     for image in id.getGammaImages(id.scene):
+        # read parameter file entries int object
         par = ISPPar(image + '.par')
+        # extract acquisition time stamp
         timestamp = datetime(*map(int, par.date)).strftime('%Y%m%dT%H%M%S')
+        # find an OSV file matching the time stamp and defined OSV type(s)
         with OSV(osvdir) as osv:
             osvfile = osv.match(timestamp, osvType)
         if not osvfile:
             raise RuntimeError('no Orbit State Vector file found')
+        # update the GAMMA parameter file with the selected orbit state vectors
         process(['S1_OPOD_vec', image + '.par', osvfile], outdir=logpath)
     else:
         raise NotImplementedError('OSV refinement for class {} is not implemented yet'.format(type(id).__name__))
 
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=2,
-            func_interp=0, nodata=(0, -99), sarSimCC=False, osvdir=None, cleanup=True):
+            func_interp=0, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False, cleanup=True):
     """
     general function for geocoding SAR images with GAMMA
 
@@ -261,7 +265,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         3: nn-thinned
     :param nodata: the nodata values for the output files; defined as a tuple with two values, the first for linear, the second for logarithmic scaling, per default (0, -99)
     :param sarsimulation: perform geocoding with SAR simulation cross correlation? If False, geocoding is performed with the Range-Doppler approach using orbit state vectors
-    :param osvdir:
+    :param osvdir: a directory for Orbit State Vector files; this is currently only used by S1 where two subdirectories POEORB and RESORB are created
+    :param allow_RES_OSV also allow the less accurate RES orbit files to be used? Otherwise the function will raise an error of no POE file exists
     :param cleanup: should all files written to the temporary directory during function execution be deleted after processing?
     :return: None
 
@@ -327,8 +332,12 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
 
     if scene.sensor in ['S1A', 'S1B']:
         print('updating orbit state vectors..')
+        if allow_RES_OSV:
+            osvtype = ['POE', 'RES']
+        else:
+            osvtype = 'POE'
         try:
-            correctOSV(scene, osvdir, logdir)
+            correctOSV(id=scene, osvdir=osvdir, logpath=logdir, osvType=osvtype)
         except RuntimeError:
             return
 
