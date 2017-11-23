@@ -62,7 +62,7 @@ def worker(sitename):
     # as type also 'RES' can be selected. These files are not as precise as POE and thus geocoding might not be
     # quite as accurate
     with OSV(osvdir) as osv:
-        maxdate = osv.maxdate(type='POE', datetype='stop')
+        maxdate = osv.maxdate(osvtype='POE', datetype='stop')
     #######################################################################################
     # define the directories for writing temporary and final results
     sitedir = os.path.join(maindir, sitename)
