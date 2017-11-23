@@ -58,18 +58,14 @@ def init_parser():
 
 
 # todo check existence not by file name but by start and stop time; files are sometimes re-published
-# todo consider handling with only one directory
 class OSV(object):
     """
     interface for management of S1 Orbit State Vector (OSV) files
 
-    input are two directories, one for Precise Orbit Ephemerides (POE) and one for Restituted Orbit (RES) files; these directories are created if they do not exist
-    actions performed upon calling the main function 'update':
-    -the ESA Quality Control (QC) server is checked for any POE files not in the local directory
-    -POE  files on the server and not in the local directory are downloaded
-    -RES files newer than the latest POE file are downloaded; POE files are approximately 18 days behind the actual date, thus RES files can be used instead
-    -delete all RES files for whose date a POE file has become available
-    using function 'match' the corresponding POE (priority) or RES file is returned for a timestamp
+    input is a directory which is to contain, or already contains, OSV files. Two subdirectories are expected and created otherwise:
+    one for Precise Orbit Ephemerides (POE) named POEORB and one for Restituted Orbit (RES) files named RESORB
+
+    using method 'match' the corresponding POE (priority) or RES file is returned for a timestamp
     timestamps are always handled in the format YYYYMMDDThhmmss
     """
     def __init__(self, osvdir):
@@ -78,7 +74,11 @@ class OSV(object):
         self.outdir_poe = os.path.join(osvdir, 'POEORB')
         self.outdir_res = os.path.join(osvdir, 'RESORB')
         self.pattern = 'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
-        self.pattern_fine = 'S1[AB]_OPER_AUX_(?P<type>(?:POE|RES)ORB)_OPOD_(?P<publish>[0-9]{8}T[0-9]{6})_V(?P<start>[0-9]{8}T[0-9]{6})_(?P<stop>[0-9]{8}T[0-9]{6})\.EOF'
+        self.pattern_fine = 'S1[AB]_OPER_AUX_' \
+                            '(?P<type>(?:POE|RES)ORB)_OPOD_' \
+                            '(?P<publish>[0-9]{8}T[0-9]{6})_V' \
+                            '(?P<start>[0-9]{8}T[0-9]{6})_' \
+                            '(?P<stop>[0-9]{8}T[0-9]{6})\.EOF'
         self.sslcontext = ssl._create_unverified_context()
 
     def __enter__(self):
@@ -109,44 +109,67 @@ class OSV(object):
     def catch(self, type='POE', start=None, stop=None):
         """
         check a server for files
+
+        :param type: the type of orbit files required; either 'POE' or 'RES'
+        :param start: (optional) the date to start searching for files
+        :param stop: (optional) the date to stop searching for files
+        :return: a list of remote OSV files
         """
         address, outdir = self._typeEvaluate(type)
         address_parse = urlparse(address)
+        # a dictionary for storing the url arguments
         query = {'page': 1}
+        # the collection of files to be returned
         files = []
+        # set the defined date or the date of the first existing OSV file otherwise
         if start is not None:
             date_start = datetime.strptime(start, '%Y%m%dT%H%M%S').strftime('%Y-%m-%d')
         else:
             date_start = '2014-08-22'
+        # set the defined date or the current date otherwise
         if stop is not None:
             date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S').strftime('%Y-%m-%d')
         else:
             date_stop = time.strftime('%Y-%m-%d')
+
+        # append the time frame to the query dictionary
         query['validity_start_time'] = '{0}..{1}'.format(date_start, date_stop)
         print('searching for new {} files'.format(type))
+        # iterate through the url pages and look for files
         while True:
+            # parse the url
             subaddress = urlunparse(address_parse._replace(query=urlencode(query)))
+            # read the remote content
             try:
                 response = urlopen(subaddress, context=self.sslcontext).read()
                 print(subaddress)
             except IOError as e:
                 raise RuntimeError(e)
+            # list all osv files found on the page
             remotes = [os.path.join(address, x) for x in sorted(set(re.findall(self.pattern, response)))]
+            # do a more accurate filtering of the time stamps
             if start is not None:
                 remotes = [x for x in remotes if self.date(x, 'stop') > start]
+            # filter files already existing in the files collection
             selection = [x for x in remotes if x not in files]
+            # stop the loop if no more files are found on the current url page
             if len(selection) == 0:
                 break
             else:
+                # append the found files to the collection and increment the url page
                 files += selection
                 query['page'] += 1
+        # in case the type 'RES' is selected then only return those files covering
+        # a time period not covered by any POE file
         if type == 'RES':
             files = [x for x in files if self.date(x, 'stop') > self.maxdate('POE', 'stop')]
         return files
 
     def date(self, file, type):
         """
-        extract a date from an OSV file name; types: 'publish', 'start', 'stop'
+        extract a date from an OSV file name
+        :param type the date type to extract; one of 'publish', 'start', 'stop'
+        :return a time stamp in the format YYYYmmddTHHMMSS
         """
         return re.match(self.pattern_fine, os.path.basename(file)).group(type)
 
@@ -233,6 +256,13 @@ class OSV(object):
         """
         perform creating/updating operations for POE and RES files:
         download newest POE and RES files, delete RES files which can be replaced by newly downloaded POE files
+
+        actions performed upon calling the main function 'update':
+        - the ESA Quality Control (QC) server is checked for any POE files not in the local directory
+        - POE  files on the server and not in the local directory are downloaded
+        - RES files newer than the latest POE file are downloaded; POE files are approximately 18 days behind the actual date, thus RES files can be used instead
+        - delete all RES files for whose date a POE file has become available
+
         :param update_res: should the RES files also be updated (or just the POE files)
         :return: None
         """
