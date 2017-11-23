@@ -95,27 +95,29 @@ class OSV(object):
             if not os.path.isdir(dir):
                 os.makedirs(dir)
 
-    def _typeEvaluate(self, type):
+    def _typeEvaluate(self, osvtype):
         """
-        evaluate the 'type' function argument and return the corresponding local directory
+        evaluate the 'osvtype' method argument and return the corresponding remote repository and local directory
+        :param osvtype: the type of orbit files required; either 'POE' or 'RES'
+        :return: the remote repository and local directory of the osv type
         """
-        if type not in ['POE', 'RES']:
+        if osvtype not in ['POE', 'RES']:
             raise IOError('type must be either "POE" or "RES"')
-        if type == 'POE':
+        if osvtype == 'POE':
             return self.remote_poe, self.outdir_poe
         else:
             return self.remote_res, self.outdir_res
 
-    def catch(self, type='POE', start=None, stop=None):
+    def catch(self, osvtype='POE', start=None, stop=None):
         """
         check a server for files
 
-        :param type: the type of orbit files required; either 'POE' or 'RES'
+        :param osvtype: the type of orbit files required; either 'POE' or 'RES'
         :param start: (optional) the date to start searching for files
         :param stop: (optional) the date to stop searching for files
         :return: a list of remote OSV files
         """
-        address, outdir = self._typeEvaluate(type)
+        address, outdir = self._typeEvaluate(osvtype)
         address_parse = urlparse(address)
         # a dictionary for storing the url arguments
         query = {'page': 1}
@@ -134,7 +136,7 @@ class OSV(object):
 
         # append the time frame to the query dictionary
         query['validity_start_time'] = '{0}..{1}'.format(date_start, date_stop)
-        print('searching for new {} files'.format(type))
+        print('searching for new {} files'.format(osvtype))
         # iterate through the url pages and look for files
         while True:
             # parse the url
@@ -161,63 +163,71 @@ class OSV(object):
                 query['page'] += 1
         # in case the type 'RES' is selected then only return those files covering
         # a time period not covered by any POE file
-        if type == 'RES':
+        if osvtype == 'RES':
             files = [x for x in files if self.date(x, 'stop') > self.maxdate('POE', 'stop')]
         return files
 
-    def date(self, file, type):
+    def date(self, file, datetype):
         """
         extract a date from an OSV file name
-        :param type the date type to extract; one of 'publish', 'start', 'stop'
+        :param datetype: one of three possible date types contained in the OSV filename: 'publish', 'start' or 'stop'
         :return a time stamp in the format YYYYmmddTHHMMSS
         """
-        return re.match(self.pattern_fine, os.path.basename(file)).group(type)
+        return re.match(self.pattern_fine, os.path.basename(file)).group(datetype)
 
     def clean_res(self):
         """
         delete all RES files for whose date a POE file exists
         """
         maxdate_poe = self.maxdate('POE', 'stop')
-        depreceated = [x for x in self.getLocals('RES') if self.date(x, 'stop') < maxdate_poe]
-        print('deleting {0} RES files'.format(len(depreceated)))
-        for item in depreceated:
+        deprecated = [x for x in self.getLocals('RES') if self.date(x, 'stop') < maxdate_poe]
+        print('deleting {0} RES files'.format(len(deprecated)))
+        for item in deprecated:
             os.remove(item)
 
-    def getLocals(self, type='POE'):
+    def getLocals(self, osvtype='POE'):
         """
-        get a list of local files
+        get a list of local files of specific type
+        :param osvtype: the type of orbit files required; either 'POE' or 'RES'
+        :return: a list of local OSV files
         """
-        address, directory = self._typeEvaluate(type)
+        address, directory = self._typeEvaluate(osvtype)
         return finder(directory, [self.pattern], regex=True)
 
-    def maxdate(self, type='POE', datetype='stop'):
+    def maxdate(self, osvtype='POE', datetype='stop'):
         """
-        return the latest date of POE/RES files; datetypes: 'publish', 'start', 'stop'
+        return the latest date of locally existing POE/RES files
+        :param osvtype: the type of orbit files required; either 'POE' or 'RES'
+        :param datetype: one of three possible date types contained in the OSV filename: 'publish', 'start' or 'stop'
+        :return: a timestamp in format YYYYmmddTHHMMSS
         """
-        address, directory = self._typeEvaluate(type)
+        address, directory = self._typeEvaluate(osvtype)
         files = finder(directory, [self.pattern], regex=True)
         return max([self.date(x, datetype) for x in files]) if len(files) > 0 else None
 
-    def mindate(self, type='POE', datetype='start'):
+    def mindate(self, osvtype='POE', datetype='start'):
         """
-        return the latest date of POE/RES files; datetypes: 'publish', 'start', 'stop'
+        return the earliest date of locally existing POE/RES files
+        :param osvtype: the type of orbit files required; either 'POE' or 'RES'
+        :param datetype: one of three possible date types contained in the OSV filename: 'publish', 'start' or 'stop'
+        :return: a timestamp in format YYYYmmddTHHMMSS
         """
-        address, directory = self._typeEvaluate(type)
+        address, directory = self._typeEvaluate(osvtype)
         files = finder(directory, [self.pattern], regex=True)
         return min([self.date(x, datetype) for x in files]) if len(files) > 0 else None
 
-    def match(self, timestamp, type='POE'):
+    def match(self, timestamp, osvtype='POE'):
         """
         return the corresponding OSV file for the provided time stamp
         the file return is on which covers the acquisition time and, if multiple exist, the one which was published last
         in case a list of options is provided as type, the file of higher accuracy (i.e. POE over RES) is returned
         :param timestamp: a string in the format 'YYYmmddTHHMMSS'
-        :param type: the type of orbit file either 'POE', 'RES' or a list of both
-        :return: the best matching orbit file
+        :param osvtype: the type of orbit files required; either 'POE', 'RES' or a list of both
+        :return: the best matching orbit file (overlapping time plus latest publication date)
         """
         # list all locally existing files of the defined type
-        if type in ['POE', 'RES']:
-            locals = self.getLocals(type)
+        if osvtype in ['POE', 'RES']:
+            locals = self.getLocals(osvtype)
             # filter the files to those which contain data for the defined time stamp
             files = [x for x in locals if self.date(x, 'start') <= timestamp <= self.date(x, 'stop')]
             if len(files) > 0:
@@ -227,7 +237,7 @@ class OSV(object):
             elif len(files) == 1:
                 return files[0]
             return None
-        elif sorted(type) == ['POE', 'RES']:
+        elif sorted(osvtype) == ['POE', 'RES']:
             best = self.match(timestamp, 'POE')
             if not best:
                 best = self.match(timestamp, 'RES')
@@ -236,6 +246,9 @@ class OSV(object):
     def retrieve(self, files):
         """
         download a list of remote files
+        the files are donwloaded into the respective subdirectories, i.e. POEORB or RESORB
+        :param files: a list of remotely existing OSV files as returned by method catch
+        :return: None
         """
         self._init_dir()
         for type in ['POE', 'RES']:
@@ -250,18 +263,33 @@ class OSV(object):
                 infile.close()
 
     def sortByDate(self, files, datetype='start'):
+        """
+        sort a list of OSV files by a specific date type
+        :param files: some OSV files
+        :param datetype: one of three possible date types contained in the OSV filename: 'publish', 'start' or 'stop'
+        :return: a list of OSV files sorted by the defiend date
+        """
         return sorted(files, key=lambda x: self.date(x, datetype))
 
     def update(self, update_res=True):
         """
+        Caution! This method is intended for downloading all available POE files and all RES files for whose
+        time span no POE file yet exists.
+        This will be a data volume of several GB and is particularly suited for multi-node SAR processing where not
+        all nodes might have internet access and thus all files have to be downloaded before starting the processing.
+
+        If you want to download the OSV file for a single scene either use the respective methods
+        of the SAR drivers (e.g. SAFE.getOSV) or methods catch and retrieve in combination.
+
         perform creating/updating operations for POE and RES files:
         download newest POE and RES files, delete RES files which can be replaced by newly downloaded POE files
 
-        actions performed upon calling the main function 'update':
+        actions performed:
         - the ESA Quality Control (QC) server is checked for any POE files not in the local directory
         - POE  files on the server and not in the local directory are downloaded
-        - RES files newer than the latest POE file are downloaded; POE files are approximately 18 days behind the actual date, thus RES files can be used instead
-        - delete all RES files for whose date a POE file has become available
+        - RES files newer than the latest POE file are downloaded; POE files are approximately 18 days behind
+          the actual date, thus RES files can be used instead
+        - delete all RES files for whose date a POE file now exists locally
 
         :param update_res: should the RES files also be updated (or just the POE files)
         :return: None
