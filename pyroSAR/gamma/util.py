@@ -447,6 +447,10 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
 def ovs(parfile, targetres):
     """
     compute DEM oversampling factors for a target resolution in meters
+
+    :param parfile: a GAMMA DEM parameter file
+    :param targetres: the target resolution in meters
+    :return: two oversampling factors for latitude and longitude
     """
     # read DEM parameter file
     dempar = ISPPar(parfile)
@@ -476,13 +480,19 @@ def multilook(infile, outfile, targetres):
     """
     multilooking of SLC and MLI images
 
-    targetres: the target resolution in ground range
-
     if the image is in slant range the ground range resolution is computed by dividing the range pixel spacing by
     the sine of the incidence angle
 
     the looks in range and azimuth are chosen to approximate the target resolution by rounding the ratio between
     target resolution and ground range/azimuth pixel spacing to the nearest integer
+
+    an ENVI HDR parameter file is automatically written for better handling on other software
+
+    :param infile a SAR image in GAMMA format with a parameter file of name <infile>.par
+    :param outfile the name of the output GAMMA file
+    :param targetres: the target resolution in ground range
+
+
     """
     # read the input parameter file
     par = ISPPar(infile + '.par')
