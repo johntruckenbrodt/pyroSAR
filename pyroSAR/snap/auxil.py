@@ -17,8 +17,11 @@ import zipfile as zf
 from ftplib import FTP
 from time import strftime, gmtime
 from xml.dom import minidom
+import numpy as np
+from distutils.spawn import find_executable
 
 import pyroSAR
+from pyroSAR.snap import SNAP_EXECUTABLE
 from pyroSAR import identify
 from pyroSAR.ancillary import dissolve, finder
 from pyroSAR.spatial import gdal_translate
@@ -35,8 +38,7 @@ suffix_lookup = {'Apply-Orbit-File': 'orb',
                  'Terrain-Flattening': 'tf',
                  'Read': '',
                  'Write': ''}
-
-
+    
 def parse_recipe(name):
     name = name if name.endswith('.xml') else name + '.xml'
     absname = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'recipes', name)
@@ -81,7 +83,17 @@ def getOrbitContentVersions(contentVersion):
         [re.split('\s*=\s*', x.strip('\r')) for x in contentVersion.read().split('\n') if re.search('^[0-9]{4}', x)])
 
 
-def getAuxdata(datasets, scenes, auxDataPath=os.path.join(os.environ['HOME'], '.snap/auxdata')):
+class GetAuxdata:
+    def __init__(self, datasets, scenes):
+        self.datasets = datasets
+        self.scenes = scenes
+        
+def getAuxdata(datasets, scenes):
+    try:
+        auxDataPath=os.path.join(os.environ['HOME'], '.snap/auxdata')
+    except KeyError:
+        auxDataPath=os.path.join(os.environ['USERPROFILE'], '.snap/auxdata')
+        
     scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
     sensors = list(set([scene.sensor for scene in scenes]))
     for dataset in datasets:
@@ -219,3 +231,39 @@ def gpt(xmlfile):
             translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'], 'format': 'GTiff'}
             gdal_translate(item, name_new, translateoptions)
         shutil.rmtree(outname)
+        
+def check_executable(name):
+    """Check whether executable is on PATH."""
+   
+    executable_list = []
+    if isinstance(name, tuple) or isinstance(name, list):
+        for item in name:
+            executable_temp = find_executable(item) is not None
+            executable_list.append(executable_temp)
+            
+        return (np.any(np.asarray(executable_list) == True), 
+               find_executable(name[np.where(np.asarray(executable_list) == True)[0][0]]))
+    
+    else:
+        return find_executable(name) is not None
+
+#def read_auxdata_dem_path(name):
+#    datafile = open(snap_dir_etc(SNAP_EXECUTABLE))
+#    found = False #this isn't really necessary 
+#    for line in datafile:
+#        if blabla in line:
+#            #found = True #not necessary 
+#            return True
+#    return False #because you finished the search without finding anything
+#    
+    
+def snap_dir_etc(name):
+    _, path = check_executable(name)
+    if _:
+        try:
+            result = os.path.join(os.path.join(os.path.dirname(os.path.dirname(path)), 'etc'), [s for s in os.listdir(os.path.join(os.path.dirname(os.path.dirname(path)), 'etc')) if "snap.auxdata.properties" in s][0])
+            
+            return result
+        except:
+            print('etc path does not exist.')
+            return None
