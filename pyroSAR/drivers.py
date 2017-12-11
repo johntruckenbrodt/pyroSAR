@@ -5,8 +5,9 @@
 # John Truckenbrodt, Felix Cremer 2016-2017
 ##############################################################
 """
-this script is intended to contain several SAR scene identifier classes to read basic metadata from the scene
-folders/files, convert to GAMMA format and do simple pre-processing
+This is the core script of package pyroSAR. It contains the drivers for the different SAR image formats and offers
+functionality for retrieving metadata, unpacking images, downloading ancillary files like DEMs and
+Orbit State Vector files as well as archiving scenes in a database.
 """
 from __future__ import print_function
 
@@ -14,10 +15,8 @@ import sys
 
 if sys.version_info >= (3, 0):
     from io import StringIO
-    from urllib.request import urlopen
 else:
     from StringIO import StringIO
-    from urllib2 import urlopen
 
 import abc
 import ast
@@ -25,7 +24,6 @@ import inspect
 import math
 import os
 import re
-import ssl
 import shutil
 import struct
 import tarfile as tf
@@ -47,7 +45,7 @@ except ImportError:
 from . import linesimplify as ls
 from .S1 import OSV
 from . import spatial
-from .ancillary import finder, parse_literal, urlQueryParser, run
+from .ancillary import finder, parse_literal, run
 from .xml_util import getNamespaces
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
