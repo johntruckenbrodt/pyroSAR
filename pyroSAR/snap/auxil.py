@@ -17,27 +17,13 @@ import zipfile as zf
 from ftplib import FTP
 from time import strftime, gmtime
 from xml.dom import minidom
-import numpy as np
-from distutils.spawn import find_executable
+import warnings
 
 import pyroSAR
-from pyroSAR.snap import SNAP_EXECUTABLE
 from pyroSAR import identify
 from pyroSAR.ancillary import dissolve, finder
 from pyroSAR.spatial import gdal_translate
-
-suffix_lookup = {'Apply-Orbit-File': 'orb',
-                 'Calibration': 'cal',
-                 'Cross-Correlation': '',
-                 'LinearToFromdB': 'dB',
-                 'Remove-GRD-Border-Noise': 'bnr',
-                 'SAR-Simulation': '',
-                 'SARSim-Terrain-Correction': 'stc',
-                 'Subset': '',
-                 'Terrain-Correction': 'tc',
-                 'Terrain-Flattening': 'tf',
-                 'Read': '',
-                 'Write': ''}
+from pyroSAR.config import (SNAP_EXECUTABLE, SUFFIX_LOOKUP, ExamineExe)
     
 def parse_recipe(name):
     name = name if name.endswith('.xml') else name + '.xml'
@@ -54,10 +40,9 @@ def parse_node(name):
         tree = ET.fromstring(workflow.read())
     return tree
 
-
 def parse_suffix(workflow):
     nodes = workflow.findall('node')
-    suffix = '_'.join(filter(None, [suffix_lookup[x] for x in [y.attrib['id'] for y in nodes]]))
+    suffix = '_'.join(filter(None, [SUFFIX_LOOKUP[x] for x in [y.attrib['id'] for y in nodes]]))
     return suffix
 
 
@@ -86,7 +71,20 @@ def getOrbitContentVersions(contentVersion):
 class GetAuxdata:
     def __init__(self, datasets, scenes):
         self.datasets = datasets
-        self.scenes = scenes
+        self.scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
+        self.sensors = list(set([scene.sensor for scene in scenes]))
+        
+        try:
+            self.auxDataPath=os.path.join(os.environ['HOME'], '.snap/auxdata')
+        except KeyError:
+            self.auxDataPath=os.path.join(os.environ['USERPROFILE'], '.snap/auxdata')
+    
+    def srtm_1sec_hgt(self):
+        pass
+        # Wird nicht benutzt?
+#        for dataset in self.datasets:
+#            files = [x.replace('hgt', 'SRTMGL1.hgt.zip') for x in
+#                     list(set(dissolve([scene.getHGT() for scene in self.scenes])))]
         
 def getAuxdata(datasets, scenes):
     try:
@@ -232,38 +230,45 @@ def gpt(xmlfile):
             gdal_translate(item, name_new, translateoptions)
         shutil.rmtree(outname)
         
-def check_executable(name):
-    """Check whether executable is on PATH."""
-   
-    executable_list = []
-    if isinstance(name, tuple) or isinstance(name, list):
-        for item in name:
-            executable_temp = find_executable(item) is not None
-            executable_list.append(executable_temp)
-            
-        return (np.any(np.asarray(executable_list) == True), 
-               find_executable(name[np.where(np.asarray(executable_list) == True)[0][0]]))
-    
-    else:
-        return find_executable(name) is not None
-
-#def read_auxdata_dem_path(name):
-#    datafile = open(snap_dir_etc(SNAP_EXECUTABLE))
-#    found = False #this isn't really necessary 
-#    for line in datafile:
-#        if blabla in line:
-#            #found = True #not necessary 
-#            return True
-#    return False #because you finished the search without finding anything
-#    
-    
-def snap_dir_etc(name):
-    _, path = check_executable(name)
-    if _:
+class ExamineSnap(ExamineExe):
+    """
+    Class to check if snap is installed. This will be called with snap.__init__
+    as snap_config. If you are running multiple snap versions or the package can
+    not find the snap executable, you can set an path via: snap_config.set_path("path")
+    """
+    def __init__(self):
+        super(ExamineSnap, self).__init__()
+        
+        # Define exe list
+        self.executable = SNAP_EXECUTABLE
+        
+        # Call proesses
+        self.___pre_process()
+        self.__get_etc()
+    def ___pre_process(self):
         try:
-            result = os.path.join(os.path.join(os.path.dirname(os.path.dirname(path)), 'etc'), [s for s in os.listdir(os.path.join(os.path.dirname(os.path.dirname(path)), 'etc')) if "snap.auxdata.properties" in s][0])
+            self.status = self.check_status(self.executable)
+            self.path = self.get_path(self.executable)
             
-            return result
+        except ValueError:
+            warnings.warn("There are more than one instances installed. Define with one you want to use with snap_config.set_path(...)", Warning)    
+        
+        if self.status:
+            pass
+        else:
+            warnings.warn("Snap is not installed. You can install it on: http://step.esa.int/main/download/. Otherwise not all functions will be working.")
+            
+    def __get_etc(self):
+        try:
+            self.etc = os.path.join(os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc'), [s for s in os.listdir(os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')) if "snap.auxdata.properties" in s][0])
+            self.auxdata=os.listdir(os.path.join(os.path.dirname(os.path.dirname(self.etc)), 'etc'))
+            self.config = os.path.join( self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
+            
         except:
-            print('etc path does not exist.')
-            return None
+            warnings.warn("ETC directory is not existend", Warning)
+
+    def set_path(self, path):
+        self.path = os.path.abspath(path)
+        self.__get_etc()
+        
+        

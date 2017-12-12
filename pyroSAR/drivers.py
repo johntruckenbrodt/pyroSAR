@@ -702,10 +702,12 @@ class CEOS_PSR(ID):
                 nZone = int(mapProjectionData[476:480])
                 dfFalseNorthing = float(mapProjectionData[496:512])
                 if dfFalseNorthing > 0.0:
-                    bNorth = False
+                    # wird auch nicht genutzt?
+#                    bNorth = False
                     epsg = 32700 + nZone
                 else:
-                    bNorth = True
+                    # Wird auch nicht genutzt?
+#                    bNorth = True
                     epsg = 32600 + nZone
                 src_srs.ImportFromEPSG(epsg)
                 # src_srs.SetUTM(nZone,bNorth) #generates WKT that osr.SpatialReference.AutoIdentifyEPSG() doesn't return an EPSG for
@@ -735,16 +737,17 @@ class CEOS_PSR(ID):
 
         p0 = p1
         p1 += ppd_l * ppd_n
-        platformPositionData = led[p0:p1]
+        # Die werden nicht mehr genutzt?
+#        platformPositionData = led[p0:p1]
         p0 = p1
         p1 += adr_l * adr_n
-        attitudeData = led[p0:p1]
+#        attitudeData = led[p0:p1]
         p0 = p1
         p1 += rdr_l * rdr_n
         radiometricData = led[p0:p1]
         p0 = p1
         p1 += dqs_l * dqs_n
-        dataQualitySummary = led[p0:p1]
+#        dataQualitySummary = led[p0:p1]
 
         facilityRelatedData = []
 
@@ -1099,8 +1102,10 @@ class SAFE(ID):
         ras_master = None
         for outband in outband_slaves:
             outband = None
-        for ras in ras_slaves:
-            ras = None
+        
+        # Wird auch nicht mehr genutzt?
+#        for ras in ras_slaves:
+#            ras = None
 
     def getCorners(self):
         coordinates = self.meta['coordinates']
@@ -1571,3 +1576,27 @@ class Archive(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.conn.close()
+
+def findfiles(scene, pattern, include_folders=False):
+    if os.path.isdir(scene):
+        files = finder(scene, [pattern], regex=True, foldermode=1 if include_folders else 0)
+        if re.search(pattern, os.path.basename(scene)) and include_folders:
+            files.append(scene)
+    elif zf.is_zipfile(scene):
+        with zf.ZipFile(scene, 'r') as zip:
+            files = [os.path.join(scene, x) for x in zip.namelist() if
+                     re.search(pattern, os.path.basename(x.strip('/')))]
+            if include_folders:
+                files = [x.strip('/') for x in files]
+            else:
+                files = [x for x in files if not x.endswith('/')]
+    elif tf.is_tarfile(scene):
+        tar = tf.open(scene)
+        files = [x for x in tar.getnames() if re.search(pattern, os.path.basename(x.strip('/')))]
+        if not include_folders:
+            files = [x for x in files if not tar.getmember(x).isdir()]
+        tar.close()
+        files = [os.path.join(scene, x) for x in files]
+    else:
+        files = [scene] if re.search(pattern, scene) else []
+    return files
