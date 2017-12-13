@@ -23,7 +23,7 @@ import pyroSAR
 from pyroSAR import identify
 from pyroSAR.ancillary import dissolve, finder
 from pyroSAR.spatial import gdal_translate
-from pyroSAR.config import (SNAP_EXECUTABLE, SUFFIX_LOOKUP, ExamineExe)
+from pyroSAR.config import (STORAGE, ExamineExe, OS_SYSTEM)
     
 def parse_recipe(name):
     name = name if name.endswith('.xml') else name + '.xml'
@@ -42,7 +42,7 @@ def parse_node(name):
 
 def parse_suffix(workflow):
     nodes = workflow.findall('node')
-    suffix = '_'.join(filter(None, [SUFFIX_LOOKUP[x] for x in [y.attrib['id'] for y in nodes]]))
+    suffix = '_'.join(filter(None, [STORAGE.LOOKUP.suffix[x] for x in [y.attrib['id'] for y in nodes]]))
     return suffix
 
 
@@ -87,9 +87,10 @@ class GetAuxdata:
 #                     list(set(dissolve([scene.getHGT() for scene in self.scenes])))]
         
 def getAuxdata(datasets, scenes):
-    try:
+    if OS_SYSTEM == 'Linux':
         auxDataPath=os.path.join(os.environ['HOME'], '.snap/auxdata')
-    except KeyError:
+        
+    elif OS_SYSTEM == 'Windows':
         auxDataPath=os.path.join(os.environ['USERPROFILE'], '.snap/auxdata')
         
     scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
@@ -239,19 +240,24 @@ class ExamineSnap(ExamineExe):
     def __init__(self):
         super(ExamineSnap, self).__init__()
         
-        # Define exe list
-        self.executable = SNAP_EXECUTABLE
+        if OS_SYSTEM == 'Linux':
+            self.auxdatapath = os.path.join(os.environ['HOME'], '.snap/auxdata')
+            
+        elif OS_SYSTEM == 'Windows':
+            self.auxdatapath = os.path.join(os.environ['USERPROFILE'], '.snap/auxdata')
         
         # Call proesses
         self.___pre_process()
         self.__get_etc()
+        self.__read_config()
+        
     def ___pre_process(self):
         try:
-            self.status = self.check_status(self.executable)
-            self.path = self.get_path(self.executable)
+            self.status = self.check_status(self.SNAP_EXECUTABLE)
+            self.path = self.get_path(self.SNAP_EXECUTABLE)
             
         except ValueError:
-            warnings.warn("There are more than one instances installed. Define with one you want to use with snap_config.set_path(...)", Warning)    
+            warnings.warn("There are more than one instances installed. Define witch one you want to use with snap_config.set_path(...). Otherwise not all functions will be working.", Warning)    
         
         if self.status:
             pass
@@ -260,15 +266,19 @@ class ExamineSnap(ExamineExe):
             
     def __get_etc(self):
         try:
-            self.etc = os.path.join(os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc'), [s for s in os.listdir(os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')) if "snap.auxdata.properties" in s][0])
-            self.auxdata=os.listdir(os.path.join(os.path.dirname(os.path.dirname(self.etc)), 'etc'))
-            self.config = os.path.join( self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
+            self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
+            self.auxdata=os.listdir(self.etc)
+            self.config_path = os.path.join(self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
             
         except:
-            warnings.warn("ETC directory is not existend", Warning)
+            warnings.warn("ETC directory is not existend.", Warning)
 
     def set_path(self, path):
         self.path = os.path.abspath(path)
         self.__get_etc()
-        
-        
+    
+    def __read_config(self):
+        with open(self.config_path) as config:
+            self.config = []
+            for line in config:
+                self.config.append(line)
