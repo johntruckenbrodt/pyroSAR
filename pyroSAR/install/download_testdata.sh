@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 
+mkdir -p $TESTDATA_DIR
+
 cd $TESTDATA_DIR
 
 echo "Start Download forest_brazil"
