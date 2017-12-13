@@ -1,15 +1,22 @@
 import pyroSAR
-import logging
-import unittest
+#import logging
+#import unittest
 import pytest
+import os
+
+testdir = os.getenv("TESTDATA_DIR", "pyroSAR/tests/data/")
 
 testcases = [
-    {"path": "pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip",
+    {"path": os.path.join("pyroSAR/tests/data", "S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip"),
      "compression": "zip",
      "sensor": "S1A",
      "product": "GRD",
      "outname": 'S1A__IW___A_20150222T170750',
-     "orbit": "A"}
+     "orbit": "A"},
+
+    {"path": os.path.join(testdir, "0000022708_001001_ALOS2015976960-140909.zip"),
+     "compression": "zip",
+     "sensor": "ALOS2"}
 ]
 
 @pytest.fixture
@@ -42,7 +49,7 @@ class Test_Metadata():
 
 def test_identify_fail():
     with pytest.raises(IOError):
-        pyroSAR.identify("/")
+        pyroSAR.identify(os.path.join(testdir, 'foobar'))
 
 def test_export2dict():
     pass

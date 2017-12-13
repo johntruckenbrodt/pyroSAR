@@ -12,6 +12,7 @@ env:
     - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
     - GDALINST=$HOME/gdalinstall
     - GDALBUILD=$HOME/gdalbuild
+    - TESTDATA_DIR=$HOME/testdata
   matrix:
    # - GDALVERSION="2.1.3"
     - GDALVERSION="2.2.1"
@@ -42,7 +43,8 @@ install:
   - "if [ \"$GDALVERSION\" == \"trunk\" -o $(gdal-config --version) == \"$GDALVERSION\" ]; then echo \"Using gdal $GDALVERSION\"; else echo \"NOT using gdal $GDALVERSION as expected; aborting\"; exit 1; fi"
   - pip install -r requirements.txt
   - python setup.py install
-
+before_script:
+  - . ./pyroSAR/install/download_testdata.sh
 script:
   - pytest
 

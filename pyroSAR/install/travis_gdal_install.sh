@@ -36,13 +36,11 @@ GDALOPTS="  --with-ogr \
             --without-xerces \
             --without-odbc \
             --with-curl \
-            --without-sqlite3 \
-            --without-dwgdirect \
+            --with-sqlite3 \
             --without-idb \
             --without-sde \
             --without-perl \
             --without-php \
-            --without-ruby \
             --with-python \
             --with-static-proj4=/usr/lib"
 
