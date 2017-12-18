@@ -185,28 +185,7 @@ class ID(object):
         :param include_folders: also match folder (or just files)?
         :return a list of file names
         """
-        if os.path.isdir(self.scene):
-            files = finder(self.scene, [pattern], regex=True, foldermode=1 if include_folders else 0)
-            if re.search(pattern, os.path.basename(self.scene)) and include_folders:
-                files.append(self.scene)
-        elif zf.is_zipfile(self.scene):
-            with zf.ZipFile(self.scene, 'r') as zip:
-                files = [os.path.join(self.scene, x) for x in zip.namelist() if
-                         re.search(pattern, os.path.basename(x.strip('/')))]
-                if include_folders:
-                    files = [x.strip('/') for x in files]
-                else:
-                    files = [x for x in files if not x.endswith('/')]
-        elif tf.is_tarfile(self.scene):
-            tar = tf.open(self.scene)
-            files = [x for x in tar.getnames() if re.search(pattern, os.path.basename(x.strip('/')))]
-            if not include_folders:
-                files = [x for x in files if not tar.getmember(x).isdir()]
-            tar.close()
-            files = [os.path.join(self.scene, x) for x in files]
-        else:
-            files = [self.scene] if re.search(pattern, self.scene) else []
-        return files
+        return findfiles(self.scene, pattern, include_folders)
 
     def gdalinfo(self, scene):
         """
@@ -271,24 +250,7 @@ class ID(object):
         :param filename a name of a file in the scene archive, easiest to get with method ID.findfiles
         :return: a regular file object or tarfile.ExtFile or StringIO
         """
-        membername = filename.replace(self.scene, '').strip('/')
-
-        if os.path.isdir(self.scene):
-            obj = open(filename)
-        elif zf.is_zipfile(self.scene):
-            obj = StringIO()
-            with zf.ZipFile(self.scene, 'r') as zip:
-                obj.write(zip.open(membername).read())
-            obj.seek(0)
-
-        elif tf.is_tarfile(self.scene):
-            obj = StringIO()
-            tar = tf.open(self.scene, 'r:gz')
-            obj.write(tar.extractfile(membername).read())
-            tar.close()
-        else:
-            raise IOError('input must be either a file name or a location in an zip or tar archive')
-        return obj
+        return getFileObj(self.scene, filename)
 
     def getGammaImages(self, directory=None):
         """
@@ -358,17 +320,7 @@ class ID(object):
         :param x a string containing the time stamp
         :return a string containing the converted time stamp in format YYYYmmddTHHMMSS
         """
-        # todo: check module time for more general approaches
-        for timeformat in ['%d-%b-%Y %H:%M:%S.%f',
-                           '%Y%m%d%H%M%S%f',
-                           '%Y-%m-%dT%H:%M:%S.%f',
-                           '%Y-%m-%dT%H:%M:%S.%fZ',
-                           '%Y%m%d %H:%M:%S.%f']:
-            try:
-                return strftime('%Y%m%dT%H%M%S', strptime(x, timeformat))
-            except (TypeError, ValueError):
-                continue
-        raise ValueError('unknown time format; check function ID.parse_date')
+        return parse_date(x)
 
     def summary(self):
         """
@@ -850,8 +802,8 @@ class CEOS_PSR(ID):
         meta['product'] = match.group('level')
 
         try:
-            meta['start'] = self.parse_date(self.meta['Img_SceneStartDateTime'])
-            meta['stop'] = self.parse_date(self.meta['Img_SceneEndDateTime'])
+            meta['start'] = self.parse_date(meta['Img_SceneStartDateTime'])
+            meta['stop'] = self.parse_date(meta['Img_SceneEndDateTime'])
         except (AttributeError, KeyError):
             try:
                 start_string = re.search('Img_SceneStartDateTime[ ="0-9:.]*', led).group()
@@ -1637,3 +1589,85 @@ class Archive(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.conn.close()
+
+
+def findfiles(scene, pattern, include_folders=False):
+    """
+    find files in a scene archive, which match a pattern
+
+    :param scene: the scene to scan
+    :param pattern: the regular expression to match
+    :param include_folders: also match folders (or just files)?
+    :return a list of file names
+    """
+    if os.path.isdir(scene):
+        files = finder(scene, [pattern], regex=True, foldermode=1 if include_folders else 0)
+        if re.search(pattern, os.path.basename(scene)) and include_folders:
+            files.append(scene)
+    elif zf.is_zipfile(scene):
+        with zf.ZipFile(scene, 'r') as zip:
+            files = [os.path.join(scene, x) for x in zip.namelist() if
+                     re.search(pattern, os.path.basename(x.strip('/')))]
+            if include_folders:
+                files = [x.strip('/') for x in files]
+            else:
+                files = [x for x in files if not x.endswith('/')]
+    elif tf.is_tarfile(scene):
+        tar = tf.open(scene)
+        files = [x for x in tar.getnames() if re.search(pattern, os.path.basename(x.strip('/')))]
+        if not include_folders:
+            files = [x for x in files if not tar.getmember(x).isdir()]
+        tar.close()
+        files = [os.path.join(scene, x) for x in files]
+    else:
+        files = [scene] if re.search(pattern, scene) else []
+    return files
+
+
+def getFileObj(scene, filename):
+    """
+    load a file into a readable file object
+    if the scene is unpacked this will be a regular 'file' object
+    for a tarfile this is an object of type 'tarfile.ExtFile'
+    for a zipfile this is an StringIO object (the zipfile.ExtFile object does not support setting file pointers via function 'seek', which is needed later on)
+
+    :param filename a name of a file in the scene archive, easiest to get with method ID.findfiles
+    :return: a regular file object or tarfile.ExtFile or StringIO
+    """
+    membername = filename.replace(scene, '').strip('/')
+
+    if os.path.isdir(scene):
+        obj = open(filename)
+    elif zf.is_zipfile(scene):
+        obj = StringIO()
+        with zf.ZipFile(scene, 'r') as zip:
+            obj.write(zip.open(membername).read())
+        obj.seek(0)
+
+    elif tf.is_tarfile(scene):
+        obj = StringIO()
+        tar = tf.open(scene, 'r:gz')
+        obj.write(tar.extractfile(membername).read())
+        tar.close()
+    else:
+        raise IOError('input must be either a file name or a location in an zip or tar archive')
+    return obj
+
+
+def parse_date(x):
+    """
+    this function gathers known time formats provided in the different SAR products and converts them to a common standard of the form YYYYMMDDTHHMMSS
+    :param x a string containing the time stamp
+    :return a string containing the converted time stamp in format YYYYmmddTHHMMSS
+    """
+    # todo: check module time for more general approaches
+    for timeformat in ['%d-%b-%Y %H:%M:%S.%f',
+                       '%Y%m%d%H%M%S%f',
+                       '%Y-%m-%dT%H:%M:%S.%f',
+                       '%Y-%m-%dT%H:%M:%S.%fZ',
+                       '%Y%m%d %H:%M:%S.%f']:
+        try:
+            return strftime('%Y%m%dT%H%M%S', strptime(x, timeformat))
+        except (TypeError, ValueError):
+            continue
+    raise ValueError('unknown time format; check function ID.parse_date')
