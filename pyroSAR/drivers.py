@@ -748,6 +748,17 @@ class CEOS_PSR(ID):
         p0 = p1
         p1 += ppd_l * ppd_n
         platformPositionData = led[p0:p1]
+
+        # the following can be used to read platform position time from the led file
+        # this covers a larger time frame than the actual scene sensing time
+        # y, m, d, nd, s = platformPositionData[144:182].split()
+        # start = datetime(int(y), int(m), int(d)) + timedelta(seconds=float(s))
+        # npoints = int(platformPositionData[140:144])
+        # interval = float(platformPositionData[182:204])
+        # stop = start + timedelta(seconds=(npoints - 1) * interval)
+        # parse_date(start)
+        # parse_date(stop)
+
         p0 = p1
         p1 += adr_l * adr_n
         attitudeData = led[p0:p1]
@@ -824,8 +835,8 @@ class CEOS_PSR(ID):
     # todo: create summary/workreport file entries for coordinates if they were read from an IMG file
     def getCorners(self):
         if 'corners' not in self.meta.keys():
-            lat = [y for x, y in self.meta.iteritems() if 'Latitude' in x]
-            lon = [y for x, y in self.meta.iteritems() if 'Longitude' in x]
+            lat = [y for x, y in self.meta.items() if 'Latitude' in x]
+            lon = [y for x, y in self.meta.items() if 'Longitude' in x]
             if len(lat) == 0 or len(lon) == 0:
                 img_filename = self.findfiles('IMG')[0]
                 img_obj = self.getFileObj(img_filename)
@@ -1657,17 +1668,22 @@ def getFileObj(scene, filename):
 def parse_date(x):
     """
     this function gathers known time formats provided in the different SAR products and converts them to a common standard of the form YYYYMMDDTHHMMSS
-    :param x a string containing the time stamp
+    :param x a string containing the time stamp or a datetime object
     :return a string containing the converted time stamp in format YYYYmmddTHHMMSS
     """
     # todo: check module time for more general approaches
-    for timeformat in ['%d-%b-%Y %H:%M:%S.%f',
-                       '%Y%m%d%H%M%S%f',
-                       '%Y-%m-%dT%H:%M:%S.%f',
-                       '%Y-%m-%dT%H:%M:%S.%fZ',
-                       '%Y%m%d %H:%M:%S.%f']:
-        try:
-            return strftime('%Y%m%dT%H%M%S', strptime(x, timeformat))
-        except (TypeError, ValueError):
-            continue
-    raise ValueError('unknown time format; check function ID.parse_date')
+    if isinstance(x, datetime):
+        return x.strftime('%Y%m%dT%H%M%S')
+    elif isinstance(x, str):
+        for timeformat in ['%d-%b-%Y %H:%M:%S.%f',
+                           '%Y%m%d%H%M%S%f',
+                           '%Y-%m-%dT%H:%M:%S.%f',
+                           '%Y-%m-%dT%H:%M:%S.%fZ',
+                           '%Y%m%d %H:%M:%S.%f']:
+            try:
+                return strftime('%Y%m%dT%H%M%S', strptime(x, timeformat))
+            except (TypeError, ValueError):
+                continue
+        raise ValueError('unknown time format; check function parse_date')
+    else:
+        raise ValueError('input must be either a string or a datetime object')
