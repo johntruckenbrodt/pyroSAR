@@ -1468,6 +1468,11 @@ class Archive(object):
         cursor = self.conn.execute('''SELECT * FROM sqlite_master WHERE type="table"''')
         return [x[1].encode('ascii') for x in cursor.fetchall()]
 
+    def get_unique_directories(self):
+        cursor = self.conn.execute('SELECT scene FROM data')
+        registered = [os.path.dirname(x[0].encode('ascii')) for x in cursor.fetchall()]
+        return list(set(registered))
+
     def move(self, scenelist, directory):
         """
         move a list of files while keeping the database entries up to date
