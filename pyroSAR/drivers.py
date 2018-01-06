@@ -2,7 +2,7 @@
 
 ##############################################################
 # Reading and Organizing system for SAR images
-# John Truckenbrodt, Felix Cremer 2016-2017
+# John Truckenbrodt, Felix Cremer 2016-2018
 ##############################################################
 """
 This is the core script of package pyroSAR. It contains the drivers for the different SAR image formats and offers
@@ -1334,6 +1334,8 @@ class Archive(object):
         cursor.execute(create_string)
         self.conn.commit()
 
+    # todo consider using a dictionary instead of a tuple as insertion argument
+    # see here: https://docs.python.org/2/library/sqlite3.html#sqlite3.Cursor.execute
     def __prepare_insertion(self, scene):
         """
         read scene metadata and parse a string for inserting it into the database
@@ -1362,12 +1364,13 @@ class Archive(object):
                     ', '.join(['GeomFromText(?, 4326)' if x == 'bbox' else '?' for x in colnames]))
         return insert_string, tuple(insertion)
 
-    def insert(self, scene_in, verbose=False):
+    def insert(self, scene_in, verbose=False, test=False):
         """
         Insert one or many scenes into the database
 
         :param scene_in: a SAR scene or a list of scenes to be inserted
         :param verbose: should status information and a progress bar be printed into the console?
+        :param test: should the insertion only be tested or directly be committed to the database?
         :return: None
         """
 
@@ -1387,28 +1390,37 @@ class Archive(object):
         else:
             raise RuntimeError('scene_in must either be a string pointing to a file, a pyroSAR.ID object '
                                'or a list containing several of either')
-        duplicates_counter = 0
+        counter_regulars = 0
+        counter_duplicates = 0
         if verbose:
-            print('inserting scenes into the database...')
+            print('inserting scenes into temporary database...')
             pbar = pb.ProgressBar(maxval=len(scenes)).start()
         for i, id in enumerate(scenes):
             insert_string, insertion = self.__prepare_insertion(id)
             try:
                 self.conn.execute(insert_string, insertion)
-                self.conn.commit()
+                counter_regulars += 1
             except sqlite3.IntegrityError as e:
                 if str(e) == 'UNIQUE constraint failed: data.outname_base':
                     self.conn.execute('INSERT INTO duplicates(outname_base, scene) VALUES(?, ?)',
                                       (id.outname_base(), id.scene))
-                    self.conn.commit()
-                    duplicates_counter += 1
+                    counter_duplicates += 1
                 else:
                     raise e
             if verbose:
                 pbar.update(i + 1)
         if verbose:
             pbar.finish()
-        print('{} duplicates detected and registered'.format(duplicates_counter))
+        if not test:
+            if verbose:
+                print('committing transactions to permanent database...')
+            self.conn.commit()
+        else:
+            if verbose:
+                print('reverting temporary database changes...')
+            self.conn.rollback()
+        print('{} scenes registered regularly'.format(counter_regulars))
+        print('{} duplicates detected and registered'.format(counter_duplicates))
 
     def is_registered(self, scene):
         return len(self.select(scene=scene)) != 0 or len(self.select_duplicates(scene=scene)) != 0
