@@ -20,6 +20,7 @@ import re
 import sys
 import fnmatch
 import inspect
+import itertools
 import os
 import subprocess as sp
 from time import mktime, strptime
@@ -69,27 +70,35 @@ def enablePrint():
 
 def finder(folder, matchlist, foldermode=0, regex=False, recursive=True):
     """
-    function for finding files in a folder and its subdirectories
-    search patterns must be given in a list
-    patterns can follow the unix shell standard (default) or regular expressions (via argument regex)
-    the argument recursive decides whether search is done recursively in all subdirectories or in the defined directory only
-    foldermodes:
-    0: no folders
-    1: folders included
-    2: only folders
+    function for finding files/folders in folders and their subdirectories
+
+    :param folder: the directory to be searched
+    :param matchlist: a list of search patterns
+    :param foldermode:
+        0: only files
+        1: files and folders
+        2: only folders
+    :param regex: are the search patterns in matchlist regular expressions or unix shell standard (default)?
+    :param recursive: search folder recursively into all subdirectories or only in the top level?
     """
     # match patterns
-    pattern = r'|'.join(matchlist if regex else [fnmatch.translate(x) for x in matchlist])
-    if recursive:
-        out = dissolve([[os.path.join(root, x) for x in dirs+files if re.search(pattern, x)] for root, dirs, files in os.walk(folder)])
+    if isinstance(folder, str):
+        pattern = r'|'.join(matchlist if regex else [fnmatch.translate(x) for x in matchlist])
+        if recursive:
+            out = dissolve([[os.path.join(root, x) for x in dirs+files if re.search(pattern, x)] for root, dirs, files in os.walk(folder)])
+        else:
+            out = [os.path.join(folder, x) for x in os.listdir(folder) if re.search(pattern, x)]
+        # exclude directories
+        if foldermode == 0:
+            out = [x for x in out if not os.path.isdir(x)]
+        if foldermode == 2:
+            out = [x for x in out if os.path.isdir(x)]
+        return sorted(out)
+    elif isinstance(folder, list):
+        groups = [finder(x, matchlist, foldermode, regex, recursive) for x in folder]
+        return list(itertools.chain(*groups))
     else:
-        out = [os.path.join(folder, x) for x in os.listdir(folder) if re.search(pattern, x)]
-    # exclude directories
-    if foldermode == 0:
-        out = [x for x in out if not os.path.isdir(x)]
-    if foldermode == 2:
-        out = [x for x in out if os.path.isdir(x)]
-    return sorted(out)
+        raise IOError('parameter folder must be either a string or a list')
 
 
 def groupbyTime(images, function, time):
