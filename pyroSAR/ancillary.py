@@ -1,6 +1,6 @@
 ##############################################################
 # core routines for software pyroSAR
-# John Truckenbrodt 2014-2017
+# John Truckenbrodt 2014-2018
 ##############################################################
 """
 This script gathers central functions and object instances for general applications
@@ -49,6 +49,7 @@ def dictmerge(x, y):
     return z
 
 
+# todo consider using itertools.chain like in function finder
 def dissolve(inlist):
     """
     list and tuple flattening; e.g. [[1, 2], [3, 4]] -> [1, 2, 3, 4]
@@ -130,10 +131,11 @@ def groupbyTime(images, function, time):
 def multicore(function, cores, multiargs, **singleargs):
     """
     wrapper for multicore process execution
-    function: individual function to be applied to each process item
-    cores: the number of subprocesses started/CPUs used; this value is reduced in case the number of subprocesses is smaller
-    multiargs: a dictionary containing subfunction argument names as keys and lists of arguments to be distributed among the processes as values
-    singleargs: all remaining arguments which are invariant among the subprocesses
+
+    :param function: individual function to be applied to each process item
+    :param cores: the number of subprocesses started/CPUs used; this value is reduced in case the number of subprocesses is smaller
+    :param multiargs: a dictionary containing subfunction argument names as keys and lists of arguments to be distributed among the processes as values
+    :param singleargs: all remaining arguments which are invariant among the subprocesses
     important:
     -all multiargs value lists must be of same length, i.e. all argument keys must be explicitly defined for each subprocess
     -all function arguments passed via singleargs must be provided with the full argument name and its value (i.e. argname=argval); default function args are not accepted
@@ -193,17 +195,23 @@ def multicore(function, cores, multiargs, **singleargs):
 
 def parse_literal(x):
     """
-    return the smallest possible data type
+    return the smallest possible data type for a string
+
+    :param x: a string to be parsed
+    :return a value of type int, float or str
     """
     if isinstance(x, list):
-        return [parse_literal(y) for y in x]
-    try:
-        return int(x)
-    except ValueError:
+        return map(parse_literal, x)
+    elif isinstance(x, str):
         try:
-            return float(x)
+            return int(x)
         except ValueError:
-            return str(x)
+            try:
+                return float(x)
+            except ValueError:
+                return x
+    else:
+        raise IOError('input must be a string or a list of strings')
 
 
 class Queue(object):
