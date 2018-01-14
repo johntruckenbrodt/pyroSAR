@@ -30,7 +30,7 @@ You can check the version by typing:
 gdalinfo --version
 ```
 ###### Debian
-Starting with Debian 9 (Strech) GDAL is available in version >2.1 in the official repository.
+Starting with Debian 9 (Stretch) GDAL is available in version >2.1 in the official repository.
 ###### Building from source
 Alternatively, you can build GDAL and the dependencies from source. The script `pyroSAR/install/install_deps.sh` 
 gives specific instructions on how to do it. It is not yet intended to run this script via shell, but rather to 
