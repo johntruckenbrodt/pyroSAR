@@ -16,7 +16,10 @@ testcases = [
 
     {"path": os.path.join(testdir, "0000022708_001001_ALOS2015976960-140909.zip"),
      "compression": "zip",
-     "sensor": "ALOS2"}
+     "sensor": "PSR2",
+     "product": "1.5",
+     "outname": "PSR2_FBD__A_20140909T043342",
+     "orbit": "A"}
 ]
 
 @pytest.fixture
