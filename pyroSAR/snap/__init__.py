@@ -1,5 +1,5 @@
 from util import geocode
 from auxil import ExamineSnap, gpt
-from pyroSAR.config import (SNAP_EXECUTABLE, OS_SYSTEM)
+from .._dev_config import SNAP_EXECUTABLE
 
 snap_config = ExamineSnap()
