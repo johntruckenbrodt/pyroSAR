@@ -24,7 +24,7 @@ import pyroSAR
 from pyroSAR import identify
 from pyroSAR.ancillary import dissolve, finder
 from pyroSAR.spatial import gdal_translate
-from pyroSAR.config import (STORAGE, ExamineExe, OS_SYSTEM)
+from .._dev_config import LOOKUP, ExamineExe
 
 
 def parse_recipe(name):
@@ -45,7 +45,7 @@ def parse_node(name):
 
 def parse_suffix(workflow):
     nodes = workflow.findall('node')
-    suffix = '_'.join(filter(None, [STORAGE.LOOKUP.suffix[x] for x in [y.attrib['id'] for y in nodes]]))
+    suffix = '_'.join(filter(None, [LOOKUP.snap.suffix[x] for x in [y.attrib['id'] for y in nodes]]))
     return suffix
 
 
@@ -254,19 +254,19 @@ class ExamineSnap(ExamineExe):
     # def ___pre_process(self):
     #     self.status, self.path = self.examine(self.SNAP_EXECUTABLE)
 
-        # try:
-        #     self.status, self.path = self.examine(self.SNAP_EXECUTABLE)
-        #
-        # except ValueError:
-        #     warnings.warn(
-        #         "There are more than one instances installed. Define witch one you want to use with snap_config.set_path(...). Otherwise not all functions will be working.",
-        #         Warning)
-        #
-        # if self.status:
-        #     pass
-        # else:
-        #     warnings.warn(
-        #         "Snap is not installed. You can install it on: http://step.esa.int/main/download/. Otherwise not all functions will be working.")
+    # try:
+    #     self.status, self.path = self.examine(self.SNAP_EXECUTABLE)
+    #
+    # except ValueError:
+    #     warnings.warn(
+    #         "There are more than one instances installed. Define witch one you want to use with snap_config.set_path(...). Otherwise not all functions will be working.",
+    #         Warning)
+    #
+    # if self.status:
+    #     pass
+    # else:
+    #     warnings.warn(
+    #         "Snap is not installed. You can install it on: http://step.esa.int/main/download/. Otherwise not all functions will be working.")
 
     def __get_etc(self):
         try:
