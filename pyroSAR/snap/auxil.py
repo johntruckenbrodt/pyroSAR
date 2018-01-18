@@ -18,13 +18,15 @@ from ftplib import FTP
 from time import strftime, gmtime
 from xml.dom import minidom
 import warnings
+from os.path import expanduser
 
 import pyroSAR
 from pyroSAR import identify
 from pyroSAR.ancillary import dissolve, finder
 from pyroSAR.spatial import gdal_translate
 from pyroSAR.config import (STORAGE, ExamineExe, OS_SYSTEM)
-    
+
+
 def parse_recipe(name):
     name = name if name.endswith('.xml') else name + '.xml'
     absname = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'recipes', name)
@@ -39,6 +41,7 @@ def parse_node(name):
     with open(absname, 'r') as workflow:
         tree = ET.fromstring(workflow.read())
     return tree
+
 
 def parse_suffix(workflow):
     nodes = workflow.findall('node')
@@ -73,26 +76,24 @@ class GetAuxdata:
         self.datasets = datasets
         self.scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
         self.sensors = list(set([scene.sensor for scene in scenes]))
-        
+
         try:
-            self.auxDataPath=os.path.join(os.environ['HOME'], '.snap/auxdata')
+            self.auxDataPath = os.path.join(os.environ['HOME'], '.snap/auxdata')
         except KeyError:
-            self.auxDataPath=os.path.join(os.environ['USERPROFILE'], '.snap/auxdata')
-    
+            self.auxDataPath = os.path.join(os.environ['USERPROFILE'], '.snap/auxdata')
+
     def srtm_1sec_hgt(self):
         pass
         # Wird nicht benutzt?
+
+
 #        for dataset in self.datasets:
 #            files = [x.replace('hgt', 'SRTMGL1.hgt.zip') for x in
 #                     list(set(dissolve([scene.getHGT() for scene in self.scenes])))]
-        
+
 def getAuxdata(datasets, scenes):
-    if OS_SYSTEM == 'Linux':
-        auxDataPath=os.path.join(os.environ['HOME'], '.snap/auxdata')
-        
-    elif OS_SYSTEM == 'Windows':
-        auxDataPath=os.path.join(os.environ['USERPROFILE'], '.snap/auxdata')
-        
+    auxDataPath = os.path.join(expanduser("~"), '.snap/auxdata')
+
     scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
     sensors = list(set([scene.sensor for scene in scenes]))
     for dataset in datasets:
@@ -230,53 +231,56 @@ def gpt(xmlfile):
             translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'], 'format': 'GTiff'}
             gdal_translate(item, name_new, translateoptions)
         shutil.rmtree(outname)
-        
+
+
 class ExamineSnap(ExamineExe):
     """
     Class to check if snap is installed. This will be called with snap.__init__
     as snap_config. If you are running multiple snap versions or the package can
     not find the snap executable, you can set an path via: snap_config.set_path("path")
     """
+
     def __init__(self):
         super(ExamineSnap, self).__init__()
-        
-        if OS_SYSTEM == 'Linux':
-            self.auxdatapath = os.path.join(os.environ['HOME'], '.snap/auxdata')
-            
-        elif OS_SYSTEM == 'Windows':
-            self.auxdatapath = os.path.join(os.environ['USERPROFILE'], '.snap/auxdata')
-        
+
+        self.status, self.path = self.examine(self.SNAP_EXECUTABLE)
+        self.auxdatapath = os.path.join(expanduser("~"), '.snap/auxdata')
+
         # Call proesses
-        self.___pre_process()
+        # self.___pre_process()
         self.__get_etc()
         self.__read_config()
-        
-    def ___pre_process(self):
-        try:
-            self.status = self.check_status(self.SNAP_EXECUTABLE)
-            self.path = self.get_path(self.SNAP_EXECUTABLE)
-            
-        except ValueError:
-            warnings.warn("There are more than one instances installed. Define witch one you want to use with snap_config.set_path(...). Otherwise not all functions will be working.", Warning)    
-        
-        if self.status:
-            pass
-        else:
-            warnings.warn("Snap is not installed. You can install it on: http://step.esa.int/main/download/. Otherwise not all functions will be working.")
-            
+
+    # def ___pre_process(self):
+    #     self.status, self.path = self.examine(self.SNAP_EXECUTABLE)
+
+        # try:
+        #     self.status, self.path = self.examine(self.SNAP_EXECUTABLE)
+        #
+        # except ValueError:
+        #     warnings.warn(
+        #         "There are more than one instances installed. Define witch one you want to use with snap_config.set_path(...). Otherwise not all functions will be working.",
+        #         Warning)
+        #
+        # if self.status:
+        #     pass
+        # else:
+        #     warnings.warn(
+        #         "Snap is not installed. You can install it on: http://step.esa.int/main/download/. Otherwise not all functions will be working.")
+
     def __get_etc(self):
         try:
             self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
-            self.auxdata=os.listdir(self.etc)
+            self.auxdata = os.listdir(self.etc)
             self.config_path = os.path.join(self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
-            
-        except:
-            warnings.warn("ETC directory is not existend.", Warning)
+
+        except WindowsError:
+            raise AssertionError("ETC directory is not existend.")
 
     def set_path(self, path):
         self.path = os.path.abspath(path)
         self.__get_etc()
-    
+
     def __read_config(self):
         with open(self.config_path) as config:
             self.config = []
