@@ -6,8 +6,9 @@ Created on Tue Dec 12 10:10:41 2017
 """
 import os
 import platform
-import numpy as np
 from distutils.spawn import find_executable
+
+import numpy as np
 
 OS_SYSTEM = platform.system()
 
@@ -156,18 +157,17 @@ class ExamineExe(object):
     def __init__(self):
         self.SNAP_EXECUTABLE = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
 
-    @staticmethod
     def examine(name):
 
         executable_list = []
-        if isinstance(name, tuple) or isinstance(name, list):
+        if isinstance(name, (tuple, list)):
             for item in name:
                 executable_temp = find_executable(item) is not None
                 executable_list.append(executable_temp)
 
                 # Check True values
-                executable = np.asarray(executable_list)
-                True_values = executable[np.where(executable == True)]
+                True_values = [item for item in executable_list if item]
+                # True_values = executable[np.where(executable is True)]
 
             if len(True_values) > 1:
                 raise ValueError(
@@ -175,12 +175,14 @@ class ExamineExe(object):
                     use with self.set_path(...)")
 
             else:
-                status = np.any(np.asarray(executable_list) == True)
+                status = any(item == True for item in executable_list)
+
                 try:
-                    temp_loc = np.where(executable == True)[0][0]
+                    temp_loc = [item for item, executable_list in enumerate(executable_list) if executable_list][0]
 
                 except IndexError:
                     raise ValueError("One of the executables {0} must be installed.".format(name))
+
                 return status, os.path.abspath(find_executable(name[temp_loc]))
 
         else:
