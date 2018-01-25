@@ -8,8 +8,6 @@ import os
 import platform
 from distutils.spawn import find_executable
 
-import numpy as np
-
 OS_SYSTEM = platform.system()
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode',
@@ -17,27 +15,15 @@ __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode
 
 
 class Storage(dict):
-    # TODO: Update docstrings
     """
     Dict class with point access to store the lookups, pattern and URLs
 
     Attributes
     ----------
-    STORAGE.LOOKUP : dict (with point access)
-        All lookuptable merged in a dict:
-            * suffix : SNAP process suffix names.
-            * archive : ...
-
-    STORAGE.PATTERN : dict (with point access)
-        All pattern merged in a dict:
-            * ceos_ers
-            * ceos_ers_pid
-            * ceos_psr
-            * esa
-            * esa_pid
-            * tsx
-            * projection
-
+    STORAGE.LOOKUP : Storage
+        All lookup table merged in a Storage class instance:
+            * snap : SNAP process.
+            * attributes : Attributes for different sensors.
     STORAGE.URL : dict (with point access)
         All URLs for DEMs, orbit files etc.:
             * dem : URL to download specific DEMs:
@@ -46,14 +32,12 @@ class Storage(dict):
                 * strm3_FTP
                 * strm1HGT
                 * ace
-
             * orbit : URL to download the orbit files:
                 * ers1
                 * ers2
                 * s1_poe
                 * s1_pres
                 * doris
-
             * auxcal : URL to download the auxcal data:
                 * s1
                 * envisat
@@ -61,7 +45,10 @@ class Storage(dict):
 
     Note
     ----
-    To import the instance use: from radoptics.config import STORAGE
+    There may be additional attributes not listed above depending of the
+    specific solver. Since this class is essentially a subclass of dict
+    with attribute accessors, one can see which attributes are available
+    using the `keys()` method.
     """
 
     def __getattr__(self, name):
@@ -155,8 +142,10 @@ STORAGE = Storage(URL=URL,
 # ==============================================================================
 class ExamineExe(object):
     def __init__(self):
+        # todo: Update Docstrings
         pass
 
+    @staticmethod
     def examine(name):
 
         executable_list = []
