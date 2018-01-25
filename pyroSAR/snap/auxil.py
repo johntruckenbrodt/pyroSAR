@@ -243,7 +243,10 @@ class ExamineSnap(ExamineExe):
     def __init__(self):
         super(ExamineSnap, self).__init__()
 
-        self.status, self.path = self.examine(self.SNAP_EXECUTABLE)
+        SNAP_EXECUTABLE = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
+
+        self.status, self.path = self.examine(SNAP_EXECUTABLE)
+
         self.auxdatapath = os.path.join(expanduser("~"), '.snap/auxdata')
 
         # Call proesses

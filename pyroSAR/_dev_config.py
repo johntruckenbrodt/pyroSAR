@@ -155,7 +155,7 @@ STORAGE = Storage(URL=URL,
 # ==============================================================================
 class ExamineExe(object):
     def __init__(self):
-        self.SNAP_EXECUTABLE = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
+        pass
 
     def examine(name):
 
