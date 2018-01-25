@@ -8,8 +8,6 @@ import os
 import platform
 from distutils.spawn import find_executable
 
-OS_SYSTEM = platform.system()
-
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode',
              'start', 'stop', 'product', 'spacing', 'samples', 'lines']
 
