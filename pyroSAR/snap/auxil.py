@@ -251,23 +251,6 @@ class ExamineSnap(ExamineExe):
         self.__get_etc()
         self.__read_config()
 
-    # def ___pre_process(self):
-    #     self.status, self.path = self.examine(self.SNAP_EXECUTABLE)
-
-    # try:
-    #     self.status, self.path = self.examine(self.SNAP_EXECUTABLE)
-    #
-    # except ValueError:
-    #     warnings.warn(
-    #         "There are more than one instances installed. Define witch one you want to use with snap_config.set_path(...). Otherwise not all functions will be working.",
-    #         Warning)
-    #
-    # if self.status:
-    #     pass
-    # else:
-    #     warnings.warn(
-    #         "Snap is not installed. You can install it on: http://step.esa.int/main/download/. Otherwise not all functions will be working.")
-
     def __get_etc(self):
         try:
             self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
