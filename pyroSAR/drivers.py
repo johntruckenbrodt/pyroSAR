@@ -106,8 +106,15 @@ def filter_processed(scenelist, outdir, recursive=False):
 class ID(object):
     """Abstract class for SAR meta data handlers."""
 
+    # todo: consider adding additional variables: looks, coordinates, ...
     def __init__(self, metadict):
-        # additional variables? looks, coordinates, ...
+        """
+        to be called by the __init__methods of the format drivers
+        scans a metadata dictionary and registers entries with a standardized name as object attributes
+        see __LOCAL__ for standard names. It must be ensured that each of these is actually read by the individual SAR format driver.
+
+        :param metadict: a dictionary containing the metadata attributes of a SAR scene
+        """
         self.locals = __LOCAL__
         for item in self.locals:
             setattr(self, item, metadict[item])
@@ -547,6 +554,7 @@ class CEOS_ERS(ID):
         #         antenna = 'antenna_ERS2'
 
 
+# todo consider renaming product levels into something more generic and comparable
 class CEOS_PSR(ID):
     """
     Handler class for ALOS-PALSAR data in CEOS format
@@ -1373,23 +1381,28 @@ class Archive(object):
         :param test: should the insertion only be tested or directly be committed to the database?
         :return: None
         """
-
+        if verbose:
+            print('...got {0} scene{1}'.format(len(scene_in), 's' if len(scene_in) > 1 else ''))
         if isinstance(scene_in, (ID, str)):
-            scenes = [scene_in if isinstance(scene_in, ID) else identify(scene_in)]
-        elif isinstance(scene_in, list):
-            if verbose:
-                print('filtering scenes by name...')
-            scenes = self.filter_scenelist(scene_in)
-            if len(scenes) > 0:
-                if verbose:
-                    print('extracting scene metadata...')
-                scenes = identify_many(scenes)
-            else:
-                print('all scenes are already registered')
-                return
-        else:
+            scene_in = [scene_in]
+        if not isinstance(scene_in, list):
             raise RuntimeError('scene_in must either be a string pointing to a file, a pyroSAR.ID object '
                                'or a list containing several of either')
+
+        if verbose:
+            print('filtering scenes by name...')
+        scenes = self.filter_scenelist(scene_in)
+        if verbose:
+            print('identifying scene and extracting metadata...')
+        scenes = identify_many(scenes)
+
+        if len(scenes) > 0:
+            if verbose:
+                print('...{0} scene{1} remaining'.format(len(scenes), 's' if len(scenes) > 1 else ''))
+        else:
+            print('all scenes are already registered')
+            return
+
         counter_regulars = 0
         counter_duplicates = 0
         if verbose:
@@ -1444,11 +1457,18 @@ class Archive(object):
         Returns: a list which only contains files whose basename is not yet registered in the database
 
         """
+        for item in scenelist:
+            if not isinstance(item, (ID, str)):
+                raise IOError('items in scenelist must be of type "str" or pyroSAR.ID')
         cursor = self.conn.execute('SELECT scene FROM data')
         registered = [os.path.basename(x[0].encode('ascii')) for x in cursor.fetchall()]
         cursor = self.conn.execute('SELECT scene FROM duplicates')
         duplicates = [os.path.basename(x[0].encode('ascii')) for x in cursor.fetchall()]
-        return [x for x in scenelist if os.path.basename(x) not in registered+duplicates]
+
+        names = [item.scene if isinstance(item, ID) else item for item in scenelist]
+        filtered = [x for x, y in zip(scenelist, names) if os.path.basename(y) not in registered+duplicates]
+
+        return filtered
 
     def get_colnames(self):
         """
@@ -1649,7 +1669,7 @@ def findfiles(scene, pattern, include_folders=False):
         files = [os.path.join(scene, x) for x in files]
     else:
         files = [scene] if re.search(pattern, scene) else []
-    return files
+    return map(str, files)
 
 
 def getFileObj(scene, filename):
