@@ -1436,6 +1436,11 @@ class Archive(object):
         print('{} duplicates detected and registered'.format(counter_duplicates))
 
     def is_registered(self, scene):
+        """
+        simple check if a scene is already registered in the database
+        :param scene: a SAR scene
+        :return: True|False
+        """
         return len(self.select(scene=scene)) != 0 or len(self.select_duplicates(scene=scene)) != 0
 
     def export2shp(self, shp):
@@ -1451,10 +1456,8 @@ class Archive(object):
         """
         filter a list of scenes by file names already registered in the database.
 
-        Args:
-            scenelist: a list of scenes (absolute path strings or pyroSAR.ID objects)
-
-        Returns: a list which only contains files whose basename is not yet registered in the database
+        :param scenelist: a list of scenes (absolute path strings or pyroSAR.ID objects)
+        :return: a list which only contains files whose basename is not yet registered in the database
 
         """
         for item in scenelist:
@@ -1489,6 +1492,11 @@ class Archive(object):
         return [x[1].encode('ascii') for x in cursor.fetchall()]
 
     def get_unique_directories(self):
+        """
+        get a list of directories containing registered scenes
+
+        :return: a list of directory names
+        """
         cursor = self.conn.execute('SELECT scene FROM data')
         registered = [os.path.dirname(x[0].encode('ascii')) for x in cursor.fetchall()]
         return list(set(registered))
@@ -1603,6 +1611,13 @@ class Archive(object):
         return [x[0].encode('ascii') for x in scenes]
 
     def select_duplicates(self, outname_base=None, scene=None):
+        """
+        select scenes from the duplicates table; either all or only one matching a specific basename or scene name
+
+        :param outname_base: the basename of the scene
+        :param scene: the scene name
+        :return: a list containing one or many scenes
+        """
         if not outname_base and not scene:
             cursor = self.conn.execute('SELECT * from duplicates')
         else:
@@ -1623,7 +1638,7 @@ class Archive(object):
         """
         get the number of scenes registered in the database
 
-        :return: the number of scenes (integer)
+        :return: a two-entry tuple containing the number of scenes in (1) the main table and (2) the duplicates table
         """
         cursor1 = self.conn.execute('''SELECT Count(*) FROM data''')
         cursor2 = self.conn.execute('''SELECT Count(*) FROM duplicates''')
