@@ -34,7 +34,7 @@ python:
   - "2.7"
 
 before_install:
-  - sudo add-apt-repository ppa:ubuntugis/ppa
+  - sudo add-apt-repository ppa:ubuntugis/ppa -y
   - sudo apt-get update -q
   - sudo apt-get install gdal-bin python-gdal -y
   - pip install -U pip
