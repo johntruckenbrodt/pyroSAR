@@ -26,8 +26,8 @@ addons:
   apt:
     packages:
     #- gdal-bin
-    - libproj-dev
-    - libgdal-dev
+    #- libproj-dev
+    #- libgdal-dev
     - libspatialite-dev
     - swig2.0
 python:
@@ -36,7 +36,7 @@ python:
 before_install:
   - sudo add-apt-repository ppa:ubuntugis/ppa -y
   - sudo apt-get update -q
-  - sudo apt-get install gdal-bin python-gdal -y
+  - sudo apt-get install gdal-bin libproj-dev libgdal-dev -y
   - pip install -U pip
   #- . ./pyroSAR/install/travis_gdal_install.sh
   #- export PATH=$GDALINST/gdal-$GDALVERSION/bin:$PATH
@@ -45,10 +45,11 @@ before_install:
 install:
   #- "if [ \"$GDALVERSION\" == \"trunk\" -o $(gdal-config --version) == \"$GDALVERSION\" ]; then echo \"Using gdal $GDALVERSION\"; else echo \"NOT using gdal $GDALVERSION as expected; aborting\"; exit 1; fi"
   - pip install -r requirements.txt
+  - pip install gdal
   - python setup.py install
 before_script:
   - pwd
-  - travis_wait 40 . ./pyroSAR/install/download_testdata.sh
+  #- . ./pyroSAR/install/download_testdata.sh
 script:
   - pwd
   - pytest
