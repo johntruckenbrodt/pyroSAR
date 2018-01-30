@@ -49,7 +49,7 @@ install:
   - python setup.py install
 before_script:
   - pwd
-  #- . ./pyroSAR/install/download_testdata.sh
+  - travis-wait 40 . ./pyroSAR/install/download_testdata.sh
 script:
   - pwd
   - pytest
