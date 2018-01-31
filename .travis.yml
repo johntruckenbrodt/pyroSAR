@@ -47,14 +47,14 @@ install:
   #- "if [ \"$GDALVERSION\" == \"trunk\" -o $(gdal-config --version) == \"$GDALVERSION\" ]; then echo \"Using gdal $GDALVERSION\"; else echo \"NOT using gdal $GDALVERSION as expected; aborting\"; exit 1; fi"
   - pip install -r requirements.txt
   - pip install coveralls
-  - pip install pytest-cov
+  - pip install coverage
   - python setup.py install
 before_script:
   - pwd
   #- travis_wait 40 . ./pyroSAR/install/download_testdata.sh
 script:
-  - pwd
-  - pytest --cov pyroSAR --cov-report term-missing
+  - coverage run --source pyroSAR/ -m pytest 
+#  - pytest --cov pyroSAR --cov-report term-missing
 after_success:
 - coveralls
 
