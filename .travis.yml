@@ -54,6 +54,6 @@ before_script:
 script:
   - pwd
   - pytest --cov
-after-success:
+after_success:
 - coveralls
 
