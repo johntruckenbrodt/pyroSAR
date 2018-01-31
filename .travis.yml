@@ -51,7 +51,7 @@ install:
   - python setup.py install
 before_script:
   - pwd
-  #- travis_wait 40 . ./pyroSAR/install/download_testdata.sh
+  - travis_wait 40 . ./pyroSAR/install/download_testdata.sh
 script:
   - coverage run --source pyroSAR/ -m pytest 
 #  - pytest --cov pyroSAR --cov-report term-missing
