@@ -409,6 +409,7 @@ def reproject(rasterobject, reference, outname, resampling='bilinear', format='E
                    '-t_srs', projection, rasterobject.filename, outname])
 
 
+# todo improve speed until aborting when all target files already exist
 def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapefile=None, layernames=None, sortfun=None,
           separate=False, overwrite=False, compress=True, cores=4):
     """
@@ -450,7 +451,16 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
                           'Q1', 'Q3']:
         raise IOError('resampling method not supported')
 
-    projections = list(set([Raster(x).projection for x in dissolve(srcfiles)]))
+    projections = list()
+    for x in dissolve(srcfiles):
+        try:
+            projection = Raster(x).projection
+        except RuntimeError as e:
+            print('cannot read file: {}'.format(x))
+            raise e
+        projections.append(projection)
+
+    projections = list(set(projections))
     if len(projections) > 1:
         raise IOError('raster projection mismatch')
     elif len(projections) == 0:
