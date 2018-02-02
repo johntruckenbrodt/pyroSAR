@@ -2,7 +2,6 @@ language: python
 sudo: false
 cache:
   directories:
-    - $GDALINST
     - ~/.cache/pip
 
 
@@ -10,24 +9,11 @@ env:
   global:
     - PIP_WHEEL_DIR=$HOME/.cache/pip/wheels
     - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
-    - GDALINST=$HOME/gdalinstall
-    - GDALBUILD=$HOME/gdalbuild
     - TESTDATA_DIR=$HOME/testdata
-  matrix:
-   # - GDALVERSION="2.1.3"
-   # - GDALVERSION="2.2.1"
-   # - GDALVERSION="2.2.0"
-   # - GDALVERSION="trunk"
-matrix:
-  allow_failures:
-    - env: GDALVERSION="trunk"
 
 addons:
   apt:
     packages:
-    #- gdal-bin
-    #- libproj-dev
-    #- libgdal-dev
     - libspatialite-dev
     - swig2.0
 python:
@@ -39,22 +25,16 @@ before_install:
   - sudo apt-get update -q
   - sudo apt-get install gdal-bin python-gdal libproj-dev libgdal-dev -y
   - pip install -U pip
-  #- . ./pyroSAR/install/travis_gdal_install.sh
-  #- export PATH=$GDALINST/gdal-$GDALVERSION/bin:$PATH
-  #- export LD_LIBRARY_PATH=$GDALINST/gdal-$GDALVERSION/lib:$LD_LIBRARY_PATH
-  #- export PYTHONPATH=$GDALINST/gdal-$GDALVERSION/lib/python2.7/site-packages
+
 install:
-  #- "if [ \"$GDALVERSION\" == \"trunk\" -o $(gdal-config --version) == \"$GDALVERSION\" ]; then echo \"Using gdal $GDALVERSION\"; else echo \"NOT using gdal $GDALVERSION as expected; aborting\"; exit 1; fi"
   - pip install -r requirements.txt
   - pip install coveralls
   - pip install coverage
   - python setup.py install
 before_script:
-  - pwd
-  - travis_wait 40 . ./pyroSAR/install/download_testdata.sh
+  - . ./pyroSAR/install/download_testdata.sh
 script:
   - coverage run --source pyroSAR/ -m pytest 
-#  - pytest --cov pyroSAR --cov-report term-missing
 after_success:
 - coveralls
 
