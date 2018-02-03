@@ -2,7 +2,7 @@
 
 
 # define a root directory for downloading packages
-root='/home/user/test'
+root= $HOME/test
 
 # define a directory for download and unpacked packages
 downloaddir=$root/originals
@@ -12,10 +12,10 @@ packagedir=$root/packages
 # In case installdir is set to a location outside of /usr/*, the following installation commands do not need to be run with a
 # dministration rights (sudo)
 #installdir=/usr/local
-installdir=/home/user/local
+installdir=$HOME/local
 
 # the version of GDAL and its dependencies
-gdal_version=2.1.1
+GDALVERSION=2.1.1
 
 # these versions are not quite as important. If you use already installed them you might need to define their location
 # for the configuration of GDAL
@@ -23,7 +23,7 @@ geos_version=3.5.0
 proj_version=4.9.2
 
 # define the number of threads for compilation
-threads=4
+threads=2
 ########################################################################################################################
 # setup environment variables and create directories
 
@@ -47,7 +47,7 @@ done
 # download GDAL and its dependencies
 
 declare -a remotes=(
-                "http://download.osgeo.org/gdal/$gdal_version/gdal-$gdal_version.tar.gz"
+                "http://download.osgeo.org/gdal/$GDALVERSION/gdal-$GDALVERSION.tar.gz"
                 "http://download.osgeo.org/geos/geos-$geos_version.tar.bz2"
                 "http://download.osgeo.org/proj/proj-$proj_version.tar.gz"
                 )
