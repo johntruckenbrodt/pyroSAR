@@ -15,7 +15,7 @@ Not everything is working properly, stay tuned...
 ### Installation of dependencies
 
 ##### GDAL
-pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as the GDAL Python binding.
+pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as the GDAL Python binding. Alternatively, one can use <a href="https://github.com/nextgis/pygdal">pygdal</a>, a virtualenv and setuptools friendly version of standard GDAL python bindings.
 ###### Ubuntu
 Currently Ubuntu comes with GDAL 1.11. By adding the ubuntugis repository to e.g. apt you can install 
 version >2.1:
