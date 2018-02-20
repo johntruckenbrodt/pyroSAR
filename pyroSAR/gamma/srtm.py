@@ -2,7 +2,7 @@
 ##############################################################
 # preparation of srtm data for use in gamma
 # module of software pyroSAR
-# John Truckenbrodt 2014-17
+# John Truckenbrodt 2014-18
 ##############################################################
 
 """
@@ -331,7 +331,6 @@ def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
         onlines = []
 
         if arcsec == 1:
-            # todo: this address now asks for a login -> find alternatives
             remotes = ['http://e4ftl01.cr.usgs.gov/SRTM/SRTMGL1.003/2000.02.11/']
             remotepattern = pattern+'.SRTMGL1.hgt.zip'
         elif arcsec == 3:
