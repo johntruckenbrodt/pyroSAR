@@ -102,11 +102,9 @@ def filter_processed(scenelist, outdir, recursive=False):
     return [x for x in scenelist if not x.is_processed(outdir, recursive)]
 
 
-# todo: add bounding box info to init and summary methods
 class ID(object):
     """Abstract class for SAR meta data handlers."""
 
-    # todo: consider adding additional variables: looks, coordinates, ...
     def __init__(self, metadict):
         """
         to be called by the __init__methods of the format drivers
@@ -360,7 +358,6 @@ class ID(object):
         """
         raise NotImplementedError
 
-    # todo: replace with functionality from module archivist
     def _unpack(self, directory, offset=None, overwrite=False):
         """
         general function for unpacking scene archives; to be called by implementations of ID.unpack
@@ -481,7 +478,6 @@ class CEOS_ERS(ID):
         # register the standardized meta attributes as object attributes
         ID.__init__(self, self.meta)
 
-    # todo: change coordinate extraction to the exact boundaries of the image (not outer pixel center points)
     def getCorners(self):
         lat = [x[1][1] for x in self.meta['gcps']]
         lon = [x[1][0] for x in self.meta['gcps']]
@@ -554,7 +550,6 @@ class CEOS_ERS(ID):
         #         antenna = 'antenna_ERS2'
 
 
-# todo consider renaming product levels into something more generic and comparable
 class CEOS_PSR(ID):
     """
     Handler class for ALOS-PALSAR data in CEOS format
@@ -840,7 +835,6 @@ class CEOS_PSR(ID):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir, overwrite=overwrite)
 
-    # todo: create summary/workreport file entries for coordinates if they were read from an IMG file
     def getCorners(self):
         if 'corners' not in self.meta.keys():
             lat = [y for x, y in self.meta.items() if 'Latitude' in x]
@@ -1296,7 +1290,6 @@ class TSX(ID):
         self._unpack(outdir, offset=header, overwrite=overwrite)
 
 
-# todo: handle error in case of parallel access: 'pysqlite2.dbapi2.OperationalError: database is locked'
 class Archive(object):
     """
     Utility for storing SAR image metadata in a spatialite database
@@ -1342,8 +1335,6 @@ class Archive(object):
         cursor.execute(create_string)
         self.conn.commit()
 
-    # todo consider using a dictionary instead of a tuple as insertion argument
-    # see here: https://docs.python.org/2/library/sqlite3.html#sqlite3.Cursor.execute
     def __prepare_insertion(self, scene):
         """
         read scene metadata and parse a string for inserting it into the database
@@ -1723,7 +1714,6 @@ def parse_date(x):
     :param x a string containing the time stamp or a datetime object
     :return a string containing the converted time stamp in format YYYYmmddTHHMMSS
     """
-    # todo: check module time for more general approaches
     if isinstance(x, datetime):
         return x.strftime('%Y%m%dT%H%M%S')
     elif isinstance(x, str):
