@@ -66,7 +66,6 @@ class ISPPar(object):
             par_file.close()
 
 
-# todo: make pretty or remove gamma dependency
 class UTM(object):
     """
     convert a gamma parameter file corner coordinate from EQA to UTM
