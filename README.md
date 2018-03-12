@@ -22,7 +22,7 @@ version >2.1:
 ```sh
 sudo add-apt-repository ppa:ubuntugis/ppa
 sudo apt-get update
-sudo apt-get install python-gdal gdal-bin
+sudo apt-get install python-gdal python3-gdal gdal-bin
 ```
 This way the required dependencies (GEOS and PROJ4 in particular) are also installed.
 You can check the version by typing:
