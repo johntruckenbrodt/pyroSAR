@@ -1260,6 +1260,14 @@ class TSX(ID):
 
         ID.__init__(self, self.meta)
 
+    def getCorners(self):
+        geocs = self.getFileObj(self.findfiles('GEOREF.xml')[0]).getvalue()
+        tree = ET.fromstring(geocs)
+        pts = tree.findall('.//gridPoint')
+        lat = [float(x.find('lat').text) for x in pts]
+        lon = [float(x.find('lon').text) for x in pts]
+        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+
     def scanMetadata(self):
         annotation = self.getFileObj(self.file).getvalue()
         namespaces = getNamespaces(annotation)
