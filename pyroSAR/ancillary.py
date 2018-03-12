@@ -11,6 +11,7 @@ import sys
 if sys.version_info >= (3, 0):
     from io import StringIO
     from urllib.parse import urlparse, urlunparse, urlencode
+    from builtins import str
 else:
     from urllib import urlencode
     from StringIO import StringIO
@@ -86,7 +87,8 @@ def finder(folder, matchlist, foldermode=0, regex=False, recursive=True):
     if isinstance(folder, str):
         pattern = r'|'.join(matchlist if regex else [fnmatch.translate(x) for x in matchlist])
         if recursive:
-            out = dissolve([[os.path.join(root, x) for x in dirs+files if re.search(pattern, x)] for root, dirs, files in os.walk(folder)])
+            out = dissolve([[os.path.join(root, x) for x in dirs+files if re.search(pattern, x)]
+                            for root, dirs, files in os.walk(folder)])
         else:
             out = [os.path.join(folder, x) for x in os.listdir(folder) if re.search(pattern, x)]
         # exclude directories
@@ -171,7 +173,8 @@ def multicore(function, cores, multiargs, **singleargs):
     cores = cores if arglengths[0] >= cores else arglengths[0]
 
     # create a list of dictionaries each containing the arguments for individual function calls to be passed to the multicore processes
-    processlist = [dictmerge(dict([(arg, multiargs[arg][i]) for arg in multiargs]), singleargs) for i in range(len(multiargs[multiargs.keys()[0]]))]
+    processlist = [dictmerge(dict([(arg, multiargs[arg][i]) for arg in multiargs]), singleargs)
+                   for i in range(len(multiargs[multiargs.keys()[0]]))]
 
     # block printing of the executed function
     blockPrint()
@@ -202,7 +205,7 @@ def parse_literal(x):
     """
     if isinstance(x, list):
         return map(parse_literal, x)
-    elif isinstance(x, str):
+    elif isinstance(x, (bytes, str)):
         try:
             return int(x)
         except ValueError:
