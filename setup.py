@@ -8,7 +8,7 @@ setup(name='pyroSAR',
       classifiers=[
           'Programming Language :: Python :: 2.7',
       ],
-      install_requires=['progressbar==2.3',
+      install_requires=['progressbar2',
                         'pathos>=0.2',
                         'numpy',
                         'scoop'],
