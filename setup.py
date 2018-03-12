@@ -3,10 +3,11 @@ from setuptools import setup, find_packages
 setup(name='pyroSAR',
       packages=find_packages(),
       include_package_data=True,
-      version='0.1',
+      version='0.2',
       description='a framework for large-scale SAR satellite data processing',
       classifiers=[
           'Programming Language :: Python :: 2.7',
+          'Programming Language :: Python :: 3.5',
       ],
       install_requires=['progressbar2',
                         'pathos>=0.2',
