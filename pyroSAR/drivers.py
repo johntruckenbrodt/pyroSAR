@@ -1384,7 +1384,8 @@ class Archive(object):
         :return: None
         """
         if verbose:
-            print('...got {0} scene{1}'.format(len(scene_in), 's' if len(scene_in) > 1 else ''))
+            length = len(scene_in) if isinstance(scene_in, list) else 1
+            print('...got {0} scene{1}'.format(length, 's' if len(scene_in) > 1 else ''))
         if isinstance(scene_in, (ID, str)):
             scene_in = [scene_in]
         if not isinstance(scene_in, list):
@@ -1394,6 +1395,9 @@ class Archive(object):
         if verbose:
             print('filtering scenes by name...')
         scenes = self.filter_scenelist(scene_in)
+        if len(scenes) == 0:
+            print('nothing to be done')
+            return
         if verbose:
             print('identifying scene and extracting metadata...')
         scenes = identify_many(scenes)
@@ -1483,7 +1487,7 @@ class Archive(object):
         :return: a list containing the column names of the data table
         """
         cursor = self.conn.execute('''PRAGMA table_info(data)''')
-        return [x[1].encode('ascii') for x in cursor.fetchall()]
+        return [str(x[1]) for x in cursor.fetchall()]
 
     def get_tablenames(self):
         """
