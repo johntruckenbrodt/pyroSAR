@@ -21,7 +21,7 @@ def crsConvert(crsIn, crsOut):
     else:
         srs = osr.SpatialReference()
         try:
-            if 'opengis.net/def/crs/EPSG/0/' in crsIn:
+            if 'opengis.net/def/crs/EPSG/0/' in str(crsIn):
                 crsIn = int(os.path.basename(crsIn.strip('/')))
             srs.ImportFromEPSG(crsIn)
         except (TypeError, RuntimeError):
