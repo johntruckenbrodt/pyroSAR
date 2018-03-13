@@ -1,5 +1,6 @@
 # pyroSAR
-[![Build Status](https://www.travis-ci.org/johntruckenbrodt/pyroSAR.svg?branch=master)](https://www.travis-ci.org/johntruckenbrodt/pyroSAR)
+[![Build Status](https://www.travis-ci.org/johntruckenbrodt/pyroSAR.svg?branch=master)](https://www.travis-ci.org/johntruckenbrodt/pyroSAR)      [![Coverage Status](https://coveralls.io/repos/github/johntruckenbrodt/pyroSAR/badge.svg?branch=master)](https://coveralls.io/github/johntruckenbrodt/pyroSAR?branch=master)
+
 ### a Python framework for large-scale SAR satellite data processing
 
 The pyroSAR package aims at providing a complete solution for the scalable organization and processing of SAR satellite data:
