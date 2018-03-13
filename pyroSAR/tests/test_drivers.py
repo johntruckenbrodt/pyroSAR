@@ -1,4 +1,5 @@
 import pyroSAR
+from pyroSAR.spatial import crsConvert
 import pytest
 import os
 
@@ -58,3 +59,19 @@ def test_identify_fail():
 
 def test_export2dict():
     pass
+
+
+def test_archive():
+    scene = 'pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'
+    dbfile = os.path.join('pyroSAR/tests/data/', 'scenes.db')
+    if os.path.isfile(dbfile):
+        os.remove(dbfile)
+    with pyroSAR.Archive(dbfile) as db:
+        db.insert(scene, verbose=True)
+        assert db.size == (1, 0)
+
+
+def test_crsConvert():
+    assert crsConvert(crsConvert(4326, 'wkt'), 'proj4') == '+proj=longlat +datum=WGS84 +no_defs '
+    assert crsConvert(crsConvert(4326, 'prettyWkt'), 'opengis') == 'http://www.opengis.net/def/crs/EPSG/0/4326'
+    assert crsConvert('+proj=longlat +datum=WGS84 +no_defs ', 'epsg') == 4326
