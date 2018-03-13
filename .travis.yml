@@ -35,8 +35,8 @@ install:
   - pip install coverage
   - python setup.py install
 
-before_script:
-  - travis_wait 40 . ./pyroSAR/install/download_testdata.sh
+#before_script:
+#  - travis_wait 40 . ./pyroSAR/install/download_testdata.sh
 
 script:
   - coverage run --source pyroSAR/ -m pytest
