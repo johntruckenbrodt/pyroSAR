@@ -1,5 +1,5 @@
 import pyroSAR
-from pyroSAR.spatial import crsConvert
+from pyroSAR.spatial import crsConvert, haversine
 import pytest
 import os
 
@@ -75,3 +75,13 @@ def test_crsConvert():
     assert crsConvert(crsConvert(4326, 'wkt'), 'proj4') == '+proj=longlat +datum=WGS84 +no_defs '
     assert crsConvert(crsConvert(4326, 'prettyWkt'), 'opengis') == 'http://www.opengis.net/def/crs/EPSG/0/4326'
     assert crsConvert('+proj=longlat +datum=WGS84 +no_defs ', 'epsg') == 4326
+    assert crsConvert('http://www.opengis.net/def/crs/EPSG/0/4326', 'epsg') == 4326
+    assert crsConvert(crsConvert('http://www.opengis.net/def/crs/EPSG/0/4326', 'osr'), 'epsg') == 4326
+    with pytest.raises(TypeError):
+        crsConvert('xyz', 'epsg')
+    with pytest.raises(ValueError):
+        crsConvert(4326, 'xyz')
+
+
+def test_haversine():
+    assert haversine(50, 10, 51, 10) == 111194.92664455889
