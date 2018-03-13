@@ -6,7 +6,7 @@ testdir = os.getenv('TESTDATA_DIR', 'pyroSAR/tests/data/')
 
 testcases = [
     #SAFE
-    {'path': os.path.join(testdir, 'S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'),
+    {'path': os.path.join('pyroSAR/tests/data/', 'S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'),
      'acquisition_mode': 'IW',
      'bbox_area': 7.573045244595988,
      'compression': 'zip',
