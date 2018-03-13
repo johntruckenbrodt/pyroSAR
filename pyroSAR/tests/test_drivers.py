@@ -6,8 +6,9 @@ testdir = os.getenv('TESTDATA_DIR', 'pyroSAR/tests/data/')
 
 testcases = [
     #SAFE
-    {'path': os.path.join('ci_testing/tests/data/', 'S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'),
+    {'path': os.path.join(testdir, 'S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'),
      'acquisition_mode': 'IW',
+     'bbox_area': 7.573045244595988,
      'compression': 'zip',
      'corners': {'ymax': 52.183979, 'ymin': 50.295261, 'xmin': 8.017178, 'xmax': 12.0268},
      'lines': 16685,
@@ -47,6 +48,7 @@ class Test_Metadata():
         assert scene['pyro'].sensor == scene['sensor']
         assert scene['pyro'].spacing == scene['spacing']
         assert scene['pyro'].is_processed('data/') is False
+        assert scene['pyro'].bbox().getArea() == scene['bbox_area']
 
 
 def test_identify_fail():
