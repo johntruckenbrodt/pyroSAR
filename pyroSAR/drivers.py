@@ -405,7 +405,7 @@ class ID(object):
                             os.makedirs(outname)
                         else:
                             try:
-                                with open(outname, 'w') as outfile:
+                                with open(outname, 'wb') as outfile:
                                     outfile.write(archive.read(item))
                             except zf.BadZipfile:
                                 print('corrupt archive, unpacking failed')
@@ -1149,11 +1149,11 @@ class SAFE(ID):
         after = (date + timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
 
         # download the files
-        if type in ['POE', 'RES']:
+        if osvType in ['POE', 'RES']:
             with OSV(outdir) as osv:
                 files = osv.catch(osvType, before, after)
                 osv.retrieve(files)
-        elif sorted(type) == ['POE', 'RES']:
+        elif sorted(osvType) == ['POE', 'RES']:
             with OSV(outdir) as osv:
                 files = osv.catch('POE', before, after)
                 if len(files) == 0:
