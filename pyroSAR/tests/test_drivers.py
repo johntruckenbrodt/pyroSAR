@@ -86,10 +86,22 @@ def test_scene():
     osvdir = os.path.join(id.scene, 'osv')
     if sys.version_info >= (2, 7, 9):
         id.getOSV(osvdir)
-        assert len(finder(os.path.join(osvdir, 'POEORB'), ['S1A*EOF'])) == 3
+
+        with pyroSAR.OSV(osvdir) as osv:
+            with pytest.raises(IOError):
+                osv.catch(osvtype='XYZ')
+            res = osv.catch(osvtype='RES', start=osv.mindate('POE'), stop=osv.maxdate('POE'))
+            osv.retrieve(res)
+
+            assert len(osv.getLocals('POE')) == 3
+            assert len(osv.getLocals('RES')) == 21
+            assert osv.match(id.start, 'POE') is not None
+            assert osv.match(id.start, 'RES') is None
+            osv.clean_res()
     else:
         with pytest.raises(RuntimeError):
-            id.getOSV(osvdir)
+            id.getOSV(osvdir, osvType='POE')
+
     shutil.rmtree(test_dir)
     os.remove(dbfile)
 
