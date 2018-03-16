@@ -1,6 +1,8 @@
 import pyroSAR
 from pyroSAR.spatial import crsConvert, haversine
+from pyroSAR.ancillary import finder
 import pytest
+import shutil
 import os
 
 testdir = os.getenv('TESTDATA_DIR', 'pyroSAR/tests/data/')
@@ -12,6 +14,7 @@ testcases = [
      'bbox_area': 7.573045244595988,
      'compression': 'zip',
      'corners': {'ymax': 52.183979, 'ymin': 50.295261, 'xmin': 8.017178, 'xmax': 12.0268},
+     'hgt_len': 15,
      'lines': 16685,
      'outname': 'S1A__IW___A_20150222T170750',
      'orbit': 'A',
@@ -48,8 +51,8 @@ class Test_Metadata():
         assert scene['pyro'].stop == scene['stop']
         assert scene['pyro'].sensor == scene['sensor']
         assert scene['pyro'].spacing == scene['spacing']
-        assert scene['pyro'].is_processed('data/') is False
         assert scene['pyro'].bbox().getArea() == scene['bbox_area']
+        assert len(scene['pyro'].getHGT()) == scene['hgt_len']
 
 
 def test_identify_fail():
@@ -61,14 +64,29 @@ def test_export2dict():
     pass
 
 
-def test_archive():
+def test_scene():
     scene = 'pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'
     dbfile = os.path.join('pyroSAR/tests/data/', 'scenes.db')
-    if os.path.isfile(dbfile):
-        os.remove(dbfile)
     with pyroSAR.Archive(dbfile) as db:
         db.insert(scene, verbose=True)
         assert db.size == (1, 0)
+    id = pyroSAR.identify(scene)
+    test_dir = 'pyroSAR/tests/data/test'
+    os.makedirs(test_dir)
+    id.bbox(outname='pyroSAR/tests/data/test/bbox_test.shp')
+    assert id.is_processed(test_dir) is False
+    id.unpack('pyroSAR/tests/data/test')
+    assert id.compression is None
+    os.remove(dbfile)
+    id.export2sqlite(dbfile)
+    with pytest.raises(IOError):
+        id.getGammaImages()
+    assert id.getGammaImages(id.scene) == []
+    osvdir = os.path.join(id.scene, 'osv')
+    id.getOSV(osvdir)
+    assert len(finder(os.path.join(osvdir, 'POEORB'), ['S1A*EOF'])) == 3
+    shutil.rmtree(test_dir)
+    os.remove(dbfile)
 
 
 def test_crsConvert():
