@@ -3,6 +3,7 @@ from pyroSAR.spatial import crsConvert, haversine
 from pyroSAR.ancillary import finder
 import pytest
 import shutil
+import sys
 import os
 
 testdir = os.getenv('TESTDATA_DIR', 'pyroSAR/tests/data/')
@@ -83,8 +84,12 @@ def test_scene():
         id.getGammaImages()
     assert id.getGammaImages(id.scene) == []
     osvdir = os.path.join(id.scene, 'osv')
-    id.getOSV(osvdir)
-    assert len(finder(os.path.join(osvdir, 'POEORB'), ['S1A*EOF'])) == 3
+    if sys.version_info >= (2, 7, 9):
+        id.getOSV(osvdir)
+        assert len(finder(os.path.join(osvdir, 'POEORB'), ['S1A*EOF'])) == 3
+    else:
+        with pytest.raises(RuntimeError):
+            id.getOSV(osvdir)
     shutil.rmtree(test_dir)
     os.remove(dbfile)
 
