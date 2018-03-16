@@ -143,7 +143,7 @@ class OSV(object):
             subaddress = urlunparse(address_parse._replace(query=urlencode(query)))
             # read the remote content
             try:
-                response = urlopen(subaddress, context=self.sslcontext).read()
+                response = urlopen(subaddress, context=self.sslcontext).read().decode('utf-8')
                 print(subaddress)
             except IOError as e:
                 raise RuntimeError(e)
