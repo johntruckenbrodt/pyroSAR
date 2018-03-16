@@ -79,7 +79,13 @@ class OSV(object):
                             '(?P<publish>[0-9]{8}T[0-9]{6})_V' \
                             '(?P<start>[0-9]{8}T[0-9]{6})_' \
                             '(?P<stop>[0-9]{8}T[0-9]{6})\.EOF'
-        self.sslcontext = ssl._create_unverified_context()
+        if sys.version_info >= (2, 7, 9):
+            self.sslcontext = ssl._create_unverified_context()
+        else:
+            #https://github.com/airnotifier/airnotifier/issues/136
+            self.sslcontext = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
+            self.sslcontext.check_hostname = False
+            self.sslcontext.verify_mode = ssl.CERT_NONE
 
     def __enter__(self):
         return self
