@@ -8,16 +8,16 @@ def not_raises(ExpectedException):
     try:
         yield
 
-    except ExpectedException, err:
+    except ExpectedException:
         raise AssertionError(
             "Did raise exception {0} when it should not!".format(
                 repr(ExpectedException)
             )
         )
 
-    except Exception, err:
+    except Exception:
         raise AssertionError(
-            "An unexpected exception {0} raised.".format(repr(err))
+            "An unexpected exception {0} raised.".format(repr(Exception))
         )
 
 class TestExemineExe:
