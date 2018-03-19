@@ -34,6 +34,7 @@ before_install:
   - pip install -U pip
 
 install:
+  - ./esa-snap_sentinel_unix_6_0.sh
   - pip install -r requirements.txt
   - pip install coveralls
   - pip install coverage
