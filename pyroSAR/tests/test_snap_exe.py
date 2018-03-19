@@ -25,12 +25,12 @@ class TestExemineExe:
         with pytest.raises(ValueError):
             ExamineExe.examine('some_exe_file.exe')
 
-    def test_not_exception(self):
-        SNAP_EXECUTABLE = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
-        with not_raises(ValueError):
-            ExamineExe.examine(SNAP_EXECUTABLE)
+    # def test_not_exception(self):
+    #     SNAP_EXECUTABLE = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
+    #     with not_raises(ValueError):
+    #         ExamineExe.examine(SNAP_EXECUTABLE)
 
-class TestExamineSnap:
-    def test_not_exception(self):
-        with not_raises(AssertionError):
-            test_snap_exe = ExamineSnap()
+# class TestExamineSnap:
+#     def test_not_exception(self):
+#         with not_raises(AssertionError):
+#             test_snap_exe = ExamineSnap()
