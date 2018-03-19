@@ -257,7 +257,7 @@ class ExamineSnap(ExamineExe):
             self.config_path = os.path.join(self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
 
         except WindowsError:
-            raise AssertionError("ETC directory is not existend.")
+            raise AssertionError("ETC directory is not existent.")
 
     def set_path(self, path):
         self.path = os.path.abspath(path)

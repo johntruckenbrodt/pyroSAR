@@ -5,7 +5,6 @@ Created on Tue Dec 12 10:10:41 2017
 @author: ibari
 """
 import os
-import platform
 from distutils.spawn import find_executable
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode',
