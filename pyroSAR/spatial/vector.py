@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 ##############################################################
 # OGR wrapper for convenient vector data handling and processing
-# John Truckenbrodt 2015-2016
+# John Truckenbrodt 2015-2018
 ##############################################################
 
 """
@@ -21,34 +21,36 @@ osr.UseExceptions()
 
 
 class Vector(object):
-    def __init__(self, filename=None, driver="ESRI Shapefile"):
+    def __init__(self, filename=None, driver='ESRI Shapefile'):
 
-        if driver not in ["ESRI Shapefile", "Memory"]:
-            raise IOError("driver not supported")
+        if driver not in ['ESRI Shapefile', 'Memory']:
+            raise IOError('driver not supported')
 
         if filename is None:
-            driver = "Memory"
+            driver = 'Memory'
         else:
             self.filename = filename
 
         self.driver = ogr.GetDriverByName(driver)
 
-        self.vector = self.driver.CreateDataSource("out") if driver == "Memory" else self.driver.Open(filename)
+        self.vector = self.driver.CreateDataSource('out') if driver == 'Memory' else self.driver.Open(filename)
 
         nlayers = self.vector.GetLayerCount()
         if nlayers > 1:
-            raise IOError("multiple layers are currently not supported")
+            raise IOError('multiple layers are currently not supported')
         elif nlayers == 1:
             self.init_layer()
 
     def __getitem__(self, expression):
-        if isinstance(parse_literal(expression), int):
+        if isinstance(expression, int):
+            return self.getFeatureByIndex(expression)
+        elif isinstance(parse_literal(expression), int):
             return self.getFeatureByIndex(parse_literal(expression))
         else:
             try:
-                field, value = expression.split("=")
+                field, value = expression.split('=')
             except AttributeError:
-                raise KeyError("invalid expression")
+                raise KeyError('invalid expression')
             feat = self.getFeatureByAttribute(field, parse_literal(value))
             return feature2vector(feat, ref=self)
 

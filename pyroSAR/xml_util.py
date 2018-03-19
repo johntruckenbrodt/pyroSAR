@@ -12,13 +12,13 @@ import xml.etree.ElementTree as ET
 class XMLHandler(object):
     def __init__(self, xml):
         errormessage = 'xmlfile must be a string pointing to an existing file, ' \
-                       'a string from which an xml can be parsed or a file object'
+                       'a string or bytes object from which an xml can be parsed or a file object'
         if 'readline' in dir(xml):
             self.infile = xml.name if hasattr(xml, 'name') else None
             xml.seek(0)
             self.text = xml.read()
             xml.seek(0)
-        elif isinstance(xml, str):
+        elif isinstance(xml, (bytes, str)):
             if os.path.isfile(xml):
                 self.infile = xml
                 with open(xml, 'r') as infile:
@@ -27,7 +27,7 @@ class XMLHandler(object):
                 try:
                     tree = ET.fromstring(xml)
                     self.infile = None
-                    self.text = xml
+                    self.text = str(xml)
                     del tree
                 except ET.ParseError:
                     raise IOError(errormessage)

@@ -1,4 +1,5 @@
 # pyroSAR
+[![Build Status](https://www.travis-ci.org/johntruckenbrodt/pyroSAR.svg?branch=master)](https://www.travis-ci.org/johntruckenbrodt/pyroSAR)      [![Coverage Status](https://coveralls.io/repos/github/johntruckenbrodt/pyroSAR/badge.svg?branch=master)](https://coveralls.io/github/johntruckenbrodt/pyroSAR?branch=master)
 
 ### a Python framework for large-scale SAR satellite data processing
 
@@ -15,14 +16,14 @@ Not everything is working properly, stay tuned...
 ### Installation of dependencies
 
 ##### GDAL
-pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as the GDAL Python binding.
+pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as the GDAL Python binding. Alternatively, one can use <a href="https://github.com/nextgis/pygdal">pygdal</a>, a virtualenv and setuptools friendly version of standard GDAL python bindings.
 ###### Ubuntu
 Currently Ubuntu comes with GDAL 1.11. By adding the ubuntugis repository to e.g. apt you can install 
 version >2.1:
 ```sh
 sudo add-apt-repository ppa:ubuntugis/ppa
 sudo apt-get update
-sudo apt-get install python-gdal gdal-bin
+sudo apt-get install python-gdal python3-gdal gdal-bin
 ```
 This way the required dependencies (GEOS and PROJ4 in particular) are also installed.
 You can check the version by typing:
@@ -30,7 +31,7 @@ You can check the version by typing:
 gdalinfo --version
 ```
 ###### Debian
-Starting with Debian 9 (Strech) GDAL is available in version >2.1 in the official repository.
+Starting with Debian 9 (Stretch) GDAL is available in version >2.1 in the official repository.
 ###### Building from source
 Alternatively, you can build GDAL and the dependencies from source. The script `pyroSAR/install/install_deps.sh` 
 gives specific instructions on how to do it. It is not yet intended to run this script via shell, but rather to 

@@ -1,6 +1,6 @@
 ##############################################################
 # core routines for software pyroSAR
-# John Truckenbrodt 2014-2017
+# John Truckenbrodt 2014-2018
 ##############################################################
 """
 This script gathers central functions and object instances for general applications
@@ -11,6 +11,7 @@ import sys
 if sys.version_info >= (3, 0):
     from io import StringIO
     from urllib.parse import urlparse, urlunparse, urlencode
+    from builtins import str
 else:
     from urllib import urlencode
     from StringIO import StringIO
@@ -20,6 +21,7 @@ import re
 import sys
 import fnmatch
 import inspect
+import itertools
 import os
 import subprocess as sp
 from time import mktime, strptime
@@ -48,6 +50,7 @@ def dictmerge(x, y):
     return z
 
 
+# todo consider using itertools.chain like in function finder
 def dissolve(inlist):
     """
     list and tuple flattening; e.g. [[1, 2], [3, 4]] -> [1, 2, 3, 4]
@@ -69,27 +72,36 @@ def enablePrint():
 
 def finder(folder, matchlist, foldermode=0, regex=False, recursive=True):
     """
-    function for finding files in a folder and its subdirectories
-    search patterns must be given in a list
-    patterns can follow the unix shell standard (default) or regular expressions (via argument regex)
-    the argument recursive decides whether search is done recursively in all subdirectories or in the defined directory only
-    foldermodes:
-    0: no folders
-    1: folders included
-    2: only folders
+    function for finding files/folders in folders and their subdirectories
+
+    :param folder: the directory to be searched
+    :param matchlist: a list of search patterns
+    :param foldermode:
+        0: only files
+        1: files and folders
+        2: only folders
+    :param regex: are the search patterns in matchlist regular expressions or unix shell standard (default)?
+    :param recursive: search folder recursively into all subdirectories or only in the top level?
     """
     # match patterns
-    pattern = r'|'.join(matchlist if regex else [fnmatch.translate(x) for x in matchlist])
-    if recursive:
-        out = dissolve([[os.path.join(root, x) for x in dirs+files if re.search(pattern, x)] for root, dirs, files in os.walk(folder)])
+    if isinstance(folder, str):
+        pattern = r'|'.join(matchlist if regex else [fnmatch.translate(x) for x in matchlist])
+        if recursive:
+            out = dissolve([[os.path.join(root, x) for x in dirs+files if re.search(pattern, x)]
+                            for root, dirs, files in os.walk(folder)])
+        else:
+            out = [os.path.join(folder, x) for x in os.listdir(folder) if re.search(pattern, x)]
+        # exclude directories
+        if foldermode == 0:
+            out = [x for x in out if not os.path.isdir(x)]
+        if foldermode == 2:
+            out = [x for x in out if os.path.isdir(x)]
+        return sorted(out)
+    elif isinstance(folder, list):
+        groups = [finder(x, matchlist, foldermode, regex, recursive) for x in folder]
+        return list(itertools.chain(*groups))
     else:
-        out = [os.path.join(folder, x) for x in os.listdir(folder) if re.search(pattern, x)]
-    # exclude directories
-    if foldermode == 0:
-        out = [x for x in out if not os.path.isdir(x)]
-    if foldermode == 2:
-        out = [x for x in out if os.path.isdir(x)]
-    return sorted(out)
+        raise IOError('parameter folder must be either a string or a list')
 
 
 def groupbyTime(images, function, time):
@@ -121,10 +133,11 @@ def groupbyTime(images, function, time):
 def multicore(function, cores, multiargs, **singleargs):
     """
     wrapper for multicore process execution
-    function: individual function to be applied to each process item
-    cores: the number of subprocesses started/CPUs used; this value is reduced in case the number of subprocesses is smaller
-    multiargs: a dictionary containing subfunction argument names as keys and lists of arguments to be distributed among the processes as values
-    singleargs: all remaining arguments which are invariant among the subprocesses
+
+    :param function: individual function to be applied to each process item
+    :param cores: the number of subprocesses started/CPUs used; this value is reduced in case the number of subprocesses is smaller
+    :param multiargs: a dictionary containing subfunction argument names as keys and lists of arguments to be distributed among the processes as values
+    :param singleargs: all remaining arguments which are invariant among the subprocesses
     important:
     -all multiargs value lists must be of same length, i.e. all argument keys must be explicitly defined for each subprocess
     -all function arguments passed via singleargs must be provided with the full argument name and its value (i.e. argname=argval); default function args are not accepted
@@ -160,7 +173,8 @@ def multicore(function, cores, multiargs, **singleargs):
     cores = cores if arglengths[0] >= cores else arglengths[0]
 
     # create a list of dictionaries each containing the arguments for individual function calls to be passed to the multicore processes
-    processlist = [dictmerge(dict([(arg, multiargs[arg][i]) for arg in multiargs]), singleargs) for i in range(len(multiargs[multiargs.keys()[0]]))]
+    processlist = [dictmerge(dict([(arg, multiargs[arg][i]) for arg in multiargs]), singleargs)
+                   for i in range(len(multiargs[multiargs.keys()[0]]))]
 
     # block printing of the executed function
     blockPrint()
@@ -184,17 +198,23 @@ def multicore(function, cores, multiargs, **singleargs):
 
 def parse_literal(x):
     """
-    return the smallest possible data type
+    return the smallest possible data type for a string
+
+    :param x: a string to be parsed
+    :return a value of type int, float or str
     """
     if isinstance(x, list):
-        return [parse_literal(y) for y in x]
-    try:
-        return int(x)
-    except ValueError:
+        return map(parse_literal, x)
+    elif isinstance(x, (bytes, str)):
         try:
-            return float(x)
+            return int(x)
         except ValueError:
-            return str(x)
+            try:
+                return float(x)
+            except ValueError:
+                return x
+    else:
+        raise IOError('input must be a string or a list of strings')
 
 
 class Queue(object):

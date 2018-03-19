@@ -40,8 +40,9 @@ maindir = '/.../swos_process'
 # the directories for Sentinel-1 POE and RES orbit state vector files
 # this is intended to be a fixed directory structure similar to that of ESA SNAP
 # in the future all auxiliary data files will be stored in a structure defined by pyroSAR
-osvdir_poe = '/.../.gamma/auxdata/Orbits/Sentinel-1/POEORB'
-osvdir_res = '/.../.gamma/auxdata/Orbits/Sentinel-1/RESORB'
+# This is currently only used for Sentinel-1; within the processor two subdirectories will be created named
+# POEORB and RESORB which will contain the respective orbit files
+osvdir = '/.../.gamma/auxdata/Orbits/Sentinel-1'
 
 
 def worker(sitename):
@@ -60,8 +61,8 @@ def worker(sitename):
     # get the maximum date of the precise orbit files
     # as type also 'RES' can be selected. These files are not as precise as POE and thus geocoding might not be
     # quite as accurate
-    with OSV(osvdir_poe, osvdir_res) as osv:
-        maxdate = osv.maxdate(type='POE', datetype='stop')
+    with OSV(osvdir) as osv:
+        maxdate = osv.maxdate(osvtype='POE', datetype='stop')
     #######################################################################################
     # define the directories for writing temporary and final results
     sitedir = os.path.join(maindir, sitename)
@@ -102,14 +103,14 @@ def worker(sitename):
         multicore(geocode, cores=parallel1, multiargs={'scene': selection_proc}, dem=demfile,
                   tempdir=tempdir, outdir=outdir,
                   targetres=resolution, scaling='db',
-                  func_geoback=2, func_interp=0, sarsimulation=False, osvdir=osvdir_poe, cleanup=True)
+                  func_geoback=2, func_interp=0, sarsimulation=False, osvdir=osvdir, cleanup=True, allow_RES_OSV=False)
     elif len(selection_proc) == 1:
         scene = selection_proc[0]
         # run the function on a single core
         geocode(scene, dem=demfile,
                 tempdir=tempdir, outdir=outdir,
                 targetres=resolution, scaling='db',
-                func_geoback=2, func_interp=0, sarSimCC=False, osvdir=osvdir_poe, cleanup=True)
+                func_geoback=2, func_interp=0, sarSimCC=False, osvdir=osvdir, cleanup=True, allow_RES_OSV=False)
     return len(selection_proc)
 
 
@@ -125,7 +126,7 @@ if __name__ == '__main__':
         archive.insert(scenes_s1)
     #######################################################################################
     # download the latest orbit state vector files
-    with OSV(osvdir_poe, osvdir_res) as osv:
+    with OSV(osvdir) as osv:
         osv.update()
     #######################################################################################
     # start the processing
