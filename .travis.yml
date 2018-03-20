@@ -31,7 +31,7 @@ before_install:
   - pip install -U pip
   - wget -O esa-snap_sentinel_unix_6_0.sh http://step.esa.int/downloads/6.0/installers/esa-snap_sentinel_unix_6_0.sh
   - sudo chmod +x esa-snap_sentinel_unix_6_0.sh
-  - - yes "" | ./esa-snap_sentinel_unix_6_0.sh
+  - yes "" | ./esa-snap_sentinel_unix_6_0.sh
   - dpkg -l | grep snap
 
 install:
