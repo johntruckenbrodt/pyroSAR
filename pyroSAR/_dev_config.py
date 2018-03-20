@@ -6,6 +6,7 @@ Created on Tue Dec 12 10:10:41 2017
 """
 import os
 from distutils.spawn import find_executable
+import warnings
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode',
              'start', 'stop', 'product', 'spacing', 'samples', 'lines']
@@ -157,7 +158,7 @@ class ExamineExe(object):
 
             if len(True_values) > 1:
                 raise ValueError(
-                    "There are more than one instances installed. Define with one you want to \
+                    "There are more than one instances installed. Define which one you want to \
                     use with self.set_path(...)")
 
             else:
@@ -165,15 +166,23 @@ class ExamineExe(object):
 
                 try:
                     temp_loc = [item for item, executable_list in enumerate(executable_list) if executable_list][0]
+                    return status, os.path.abspath(find_executable(name[temp_loc]))
 
                 except IndexError:
-                    raise ValueError("One of the executables {0} must be installed.".format(name))
+                    # raise ValueError("One of the executables {0} must be installed.".format(name))
+                    warnings.warn("One of the executables {0} should be installed. You can download it from \
+                                  http://step.esa.int/main/toolboxes/snap/ or you can specify a path with \
+                                  snap_config.set_path(path_to_snap)".format(name), UserWarning)
 
-                return status, os.path.abspath(find_executable(name[temp_loc]))
+                # return status, os.path.abspath(find_executable(name[temp_loc]))
 
         else:
             status = find_executable(name) is not None
             if status is False:
-                raise ValueError("The executables {0} must be installed.".format(name))
+                warnings.warn("The executables {0} must be installed. You can download it from \
+                                  http://step.esa.int/main/toolboxes/snap/ or you can specify a path with \
+                                  snap_config.set_path(path_to_snap)".format(name), UserWarning)
 
-            return status, os.path.abspath(find_executable(name))
+                # raise ValueError("The executables {0} must be installed.".format(name))
+            else:
+                return status, os.path.abspath(find_executable(name))
