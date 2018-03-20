@@ -33,6 +33,7 @@ before_install:
   - sudo chmod +x esa-snap_sentinel_unix_6_0.sh
   - yes "" | ./esa-snap_sentinel_unix_6_0.sh
   - dpkg -l | grep snap
+  - which snap
 
 install:
   - pip install -r requirements.txt
