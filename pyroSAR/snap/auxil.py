@@ -244,11 +244,15 @@ class ExamineSnap(ExamineExe):
         super(ExamineSnap, self).__init__()
 
         SNAP_EXECUTABLE = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
-        self.status, self.path = self.examine(SNAP_EXECUTABLE)
-        self.auxdatapath = os.path.join(expanduser("~"), '.snap/auxdata')
+        try:
+            self.status, self.path = self.examine(SNAP_EXECUTABLE)
+            self.auxdatapath = os.path.join(expanduser("~"), '.snap/auxdata')
 
-        self.__get_etc()
-        self.__read_config()
+            self.__get_etc()
+            self.__read_config()
+
+        except TypeError:
+            pass
 
     def __get_etc(self):
         try:

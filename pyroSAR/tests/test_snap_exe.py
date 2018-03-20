@@ -22,7 +22,7 @@ def not_raises(ExpectedException):
 
 class TestExemineExe:
     def test_exception(self):
-        with pytest.raises(ValueError):
+        with pytest.warns(UserWarning):
             ExamineExe.examine('some_exe_file.exe')
 
     # def test_not_exception(self):
@@ -30,7 +30,11 @@ class TestExemineExe:
     #     with not_raises(ValueError):
     #         ExamineExe.examine(SNAP_EXECUTABLE)
 
-# class TestExamineSnap:
-#     def test_not_exception(self):
-#         with not_raises(AssertionError):
-#             test_snap_exe = ExamineSnap()
+class TestExamineSnap:
+    def test_exception(self):
+        with pytest.warns(UserWarning):
+            ExamineExe.examine('some_exe_file.exe')
+
+    # def test_not_exception(self):
+    #     with not_raises(AssertionError):
+    #         test_snap_exe = ExamineSnap()

@@ -5,8 +5,8 @@ Created on Tue Dec 12 10:10:41 2017
 @author: ibari
 """
 import os
-from distutils.spawn import find_executable
 import warnings
+from distutils.spawn import find_executable
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode',
              'start', 'stop', 'product', 'spacing', 'samples', 'lines']
@@ -158,8 +158,7 @@ class ExamineExe(object):
 
             if len(True_values) > 1:
                 raise ValueError(
-                    "There are more than one instances installed. Define which one you want to \
-                    use with self.set_path(...)")
+                    "There are more than one instances installed. Define which one you want to use with self.set_path(...)")
 
             else:
                 status = any(item == True for item in executable_list)
@@ -170,18 +169,16 @@ class ExamineExe(object):
 
                 except IndexError:
                     # raise ValueError("One of the executables {0} must be installed.".format(name))
-                    warnings.warn("One of the executables {0} should be installed. You can download it from \
-                                  http://step.esa.int/main/toolboxes/snap/ or you can specify a path with \
-                                  snap_config.set_path(path_to_snap)".format(name), UserWarning)
+                    warnings.warn(
+                        "One of the executables {0} should be installed. You can download it from http://step.esa.int/main/toolboxes/snap/ or you can specify a path with snap_config.set_path(path_to_snap)".format(
+                            name), UserWarning)
 
                 # return status, os.path.abspath(find_executable(name[temp_loc]))
 
         else:
             status = find_executable(name) is not None
             if status is False:
-                warnings.warn("The executables {0} must be installed. You can download it from \
-                                  http://step.esa.int/main/toolboxes/snap/ or you can specify a path with \
-                                  snap_config.set_path(path_to_snap)".format(name), UserWarning)
+                warnings.warn("The executables {0} must be installed. You can download it from http://step.esa.int/main/toolboxes/snap/ or you can specify a path with snap_config.set_path(path_to_snap)".format(name), UserWarning)
 
                 # raise ValueError("The executables {0} must be installed.".format(name))
             else:
