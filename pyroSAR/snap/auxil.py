@@ -240,12 +240,11 @@ class ExamineSnap(ExamineExe):
     not find the snap executable, you can set an path via: snap_config.set_path("path")
     """
 
-    def __init__(self):
+    def __init__(self, snap_executable=('snap64.exe', 'snap32.exe', 'snap.exe', 'snap')):
         super(ExamineSnap, self).__init__()
 
-        SNAP_EXECUTABLE = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
         try:
-            self.status, self.path = self.examine(SNAP_EXECUTABLE)
+            self.status, self.path = self.examine(snap_executable)
             self.auxdatapath = os.path.join(expanduser("~"), '.snap/auxdata')
 
             self.__get_etc()
