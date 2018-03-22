@@ -1,95 +1,122 @@
 import pyroSAR
-#import logging
-#import unittest
+from pyroSAR.spatial import crsConvert, haversine
+from pyroSAR.ancillary import finder
 import pytest
+import shutil
+import sys
 import os
 
-testdir = os.getenv("TESTDATA_DIR", "pyroSAR/tests/data/")
+testdir = os.getenv('TESTDATA_DIR', 'pyroSAR/tests/data/')
 
 testcases = [
-    {"path": os.path.join("pyroSAR/tests/data", "S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip"),
-     "compression": "zip",
-     "sensor": "S1A",
-     "product": "GRD",
-     "outname": 'S1A__IW___A_20150222T170750',
-     "orbit": "A"},
-
-    {"path": os.path.join(testdir, "0000022708_001001_ALOS2015976960-140909.zip"),
-     "compression": "zip",
-     "sensor": "PSR2",
-     "product": "1.5",
-     "outname": "PSR2_FBD__A_20140909T043342",
-     "orbit": "A"}
+    #SAFE
+    {'path': os.path.join('pyroSAR/tests/data/', 'S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'),
+     'acquisition_mode': 'IW',
+     'bbox_area': 7.573045244595988,
+     'compression': 'zip',
+     'corners': {'ymax': 52.183979, 'ymin': 50.295261, 'xmin': 8.017178, 'xmax': 12.0268},
+     'hgt_len': 15,
+     'lines': 16685,
+     'outname': 'S1A__IW___A_20150222T170750',
+     'orbit': 'A',
+     'polarizations': ['VV', 'VH'],
+     'product': 'GRD',
+     'samples': 25368,
+     'sensor': 'S1A',
+     'spacing': (10.0, 9.998647),
+     'start': '20150222T170750',
+     'stop': '20150222T170815'
+     }
 ]
+
 
 @pytest.fixture
 def scene(case):
     case['pyro'] = pyroSAR.identify(case['path'])
     return case
 
-@pytest.mark.parametrize("case", testcases)
+
+@pytest.mark.parametrize('case', testcases)
 class Test_Metadata():
-    def test_compression(self, scene):
-        #scene = pyroSAR.identify(case["path"])
-        assert scene['pyro'].compression == scene["compression"]
-
-    def test_sensor(self, scene):
-        assert scene['pyro'].sensor == scene["sensor"]
-
-    def test_product(self, scene):
-        assert scene['pyro'].product == scene["product"]
-
-    def test_is_processed(self, scene):
-        assert scene['pyro'].is_processed("data/") == False
-
-    def test_outname(self, scene):
-        assert scene['pyro'].outname_base() == scene["outname"]
-
-    def test_orbit(self, scene):
-        assert scene['pyro'].orbit == scene["orbit"]
-
+    def test_attributes(self, scene):
+        assert scene['pyro'].acquisition_mode == scene['acquisition_mode']
+        assert scene['pyro'].compression == scene['compression']
+        assert scene['pyro'].getCorners() == scene['corners']
+        assert scene['pyro'].lines == scene['lines']
+        assert scene['pyro'].outname_base() == scene['outname']
+        assert scene['pyro'].orbit == scene['orbit']
+        assert scene['pyro'].polarizations == scene['polarizations']
+        assert scene['pyro'].product == scene['product']
+        assert scene['pyro'].samples == scene['samples']
+        assert scene['pyro'].start == scene['start']
+        assert scene['pyro'].stop == scene['stop']
+        assert scene['pyro'].sensor == scene['sensor']
+        assert scene['pyro'].spacing == scene['spacing']
+        assert scene['pyro'].bbox().getArea() == scene['bbox_area']
+        assert len(scene['pyro'].getHGT()) == scene['hgt_len']
 
 
 def test_identify_fail():
     with pytest.raises(IOError):
         pyroSAR.identify(os.path.join(testdir, 'foobar'))
 
+
 def test_export2dict():
     pass
 
 
-"""
-class TestMetadataS1(unittest.TestCase):
-    def setUp(self):
-        self.s1 = pyroSAR.identify("data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip")
-        #print self.s1.meta
-    def tearDown(self):
-        self.s1 = None
+def test_scene():
+    scene = 'pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'
+    dbfile = os.path.join('pyroSAR/tests/data/', 'scenes.db')
+    with pyroSAR.Archive(dbfile) as db:
+        db.insert(scene, verbose=True)
+        assert db.size == (1, 0)
+    id = pyroSAR.identify(scene)
+    test_dir = 'pyroSAR/tests/data/test'
+    os.makedirs(test_dir)
+    id.bbox(outname='pyroSAR/tests/data/test/bbox_test.shp')
+    assert id.is_processed(test_dir) is False
+    id.unpack('pyroSAR/tests/data/test')
+    assert id.compression is None
+    os.remove(dbfile)
+    id.export2sqlite(dbfile)
+    with pytest.raises(IOError):
+        id.getGammaImages()
+    assert id.getGammaImages(id.scene) == []
+    osvdir = os.path.join(id.scene, 'osv')
+    if sys.version_info >= (2, 7, 9):
+        id.getOSV(osvdir)
 
-    def test_compression_zip(self):
-        self.assertEqual(self.s1.compression, 'zip')
+        with pyroSAR.OSV(osvdir) as osv:
+            with pytest.raises(IOError):
+                osv.catch(osvtype='XYZ')
+            res = osv.catch(osvtype='RES', start=osv.mindate('POE'), stop=osv.maxdate('POE'))
+            osv.retrieve(res)
 
-    def test_sensor_S1(self):
-        self.assertEqual(self.s1.sensor, "S1A")
+            assert len(osv.getLocals('POE')) == 3
+            assert len(osv.getLocals('RES')) == 21
+            assert osv.match(id.start, 'POE') is not None
+            assert osv.match(id.start, 'RES') is None
+            osv.clean_res()
+    else:
+        with pytest.raises(RuntimeError):
+            id.getOSV(osvdir, osvType='POE')
 
-    def test_product(self):
-        self.assertEqual(self.s1.product, "GRD")
+    shutil.rmtree(test_dir)
+    os.remove(dbfile)
 
-    def test_getCorners(self):
-        pass
-        #self.assertEqual(self.s1.getCorners(), {'xmin':}) 
 
-    def test_is_processed_False(self):
-        self.assertFalse(self.s1.is_processed('data/'))
+def test_crsConvert():
+    assert crsConvert(crsConvert(4326, 'wkt'), 'proj4') == '+proj=longlat +datum=WGS84 +no_defs '
+    assert crsConvert(crsConvert(4326, 'prettyWkt'), 'opengis') == 'http://www.opengis.net/def/crs/EPSG/0/4326'
+    assert crsConvert('+proj=longlat +datum=WGS84 +no_defs ', 'epsg') == 4326
+    assert crsConvert('http://www.opengis.net/def/crs/EPSG/0/4326', 'epsg') == 4326
+    assert crsConvert(crsConvert('http://www.opengis.net/def/crs/EPSG/0/4326', 'osr'), 'epsg') == 4326
+    with pytest.raises(TypeError):
+        crsConvert('xyz', 'epsg')
+    with pytest.raises(ValueError):
+        crsConvert(4326, 'xyz')
 
-    def test_outname_base(self):
-        self.assertEqual(self.s1.outname_base(), )
 
-    def test_orbit(self):
-        self.assertEqual(self.s1.orbit, 'A')
-
-    #def test_
-
-if __name__ == "__main__":
-    unittest.main()
-"""
+def test_haversine():
+    assert haversine(50, 10, 51, 10) == 111194.92664455889

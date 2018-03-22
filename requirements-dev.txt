@@ -1,8 +1,7 @@
-progressbar==2.3
+progressbar2
 pathos>=0.2
 numpy
 scoop
-pygdal
 
 #Testing requirements
 pytest

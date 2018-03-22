@@ -1,3 +1,3 @@
 __author__ = 'john'
 
-from auxil import OSV
+from .auxil import OSV

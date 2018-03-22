@@ -1,5 +1,6 @@
 # pyroSAR
-[![Build Status](https://www.travis-ci.org/johntruckenbrodt/pyroSAR.svg?branch=master)](https://www.travis-ci.org/johntruckenbrodt/pyroSAR)
+[![Build Status](https://www.travis-ci.org/johntruckenbrodt/pyroSAR.svg?branch=master)](https://www.travis-ci.org/johntruckenbrodt/pyroSAR)      [![Coverage Status](https://coveralls.io/repos/github/johntruckenbrodt/pyroSAR/badge.svg?branch=master)](https://coveralls.io/github/johntruckenbrodt/pyroSAR?branch=master)
+
 ### a Python framework for large-scale SAR satellite data processing
 
 The pyroSAR package aims at providing a complete solution for the scalable organization and processing of SAR satellite data:
@@ -22,7 +23,7 @@ version >2.1:
 ```sh
 sudo add-apt-repository ppa:ubuntugis/ppa
 sudo apt-get update
-sudo apt-get install python-gdal gdal-bin
+sudo apt-get install python-gdal python3-gdal gdal-bin
 ```
 This way the required dependencies (GEOS and PROJ4 in particular) are also installed.
 You can check the version by typing:
