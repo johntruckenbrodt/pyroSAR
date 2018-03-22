@@ -29,9 +29,9 @@ before_install:
   - sudo apt-get install gdal-bin python-gdal python3-gdal libproj-dev libgdal-dev -y
   - sudo apt-get install wget
   - pip install -U pip
-#  - wget -O esa-snap_sentinel_unix_6_0.sh http://step.esa.int/downloads/6.0/installers/esa-snap_sentinel_unix_6_0.sh
-#  - sudo chmod +x esa-snap_sentinel_unix_6_0.sh
-#  - yes "" | ./esa-snap_sentinel_unix_6_0.sh
+  - wget -O esa-snap_sentinel_unix_6_0.sh http://step.esa.int/downloads/6.0/installers/esa-snap_sentinel_unix_6_0.sh
+  - sudo chmod +x esa-snap_sentinel_unix_6_0.sh
+  - yes "" | ./esa-snap_sentinel_unix_6_0.sh
 
 install:
   - pip install -r requirements.txt
