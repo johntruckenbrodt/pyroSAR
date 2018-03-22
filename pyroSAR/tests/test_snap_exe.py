@@ -33,7 +33,7 @@ class TestExemineExe:
         SNAP_EXECUTABLE = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
         with pytest.warns(None) as record:
             ExamineExe.examine(SNAP_EXECUTABLE)
-        assert len(record) == 1
+        assert len(record) == 0
 
 
 class TestExamineSnap:
