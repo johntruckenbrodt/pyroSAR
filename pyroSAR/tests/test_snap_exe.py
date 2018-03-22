@@ -25,6 +25,9 @@ class TestExemineExe:
         with pytest.warns(UserWarning):
             ExamineExe.examine('some_exe_file.exe')
 
+    def test_warn_snap(self):
+        with pytest.warns(UserWarning):
+            ExamineExe.examine('snap')
     # def test_not_exception(self):
     #     SNAP_EXECUTABLE = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
     #     with not_raises(ValueError):
