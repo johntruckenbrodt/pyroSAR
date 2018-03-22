@@ -1,7 +1,10 @@
-import pytest
 from contextlib import contextmanager
+
+import pytest
+
 from pyroSAR._dev_config import ExamineExe
 from pyroSAR.snap.auxil import ExamineSnap
+
 
 @contextmanager
 def not_raises(ExpectedException):
@@ -20,24 +23,25 @@ def not_raises(ExpectedException):
             "An unexpected exception {0} raised.".format(repr(Exception))
         )
 
+
 class TestExemineExe:
     def test_exception(self):
         with pytest.warns(UserWarning):
             ExamineExe.examine('some_exe_file.exe')
 
-    def test_warn_snap(self):
-        with pytest.warns(UserWarning):
-            ExamineExe.examine('snap')
-    # def test_not_exception(self):
-    #     SNAP_EXECUTABLE = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
-    #     with not_raises(ValueError):
-    #         ExamineExe.examine(SNAP_EXECUTABLE)
+    def test_not_exception(self):
+        SNAP_EXECUTABLE = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
+        with pytest.warns(None) as record:
+            ExamineExe.examine(SNAP_EXECUTABLE)
+        assert len(record) == 1
+
 
 class TestExamineSnap:
     def test_exception(self):
         with pytest.warns(UserWarning):
-            ExamineExe.examine('some_exe_file.exe')
+            ExamineSnap(snap_executable='some_exe_file.exe')
 
-    # def test_not_exception(self):
-    #     with not_raises(AssertionError):
-    #         test_snap_exe = ExamineSnap()
+    def test_not_exception(self):
+        with pytest.warns(None) as record:
+            ExamineSnap()
+        assert len(record) == 0
