@@ -32,9 +32,8 @@ before_install:
   - wget -O esa-snap_sentinel_unix_6_0.sh http://step.esa.int/downloads/6.0/installers/esa-snap_sentinel_unix_6_0.sh
   - sudo chmod +x esa-snap_sentinel_unix_6_0.sh
   - yes "" | ./esa-snap_sentinel_unix_6_0.sh #-q -dir "d:\myapps\My Application"
-  - ls /opt
-  - ls /opt/snap
-  - ls /usr/local/bin
+  - ls -dl /opt/snap
+  - ls -dl /usr/local/bin
 #  - export PATH=$PATH:/usr/local/bin
 
 install:
