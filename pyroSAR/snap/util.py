@@ -8,7 +8,6 @@ import pyroSAR
 from pyroSAR import spatial
 from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt
 
-
 def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BoderNoise=True, offset=None, externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, test=False):
     """
