@@ -84,7 +84,7 @@ snap_suffix = {'Apply-Orbit-File': 'Orb',
                'Terrain-Correction': 'TC',
                'Terrain-Flattening': 'TF',
                'Read': '',
-               'Write': ''},
+               'Write': ''}
 
 snap = Storage(suffix=snap_suffix)
 
