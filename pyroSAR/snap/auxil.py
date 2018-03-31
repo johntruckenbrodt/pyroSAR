@@ -17,7 +17,6 @@ import zipfile as zf
 from ftplib import FTP
 from time import strftime, gmtime
 from xml.dom import minidom
-import warnings
 from os.path import expanduser
 
 import pyroSAR
@@ -245,6 +244,10 @@ class ExamineSnap(ExamineExe):
 
         try:
             self.status, self.path = self.examine(snap_executable)
+
+            if os.path.islink(self.path):
+                self.path = os.path.realpath(self.path)
+
             self.auxdatapath = os.path.join(expanduser("~"), '.snap/auxdata')
 
             self.__get_etc()
@@ -259,7 +262,7 @@ class ExamineSnap(ExamineExe):
             self.auxdata = os.listdir(self.etc)
             self.config_path = os.path.join(self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
 
-        except WindowsError:
+        except OSError:
             raise AssertionError("ETC directory is not existent.")
 
     def set_path(self, path):
