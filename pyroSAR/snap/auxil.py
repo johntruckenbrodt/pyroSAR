@@ -247,7 +247,6 @@ class ExamineSnap(ExamineExe):
 
             if os.path.islink(self.path):
                 self.path = os.path.realpath(self.path)
-
             self.auxdatapath = os.path.join(expanduser("~"), '.snap/auxdata')
 
             self.__get_etc()
