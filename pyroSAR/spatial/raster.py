@@ -14,19 +14,25 @@ loaded to memory by calling functions matrix or load.
 # todo: function to write data with the same metadata as a given file
 # todo: documentation
 
+from __future__ import division
 import os
 import re
 import shutil
 import subprocess as sp
 from math import sqrt
 from time import gmtime, strftime
-
-from .. import envi
 import numpy as np
-from . import Vector, bbox, crsConvert, intersect, gdalwarp, gdalbuildvrt
-from ..ancillary import dissolve, multicore
-from osgeo import gdal, osr
-from osgeo.gdalconst import *
+
+#from pyroSAR._common import (SpatialResults, nan_to_num, subset, test_import_type,
+#                             test_string, test_data)
+from pyroSAR import envi
+from pyroSAR.spatial.auxil import (gdalwarp, gdalbuildvrt)
+from pyroSAR.spatial.vector import (Vector, bbox, crsConvert, intersect)
+from pyroSAR.ancillary import (dissolve, multicore)
+
+from osgeo import (gdal, gdal_array, osr)
+from osgeo.gdalconst import (GA_ReadOnly, GDT_Byte, GDT_Int16, GDT_UInt16,
+                             GDT_Int32, GDT_UInt32, GDT_Float32, GDT_Float64)
 
 os.environ['GDAL_PAM_PROXY_DIR'] = '/tmp'
 
@@ -70,6 +76,24 @@ class Raster(object):
 
         self.__data = []
 
+    @staticmethod
+    def typemap():
+        """ Conversion from np.dtype to GDAL dtype
+        """
+        TYPEMAP = {}
+        for name in dir(np):
+            obj = getattr(np, name)
+            if hasattr(obj, 'dtype'):
+                try:
+                    npn = obj(0)
+#                    nat = np.asscalar(npn)
+                    if gdal_array.NumericTypeCodeToGDALTypeCode(npn.dtype.type):
+                        TYPEMAP[npn.dtype.name] = gdal_array.NumericTypeCodeToGDALTypeCode(npn.dtype.type)
+                except:
+                    pass
+
+        return TYPEMAP
+    
     @property
     def proj4args(self):
         args = [x.split('=') for x in re.split('[+ ]*', self.proj4) if len(x) > 0]

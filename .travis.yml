@@ -27,7 +27,12 @@ before_install:
   - sudo add-apt-repository ppa:ubuntugis/ppa -y
   - sudo apt-get update -q
   - sudo apt-get install gdal-bin python-gdal python3-gdal libproj-dev libgdal-dev -y
+  - sudo apt-get install wget
   - pip install -U pip
+  - wget -O esa-snap_sentinel_unix_6_0.sh http://step.esa.int/downloads/6.0/installers/esa-snap_sentinel_unix_6_0.sh
+  - sudo chmod +x esa-snap_sentinel_unix_6_0.sh
+  - yes "" | ./esa-snap_sentinel_unix_6_0.sh
+  - export PATH=$PATH:/opt/snap/bin/
 
 install:
   - pip install -r requirements.txt

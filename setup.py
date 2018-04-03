@@ -1,4 +1,11 @@
 from setuptools import setup, find_packages
+import os
+
+# Create .pyrosar in HOME - Directory
+directory = os.path.join(os.path.expanduser("~"), '.pyrosar')
+
+if not os.path.exists(directory):
+    os.makedirs(directory)
 
 setup(name='pyroSAR',
       packages=find_packages(),

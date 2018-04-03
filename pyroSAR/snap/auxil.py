@@ -17,24 +17,14 @@ import zipfile as zf
 from ftplib import FTP
 from time import strftime, gmtime
 from xml.dom import minidom
+import warnings
+from os.path import expanduser
 
 import pyroSAR
 from pyroSAR import identify
 from pyroSAR.ancillary import dissolve, finder
 from pyroSAR.spatial import gdal_translate
-
-suffix_lookup = {'Apply-Orbit-File': 'orb',
-                 'Calibration': 'cal',
-                 'Cross-Correlation': '',
-                 'LinearToFromdB': 'dB',
-                 'Remove-GRD-Border-Noise': 'bnr',
-                 'SAR-Simulation': '',
-                 'SARSim-Terrain-Correction': 'stc',
-                 'Subset': '',
-                 'Terrain-Correction': 'tc',
-                 'Terrain-Flattening': 'tf',
-                 'Read': '',
-                 'Write': ''}
+from .._dev_config import LOOKUP, ExamineExe
 
 
 def parse_recipe(name):
@@ -55,7 +45,7 @@ def parse_node(name):
 
 def parse_suffix(workflow):
     nodes = workflow.findall('node')
-    suffix = '_'.join(filter(None, [suffix_lookup[x] for x in [y.attrib['id'] for y in nodes]]))
+    suffix = '_'.join(filter(None, [LOOKUP.snap.suffix[x] for x in [y.attrib['id'] for y in nodes]]))
     return suffix
 
 
@@ -81,7 +71,29 @@ def getOrbitContentVersions(contentVersion):
         [re.split('\s*=\s*', x.strip('\r')) for x in contentVersion.read().split('\n') if re.search('^[0-9]{4}', x)])
 
 
-def getAuxdata(datasets, scenes, auxDataPath=os.path.join(os.environ['HOME'], '.snap/auxdata')):
+class GetAuxdata:
+    def __init__(self, datasets, scenes):
+        self.datasets = datasets
+        self.scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
+        self.sensors = list(set([scene.sensor for scene in scenes]))
+
+        try:
+            self.auxDataPath = os.path.join(os.environ['HOME'], '.snap/auxdata')
+        except KeyError:
+            self.auxDataPath = os.path.join(os.environ['USERPROFILE'], '.snap/auxdata')
+
+    def srtm_1sec_hgt(self):
+        pass
+        # Wird nicht benutzt?
+
+
+#        for dataset in self.datasets:
+#            files = [x.replace('hgt', 'SRTMGL1.hgt.zip') for x in
+#                     list(set(dissolve([scene.getHGT() for scene in self.scenes])))]
+
+def getAuxdata(datasets, scenes):
+    auxDataPath = os.path.join(expanduser("~"), '.snap/auxdata')
+
     scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
     sensors = list(set([scene.sensor for scene in scenes]))
     for dataset in datasets:
@@ -219,3 +231,43 @@ def gpt(xmlfile):
             translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'], 'format': 'GTiff'}
             gdal_translate(item, name_new, translateoptions)
         shutil.rmtree(outname)
+
+
+class ExamineSnap(ExamineExe):
+    """
+    Class to check if snap is installed. This will be called with snap.__init__
+    as snap_config. If you are running multiple snap versions or the package can
+    not find the snap executable, you can set an path via: snap_config.set_path("path")
+    """
+
+    def __init__(self, snap_executable=('snap64.exe', 'snap32.exe', 'snap.exe', 'snap')):
+        super(ExamineSnap, self).__init__()
+
+        try:
+            self.status, self.path = self.examine(snap_executable)
+            self.auxdatapath = os.path.join(expanduser("~"), '.snap/auxdata')
+
+            self.__get_etc()
+            self.__read_config()
+
+        except TypeError:
+            pass
+
+    def __get_etc(self):
+        try:
+            self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
+            self.auxdata = os.listdir(self.etc)
+            self.config_path = os.path.join(self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
+
+        except WindowsError:
+            raise AssertionError("ETC directory is not existent.")
+
+    def set_path(self, path):
+        self.path = os.path.abspath(path)
+        self.__get_etc()
+
+    def __read_config(self):
+        with open(self.config_path) as config:
+            self.config = []
+            for line in config:
+                self.config.append(line)
