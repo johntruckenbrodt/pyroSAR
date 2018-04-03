@@ -13,25 +13,47 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
-    infile: a pyroSAR.ID object or a file/folder name of a SAR scene
-    outdir: the directory to write the final files to
-    t_srs: a target geographic reference system (a string in WKT or PROJ4 format or a EPSG identifier number)
-    tr: the target resolution in meters
-    polarizations: the polarizations to be processed; can be a string for a single polarization e.g. 'VV' or a list of several polarizations e.g. ['VV', 'VH']
-    shapefile: a vector file for subsetting the SAR scene to a test site
-    scaling: should the output be in linear of decibel scaling? Input can be single strings e.g. 'dB' or a list of both: ['linear', 'dB']
-    geocoding_type: the type of geocoding applied; can be either 'Range-Doppler' or 'SAR simulation cross correlation'
-    removeS1BoderNoise: enables removal of S1 GRD border noise
-    offset: a tuple defining offsets for left, right, top and bottom in pixels, e.g. (100, 100, 0, 0); this variable is overridden if a shapefile is defined
-    externalDEMFile: the absolute path to an external DEM file
-    externalDEMNoDataValue: the no data value of the external DEM. If not specified the function will try to read it from the specified external DEM.
-    externalDEMApplyEGM: apply Earth Gravitational Model to external DEM?
-    test: if set to True the workflow xml file is only written and not executed
+    Parameters
+    ----------
+    infile: str or pyroSAR.ID class instance
+        A pyroSAR.ID object or a file/folder name of a SAR scene
+    outdir: str
+        the directory to write the final files to
+    t_srs: str or None
+        a target geographic reference system (a string in WKT or PROJ4 format or a EPSG identifier number)
+    tr: int or float
+        the target resolution in meters
+    polarizations: list or {'VV', 'HH', 'VH', 'HV', 'all'}
+        The polarizations to be processed; can be a string for a single polarization e.g. 'VV' or a list of several polarizations e.g. ['VV', 'VH']
+    shapefile: ???
+        A vector file for subsetting the SAR scene to a test site
+    scaling: {'dB', 'db', 'linear'}
+        should the output be in linear of decibel scaling? Input can be single strings e.g. 'dB' or a list of both: ['linear', 'dB']
+    geocoding_type: str
+        The type of geocoding applied; can be either 'Range-Doppler' or 'SAR simulation cross correlation'
+    removeS1BoderNoise: bool
+        Enables removal of S1 GRD border noise
+    offset: tuple
+    A tuple defining offsets for left, right, top and bottom in pixels, e.g. (100, 100, 0, 0); this variable is overridden if a shapefile is defined
+    externalDEMFile: str or None
+        The absolute path to an external DEM file
+    externalDEMNoDataValue: int or float
+        The no data value of the external DEM. If not specified the function will try to read it from the specified external DEM.
+    externalDEMApplyEGM: bool
+        Apply Earth Gravitational Model to external DEM?
+    test: bool
+        If set to True the workflow xml file is only written and not executed
 
+    Note
+    ----
     If only one polarization is selected the results are directly written to GeoTiff.
     Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTiff files (one for each polarization)
     If GeoTiff would directly be selected as output format for multiple polarizations then a multilayer GeoTiff
     is written by SNAP which is considered an unfavorable format
+
+    See Also
+    --------
+    pyroSAR.ID
     """
 
     id = infile if isinstance(infile, pyroSAR.ID) else pyroSAR.identify(infile)
@@ -138,7 +160,7 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
             'AXIS["Geodetic latitude", NORTH]]'
     ############################################
     # add node for conversion from linear to db scaling
-    if scaling is 'dB':
+    if scaling is 'dB' or scaling is 'db':
         lin2db = parse_node('lin2db')
         sourceNode = 'Terrain-Correction' if geocoding_type == 'Range-Doppler' else 'SARSim-Terrain-Correction'
         insert_node(workflow, sourceNode, lin2db)
