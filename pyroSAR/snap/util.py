@@ -27,9 +27,8 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
         or a list of several polarizations e.g. ['VV', 'VH']
     shapefile: (optional) str or spatial.vector.Vector class instance; default: None
         a vector geometry for subsetting the SAR scene to a test site
-    scaling: (optional) str or list; options: 'dB', 'linear', default: 'dB'
-        should the output be in linear of decibel scaling? Input can be a single string e.g. 'dB'
-        or a list of both: ['linear', 'dB']
+    scaling: (optional) str; options: 'dB', 'linear', default: 'dB'
+        should the output be in linear of decibel scaling?
     geocoding_type: (optional) str; options: 'Range-Doppler', 'SAR simulation cross correlation', default: 'Range-Doppler'
         the type of geocoding applied
     removeS1BoderNoise: (optional) bool; default: True
@@ -157,6 +156,10 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
             'AXIS["Geodetic latitude", NORTH]]'
     ############################################
     # add node for conversion from linear to db scaling
+    
+    if scaling not in ['dB', 'linear']:
+        raise RuntimeError('scaling must be  a string of either "dB" or "linear"')
+
     if scaling is 'dB':
         lin2db = parse_node('lin2db')
         sourceNode = 'Terrain-Correction' if geocoding_type == 'Range-Doppler' else 'SARSim-Terrain-Correction'
