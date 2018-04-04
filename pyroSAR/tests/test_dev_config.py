@@ -12,6 +12,7 @@ class TestStorage:
     def test_keys(self):
         storage = Storage(a=1, b=2)
         key = storage.keys()
+        key = list(key)
         assert key[0] == 'a'
         assert key[1] == 'b'
 
