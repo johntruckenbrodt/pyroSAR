@@ -13,8 +13,8 @@ class TestStorage:
         storage = Storage(a=1, b=2)
         key = storage.keys()
         key = list(key)
-        assert key[0] == 'a'
-        assert key[1] == 'b'
+        assert key[0] == 'a' or 'b'
+        assert key[1] == 'b' or 'a'
 
 class TestLookup:
     def test_suffix(self):
