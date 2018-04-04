@@ -9,6 +9,12 @@ class TestStorage:
         assert storage.a == 1
         assert storage.b == 2
 
+    def test_keys(self):
+        storage = Storage(a=1, b=2)
+        key = storage.keys()
+        assert key[0] == 'a'
+        assert key[1] == 'b'
+
 class TestLookup:
     def test_suffix(self):
         assert LOOKUP.snap.suffix['Apply-Orbit-File'] == 'Orb'
