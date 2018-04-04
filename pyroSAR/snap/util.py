@@ -10,47 +10,58 @@ from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_
 
 
 def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB',
-            geocoding_type='Range-Doppler', removeS1BoderNoise=True, offset=None, externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, test=False):
+            geocoding_type='Range-Doppler', removeS1BoderNoise=True, offset=None, externalDEMFile=None,
+            externalDEMNoDataValue=None, externalDEMApplyEGM=True, test=False):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
+    Parameters
+    ----------
     infile: str or pyroSAR.ID class instance
         the SAR scene to be processed
     outdir: str
-        the directory to write the final files to
-    t_srs: (optional) str or osr.SpatialReference instance; default: None
-        a target geographic reference system (e.g. a string in WKT, EPSG or PROJ4 format)
-    tr: (optional) int or float; default: 20
-        the target resolution in meters
-    polarizations: (optional) str or list; options: 'VV', 'HH', 'VH', 'HV', 'all'; default: 'all'
-        the polarizations to be processed; can be a string for a single polarization e.g. 'VV'
-        or a list of several polarizations e.g. ['VV', 'VH']
-    shapefile: (optional) str or spatial.vector.Vector class instance; default: None
-        a vector geometry for subsetting the SAR scene to a test site
-    scaling: (optional) str; options: 'dB', 'linear', default: 'dB'
-        should the output be in linear of decibel scaling?
-    geocoding_type: (optional) str; options: 'Range-Doppler', 'SAR simulation cross correlation', default: 'Range-Doppler'
-        the type of geocoding applied
-    removeS1BoderNoise: (optional) bool; default: True
-        enables removal of S1 GRD border noise
-    offset: (optional) tuple; default: None
-        a tuple defining offsets for left, right, top and bottom in pixels, e.g. (100, 100, 0, 0);
-        this variable is overridden if a shapefile is defined
-    externalDEMFile: (optional) str; default: None
-        the absolute path to an external DEM file
-    externalDEMNoDataValue: (optional) int or float; default: None
-        the no data value of the external DEM.
-        If not specified the function will try to read it from the specified external DEM.
-    externalDEMApplyEGM: (optional) bool; default: None
-        apply Earth Gravitational Model to external DEM?
-    test: (optional) bool; default: False
-        if set to True the workflow xml file is only written and not executed
+        The directory to write the final files to.
+    t_srs: str, osr.SpatialReference instance or None, optional
+        A target geographic reference system (e.g. a string in WKT, EPSG or PROJ4 format).
+        Default is None.
+    tr: int or float, optional
+        The target resolution in meters. Default is 20
+    polarizations: list or {'VV', 'HH', 'VH', 'HV', 'all'}, optional
+        The polarizations to be processed; can be a string for a single polarization e.g. 'VV' or a list of several
+        polarizations e.g. ['VV', 'VH']. Default is 'all'.
+    shapefile: str or spatial.vector.Vector class instance, optional
+        A vector geometry for subsetting the SAR scene to a test site. Default is None.
+    scaling: {'dB', 'db', 'linear'}, optional
+        Should the output be in linear or decibel scaling? Default is 'dB'.
+    geocoding_type: {'Range-Doppler', 'SAR simulation cross correlation'}, optional
+        The type of geocoding applied; can be either 'Range-Doppler' (default) or 'SAR simulation cross correlation'
+    removeS1BoderNoise: bool, optional
+        Enables removal of S1 GRD border noise (default).
+    offset: tuple, optional
+        A tuple defining offsets for left, right, top and bottom in pixels, e.g. (100, 100, 0, 0); this variable is
+        overridden if a shapefile is defined. Default is None.
+    externalDEMFile: str or None, optional
+        The absolute path to an external DEM file. Default is None.
+    externalDEMNoDataValue: int, float or None, optional
+        The no data value of the external DEM. If not specified (default) the function will try to read it from the
+        specified external DEM.
+    externalDEMApplyEGM: bool, optional
+        Apply Earth Gravitational Model to external DEM? Default is True.
+    test: bool, optional
+        If set to True the workflow xml file is only written and not executed. Default is False.
 
+    Note
+    ----
     If only one polarization is selected the results are directly written to GeoTiff.
     Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTiff files
     (one for each polarization).
     If GeoTiff would directly be selected as output format for multiple polarizations then a multilayer GeoTiff
     is written by SNAP which is considered an unfavorable format
+
+    See Also
+    --------
+    pyroSAR.ID
+    pyroSAR.spatial.vector.Vector
     """
 
     id = infile if isinstance(infile, pyroSAR.ID) else pyroSAR.identify(infile)
@@ -156,11 +167,11 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
             'AXIS["Geodetic latitude", NORTH]]'
     ############################################
     # add node for conversion from linear to db scaling
-    
-    if scaling not in ['dB', 'linear']:
-        raise RuntimeError('scaling must be  a string of either "dB" or "linear"')
 
-    if scaling is 'dB':
+    if scaling not in ['dB', 'db', 'linear']:
+        raise RuntimeError('scaling must be  a string of either "dB", "db" or "linear"')
+
+    if scaling in ['dB', 'db']:
         lin2db = parse_node('lin2db')
         sourceNode = 'Terrain-Correction' if geocoding_type == 'Range-Doppler' else 'SARSim-Terrain-Correction'
         insert_node(workflow, sourceNode, lin2db)
@@ -195,7 +206,7 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
         l, r, t, b = offset
 
         subset = workflow.find('.//node[@id="Subset"]')
-        subset.find('.//parameters/region').text = ','.join(map(str, [l, t, id.samples-l-r, id.lines-t-b]))
+        subset.find('.//parameters/region').text = ','.join(map(str, [l, t, id.samples - l - r, id.lines - t - b]))
         subset.find('.//parameters/geoRegion').text = ''
     ############################################
     # parametrize write node
