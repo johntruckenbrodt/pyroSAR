@@ -225,6 +225,21 @@ class Raster(object):
             else:
                 return no_data
 
+    def is_valid(self):
+        """
+        check image integrity
+        tries to compute the checksum for each raster layer and returns False if this fails
+        https://lists.osgeo.org/pipermail/gdal-dev/2013-November/037520.html
+
+        :return: (logical) is the file valid?
+        """
+        for i in range(self.raster.RasterCount):
+            try:
+                checksum = self.raster.GetRasterBand(i).Checksum()
+            except RuntimeError:
+                return False
+        return True
+
     def layers(self):
         """
         get specific raster layer information objects

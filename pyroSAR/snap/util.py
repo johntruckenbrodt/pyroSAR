@@ -1,12 +1,13 @@
 ##############################################################
 # Convenience functions for SAR image batch processing with ESA SNAP
-# John Truckenbrodt, 2016-2017
+# John Truckenbrodt, 2016-2018
 ##############################################################
 import os
 
 import pyroSAR
 from pyroSAR import spatial
 from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt
+
 
 def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BoderNoise=True, offset=None, externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, test=False):
@@ -18,36 +19,37 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     infile: str or pyroSAR.ID class instance
         A pyroSAR.ID object or a file/folder name of a SAR scene
     outdir: str
-        the directory to write the final files to
-    t_srs: str or None
-        a target geographic reference system (a string in WKT or PROJ4 format or a EPSG identifier number)
-    tr: int or float
-        the target resolution in meters
-    polarizations: list or {'VV', 'HH', 'VH', 'HV', 'all'}
-        The polarizations to be processed; can be a string for a single polarization e.g. 'VV' or a list of several polarizations e.g. ['VV', 'VH']
-    shapefile: ???
-        A vector file for subsetting the SAR scene to a test site
-    scaling: {'dB', 'db', 'linear'}
-        should the output be in linear of decibel scaling? Input can be single strings e.g. 'dB' or a list of both: ['linear', 'dB']
-    geocoding_type: str
-        The type of geocoding applied; can be either 'Range-Doppler' or 'SAR simulation cross correlation'
-    removeS1BoderNoise: bool
-        Enables removal of S1 GRD border noise
-    offset: tuple
-    A tuple defining offsets for left, right, top and bottom in pixels, e.g. (100, 100, 0, 0); this variable is overridden if a shapefile is defined
-    externalDEMFile: str or None
-        The absolute path to an external DEM file
+        The directory to write the final files to
+    t_srs: str, osr.SpatialReference instance or None, optional
+        A target geographic reference system (a string in WKT or PROJ4 format or a EPSG identifier number). Default is None.
+    tr: int or float, optional
+        The target resolution in meters. Defualt is 20
+    polarizations: list or {'VV', 'HH', 'VH', 'HV', 'all'}, optional
+        The polarizations to be processed; can be a string for a single polarization e.g. 'VV' or a list of several polarizations e.g. ['VV', 'VH']. Default is 'all'.
+    shapefile: str or spatial.vector.Vector class instance, optional
+        A vector file for subsetting the SAR scene to a test site. Default is None.
+    scaling: list, {'dB', 'db', 'linear'}, optional
+        Should the output be in linear of decibel scaling? Input can be single strings e.g. 'dB' or a list of both: ['linear', 'dB']. Default is 'dB'.
+    geocoding_type: {'Range-Doppler', 'SAR simulation cross correlation'}, optional
+        The type of geocoding applied; can be either 'Range-Doppler' (default) or 'SAR simulation cross correlation'
+    removeS1BoderNoise: bool, optional
+        Enables removal of S1 GRD border noise (default).
+    offset: tuple, optional
+    A tuple defining offsets for left, right, top and bottom in pixels, e.g. (100, 100, 0, 0); this variable is overridden if a shapefile is defined. Default is None.
+    externalDEMFile: str or None, optional
+        The absolute path to an external DEM file. Default is None.
     externalDEMNoDataValue: int or float
         The no data value of the external DEM. If not specified the function will try to read it from the specified external DEM.
     externalDEMApplyEGM: bool
-        Apply Earth Gravitational Model to external DEM?
+        Apply Earth Gravitational Model to external DEM? Default is None.
     test: bool
-        If set to True the workflow xml file is only written and not executed
+        If set to True the workflow xml file is only written and not executed. Default is None
 
     Note
     ----
     If only one polarization is selected the results are directly written to GeoTiff.
-    Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTiff files (one for each polarization)
+    Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTiff files
+    (one for each polarization).
     If GeoTiff would directly be selected as output format for multiple polarizations then a multilayer GeoTiff
     is written by SNAP which is considered an unfavorable format
 
@@ -113,7 +115,6 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
 
     cal = workflow.find('.//node[@id="Calibration"]')
 
-    # todo: check whether the following works with Sentinel-1
     if len(polarizations) > 1:
         cal.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
         cal.find('.//parameters/sourceBands').text = ','.join(['Intensity_' + x for x in polarizations])
@@ -227,7 +228,8 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
             raise RuntimeError('specified externalDEMFile does not exist')
         demname = 'External DEM'
     else:
-        # SRTM 1arcsec is only available between -58 and +60 degrees. If the scene exceeds those latitudes SRTM 3arcsec is selected.
+        # SRTM 1arcsec is only available between -58 and +60 degrees.
+        # If the scene exceeds those latitudes SRTM 3arcsec is selected.
         if id.getCorners()['ymax'] > 60 or id.getCorners()['ymin'] < -58:
             demname = 'SRTM 3Sec'
         else:

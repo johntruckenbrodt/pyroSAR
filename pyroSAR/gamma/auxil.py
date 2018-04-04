@@ -11,8 +11,8 @@ from .error import gammaErrorHandler
 class ISPPar(object):
     """Reader for ISP parameter files of the GAMMA software package.
 
-    This class allows to read all information from filed in GAMMA's parameter file format. Each key-value pair is parsed
-    and added as attributes. For instance if the parameter file contains the pair 'sensor:    TSX-1' a attribute named
+    This class allows to read all information from files in GAMMA's parameter file format. Each key-value pair is parsed
+    and added as attribute. For instance if the parameter file contains the pair 'sensor:    TSX-1' an attribute named
     'sensor' with the value 'TSX-1' will be available.
 
     The values are converted to native Python types, while unit identifiers like 'dB' or 'Hz' are removed. Please see
@@ -28,7 +28,7 @@ class ISPPar(object):
         Args:
             filename: The filename or file object representing the ISP parameter file.
         """
-        if isinstance(filename, basestring):
+        if isinstance(filename, (str, unicode)):
             par_file = open(filename, 'r')
         else:
             par_file = filename

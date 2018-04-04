@@ -226,7 +226,7 @@ def gpt(xmlfile):
         suffix = parse_suffix(workflow)
         for item in finder(outname, ['*.img']):
             pol = re.search('[HV]{2}', item).group()
-            name_new = os.path.join(outdir, '{}_{}_{}'.format(id.outname_base(), pol, suffix))
+            name_new = os.path.join(outdir, '{}_{}_{}.tif'.format(id.outname_base(), pol, suffix))
             translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'], 'format': 'GTiff'}
             gdal_translate(item, name_new, translateoptions)
         shutil.rmtree(outname)

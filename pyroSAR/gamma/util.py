@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ##############################################################
 # universal core routines for processing SAR images with GAMMA
-# John Truckenbrodt 2014-2017
+# John Truckenbrodt 2014-2018
 ##############################################################
 
 """
@@ -20,7 +20,6 @@ else:
 from osgeo import ogr
 
 from .. import envi
-from ..S1 import OSV
 from ..drivers import *
 from ..spatial import haversine
 
@@ -60,7 +59,6 @@ def calibrate(id, directory, replace=False):
         raise NotImplementedError('calibration for class {} is not implemented yet'.format(type(id).__name__))
 
 
-# todo integrate parameter logpath
 def convert2gamma(id, directory, S1_noiseremoval=True):
     """
     general function for converting SAR images to Gamma format
