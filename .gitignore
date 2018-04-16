@@ -5,3 +5,5 @@
 
 .cache/
 .coverage
+
+docs/_build/
