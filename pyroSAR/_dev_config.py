@@ -7,6 +7,7 @@ Created on Tue Dec 12 10:10:41 2017
 import os
 import warnings
 from distutils.spawn import find_executable
+from os.path import expanduser
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode',
              'start', 'stop', 'product', 'spacing', 'samples', 'lines']
@@ -138,6 +139,21 @@ STORAGE = Storage(URL=URL,
 # ==============================================================================
 # Class Definitions
 # ==============================================================================
+def make_dir(path=expanduser("~"), dirname='.pyrosar'):
+    directory = os.path.join(path, dirname)
+
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+def write_config_file(data, header=None, path=os.path.join(expanduser("~"), '.pyrosar')):
+    files = os.path.join(path, 'config.txt')
+    # file_name = open(files, "a")
+    with open(files, 'a') as x_file:
+        if header is None:
+            x_file.write('{0} \n'.format(data))
+        else:
+            x_file.write('{0}:{1} \n'.format(header, data))
+
 class ExamineExe(object):
     def __init__(self):
         # todo: Update Docstrings

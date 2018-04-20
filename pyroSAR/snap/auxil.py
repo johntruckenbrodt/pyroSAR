@@ -23,7 +23,8 @@ import pyroSAR
 from pyroSAR import identify
 from pyroSAR.ancillary import dissolve, finder
 from pyroSAR.spatial import gdal_translate
-from .._dev_config import LOOKUP, ExamineExe
+from .._dev_config import LOOKUP, ExamineExe, make_dir, write_config_file
+import warnings
 
 
 def parse_recipe(name):
@@ -232,6 +233,25 @@ def gpt(xmlfile):
         shutil.rmtree(outname)
 
 
+def get_etc_from_config():
+    try:
+        path = os.path.join(expanduser("~"), '.pyrosar')
+        files = os.path.join(path, 'config.txt')
+
+        with open(files, 'r') as fd:
+            content = {}
+            for i in fd:
+                entry = i.split('::')
+                if entry:
+                    content.update({entry[0]: entry[1]})
+
+        return content['snap_etc']
+
+    except (IOError, KeyError):
+        raise RuntimeError(
+            "No snap/etc directory is saved. Please enter a valid path to the etc directory of snap with the function ExamineSnap.set_etc(path).")
+
+
 class ExamineSnap(ExamineExe):
     """
     Class to check if snap is installed. This will be called with snap.__init__
@@ -240,7 +260,6 @@ class ExamineSnap(ExamineExe):
     """
 
     def __init__(self, snap_executable=('snap64.exe', 'snap32.exe', 'snap.exe', 'snap')):
-        super(ExamineSnap, self).__init__()
 
         try:
             self.status, self.path = self.examine(snap_executable)
@@ -258,12 +277,35 @@ class ExamineSnap(ExamineExe):
 
     def __get_etc(self):
         try:
-            self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
+            try:
+                self.etc = get_etc_from_config()
+
+            except RuntimeError:
+                make_dir()
+                self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
+                write_config_file(data=self.etc, header='snap_etc:')
+
             self.auxdata = os.listdir(self.etc)
             self.config_path = os.path.join(self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
 
-        except OSError:
-            raise AssertionError("ETC directory is not existent.")
+        except (OSError, IndexError):
+            warnings.warn(
+                "The snap//etc directory is not existent. Please enter the full path to the snap//etc directory. By default the directory should be in 'C:\Program Files\snap\etc'")
+
+            self.etc = input("Path to snap//etc directory: ")
+            try:
+                self.set_etc(self.etc)
+            except OSError:
+                raise RuntimeError("No snap/etc directory is saved. Please enter a valid path to the etc directory of snap with the function ExamineSnap.set_etc(path).")
+
+    def set_etc(self, path):
+        self.etc = path
+
+        make_dir()
+        self.auxdata = os.listdir(self.etc)
+        self.config_path = os.path.join(self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
+
+        write_config_file(data=self.etc, header='snap_etc:')
 
     def set_path(self, path):
         self.path = os.path.abspath(path)
