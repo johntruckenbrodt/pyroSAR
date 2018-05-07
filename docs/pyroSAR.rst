@@ -11,8 +11,8 @@ The ID class and its subclasses allows easy and standardized access to the metad
     :undoc-members:
     :show-inheritance:
 
-Preprocessing
-=============
+SNAP Processing
+===============
 
 .. automodule:: pyroSAR.snap.util
     :members:
