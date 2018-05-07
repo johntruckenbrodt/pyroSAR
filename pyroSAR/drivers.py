@@ -54,9 +54,17 @@ __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode
 
 def identify(scene):
     """
-    Return a metadata handler of the given scene
-    :param scene: a file name
-    :return: a pyroSAR metadata handler
+    identify a SAR scene and return the appropriate metadata handler object
+
+    Parameters
+    ----------
+    scene: str
+        a file name
+
+    Returns
+    -------
+    a subclass of :class:`~drivers.ID`
+        a pyroSAR metadata handler
     """
     for handler in ID.__subclasses__():
         try:
@@ -68,10 +76,17 @@ def identify(scene):
 
 def identify_many(scenes):
     """
-    return metadata handlers of all valid scenes in a list, similar to function identify
-    prints a progressbar
-    :param scenes: a list of file names
-    :return: a list of pyroSAR metadata handlers
+    wrapper function for returning metadata handlers of all valid scenes in a list, similar to function :func:`identify`.
+    Prints a progressbar.
+
+    Parameters
+    ----------
+    scenes: list
+        the file names of the scenes to be identified
+    Returns
+    -------
+    list
+        a list of pyroSAR metadata handlers
     """
     idlist = []
     pbar = pb.ProgressBar(maxval=len(scenes)).start()
@@ -91,13 +106,23 @@ def identify_many(scenes):
 
 def filter_processed(scenelist, outdir, recursive=False):
     """
-    filter a list of pyroSAR objects to those that have not yet been processed and stored in the defined directory
-    the search for processed scenes is either done in the directory only or recursively into subdirectories
-    the scenes must have been processed with pyroSAR in order to follow the right naming scheme
-    :param scenelist: a list of pyroSAR objects
-    :param outdir: the processing directory
-    :param recursive: scan outdir recursively into subdirectories?
-    :return: a list of those scenes, which have not been processed yet
+    Filter a list of pyroSAR objects to those that have not yet been processed and stored in the defined directory.
+    The search for processed scenes is either done in the directory only or recursively into subdirectories.
+    The scenes must have been processed with pyroSAR in order to follow the right naming scheme.
+
+    Parameters
+    ----------
+    scenelist: list
+        a list of pyroSAR objects
+    outdir: str
+        the processing directory
+    recursive: bool
+        scan `outdir` recursively into subdirectories?
+
+    Returns
+    -------
+    list
+        a list of those scenes, which have not been processed yet
     """
     return [x for x in scenelist if not x.is_processed(outdir, recursive)]
 
@@ -119,11 +144,19 @@ class ID(object):
 
     def bbox(self, outname=None, overwrite=True):
         """
-        get the bounding box of a scene either as an vector object or written to a shapefile
+        get the bounding box of a scene either as a vector object or written to a shapefile
 
-        :param outname: the name of the shapefile to be written, default: None
-        :param overwrite: ...an existing shapefile
-        :return: None if outname is None, otherwise an object of type pyroSAR.spatial.vector
+        Parameters
+        ----------
+        outname: str
+            the name of the shapefile to be written
+        overwrite: bool
+            overwrite an existing shapefile?
+
+        Returns
+        -------
+        pyroSAR.spatial.vector.Vector or None
+            the vector object if `outname` is None, None otherwise
         """
         if outname is None:
             return spatial.bbox(self.getCorners(), self.projection)
@@ -136,7 +169,10 @@ class ID(object):
         """
         check whether a scene is compressed into an tarfile or zipfile or not at all
 
-        :return: either 'zip', 'tar' or None
+        Returns
+        -------
+        str or None
+            either 'zip', 'tar' or None
         """
         if os.path.isdir(self.scene):
             return None
@@ -168,11 +204,20 @@ class ID(object):
 
     def examine(self, include_folders=False):
         """
-        check whether any items in the SAR scene structure match the regular expression pattern defined by the class
+        check whether any items in the SAR scene structure (i.e. files/folders) match the regular expression pattern
+        defined by the class. On success the item is registered in the object as attribute `file`.
 
-        :param include_folders: also match folder (or just files)?
-        :return: None
-        :raises: IOError
+        Parameters
+        ----------
+        include_folders: bool
+            also match folder (or just files)?
+
+        Returns
+        -------
+
+        Raises
+        -------
+        IOError
         """
         files = self.findfiles(self.pattern, include_folders=include_folders)
         if len(files) == 1:
@@ -184,19 +229,34 @@ class ID(object):
 
     def findfiles(self, pattern, include_folders=False):
         """
-        find files in the scene archive, which match a pattern
+        find files in the scene archive, which match a pattern; see :func:`~findfiles`
 
-        :param pattern: the regular expression to match
-        :param include_folders: also match folder (or just files)?
-        :return a list of file names
+        Parameters
+        ----------
+        pattern: str
+            the regular expression to match
+        include_folders: bool
+             also match folders (or just files)?
+        Returns
+        -------
+        list
+            the matched file names
         """
         return findfiles(self.scene, pattern, include_folders)
 
     def gdalinfo(self, scene):
         """
         read metadata directly from the GDAL SAR image drivers
-        :param scene: an archive containing a SAR scene
-        :return a dictionary of metadata attributes
+
+        Parameters
+        ----------
+        scene: str
+            an archive containing a SAR scene
+
+        Returns
+        -------
+        dict
+            the metadata attributes
         """
         self.scene = os.path.realpath(scene)
         files = self.findfiles('(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)')
@@ -239,30 +299,50 @@ class ID(object):
     @abc.abstractmethod
     def getCorners(self):
         """
-        abstract method for deriving the corner coordinates from a SAR scene
-        to be implemented by individual format drivers
-        :return dictionary with keys xmin, xmax, ymin and ymax
+        derive the corner coordinates from a SAR scene
+
+        Returns
+        -------
+        dict
+            dictionary with keys xmin, xmax, ymin and ymax
         """
         raise NotImplementedError
 
     def getFileObj(self, filename):
         """
-        load a file into a readable file object
-        if the scene is unpacked this will be a regular 'file' object
-        for a tarfile this is an object of type 'tarfile.ExtFile'
-        for a zipfile this is an StringIO object (the zipfile.ExtFile object does not support setting file pointers via function 'seek', which is needed later on)
+        Load a file into a readable file object.
+        If the scene is unpacked this will be a regular `file` object.
+        For a tarfile this is an object of type `tarfile.ExtFile`.
+        For a zipfile this is an `StringIO` object (the `zipfile.ExtFile` object does not support setting file pointers via function `seek`, which is needed later on)
 
-        :param filename a name of a file in the scene archive, easiest to get with method ID.findfiles
-        :return: a regular file object or tarfile.ExtFile or StringIO
+        Parameters
+        ----------
+        filename: str
+            the name of a file in the scene archive, easiest to get with method :func:`~ID.findfiles`
+
+        Returns
+        -------
+        tarfile.ExtFile or StringIO
+            a file pointer object
         """
         return getFileObj(self.scene, filename)
 
     def getGammaImages(self, directory=None):
         """
         list all files processed by GAMMA
-        :param directory: the directory to be scanned; if left empty self.gammadir is scanned
-        :return: a list of images processed by GAMMA
-        :raises IOError
+
+        Parameters
+        ----------
+        directory: str
+            the directory to be scanned; if left empty the object attribute `gammadir` is scanned
+
+
+        list
+            the file names of the images processed by GAMMA
+
+        Raises
+        -------
+        IOError
         """
         if directory is None:
             if hasattr(self, 'gammadir'):
@@ -276,7 +356,11 @@ class ID(object):
     def getHGT(self):
         """
         get the names of all SRTM HGT tiles overlapping with the SAR scene
-        :return names of the SRTM HGT tiles
+
+        Returns
+        -------
+        list
+            names of the SRTM HGT tiles
         """
 
         corners = self.getCorners()
@@ -297,9 +381,18 @@ class ID(object):
 
     def is_processed(self, outdir, recursive=False):
         """
-        check whether a scene has already been processed and stored in the defined output directory (and subdirectories if recursive)
-        :param outdir the directory to be checked
-        :return does an image matching the scene pattern exist?
+        check whether a scene has already been processed and stored in the defined output directory
+        (and subdirectories if scanned recursively)
+
+        Parameters
+        ----------
+        outdir: str
+            the directory to be checked
+
+        Returns
+        -------
+        bool
+            does an image matching the scene pattern exist?
         """
         if os.path.isdir(outdir):
             # '{}.*tif$'.format(self.outname_base())
@@ -309,8 +402,14 @@ class ID(object):
 
     def outname_base(self):
         """
-        parse a string containing basic information about the scene in standardized format
-        :return: a standardized name string unique to the scene
+        parse a string containing basic information about the scene in standardized format.
+        Currently this id contains the sensor (4 digits), acquisition mode (4 digits), orbit (1 digit)
+        and acquisition start time (15 digits)., e.g. 'S1A__IW___A_20150523T122350'
+
+        Returns
+        -------
+        str
+            a standardized name unique to the scene
         """
         fields = ('{:_<4}'.format(self.sensor),
                   '{:_<4}'.format(self.acquisition_mode),
@@ -321,16 +420,28 @@ class ID(object):
     @staticmethod
     def parse_date(x):
         """
-        this function gathers known time formats provided in the different SAR products and converts them to a common standard of the form YYYYMMDDTHHMMSS
-        :param x a string containing the time stamp
-        :return a string containing the converted time stamp in format YYYYmmddTHHMMSS
+        this function gathers known time formats provided in the different SAR products and converts them to a common
+        standard of the form YYYYMMDDTHHMMSS.
+
+        Parameters
+        ----------
+        x: str
+            the time stamp
+
+        Returns
+        -------
+        str
+            the converted time stamp in format YYYYmmddTHHMMSS
         """
         return parse_date(x)
 
     def summary(self):
         """
-        print the standardized set of scene attributes; see ID.__init__ for values
-        :return: None
+        print the set of standardized scene metadata attributes
+
+        Returns
+        -------
+
         """
         for item in sorted(self.locals):
             print('{0}: {1}'.format(item, getattr(self, item)))
@@ -338,23 +449,34 @@ class ID(object):
     @abc.abstractmethod
     def scanMetadata(self):
         """
-        abstract method to scan SAR scenes for metadata attributes
-        the returning dictionary is to be registered as attribute meta in the object and is checked by ID.__init__ for
-        a selection of standardized names
-        :return: a dictionary containing the derived attributes
+        scan SAR scenes for metadata attributes.
+        The returned dictionary is registered as attribute `meta` by the class upon object initialization.
+        This dictionary furthermore needs to return a set of standardized attribute keys,
+        which are directly registered as object attributes.
+
+        Returns
+        -------
+        dict
+            the derived attributes
+
         """
         raise NotImplementedError
 
     @abc.abstractmethod
-    def unpack(self, directory):
+    def unpack(self, directory, overwrite=False):
         """
-        abstract method for unpacking SAR scenes into a defined directory
-        this method differs between the individual drivers as the name of the directory is derived
-        from different file/folder names of the scene
-        Furthermore, the individual implementations are required to call ID._unpack to perform the actual unpacking
-        once the name and folder structure are determined
-        :param directory: the directory to which the scene is unpacked
-        :return: None
+        Unpack the SAR scene into a defined directory.
+
+        Parameters
+        ----------
+        directory: str
+            the base directory into which the scene is unpacked
+        overwrite: bool
+            overwrite an existing unpacked scene?
+
+        Returns
+        -------
+
         """
         raise NotImplementedError
 
@@ -428,8 +550,9 @@ class CEOS_ERS(ID):
     """
     Handler class for ERS data in CEOS format
     
-    References:
+    Reference:
         ER-IS-EPO-GS-5902-3: Annex C. ERS SAR.SLC/SLC-I. CCT and EXABYTE (ESA 1998)
+        [`link <https://earth.esa.int/documents/10174/1597298/SAR05E.pdf>`_]
     """
 
     def __init__(self, scene):
@@ -495,9 +618,6 @@ class CEOS_ERS(ID):
             raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
 
     def scanMetadata(self):
-        """
-        read the leader file and extract relevant metadata
-        """
         lea_obj = self.getFileObj(self.findfiles('LEA_01.001')[0])
         lea = lea_obj.read()
         lea_obj.close()
@@ -555,53 +675,49 @@ class CEOS_PSR(ID):
     Handler class for ALOS-PALSAR data in CEOS format
 
     PALSAR-1:
-
-        References:
+        Reference:
             NEB-070062B: ALOS/PALSAR Level 1.1/1.5 product Format description (JAXA 2009)
-    
+            [`link <http://www.eorc.jaxa.jp/ALOS/en/doc/fdata/PALSAR_x_Format_EL.pdf>`_]
         Products / processing levels:
-            1.0
-            1.1
-            1.5
-    
+            * 1.0
+            * 1.1
+            * 1.5
         Acquisition modes:
-            AB: [SP][HWDPC]
-            A: supplemental remarks of the sensor type:
-                S: Wide observation mode
-                P: all other modes
-            B: observation mode
-                H: Fine mode
-                W: ScanSAR mode
-                D: Direct downlink mode
-                P: Polarimetry mode
-                C: Calibration mode
+            * AB: [SP][HWDPC]
+            * A: supplemental remarks of the sensor type:
+                * S: Wide observation mode
+                * P: all other modes
+            * B: observation mode
+                * H: Fine mode
+                * W: ScanSAR mode
+                * D: Direct downlink mode
+                * P: Polarimetry mode
+                * C: Calibration mode
     
     PALSAR-2:
-    
-        References:
-            ALOS-2/PALSAR-2 Level 1.1/1.5/2.1/3.1 CEOS SAR Product Format Description
-        
+        Reference:
+            ALOS-2/PALSAR-2 Level 1.1/1.5/2.1/3.1 CEOS SAR Product Format Description (JAXA 2014).
+            [`link <http://www.eorc.jaxa.jp/ALOS-2/en/doc/fdata/PALSAR-2_xx_Format_CEOS_E_r.pdf>`_]
         Products / processing levels:
-            1.0
-            1.1
-            1.5
-        
+            * 1.0
+            * 1.1
+            * 1.5
         Acquisition modes:
-            SBS: Spotlight mode 
-            UBS: Ultra-fine mode Single polarization 
-            UBD: Ultra-fine mode Dual polarization 
-            HBS: High-sensitive mode Single polarization
-            HBD: High-sensitive mode Dual polarization 
-            HBQ: High-sensitive mode Full (Quad.) polarimetry 
-            FBS: Fine mode Single polarization 
-            FBD: Fine mode Dual polarization 
-            FBQ: Fine mode Full (Quad.) polarimetry 
-            WBS: Scan SAR nominal [14MHz] mode Single polarization 
-            WBD: Scan SAR nominal [14MHz] mode Dual polarization 
-            WWS: Scan SAR nominal [28MHz] mode Single polarization 
-            WWD: Scan SAR nominal [28MHz] mode Dual polarization 
-            VBS: Scan SAR wide mode Single polarization 
-            VBD: Scan SAR wide mode Dual polarization
+            * SBS: Spotlight mode
+            * UBS: Ultra-fine mode Single polarization
+            * UBD: Ultra-fine mode Dual polarization
+            * HBS: High-sensitive mode Single polarization
+            * HBD: High-sensitive mode Dual polarization
+            * HBQ: High-sensitive mode Full (Quad.) polarimetry
+            * FBS: Fine mode Single polarization
+            * FBD: Fine mode Dual polarization
+            * FBQ: Fine mode Full (Quad.) polarimetry
+            * WBS: Scan SAR nominal [14MHz] mode Single polarization
+            * WBD: Scan SAR nominal [14MHz] mode Dual polarization
+            * WWS: Scan SAR nominal [28MHz] mode Single polarization
+            * WWD: Scan SAR nominal [28MHz] mode Dual polarization
+            * VBS: Scan SAR wide mode Single polarization
+            * VBD: Scan SAR wide mode Dual polarization
     """
 
     def __init__(self, scene):
@@ -642,14 +758,14 @@ class CEOS_PSR(ID):
         # register the standardized meta attributes as object attributes
         ID.__init__(self, self.meta)
 
-    def getLeaderfile(self):
+    def _getLeaderfile(self):
         led_filename = self.findfiles(self.pattern)[0]
         led_obj = self.getFileObj(led_filename)
         led = led_obj.read()
         led_obj.close()
         return led
 
-    def parseSummary(self):
+    def _parseSummary(self):
         try:
             summary_file = self.getFileObj(self.findfiles('summary|workreport')[0])
         except IndexError:
@@ -667,7 +783,7 @@ class CEOS_PSR(ID):
         led = led_obj.read()
         led_obj.close()
 
-        meta = self.parseSummary()
+        meta = self._parseSummary()
 
         p0 = 0
         p1 = struct.unpack('>i', led[8:12])[0]
@@ -944,8 +1060,8 @@ class SAFE(ID):
     Handler class for Sentinel-1 data
 
     References:
-        S1-RS-MDA-52-7443 Sentinel-1 IPF Auxiliary Product Specification
-        MPC-0243 Masking "No-value" Pixels on GRD Products generated by the Sentinel-1 ESA IPF
+        * S1-RS-MDA-52-7443 Sentinel-1 IPF Auxiliary Product Specification
+        * MPC-0243 Masking "No-value" Pixels on GRD Products generated by the Sentinel-1 ESA IPF
     """
 
     def __init__(self, scene):
@@ -1005,9 +1121,10 @@ class SAFE(ID):
     def removeGRDBorderNoise(self):
         """
         mask out Sentinel-1 image border noise
-        reference:
-            'Masking "No-value" Pixels on GRD Products generated by the Sentinel-1 ESA IPF' (issue 1, June 2015)
-            available online under 'https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/document-library'
+
+        Reference:
+            Masking "No-value" Pixels on GRD Products generated by the Sentinel-1 ESA IPF' (issue 1, June 2015)
+            available online under https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/document-library
         """
         if self.compression is not None:
             raise RuntimeError('scene is not yet unpacked')
@@ -1161,9 +1278,6 @@ class SAFE(ID):
                 osv.retrieve(files)
 
     def scanMetadata(self):
-        """
-        read the manifest.safe file and extract relevant metadata
-        """
         manifest = self.getFileObj(self.findfiles('manifest.safe')[0]).getvalue()
         namespaces = getNamespaces(manifest)
         tree = ET.fromstring(manifest)
@@ -1204,31 +1318,31 @@ class TSX(ID):
     Handler class for TerraSAR-X and TanDEM-X data
 
     References:
-        TX-GS-DD-3302  TerraSAR-X Basic Product Specification Document
-        TX-GS-DD-3303  TerraSAR-X Experimental Product Description
-        TD-GS-PS-3028  TanDEM-X Experimental Product Description
-        TerraSAR-X Image Product Guide (Airbus Defence and Space)
+        * TX-GS-DD-3302  TerraSAR-X Basic Product Specification Document
+        * TX-GS-DD-3303  TerraSAR-X Experimental Product Description
+        * TD-GS-PS-3028  TanDEM-X Experimental Product Description
+        * TerraSAR-X Image Product Guide (Airbus Defence and Space)
     
     Acquisition modes:
-        ST:    Staring Spotlight
-        HS:    High Resolution SpotLight
-        HS300: High Resolution SpotLight 300 MHz
-        SL:    SpotLight
-        SM:    StripMap
-        SC:    ScanSAR
-        WS:    Wide ScanSAR
+        * ST:    Staring Spotlight
+        * HS:    High Resolution SpotLight
+        * HS300: High Resolution SpotLight 300 MHz
+        * SL:    SpotLight
+        * SM:    StripMap
+        * SC:    ScanSAR
+        * WS:    Wide ScanSAR
     
     Polarisation modes:
-        Single (S): all acquisition modes
-        Dual   (D): High Resolution SpotLight (HS), SpotLight (SL) and StripMap (SM)
-        Twin   (T): StripMap (SM) (experimental)
-        Quad   (Q): StripMap (SM) (experimental)
+        * Single (S): all acquisition modes
+        * Dual   (D): High Resolution SpotLight (HS), SpotLight (SL) and StripMap (SM)
+        * Twin   (T): StripMap (SM) (experimental)
+        * Quad   (Q): StripMap (SM) (experimental)
     
     Products:
-        SSC: Single Look Slant Range Complex
-        MGD: Multi Look Ground Range Detected
-        GEC: Geocoded Ellipsoid Corrected
-        EEC: Enhanced Ellipsoid Corrected
+        * SSC: Single Look Slant Range Complex
+        * MGD: Multi Look Ground Range Detected
+        * GEC: Geocoded Ellipsoid Corrected
+        * EEC: Enhanced Ellipsoid Corrected
     """
 
     def __init__(self, scene):
@@ -1444,9 +1558,17 @@ class Archive(object):
 
     def is_registered(self, scene):
         """
-        simple check if a scene is already registered in the database
-        :param scene: a SAR scene
-        :return: True|False
+        Simple check if a scene is already registered in the database.
+
+        Parameters
+        ----------
+        scene: str
+            the SAR scene
+
+        Returns
+        -------
+        bool
+            is the scene already registered?
         """
         return len(self.select(scene=scene)) != 0 or len(self.select_duplicates(scene=scene)) != 0
 
@@ -1454,17 +1576,29 @@ class Archive(object):
         """
         export the database to a shapefile
 
-        :param shp: the name of the shapefile to be written
-        :return: None
+        Parameters
+        ----------
+        shp: str
+            the name of the shapefile to be written
+
+        Returns
+        -------
         """
         run(['ogr2ogr', '-f', '"ESRI Shapefile"', shp, self.dbfile])
 
     def filter_scenelist(self, scenelist):
         """
-        filter a list of scenes by file names already registered in the database.
+        Filter a list of scenes by file names already registered in the database.
 
-        :param scenelist: a list of scenes (absolute path strings or pyroSAR.ID objects)
-        :return: a list which only contains files whose basename is not yet registered in the database
+        Parameters
+        ----------
+        scenelist: list of str or pyroSAR.ID
+            the scenes to be filtered
+
+        Returns
+        -------
+        list
+            the file names of the scenes whose basename is not yet registered in the database
 
         """
         for item in scenelist:
@@ -1482,27 +1616,36 @@ class Archive(object):
 
     def get_colnames(self):
         """
-        return the names of the database table
+        Return the names of the database table.
 
-        :return: a list containing the column names of the data table
+        Returns
+        -------
+        list
+            the column names of the data table
         """
         cursor = self.conn.execute('''PRAGMA table_info(data)''')
         return [str(x[1]) for x in cursor.fetchall()]
 
     def get_tablenames(self):
         """
-        return the names of all tables in the database
+        Return the names of all tables in the database
 
-        :return: a list of table names
+        Returns
+        -------
+        list
+            the table names
         """
         cursor = self.conn.execute('''SELECT * FROM sqlite_master WHERE type="table"''')
         return [x[1].encode('ascii') for x in cursor.fetchall()]
 
     def get_unique_directories(self):
         """
-        get a list of directories containing registered scenes
+        Get a list of directories containing registered scenes
 
-        :return: a list of directory names
+        Returns
+        -------
+        list
+            the directory names
         """
         cursor = self.conn.execute('SELECT scene FROM data')
         registered = [os.path.dirname(x[0].encode('ascii')) for x in cursor.fetchall()]
@@ -1510,13 +1653,19 @@ class Archive(object):
 
     def move(self, scenelist, directory):
         """
-        move a list of files while keeping the database entries up to date
-        if a scene is registered in the database (in either the data or duplicates table),
-        the scene entry is directly changed to the new location
+        Move a list of files while keeping the database entries up to date.
+        If a scene is registered in the database (in either the data or duplicates table),
+        the scene entry is directly changed to the new location.
 
-        :param scenelist: a list of file locations
-        :param directory: a folder to which the files are moved
-        :return: None
+        Parameters
+        ----------
+        scenelist: list
+            the file locations
+        directory: str
+            a folder to which the files are moved
+
+        Returns
+        -------
         """
         if not os.access(directory, os.W_OK):
             raise RuntimeError('directory cannot be written to')
@@ -1557,17 +1706,33 @@ class Archive(object):
         """
         select scenes from the database
 
-        Args:
-            vectorobject: an object of type spatial.vector.Vector
-            mindate: a date string of format YYYYmmddTHHMMSS
-            maxdate: a date string of format YYYYmmddTHHMMSS
-            processdir: a directory to be scanned for already processed scenes; the selected scenes will be filtered to those that have not yet been processed
-            recursive: should also the subdirectories of the processdir be scanned?
-            **args: any further arguments (columns), which are registered in the database. See Archive.get_colnames()
+        Parameters
+        ----------
+        vectorobject: spatial.vector.Vector
+            a geometry with which the scenes need to overlap
+        mindate:str
+            the minimum acquisition date in format YYYYmmddTHHMMSS
+        maxdate: str
+            the maximum acquisition date in format YYYYmmddTHHMMSS
+        processdir: str
+            a directory to be scanned for already processed scenes;
+            the selected scenes will be filtered to those that have not yet been processed
+        recursive: bool
+            should also the subdirectories of the processdir be scanned?
+        polarizations: list
+            a list of polarization strings, e.g. ['HH', 'VV']
+        verbose: bool
+            print details about hte selection including the SQL query?
+        **args:
+            any further arguments (columns), which are registered in the database. See :func:`~Archive.get_colnames()`
 
-        Returns: a list of strings pointing to the file locations of the selected scenes
+        Returns
+        -------
+        list
+            the file names pointing to the selected scenes
 
         """
+
         arg_valid = [x for x in args.keys() if x in self.get_colnames()]
         arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
@@ -1620,11 +1785,20 @@ class Archive(object):
 
     def select_duplicates(self, outname_base=None, scene=None):
         """
-        select scenes from the duplicates table; either all or only one matching a specific basename or scene name
+        Select scenes from the duplicates table. In case both `outname_base` and `scene` are set to None all scenes in
+        the table are returned, otherwise only those that match the attributes `outname_base` and `scene` if they are not None.
 
-        :param outname_base: the basename of the scene
-        :param scene: the scene name
-        :return: a list containing one or many scenes
+        Parameters
+        ----------
+        outname_base: str
+            the basename of the scene
+        scene: str
+            the scene name
+
+        Returns
+        -------
+        list
+            the selected scene(s)
         """
         if not outname_base and not scene:
             cursor = self.conn.execute('SELECT * from duplicates')
@@ -1646,7 +1820,10 @@ class Archive(object):
         """
         get the number of scenes registered in the database
 
-        :return: a two-entry tuple containing the number of scenes in (1) the main table and (2) the duplicates table
+        Returns
+        -------
+        tuple
+            the number of scenes in (1) the main table and (2) the duplicates table
         """
         cursor1 = self.conn.execute('''SELECT Count(*) FROM data''')
         cursor2 = self.conn.execute('''SELECT Count(*) FROM duplicates''')
@@ -1666,10 +1843,18 @@ def findfiles(scene, pattern, include_folders=False):
     """
     find files in a scene archive, which match a pattern
 
-    :param scene: the scene to scan
-    :param pattern: the regular expression to match
-    :param include_folders: also match folders (or just files)?
-    :return a list of file names
+    Parameters
+    ----------
+    scene: str
+        the SAR scene to be scanned, can be a directory, a zip or tar.gz archive
+    pattern: str
+        the regular expression to match
+    include_folders: bool
+         also match folders (or just files)?
+    Returns
+    -------
+    list
+        the matched file names
     """
     if os.path.isdir(scene):
         files = finder(scene, [pattern], regex=True, foldermode=1 if include_folders else 0)
@@ -1698,13 +1883,22 @@ def findfiles(scene, pattern, include_folders=False):
 
 def getFileObj(scene, filename):
     """
-    load a file into a readable file object
-    if the scene is unpacked this will be a regular 'file' object
-    for a tarfile this is an object of type 'tarfile.ExtFile'
-    for a zipfile this is an StringIO object (the zipfile.ExtFile object does not support setting file pointers via function 'seek', which is needed later on)
+    Load a file in a SAR scene archive into a readable file object.
+    If the scene is unpacked this will be a regular `file` object.
+    For a tarfile this is an object of type `tarfile.ExtFile`.
+    For a zipfile this is an `StringIO` object (the `zipfile.ExtFile` object does not support setting file pointers via function `seek`, which is needed later on)
 
-    :param filename a name of a file in the scene archive, easiest to get with method ID.findfiles
-    :return: a regular file object or tarfile.ExtFile or StringIO
+    Parameters
+    ----------
+    scene: str
+        the scene archive. Can be either a directory or a compressed archive of type zip or tar.gz.
+    filename: str
+        the name of a file in the scene archive, easiest to get with method :func:`~ID.findfiles`
+
+    Returns
+    -------
+    tarfile.ExtFile or StringIO
+        a file pointer object
     """
     membername = filename.replace(scene, '').strip('/')
 
@@ -1728,9 +1922,18 @@ def getFileObj(scene, filename):
 
 def parse_date(x):
     """
-    this function gathers known time formats provided in the different SAR products and converts them to a common standard of the form YYYYMMDDTHHMMSS
-    :param x a string containing the time stamp or a datetime object
-    :return a string containing the converted time stamp in format YYYYmmddTHHMMSS
+    this function gathers known time formats provided in the different SAR products and converts them to a common
+    standard of the form YYYYMMDDTHHMMSS
+
+    Parameters
+    ----------
+    x: str or datetime.datetime
+        the time stamp to be converted
+
+    Returns
+    -------
+    str
+        the converted time stamp in format YYYYmmddTHHMMSS
     """
     if isinstance(x, datetime):
         return x.strftime('%Y%m%dT%H%M%S')
