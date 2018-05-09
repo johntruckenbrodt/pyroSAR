@@ -18,3 +18,19 @@ SNAP Processing
     :members:
     :undoc-members:
     :show-inheritance:
+
+GAMMA Processing
+================
+
+.. automodule:: pyroSAR.gamma.util
+    :members: geocode, convert2gamma
+    :undoc-members:
+    :show-inheritance:
+
+Sentinel-1 Tools
+================
+
+.. automodule:: pyroSAR.S1.auxil
+    :members: OSV
+    :undoc-members:
+    :show-inheritance:
