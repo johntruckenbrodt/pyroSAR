@@ -1418,6 +1418,42 @@ class TSX(ID):
 class Archive(object):
     """
     Utility for storing SAR image metadata in a spatialite database
+
+    Parameters
+    ----------
+    dbfile: str
+        the database file. This file might either point to an existing database or will be created otherwise.
+
+    Examples
+    ----------
+    select all Sentinel-1 A/B scenes stored in the database, which
+     * overlap with a test site
+     * were acquired in Ground-Range-Detected (GRD) Interferometric Wide Swath (IW) mode before 2018
+     * contain a VV polarization image
+     * have not been processed to directory `outdir` before
+
+    >>> from pyroSAR import Archive
+    >>> from pyroSAR.spatial import Vector
+    >>> archive = Archive('/path/to/dbfile.db')
+    >>> site = Vector('/path/to/site.shp')
+    >>> outdir = '/path/to/processed/results'
+    >>> maxdate = '20171231T235959'
+    >>> selection_proc = archive.select(vectorobject=site,
+    >>>                                 processdir=outdir,
+    >>>                                 maxdate=maxdate,
+    >>>                                 sensor=('S1A', 'S1B'),
+    >>>                                 product='GRD',
+    >>>                                 acquisition_mode='IW',
+    >>>                                 vv=1)
+    >>> archive.close()
+
+    Alternatively, the `with` statement can be used.
+    In this case to just check whether one particular scene is already registered in the database:
+
+    >>> from pyroSAR import identify, Archive
+    >>> scene = identify('S1A_IW_SLC__1SDV_20150330T170734_20150330T170801_005264_006A6C_DA69.zip')
+    >>> with Archive('/path/to/dbfile.db') as archive:
+    >>>     print(archive.is_registered(scene))
     """
 
     def __init__(self, dbfile):
@@ -1833,6 +1869,9 @@ class Archive(object):
         return self
 
     def close(self):
+        """
+        close the database connection
+        """
         self.conn.close()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
