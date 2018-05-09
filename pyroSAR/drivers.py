@@ -127,7 +127,9 @@ def filter_processed(scenelist, outdir, recursive=False):
 
 
 class ID(object):
-    """Abstract class for SAR meta data handlers."""
+    """
+    Abstract class for SAR meta data handlers
+    """
 
     def __init__(self, metadict):
         """
@@ -1257,9 +1259,20 @@ class SAFE(ID):
     def getOSV(self, outdir, osvType='POE'):
         """
         download Orbit State Vector files for the scene
-        :param outdir: the directory of OSV files; subdirectories POEORB and RESORB are created automatically
-        :param osvType: the type of orbit file either 'POE', 'RES' or a list of both
-        :return: None
+
+        Parameters
+        ----------
+        outdir: str
+            the directory of OSV files; subdirectories POEORB and RESORB are created automatically
+        osvType: {'POE', 'RES'}
+            the type of orbit file either 'POE', 'RES' or a list of both
+
+        Returns
+        -------
+
+        See Also
+        --------
+        :meth:`pyroSAR.S1.auxil.OSV`
         """
         date = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
 
@@ -1530,10 +1543,14 @@ class Archive(object):
         """
         Insert one or many scenes into the database
 
-        :param scene_in: a SAR scene or a list of scenes to be inserted
-        :param verbose: should status information and a progress bar be printed into the console?
-        :param test: should the insertion only be tested or directly be committed to the database?
-        :return: None
+        Parameters
+        ----------
+        scene_in: str or list
+            a SAR scene or a list of scenes to be inserted
+        verbose: bool
+            should status information and a progress bar be printed into the console?
+        test: bool
+            should the insertion only be tested or directly be committed to the database?
         """
         if verbose:
             length = len(scene_in) if isinstance(scene_in, list) else 1
