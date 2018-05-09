@@ -1923,9 +1923,6 @@ def findfiles(scene, pattern, include_folders=False):
 def getFileObj(scene, filename):
     """
     Load a file in a SAR scene archive into a readable file object.
-    If the scene is unpacked this will be a regular `file` object.
-    For a tarfile this is an object of type `tarfile.ExtFile`.
-    For a zipfile this is an `StringIO` object (the `zipfile.ExtFile` object does not support setting file pointers via function `seek`, which is needed later on)
 
     Parameters
     ----------
@@ -1936,13 +1933,17 @@ def getFileObj(scene, filename):
 
     Returns
     -------
-    tarfile.ExtFile or StringIO
-        a file pointer object
+    io.BytesIO
+        a file object
     """
     membername = filename.replace(scene, '').strip('/')
 
     if os.path.isdir(scene):
-        obj = open(filename)
+        obj = BytesIO()
+        with open(filename) as infile:
+            obj.write(infile.read())
+        obj.seek(0)
+
     elif zf.is_zipfile(scene):
         obj = BytesIO()
         with zf.ZipFile(scene, 'r') as zip:
@@ -1954,6 +1955,7 @@ def getFileObj(scene, filename):
         tar = tf.open(scene, 'r:gz')
         obj.write(tar.extractfile(membername).read())
         tar.close()
+        obj.seek(0)
     else:
         raise IOError('input must be either a file name or a location in an zip or tar archive')
     return obj
