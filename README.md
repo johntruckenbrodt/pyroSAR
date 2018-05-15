@@ -138,17 +138,18 @@ The function `geocode` is a basic utility for SNAP. It will perform all necessar
 topographically normalize and scale the input image and write GeoTiff files to the selected output directory.  
 All necessary files like orbit state vectors and SRTM DEM tiles are downloaded automatically in the background by SNAP.  
 SNAP is most conveniently used with workflow XMLs. The function geocode parses a workflow for the particular scene,
-parametrizes it depending on the scene type and selected processing parameters and writes it to the output directory.
+parametrizes it depending on the scene type and selected processing parameters and writes it to the output directory.  
+It then calls the command `gpt`, which is SNAP's command line interface, on the workflow to execute the processing steps. 
 
 ##### a word on file naming
 pyroSAR internally uses a fixed naming scheme to keep track of processed results. For each scene an identifier is created,
-which contains the sensor, acquisition mode, orbit (ascneding or dsescending) and the time stamp of the acquisition start.
-For the example above it is `S1A__IW___A_20150222T170750`, which can be created by calling `scene.outname_base`. For each
+which contains the sensor, acquisition mode, orbit (ascending or dsescending) and the time stamp of the acquisition start.
+For the example above it is `S1A__IW___A_20150222T170750`, which can be created by calling `scene.outname_base()`. For each
 attribute a fixed number of digits is reserved. In case the attribute is shorter than this number, 
 the rest of the digits is filled with underscrores. I.e., the sensor field is four digits long, but 'S1A' only three.
 Thus, `S1A_` is the sensor slot. In the same way, `IW__` is the acquisition mode slot, which is also four digits long.
   
-Processing functions like `geocode` might add suffixes to this identifier to further keep track of individual processing
+Processing functions like `geocode` add suffixes to this identifier to further keep track of individual processing
 steps performed on the dataset.  
 This core concept is used by many pyroSAR functions internally to keep track of which scenes have been processed before.
 ### Long Description
