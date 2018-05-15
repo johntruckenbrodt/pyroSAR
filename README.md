@@ -75,8 +75,82 @@ You might need to install pip and git for this to work:
 sudo apt-get install python-pip
 sudo apt-get install git
 ```
+### A small example
+Now that everything is installed, we can start working with our satellite data.
+Let's assume you have a Sentinel-1 scene in a local directory. 
+At first we load the scene into pyroSAR for analysis of the metadata:
+```python
+from pyroSAR import identify
+name = 'S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'
+scene = identify(name)
+scene.summary()
+```
+This will automatically identify the scene, scan it for metadata and print a summary of selected metadata entries.
+The names of the attributes (e.g. sensor and acquisition_mode) are standardized for all SAR scenes.
+Further entries whose names are not standardized can be found in a dictionary `scene.meta`.
 
+Now that we have made ourselves familiar with the scene, we import it into a sqlite database:
+```python
+from pyroSAR import Archive
+dbfile = 'scenes.db'
+with Archive(dbfile) as archive:
+    archive.insert(scene)
+```
+`dbfile` is a file either containing an already existing database or one to be created.
 
+Let's assume our database contains a number of scenes and we want to select some for processing.  
+We have a shapefile, which contains a geometry delimiting our test site for which we want to 
+process some Sentinel-1 scenes.  
+We already processed some scenes in the past and the results are stored in a directory
+`outdir`. We only want to select scenes which have not been processed to this directory before.  
+Furthermore, we are only interested in scenes acquired in Ground Range Detected (GRD) Interferometric Wide 
+Swath mode (IW), which contain a VV band.
+
+```python
+from pyroSAR.spatial import Vector
+archive = Archive('scenes.db')
+site = Vector('site.shp')
+outdir = '/path/to/processed/results'
+maxdate = '20171231T235959'
+selection_proc = archive.select(vectorobject=site,
+                                processdir=outdir,
+                                maxdate=maxdate,
+                                sensor=('S1A', 'S1B'),
+                                product='GRD',
+                                acquisition_mode='IW',
+                                vv=1)
+archive.close()
+```
+Here we use pyroSAR's own vector geometry driver for loading the shapefile and pass it together with the other parameters
+to the method `Archive.select`. You can also use the `with` statement like in the code block above.
+The returned `selection_proc` is a list of file names for the scenes we selected from the database, which we can now 
+pass to a processing function:
+```python
+from pyroSAR.snap import geocode
+
+# the target pixel resolution in meters
+resolution = 20
+
+for scene in selection_proc:
+    geocode(infile=scene, outdir=outdir, tr=resolution, scaling='db', shapefile=site)
+```
+The function `geocode` is a basic utility for SNAP. It will perform all necessary steps to subset, resample, orthorectify,
+topographically normalize and scale the input image and write GeoTiff files to the selected output directory.  
+All necessary files like orbit state vectors and SRTM DEM tiles are downloaded automatically in the background by SNAP.  
+SNAP is most conveniently used with workflow XMLs. The function geocode parses a workflow for the particular scene,
+parametrizes it depending on the scene type and selected processing parameters and writes it to the output directory.
+
+##### a word on file naming
+pyroSAR internally uses a fixed naming scheme to keep track of processed results. For each scene an identifier is created,
+which contains the sensor, acquisition mode, orbit (ascneding or dsescending) and the time stamp of the acquisition start.
+For the example above it is `S1A__IW___A_20150222T170750`, which can be created by calling `scene.outname_base`. For each
+attribute a fixed number of digits is reserved. In case the attribute is shorter than this number, 
+the rest of the digits is filled with underscrores. I.e., the sensor field is four digits long, but 'S1A' only three.
+Thus, `S1A_` is the sensor slot. In the same way, `IW__` is the acquisition mode slot, which is also four digits long.
+  
+Processing functions like `geocode` might add suffixes to this identifier to further keep track of individual processing
+steps performed on the dataset.  
+This core concept is used by many pyroSAR functions internally to keep track of which scenes have been processed before.
 ### Long Description
 
 The launch of recent satellite missions, the Sentinel fleet of ESA’s Copernicus programme in particular, has led to a
