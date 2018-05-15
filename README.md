@@ -16,7 +16,9 @@ Not everything is working properly, stay tuned...
 ### Installation of dependencies
 
 ##### GDAL
-pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as the GDAL Python binding. Alternatively, one can use <a href="https://github.com/nextgis/pygdal">pygdal</a>, a virtualenv and setuptools friendly version of standard GDAL python bindings.
+pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as the GDAL Python binding. 
+Alternatively, one can use <a href="https://github.com/nextgis/pygdal">pygdal</a>, 
+a virtualenv and setuptools friendly version of standard GDAL python bindings.
 ###### Ubuntu
 Currently Ubuntu comes with GDAL 1.11. By adding the ubuntugis repository to e.g. apt you can install 
 version >2.1:
@@ -87,7 +89,7 @@ scene.summary()
 ```
 This will automatically identify the scene, scan it for metadata and print a summary of selected metadata entries.
 The names of the attributes (e.g. sensor and acquisition_mode) are standardized for all SAR scenes.
-Further entries whose names are not standardized can be found in a dictionary `scene.meta`.
+Further entries, whose names are not standardized, can be found in a dictionary `scene.meta`.
 
 Now that we have made ourselves familiar with the scene, we import it into a sqlite database:
 ```python
@@ -121,7 +123,7 @@ selection_proc = archive.select(vectorobject=site,
                                 vv=1)
 archive.close()
 ```
-Here we use pyroSAR's own vector geometry driver for loading the shapefile and pass it together with the other parameters
+Here we use pyroSAR's own vector geometry driver for loading the shapefile and pass it, together with the other parameters,
 to the method `Archive.select`. You can also use the `with` statement like in the code block above.
 The returned `selection_proc` is a list of file names for the scenes we selected from the database, which we can now 
 pass to a processing function:
@@ -146,8 +148,9 @@ pyroSAR internally uses a fixed naming scheme to keep track of processed results
 which contains the sensor, acquisition mode, orbit (ascending or dsescending) and the time stamp of the acquisition start.
 For the example above it is `S1A__IW___A_20150222T170750`, which can be created by calling `scene.outname_base()`. For each
 attribute a fixed number of digits is reserved. In case the attribute is shorter than this number, 
-the rest of the digits is filled with underscrores. I.e., the sensor field is four digits long, but 'S1A' only three.
-Thus, `S1A_` is the sensor slot. In the same way, `IW__` is the acquisition mode slot, which is also four digits long.
+the rest of the digits is filled with underscores. I.e., the sensor field is four digits long, but 'S1A' only three.
+Thus, `S1A_` is the sensor slot. In the same way, `IW__` is the acquisition mode slot, which is also four digits long.  
+`A` denotes ascending orbit, the time stamp is in format YYYYmmddTHHMMSS.
   
 Processing functions like `geocode` add suffixes to this identifier to further keep track of individual processing
 steps performed on the dataset.  
