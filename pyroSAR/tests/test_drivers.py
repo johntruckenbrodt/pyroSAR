@@ -5,6 +5,7 @@ import pytest
 import shutil
 import sys
 import os
+from osgeo import ogr
 
 testdir = os.getenv('TESTDATA_DIR', 'pyroSAR/tests/data/')
 
@@ -53,6 +54,16 @@ class Test_Metadata():
         assert scene['pyro'].sensor == scene['sensor']
         assert scene['pyro'].spacing == scene['spacing']
         assert scene['pyro'].bbox().getArea() == scene['bbox_area']
+        assert scene['pyro'].bbox().extent == scene['corners']
+        assert scene['pyro'].bbox().nlayers == 1
+        assert scene['pyro'].bbox().getProjection('epsg') == 4326
+        assert scene['pyro'].bbox().proj4 == '+proj=longlat +datum=WGS84 +no_defs'
+        assert isinstance(scene['pyro'].bbox().getFeatureByIndex(0), ogr.Feature)
+        with pytest.raises(IndexError):
+            scene['pyro'].bbox().getFeatureByIndex(1)
+        bbox = scene['pyro'].bbox()
+        bbox.reproject(32633)
+        assert bbox.proj4 == '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs'
         assert len(scene['pyro'].getHGT()) == scene['hgt_len']
 
 
