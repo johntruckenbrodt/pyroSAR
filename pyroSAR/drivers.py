@@ -1476,11 +1476,11 @@ class Archive(object):
         self.conn = sqlite3.connect(self.dbfile)
         self.conn.enable_load_extension(True)
         try:
-            self.conn.load_extension('mod_spatialite')
+            self.conn.load_extension('mod_spatialite.so')
             if 'spatial_ref_sys' not in self.get_tablenames():
                 self.conn.execute('SELECT InitSpatialMetaData(1);')
         except sqlite3.OperationalError:
-            self.conn.load_extension('libspatialite')
+            self.conn.load_extension('libspatialite.so')
             if 'spatial_ref_sys' not in self.get_tablenames():
                 self.conn.execute('SELECT InitSpatialMetaData();')
 

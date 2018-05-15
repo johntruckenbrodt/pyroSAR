@@ -52,9 +52,9 @@ con=sqlite3.connect(':memory:')
 # enable loading extensions and load spatialite
 con.enable_load_extension(True)
 try:
-    con.load_extension('mod_spatialite')
+    con.load_extension('mod_spatialite.so')
 except sqlite3.OperationalError:
-    con.load_extension('libspatialite')
+    con.load_extension('libspatialite.so')
 ```
 In case loading extensions is not permitted you might need to install the package `pysqlite2`. 
 See the script `pyroSAR/install/install_deps.sh` for instructions. 
