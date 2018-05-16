@@ -148,9 +148,9 @@ class Vector(object):
         for feature in features:
             try:
                 feature.geometry().Set3D(set3D)
-            except AttributeError as e:
-                print('apparently you are using a GDAL version lower than 2.1')
-                raise e
+            except AttributeError:
+                dim = 3 if set3D else 2
+                feature.geometry().SetCoordinateDimension(dim)
 
         return [feature.geometry().ExportToWkt() for feature in features]
 
