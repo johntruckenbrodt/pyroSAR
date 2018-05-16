@@ -58,19 +58,22 @@ def identify(scene):
     Parameters
     ----------
     scene: str
-        a file name
+        a file or directory name
 
     Returns
     -------
     a subclass of :class:`~drivers.ID`
         a pyroSAR metadata handler
     """
+    if not os.path.exists(scene):
+        raise OSError("No such file or directory: '{}'".format(scene))
+
     for handler in ID.__subclasses__():
         try:
             return handler(scene)
         except (IOError, KeyError):
             pass
-    raise IOError('data format not supported')
+    raise RuntimeError('data format not supported')
 
 
 def identify_many(scenes):
@@ -96,7 +99,7 @@ def identify_many(scenes):
             try:
                 id = identify(scene)
                 idlist.append(id)
-            except IOError:
+            except RuntimeError:
                 continue
         pbar.update(i + 1)
     pbar.finish()
@@ -1568,7 +1571,7 @@ class Archive(object):
             print('nothing to be done')
             return
         if verbose:
-            print('identifying scene and extracting metadata...')
+            print('identifying scenes and extracting metadata...')
         scenes = identify_many(scenes)
 
         if len(scenes) > 0:
