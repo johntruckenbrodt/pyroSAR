@@ -19,6 +19,7 @@ from io import BytesIO
 
 import abc
 import ast
+import csv
 import inspect
 import math
 import os
@@ -1708,6 +1709,31 @@ class Archive(object):
         cursor = self.conn.execute('SELECT scene FROM data')
         registered = [os.path.dirname(x[0].encode('ascii')) for x in cursor.fetchall()]
         return list(set(registered))
+
+    def import_outdated(self, dbfile, verbose=False):
+        """
+        import an older data base in csv format
+
+        Parameters
+        ----------
+        dbfile: str
+            the file name of the old data base
+        verbose: bool
+            should status information and a progress bar be printed into the console?
+
+        Returns
+        -------
+
+        """
+        with open(dbfile) as csvfile:
+            text = csvfile.read()
+            csvfile.seek(0)
+            dialect = csv.Sniffer().sniff(text)
+            reader = csv.DictReader(csvfile, dialect=dialect)
+            scenes = []
+            for row in reader:
+                scenes.append(row['scene'])
+            self.insert(scenes, verbose=verbose)
 
     def move(self, scenelist, directory):
         """
