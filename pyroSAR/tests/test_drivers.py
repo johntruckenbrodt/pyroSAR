@@ -1,6 +1,4 @@
 import pyroSAR
-from pyroSAR.spatial import crsConvert, haversine
-from pyroSAR.ancillary import finder
 import pytest
 import shutil
 import sys
@@ -53,17 +51,6 @@ class Test_Metadata():
         assert scene['pyro'].stop == scene['stop']
         assert scene['pyro'].sensor == scene['sensor']
         assert scene['pyro'].spacing == scene['spacing']
-        assert scene['pyro'].bbox().getArea() == scene['bbox_area']
-        assert scene['pyro'].bbox().extent == scene['corners']
-        assert scene['pyro'].bbox().nlayers == 1
-        assert scene['pyro'].bbox().getProjection('epsg') == 4326
-        assert scene['pyro'].bbox().proj4 == '+proj=longlat +datum=WGS84 +no_defs'
-        assert isinstance(scene['pyro'].bbox().getFeatureByIndex(0), ogr.Feature)
-        with pytest.raises(IndexError):
-            scene['pyro'].bbox().getFeatureByIndex(1)
-        bbox = scene['pyro'].bbox()
-        bbox.reproject(32633)
-        assert bbox.proj4 == '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs'
         assert len(scene['pyro'].getHGT()) == scene['hgt_len']
 
 
@@ -115,19 +102,3 @@ def test_scene():
 
     shutil.rmtree(test_dir)
     os.remove(dbfile)
-
-
-def test_crsConvert():
-    assert crsConvert(crsConvert(4326, 'wkt'), 'proj4') == '+proj=longlat +datum=WGS84 +no_defs '
-    assert crsConvert(crsConvert(4326, 'prettyWkt'), 'opengis') == 'http://www.opengis.net/def/crs/EPSG/0/4326'
-    assert crsConvert('+proj=longlat +datum=WGS84 +no_defs ', 'epsg') == 4326
-    assert crsConvert('http://www.opengis.net/def/crs/EPSG/0/4326', 'epsg') == 4326
-    assert crsConvert(crsConvert('http://www.opengis.net/def/crs/EPSG/0/4326', 'osr'), 'epsg') == 4326
-    with pytest.raises(TypeError):
-        crsConvert('xyz', 'epsg')
-    with pytest.raises(ValueError):
-        crsConvert(4326, 'xyz')
-
-
-def test_haversine():
-    assert haversine(50, 10, 51, 10) == 111194.92664455889
