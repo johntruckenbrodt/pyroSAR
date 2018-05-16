@@ -68,7 +68,7 @@ class Test_Metadata():
 
 
 def test_identify_fail():
-    with pytest.raises(IOError):
+    with pytest.raises(OSError):
         pyroSAR.identify(os.path.join(testdir, 'foobar'))
 
 
