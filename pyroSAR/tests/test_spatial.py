@@ -1,9 +1,10 @@
 import os
+import shutil
 import pytest
 import numpy as np
 from osgeo import ogr
 from pyroSAR import identify
-from pyroSAR.spatial import crsConvert, haversine, Raster, stack
+from pyroSAR.spatial import crsConvert, haversine, Raster, stack, ogr2ogr, gdal_translate, gdal_rasterize
 from pyroSAR.ancillary import finder
 
 
@@ -104,3 +105,16 @@ def test_stack():
           srcnodata=-99, dstnodata=-99, dstfile=outname)
     for item in finder('pyroSAR/tests/data', ['S1A*_sub*']):
         os.remove(item)
+
+
+def test_auxil():
+    dir = 'pyroSAR/tests/data/subdir'
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+    ras = Raster('pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
+    bbox = os.path.join(dir, 'bbox.shp')
+    ras.bbox(bbox)
+    ogr2ogr(bbox, os.path.join(dir, 'bbox.gml'), {'format': 'GML'})
+    gdal_translate(ras.raster, os.path.join(dir, 'test'), {'format': 'ENVI'})
+    gdal_rasterize(bbox, os.path.join(dir, 'test2'), {'format': 'GTiff', 'xRes': 20, 'yRes': 20})
+    shutil.rmtree(dir)
