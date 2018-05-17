@@ -63,31 +63,48 @@ def haversine(lat1, lon1, lat2, lon2):
     return radius * c
 
 
-# a simple wrapper for gdal.Warp
 def gdalwarp(src, dst, options):
+    """
+    a simple wrapper for gdal.Warp
+    http://gdal.org/python/osgeo.gdal-module.html#WarpOptions
+    """
     out = gdal.Warp(dst, src, options=gdal.WarpOptions(**options))
     out = None
 
 
-# a simple wrapper for gdal.BuildVRT
+#
 def gdalbuildvrt(src, dst, options):
+    """
+    a simple wrapper for gdal.BuildVRT
+    http://gdal.org/python/osgeo.gdal-module.html#BuildVRTOptions
+    """
     out = gdal.BuildVRT(dst, src, options=gdal.BuildVRTOptions(**options))
     out = None
 
 
-# a simple wrapper for gdal.Translate
 def gdal_translate(src, dst, options):
+    """
+    a simple wrapper for gdal.Translate
+    http://gdal.org/python/osgeo.gdal-module.html#TranslateOptions
+    """
     out = gdal.Translate(dst, src, options=gdal.TranslateOptions(**options))
     out = None
 
 
-# a simple wrapper for gdal.VectorTranslate aka ogr2ogr
 def ogr2ogr(src, dst, options):
+    """
+    a simple wrapper for gdal.VectorTranslate aka ogr2ogr
+    http://gdal.org/python/osgeo.gdal-module.html#VectorTranslateOptions
+    """
+
     out = gdal.VectorTranslate(dst, src, options=gdal.VectorTranslateOptions(**options))
     out = None
 
 
-# a simple wrapper for gdal.Rasterize
 def gdal_rasterize(src, dst, options):
+    """
+    a simple wrapper for gdal.Rasterize
+    http://gdal.org/python/osgeo.gdal-module.html#RasterizeOptions
+    """
     out = gdal.Rasterize(dst, src, options=gdal.RasterizeOptions(**options))
     out = None
