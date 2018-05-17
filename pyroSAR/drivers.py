@@ -1988,7 +1988,7 @@ def getFileObj(scene, filename):
 
     if os.path.isdir(scene):
         obj = BytesIO()
-        with open(filename) as infile:
+        with open(filename, 'rb') as infile:
             obj.write(infile.read())
         obj.seek(0)
 
