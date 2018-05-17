@@ -47,7 +47,7 @@ class Raster(object):
             self.filename = filename if os.path.isabs(filename) else os.path.join(os.getcwd(), filename)
             self.raster = gdal.Open(filename, GA_ReadOnly)
         else:
-            raise IOError('file does not exist')
+            raise OSError('file does not exist')
 
         self.cols = self.raster.RasterXSize
         self.rows = self.raster.RasterYSize
@@ -463,7 +463,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
         the destination file (if sesparate) or a directory
     resampling: {near, bilinear, cubic, cubicspline, lanczos, average, mode, max, min, med, Q1, Q3}
         the resampling method; see documentation of gdalwarp
-    targetres: list
+    targetres: tuple
         a list with two entries for x and y spatial resolution
     srcnodata: int or float
         the nodata value of the source files
@@ -494,8 +494,8 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
         if len(layernames) != len(srcfiles):
             raise IOError('mismatch between number of source file groups and layernames')
 
-    if not isinstance(targetres, list) and len(targetres) != 2:
-        raise IOError('targetres must be a list with two entries for x and y resolution')
+    if not isinstance(targetres, (list, tuple)) or len(targetres) != 2:
+        raise RuntimeError('targetres must be a list or tuple with two entries for x and y resolution')
 
     if len(srcfiles) == 1 and not isinstance(srcfiles[0], list):
         raise IOError('only one file specified; nothing to be done')
@@ -508,7 +508,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     for x in dissolve(srcfiles):
         try:
             projection = Raster(x).projection
-        except RuntimeError as e:
+        except OSError as e:
             print('cannot read file: {}'.format(x))
             raise e
         projections.append(projection)
