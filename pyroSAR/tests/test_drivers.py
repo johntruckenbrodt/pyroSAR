@@ -1,9 +1,11 @@
 import pyroSAR
 import pytest
 import shutil
+import tarfile as tf
 import sys
 import os
 from osgeo import ogr
+from datetime import datetime
 
 testdir = os.getenv('TESTDATA_DIR', 'pyroSAR/tests/data/')
 
@@ -57,10 +59,58 @@ class Test_Metadata():
 def test_identify_fail():
     with pytest.raises(OSError):
         pyroSAR.identify(os.path.join(testdir, 'foobar'))
+    with pytest.raises(RuntimeError):
+        pyroSAR.identify('pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
+
+
+def test_identify_many_fail():
+    filename = 'pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'
+    assert pyroSAR.identify_many([filename]) == []
+
+
+def test_filter_processed():
+    filename = 'pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'
+    scene = pyroSAR.identify(filename)
+    outdir = 'pyroSAR/tests'
+    assert len(pyroSAR.filter_processed([scene], outdir)) == 1
+
+
+def test_parse_date():
+    with pytest.raises(ValueError):
+        print(pyroSAR.parse_date(1))
+    with pytest.raises(ValueError):
+        print(pyroSAR.parse_date('foobar'))
+    assert pyroSAR.parse_date(datetime(2006, 11, 21)) == '20061121T000000'
 
 
 def test_export2dict():
     pass
+
+
+def test_getFileObj():
+    filename = 'pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'
+    scene = pyroSAR.identify(filename)
+    tmpdir = 'pyroSAR/tests/data/tmp'
+    if os.path.exists(tmpdir):
+        shutil.rmtree(tmpdir)
+    os.makedirs(tmpdir)
+    try:
+        scene.unpack(tmpdir)
+    except RuntimeError:
+        pass
+    item = scene.findfiles('manifest.safe')[0]
+    assert os.path.basename(item) == 'manifest.safe'
+    assert isinstance(scene.getFileObj(item).read(), (bytes, str))
+
+    filename = os.path.join(tmpdir, os.path.basename(filename.replace('zip', 'tar.gz')))
+    with tf.open(filename, 'w:gz') as tar:
+        tar.add(scene.scene, arcname=os.path.basename(scene.scene))
+    scene = pyroSAR.identify(filename)
+    item = scene.findfiles('manifest.safe')[0]
+    assert isinstance(scene.getFileObj(item).read(), (bytes, str))
+    shutil.rmtree(tmpdir)
+    with pytest.raises(IOError):
+        pyroSAR.getFileObj('foo', 'bar')
 
 
 def test_scene():
