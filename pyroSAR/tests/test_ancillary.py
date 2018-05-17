@@ -1,4 +1,6 @@
+import os
 import unittest
+import subprocess as sp
 import pyroSAR.ancillary as anc
 
 
@@ -31,6 +33,20 @@ class TestListFunctions(unittest.TestCase):
 
     def test_seconds(self):
         self.assertEqual(anc.seconds('test_20151212T234411'), 3658952651.0)
+
+    def test_run(self):
+        log = 'pyroSAR/tests/data/test_run.log'
+        out, err = anc.run(cmd=['gdalinfo',
+                                'pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'],
+                           logfile=log, void=False)
+        os.remove(log)
+        with self.assertRaises(OSError):
+            anc.run(['foobar'])
+        with self.assertRaises(sp.CalledProcessError):
+            anc.run(['gdalinfo', 'foobar'])
+
+    def test_which(self):
+        self.assertTrue(os.path.isfile(anc.which('gdalinfo')))
 
 
 if __name__ == "__main__":
