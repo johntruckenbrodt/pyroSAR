@@ -11,12 +11,37 @@ osr.UseExceptions()
 
 def crsConvert(crsIn, crsOut):
     """
-    convert between epsg, wkt, proj4 and opengis spatial references
+    convert between different types of spatial references
 
-    if type 'osr' is selected the function will return a spatial reference object of type osr.SpatialReference()
-    :param crsIn: a osr.SpatialReference object, an opengis URL (e.g. 'http://www.opengis.net/def/crs/EPSG/0/4326') or a string of type WKT, PROJ4 or EPSG
-    :param crsOut: either 'wkt', 'proj4', 'epsg', 'osr', 'opengis' or 'prettyWkt' (a wkt string formatted for readability)
-    :return: a string or integer code describing the required CRS
+    Parameters
+    ----------
+    crsIn: int, str or osr.SpatialReference
+        the input CRS
+    crsOut: {'wkt', 'proj4', 'epsg', 'osr', 'opengis' or 'prettyWkt'}
+        the output CRS type
+
+    Returns
+    -------
+    int, str or osr.SpatialReference
+        the output CRS
+
+    Examples
+    --------
+    convert an integer EPSG code to PROJ4:
+
+    >>> crsConvert(4326, 'proj4')
+    '+proj=longlat +datum=WGS84 +no_defs '
+
+    convert a PROJ4 string to an opengis URL:
+
+    >>> crsConvert('+proj=longlat +datum=WGS84 +no_defs ', 'opengis')
+    'http://www.opengis.net/def/crs/EPSG/0/4326'
+
+    convert the opengis URL back to EPSG:
+
+    >>> crsConvert('http://www.opengis.net/def/crs/EPSG/0/4326', 'epsg')
+    4326
+
     """
     if isinstance(crsIn, osr.SpatialReference):
         srs = crsIn.Clone()
@@ -54,7 +79,24 @@ def crsConvert(crsIn, crsOut):
 
 def haversine(lat1, lon1, lat2, lon2):
     """
-    compute distance in meters between two points in latlon
+    compute the distance in meters between two points in latlon
+
+    Parameters
+    ----------
+    lat1: int or float
+        the latitude of point 1
+    lon1: int or float
+        the longitude of point 1
+    lat2: int or float
+        the latitude of point 2
+    lon2: int or float
+        the longitude of point 2
+
+    Returns
+    -------
+    float
+        the distance between point 1 and point2 in meters
+
     """
     radius = 6371000
     lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
@@ -66,17 +108,42 @@ def haversine(lat1, lon1, lat2, lon2):
 def gdalwarp(src, dst, options):
     """
     a simple wrapper for gdal.Warp
-    http://gdal.org/python/osgeo.gdal-module.html#WarpOptions
+
+    Parameters
+    ----------
+    src: str, ogr.DataSource or gdal.DataSource
+        the input data set
+    dst: str
+        the output data set
+    options: dict
+        additional parameters passed to gdal.Warp;
+        see http://gdal.org/python/osgeo.gdal-module.html#WarpOptions
+
+    Returns
+    -------
+
     """
     out = gdal.Warp(dst, src, options=gdal.WarpOptions(**options))
     out = None
 
 
-#
 def gdalbuildvrt(src, dst, options):
     """
     a simple wrapper for gdal.BuildVRT
-    http://gdal.org/python/osgeo.gdal-module.html#BuildVRTOptions
+
+    Parameters
+    ----------
+    src: str, ogr.DataSource or gdal.DataSource
+        the input data set
+    dst: str
+        the output data set
+    options: dict
+        additional parameters passed to gdal.BuildVRT;
+        see http://gdal.org/python/osgeo.gdal-module.html#BuildVRTOptions
+
+    Returns
+    -------
+
     """
     out = gdal.BuildVRT(dst, src, options=gdal.BuildVRTOptions(**options))
     out = None
@@ -85,7 +152,20 @@ def gdalbuildvrt(src, dst, options):
 def gdal_translate(src, dst, options):
     """
     a simple wrapper for gdal.Translate
-    http://gdal.org/python/osgeo.gdal-module.html#TranslateOptions
+
+    Parameters
+    ----------
+    src: str, ogr.DataSource or gdal.DataSource
+        the input data set
+    dst: str
+        the output data set
+    options: dict
+        additional parameters passed to gdal.Translate;
+        see http://gdal.org/python/osgeo.gdal-module.html#TranslateOptions
+
+    Returns
+    -------
+
     """
     out = gdal.Translate(dst, src, options=gdal.TranslateOptions(**options))
     out = None
@@ -94,9 +174,21 @@ def gdal_translate(src, dst, options):
 def ogr2ogr(src, dst, options):
     """
     a simple wrapper for gdal.VectorTranslate aka ogr2ogr
-    http://gdal.org/python/osgeo.gdal-module.html#VectorTranslateOptions
-    """
 
+    Parameters
+    ----------
+    src: str or ogr.DataSource
+        the input data set
+    dst: str
+        the output data set
+    options: dict
+        additional parameters passed to gdal.VectorTranslate;
+        see http://gdal.org/python/osgeo.gdal-module.html#VectorTranslateOptions
+
+    Returns
+    -------
+
+    """
     out = gdal.VectorTranslate(dst, src, options=gdal.VectorTranslateOptions(**options))
     out = None
 
@@ -104,7 +196,20 @@ def ogr2ogr(src, dst, options):
 def gdal_rasterize(src, dst, options):
     """
     a simple wrapper for gdal.Rasterize
-    http://gdal.org/python/osgeo.gdal-module.html#RasterizeOptions
+
+    Parameters
+    ----------
+    src: str or ogr.DataSource
+        the input data set
+    dst: str
+        the output data set
+    options: dict
+        additional parameters passed to gdal.Rasterize;
+        see http://gdal.org/python/osgeo.gdal-module.html#RasterizeOptions
+
+    Returns
+    -------
+
     """
     out = gdal.Rasterize(dst, src, options=gdal.RasterizeOptions(**options))
     out = None
