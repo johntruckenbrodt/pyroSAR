@@ -1,16 +1,9 @@
 ##############################################################
 # GDAL wrapper for convenient raster data handling and processing
-# John Truckenbrodt 2015-2017
+# John Truckenbrodt 2015-2018
 ##############################################################
 
-"""
-This is intended as a raster meta information handler with options for reading and writing raster data in a
-convenient manner by simplifying the numerous options provided by the GDAL python binding.
-Several functions are provided along with this module to directly modify the raster object in memory or directly
-write a newly created file to disk (without modifying the rasterobject itself).
-Upon initializing a Raster object only metadata is loaded, the actual data can be, for example,
-loaded to memory by calling functions matrix or load.
-"""
+
 # todo: function to write data with the same metadata as a given file
 # todo: documentation
 
@@ -40,13 +33,21 @@ gdal.UseExceptions()
 
 
 class Raster(object):
+    """
+    This is intended as a raster meta information handler with options for reading and writing raster data in a
+    convenient manner by simplifying the numerous options provided by the GDAL python binding.
+    Several functions are provided along with this module to directly modify the raster object in memory or directly
+    write a newly created file to disk (without modifying the rasterobject itself).
+    Upon initializing a Raster object only metadata is loaded, the actual data can be, for example,
+    loaded to memory by calling functions matrix or load.
+    """
     # todo: init a Raster object from array data not only from a filename
     def __init__(self, filename):
         if os.path.isfile(filename):
             self.filename = filename if os.path.isabs(filename) else os.path.join(os.getcwd(), filename)
             self.raster = gdal.Open(filename, GA_ReadOnly)
         else:
-            raise IOError('file does not exist')
+            raise OSError('file does not exist')
 
         self.cols = self.raster.RasterXSize
         self.rows = self.raster.RasterYSize
@@ -96,7 +97,7 @@ class Raster(object):
     
     @property
     def proj4args(self):
-        args = [x.split('=') for x in re.split('[+ ]*', self.proj4) if len(x) > 0]
+        args = [x.split('=') for x in re.split('[+ ]+', self.proj4) if len(x) > 0]
         return dict([(x[0], None) if len(x) == 1 else tuple(x) for x in args])
 
     @property
@@ -235,7 +236,7 @@ class Raster(object):
         """
         for i in range(self.raster.RasterCount):
             try:
-                checksum = self.raster.GetRasterBand(i).Checksum()
+                checksum = self.raster.GetRasterBand(i + 1).Checksum()
             except RuntimeError:
                 return False
         return True
@@ -454,24 +455,37 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     """
     function for mosaicking, resampling and stacking of multiple raster files into a 3D data cube
 
-    Args:
-        srcfiles: a list of file names or a list of lists; each sub-list is treated as an order to mosaic its containing files
-        dstfile: the destination file (if sesparate) or a directory
-        resampling: the resampling method; see documentation of gdalwarp
-            options: near, bilinear, cubic, cubicspline, lanczos, average, mode, max, min, med, Q1, Q3
-        targetres: a list with two entries for x and y
-        srcnodata: the nodata value of the source files
-        dstnodata: the nodata value of the destination file(s)
-        shapefile: a shapefile for defining the area of the destination files
-        layernames: the names of the output layers; if None, the basenames of the input files is used
-        sortfun: a function for sorting the input files; this is needed for defining the mosaicking order
-        separate: should the files be written to a single raster block or separate files? If separate, each tile is written to geotiff.
-        overwrite: overwrite the file if it already exists?
-        compress: compress the geotiff files?
-        cores: the number of CPU threads to use; this is only relevant if separate = True
+    Parameters
+    ----------
+    srcfiles: list
+        a list of file names or a list of lists; each sub-list is treated as an order to mosaic its containing files
+    dstfile: str
+        the destination file (if sesparate) or a directory
+    resampling: {near, bilinear, cubic, cubicspline, lanczos, average, mode, max, min, med, Q1, Q3}
+        the resampling method; see documentation of gdalwarp
+    targetres: tuple
+        a list with two entries for x and y spatial resolution
+    srcnodata: int or float
+        the nodata value of the source files
+    dstnodata: int or float
+        the nodata value of the destination file(s)
+    shapefile: str or spatial.vector.Vector
+        a shapefile for defining the area of the destination files
+    layernames: list
+        the names of the output layers; if None, the basenames of the input files are used
+    sortfun: function
+        a function for sorting the input files; this is needed for defining the mosaicking order
+    separate: bool
+        should the files be written to a single raster block or separate files? If separate, each tile is written to geotiff.
+    overwrite: bool
+        overwrite the file if it already exists?
+    compress: bool
+        compress the geotiff files?
+    cores: int
+        the number of CPU threads to use; this is only relevant if separate = True
 
-    Returns:
-        A single raster stack in ENVI format or multiple geotiff files of same extent.
+    Returns
+    -------
     """
     if len(dissolve(srcfiles)) == 0:
         raise IOError('no input files provided to function raster.stack')
@@ -480,8 +494,8 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
         if len(layernames) != len(srcfiles):
             raise IOError('mismatch between number of source file groups and layernames')
 
-    if not isinstance(targetres, list) and len(targetres) != 2:
-        raise IOError('targetres must be a list with two entries for x and y resolution')
+    if not isinstance(targetres, (list, tuple)) or len(targetres) != 2:
+        raise RuntimeError('targetres must be a list or tuple with two entries for x and y resolution')
 
     if len(srcfiles) == 1 and not isinstance(srcfiles[0], list):
         raise IOError('only one file specified; nothing to be done')
@@ -494,7 +508,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     for x in dissolve(srcfiles):
         try:
             projection = Raster(x).projection
-        except RuntimeError as e:
+        except OSError as e:
             print('cannot read file: {}'.format(x))
             raise e
         projections.append(projection)

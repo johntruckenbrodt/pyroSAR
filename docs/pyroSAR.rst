@@ -11,10 +11,42 @@ The ID class and its subclasses allows easy and standardized access to the metad
     :undoc-members:
     :show-inheritance:
 
-Preprocessing
-=============
+SNAP Processing
+===============
 
 .. automodule:: pyroSAR.snap.util
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+GAMMA Processing
+================
+
+.. automodule:: pyroSAR.gamma.util
+    :members: geocode, convert2gamma
+    :undoc-members:
+    :show-inheritance:
+
+Sentinel-1 Tools
+================
+
+.. automodule:: pyroSAR.S1.auxil
+    :members: OSV
+    :undoc-members:
+    :show-inheritance:
+
+Raster Tools
+============
+
+.. automodule:: pyroSAR.spatial.raster
+    :members: stack
+    :undoc-members:
+    :show-inheritance:
+
+General Spatial Tools
+=====================
+
+.. automodule:: pyroSAR.spatial.auxil
     :members:
     :undoc-members:
     :show-inheritance:

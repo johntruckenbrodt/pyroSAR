@@ -5,7 +5,7 @@
 ##############################################################
 
 """
-This script is intended as a set of generalized processing routines for modularized GAMMA work flows.
+This module is intended as a set of generalized processing routines for modularized GAMMA work flows.
 The function parametrization is intended to be applicable to any kind of situation and input data set. Thus, instead of choosing a specific parametrization for the data at hand,
 core parameters are iterated over a set of values in order to find the one best suited for the task.
 The approach of the single routines is likely to still have drawbacks and might fail in certain situations. Testing and suggestions on improvements are very welcome.
@@ -61,12 +61,20 @@ def calibrate(id, directory, replace=False):
 
 def convert2gamma(id, directory, S1_noiseremoval=True):
     """
-    general function for converting SAR images to Gamma format
+    general function for converting SAR images to GAMMA format
 
-    :param id: an object of type pyroSAR.ID or any subclass
-    :param directory: the output directory for the converted images
-    :param S1_noiseremoval: only Sentinel-1: should noise removal be applied to the image?
-    :return: None
+    Parameters
+    ----------
+    id: pyroSAR.ID
+        an SAR scene object of type pyroSAR.ID or any subclass
+    directory: str
+        the output directory for the converted images
+    S1_noiseremoval: bool
+        only Sentinel-1: should noise removal be applied to the image?
+
+    Returns
+    -------
+
     """
 
     if not isinstance(id, ID):
@@ -247,47 +255,73 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     """
     general function for geocoding SAR images with GAMMA
 
-    :param scene: the SAR scene to be processed (can be the name of the file or a pyroSAR object)
-    :param dem: the reference DEM in GAMMA format
-    :param tempdir: a temporary directory for writing intermediate files
-    :param outdir: the directory for the final GeoTiff output files
-    :param targetres: the target resolution in meters
-    :param scaling: can be either 'linear', 'db' or a list of both (i.e. ['linear', 'db'])
-    :param func_geoback: backward geocoding interpolation mode (see GAMMA command geocode_back)
-        0: nearest-neighbor
-        1: bicubic spline
-        2: bicubic-log spline, interpolates log(data)
-        3: bicubic-sqrt spline, interpolates sqrt(data)
-        NOTE: bicubic-log spline and bicubic-sqrt spline modes should only be used with non-negative data!
-    :param func_interp: output lookup table values in regions of layover, shadow, or DEM gaps (see GAMMA command gc_map)
-        0: set to (0.,0.)
-        1: linear interpolation across these regions
-        2: actual value
-        3: nn-thinned
-    :param nodata: the nodata values for the output files; defined as a tuple with two values, the first for linear, the second for logarithmic scaling, per default (0, -99)
-    :param sarsimulation: perform geocoding with SAR simulation cross correlation? If False, geocoding is performed with the Range-Doppler approach using orbit state vectors
-    :param osvdir: a directory for Orbit State Vector files; this is currently only used by S1 where two subdirectories POEORB and RESORB are created
-    :param allow_RES_OSV also allow the less accurate RES orbit files to be used? Otherwise the function will raise an error of no POE file exists
-    :param cleanup: should all files written to the temporary directory during function execution be deleted after processing?
-    :return: None
+    Parameters
+    ----------
+    scene: str or pyroSAR.ID
+        the SAR scene to be processed
+    dem: str
+        the reference DEM in GAMMA format
+    tempdir: str
+        a temporary directory for writing intermediate files
+    outdir: str
+        the directory for the final GeoTiff output files
+    targetres: int
+        the target resolution in meters
+    scaling: {'linear', 'db'} or list
+        the value scaling of the backscatter values; either 'linear', 'db' or a list of both, i.e. ['linear', 'db']
+    func_geoback: {0, 1, 2, 3}
+        backward geocoding interpolation mode (see GAMMA command geocode_back)
+         * 0: nearest-neighbor
+         * 1: bicubic spline
+         * 2: bicubic-log spline, interpolates log(data)
+         * 3: bicubic-sqrt spline, interpolates sqrt(data)
 
+        NOTE: bicubic-log spline and bicubic-sqrt spline modes should only be used with non-negative data!
+    func_interp: {0, 1, 2, 3}
+        output lookup table values in regions of layover, shadow, or DEM gaps (see GAMMA command gc_map)
+         * 0: set to (0., 0.)
+         * 1: linear interpolation across these regions
+         * 2: actual value
+         * 3: nn-thinned
+    nodata: tuple
+        the nodata values for the output files; defined as a tuple with two values, the first for linear,
+        the second for logarithmic scaling
+    sarSimCC: bool
+        perform geocoding with SAR simulation cross correlation?
+        If False, geocoding is performed with the Range-Doppler approach using orbit state vectors
+    osvdir: str
+        a directory for Orbit State Vector files;
+        this is currently only used by for Sentinel-1 where two subdirectories POEORB and RESORB are created;
+        if set to None, a subdirectory OSV is created in the directory of the unpacked scene.
+    allow_RES_OSV: bool
+        also allow the less accurate RES orbit files to be used?
+        Otherwise the function will raise an error of no POE file exists
+    cleanup: bool
+        should all files written to the temporary directory during function execution be deleted after processing?
+
+    Returns
+    -------
+
+    Note
+    ----
     intermediate output files (named <master_MLI>_<suffix>):
-    - dem_seg: dem subsetted to the extent of the SAR image
-    - lut: rough geocoding lookup table
-    - lut_fine: fine geocoding lookup table
-    - sim_map: simulated SAR backscatter image in DEM geometry
-    - sim_sar: simulated SAR backscatter image in SAR geometry
-    - u: zenith angle of surface normal vector n (angle between z and n)
-    - v: orientation angle of n (between x and projection of n in xy plane)
-    - inc: local incidence angle (between surface normal and look vector)
-    - psi: projection angle (between surface normal and image plane normal)
-    - pix: pixel area normalization factor
-    - ls_map: layover and shadow map (in map projection)
-    - diffpar: ISP offset/interferogram parameter file
-    - offs: offset estimates (fcomplex)
-    - coffs: culled range and azimuth offset estimates (fcomplex)
-    - coffsets: culled offset estimates and cross correlation values (text format)
-    - ccp: cross-correlation of each patch (0.0->1.0) (float)
+     * dem_seg: dem subsetted to the extent of the SAR image
+     * lut: rough geocoding lookup table
+     * lut_fine: fine geocoding lookup table
+     * sim_map: simulated SAR backscatter image in DEM geometry
+     * sim_sar: simulated SAR backscatter image in SAR geometry
+     * u: zenith angle of surface normal vector n (angle between z and n)
+     * v: orientation angle of n (between x and projection of n in xy plane)
+     * inc: local incidence angle (between surface normal and look vector)
+     * psi: projection angle (between surface normal and image plane normal)
+     * pix: pixel area normalization factor
+     * ls_map: layover and shadow map (in map projection)
+     * diffpar: ISP offset/interferogram parameter file
+     * offs: offset estimates (fcomplex)
+     * coffs: culled range and azimuth offset estimates (fcomplex)
+     * coffsets: culled offset estimates and cross correlation values (text format)
+     * ccp: cross-correlation of each patch (0.0->1.0) (float)
+
     """
 
     scene = scene if isinstance(scene, ID) else identify(scene)

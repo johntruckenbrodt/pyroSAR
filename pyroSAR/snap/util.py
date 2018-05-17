@@ -60,8 +60,8 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
 
     See Also
     --------
-    pyroSAR.ID
-    pyroSAR.spatial.vector.Vector
+    :class:`pyroSAR.drivers.ID`
+    :class:`pyroSAR.spatial.vector.Vector`
     """
 
     id = infile if isinstance(infile, pyroSAR.ID) else pyroSAR.identify(infile)

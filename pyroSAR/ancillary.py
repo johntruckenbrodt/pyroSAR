@@ -24,7 +24,7 @@ import inspect
 import itertools
 import os
 import subprocess as sp
-from time import mktime, strptime
+from datetime import datetime
 
 try:
     import pathos.multiprocessing as mp
@@ -204,7 +204,7 @@ def parse_literal(x):
     :return a value of type int, float or str
     """
     if isinstance(x, list):
-        return map(parse_literal, x)
+        return [parse_literal(y) for y in x]
     elif isinstance(x, (bytes, str)):
         try:
             return int(x)
@@ -308,10 +308,20 @@ def seconds(filename):
     function to extract time in seconds from a file name.
     the format must follow a fixed pattern: YYYYmmddTHHMMSS
     Images processed with pyroSAR functionalities via module snap or gamma will contain this information.
-    :param filename: the name of a file from which to extract the time from
-    :return:
+
+    Parameters
+    ----------
+    filename: str
+        the name of a file from which to extract the time from
+
+    Returns
+    -------
+    float
+        the difference between the time stamp in filename and Jan 01 1900 in seconds
     """
-    return mktime(strptime(re.findall('[0-9T]{15}', filename)[0], '%Y%m%dT%H%M%S'))
+    # return mktime(strptime(re.findall('[0-9T]{15}', filename)[0], '%Y%m%dT%H%M%S'))
+    td = datetime.strptime(re.findall('[0-9T]{15}', filename)[0], '%Y%m%dT%H%M%S') - datetime(1900, 1, 1)
+    return td.total_seconds()
 
 
 class Stack(object):
