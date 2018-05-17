@@ -1,8 +1,11 @@
 
+import os
 import pytest
+import numpy as np
 from osgeo import ogr
 from pyroSAR import identify
-from pyroSAR.spatial import crsConvert, haversine
+from pyroSAR.spatial import crsConvert, haversine, Raster, stack
+from pyroSAR.ancillary import finder
 
 
 def test_crsConvert():
@@ -34,3 +37,33 @@ def test_Vector():
         bbox.getFeatureByIndex(1)
     bbox.reproject(32633)
     assert bbox.proj4 == '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs'
+
+
+def test_Raster():
+    ras = Raster('pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
+    assert ras.bands == 1
+    assert ras.proj4 == '+proj=utm +zone=31 +datum=WGS84 +units=m +no_defs '
+    assert ras.cols == 268
+    assert ras.rows == 217
+    assert ras.dim == [217, 268, 1]
+    assert ras.dtype == 'Float32'
+    assert ras.epsg == 32631
+    assert ras.format == 'GTiff'
+    assert ras.geo == {'ymax': 4830114.70107, 'rotation_y': 0.0, 'rotation_x': 0.0, 'xmax': 625408.241204, 'xres': 20.0,
+                       'xmin': 620048.241204, 'ymin': 4825774.70107, 'yres': -20.0}
+    assert ras.geogcs == 'WGS 84'
+    assert ras.is_valid() is True
+    assert ras.proj4args == {'units': 'm', 'no_defs': None, 'datum': 'WGS84', 'proj': 'utm', 'zone': '31'}
+    assert ras.allstats == [[-26.65471076965332, 1.4325850009918213, -12.124929534450377, 4.738273594738293]]
+    assert ras.bbox().getArea() == 23262400.0
+    assert len(ras.layers()) == 1
+    ras.load()
+    assert isinstance(ras.matrix(), np.ndarray)
+
+
+def test_stack():
+    name = 'pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'
+    stack(srcfiles=[name, name], resampling='near', targetres=(30, 30), srcnodata=-99, dstnodata=-99,
+          dstfile='pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db_sub')
+    for item in finder('pyroSAR/tests/data', ['S1A*_sub*']):
+        os.remove(item)
