@@ -42,3 +42,11 @@ Raster Tools
     :members: stack
     :undoc-members:
     :show-inheritance:
+
+General Spatial Tools
+=====================
+
+.. automodule:: pyroSAR.spatial.auxil
+    :members:
+    :undoc-members:
+    :show-inheritance:
