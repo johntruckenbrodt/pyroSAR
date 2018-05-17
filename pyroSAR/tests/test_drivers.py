@@ -98,6 +98,7 @@ def test_getFileObj():
         scene.unpack(tmpdir)
     except RuntimeError:
         pass
+    scene = pyroSAR.identify(scene.scene)
     item = scene.findfiles('manifest.safe')[0]
     assert os.path.basename(item) == 'manifest.safe'
     assert isinstance(scene.getFileObj(item).read(), (bytes, str))
