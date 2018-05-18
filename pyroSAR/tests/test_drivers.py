@@ -116,16 +116,21 @@ def test_getFileObj():
 
 def test_scene():
     scene = 'pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'
-    dbfile = os.path.join('pyroSAR/tests/data/', 'scenes.db')
+    tmp = 'pyroSAR/tests/data/test/tmp'
+    if os.path.isdir(tmp):
+        shutil.rmtree(tmp)
+    os.makedirs(tmp)
+    dbfile = os.path.join(tmp, 'scenes.db')
     with pyroSAR.Archive(dbfile) as db:
         db.insert(scene, verbose=True)
         assert db.size == (1, 0)
+    db = pyroSAR.Archive(dbfile)
+    assert len(db.get_unique_directories()) == 1
+    db.close()
     id = pyroSAR.identify(scene)
-    test_dir = 'pyroSAR/tests/data/test'
-    os.makedirs(test_dir)
-    id.bbox(outname='pyroSAR/tests/data/test/bbox_test.shp')
-    assert id.is_processed(test_dir) is False
-    id.unpack('pyroSAR/tests/data/test')
+    id.bbox(outname=os.path.join(tmp, 'bbox_test.shp'), overwrite=True)
+    assert id.is_processed(tmp) is False
+    id.unpack(tmp, overwrite=True)
     assert id.compression is None
     os.remove(dbfile)
     id.export2sqlite(dbfile)
@@ -135,7 +140,6 @@ def test_scene():
     osvdir = os.path.join(id.scene, 'osv')
     if sys.version_info >= (2, 7, 9):
         id.getOSV(osvdir)
-
         with pyroSAR.OSV(osvdir) as osv:
             with pytest.raises(IOError):
                 osv.catch(osvtype='XYZ')
@@ -151,5 +155,4 @@ def test_scene():
         with pytest.raises(RuntimeError):
             id.getOSV(osvdir, osvType='POE')
 
-    shutil.rmtree(test_dir)
-    os.remove(dbfile)
+    shutil.rmtree(tmp)
