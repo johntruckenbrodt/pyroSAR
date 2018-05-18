@@ -56,21 +56,24 @@ class Test_Metadata():
         assert len(scene['pyro'].getHGT()) == scene['hgt_len']
 
 
+tmpdir = os.path.join(testdir, 'tmp')
+testfile1 = os.path.join(testdir, 'S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip')
+testfile2 = os.path.join(testdir, 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
+
+
 def test_identify_fail():
     with pytest.raises(OSError):
         pyroSAR.identify(os.path.join(testdir, 'foobar'))
     with pytest.raises(RuntimeError):
-        pyroSAR.identify('pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
+        pyroSAR.identify(testfile2)
 
 
 def test_identify_many_fail():
-    filename = 'pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'
-    assert pyroSAR.identify_many([filename]) == []
+    assert pyroSAR.identify_many([testfile2]) == []
 
 
 def test_filter_processed():
-    filename = 'pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'
-    scene = pyroSAR.identify(filename)
+    scene = pyroSAR.identify(testfile1)
     outdir = 'pyroSAR/tests'
     assert len(pyroSAR.filter_processed([scene], outdir)) == 1
 
@@ -88,25 +91,19 @@ def test_export2dict():
 
 
 def test_getFileObj():
-    filename = 'pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'
-    scene = pyroSAR.identify(filename)
-    tmpdir = 'pyroSAR/tests/data/tmp'
-    if os.path.exists(tmpdir):
-        shutil.rmtree(tmpdir)
+    scene = pyroSAR.identify(testfile1)
     os.makedirs(tmpdir)
-    try:
-        scene.unpack(tmpdir)
-    except RuntimeError:
-        pass
+    scene.unpack(tmpdir)
     scene = pyroSAR.identify(scene.scene)
     item = scene.findfiles('manifest.safe')[0]
     assert os.path.basename(item) == 'manifest.safe'
     assert isinstance(scene.getFileObj(item).read(), (bytes, str))
 
-    filename = os.path.join(tmpdir, os.path.basename(filename.replace('zip', 'tar.gz')))
+    filename = os.path.join(tmpdir, os.path.basename(testfile1.replace('zip', 'tar.gz')))
     with tf.open(filename, 'w:gz') as tar:
         tar.add(scene.scene, arcname=os.path.basename(scene.scene))
     scene = pyroSAR.identify(filename)
+    assert scene.compression == 'tar'
     item = scene.findfiles('manifest.safe')[0]
     assert isinstance(scene.getFileObj(item).read(), (bytes, str))
     shutil.rmtree(tmpdir)
@@ -115,22 +112,16 @@ def test_getFileObj():
 
 
 def test_scene():
-    scene = 'pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'
-    tmp = 'pyroSAR/tests/data/test/tmp'
-    if os.path.isdir(tmp):
-        shutil.rmtree(tmp)
-    os.makedirs(tmp)
-    dbfile = os.path.join(tmp, 'scenes.db')
-    with pyroSAR.Archive(dbfile) as db:
-        db.insert(scene, verbose=True)
-        assert db.size == (1, 0)
-    db = pyroSAR.Archive(dbfile)
-    assert len(db.get_unique_directories()) == 1
-    db.close()
-    id = pyroSAR.identify(scene)
-    id.bbox(outname=os.path.join(tmp, 'bbox_test.shp'), overwrite=True)
-    assert id.is_processed(tmp) is False
-    id.unpack(tmp, overwrite=True)
+    os.makedirs(tmpdir)
+    dbfile = os.path.join(tmpdir, 'scenes.db')
+    id = pyroSAR.identify(testfile1)
+    assert isinstance(id.export2dict(), dict)
+    with pytest.raises(RuntimeError):
+        assert isinstance(id.gdalinfo(), dict)
+    id.summary()
+    id.bbox(outname=os.path.join(tmpdir, 'bbox_test.shp'), overwrite=True)
+    assert id.is_processed(tmpdir) is False
+    id.unpack(tmpdir, overwrite=True)
     assert id.compression is None
     os.remove(dbfile)
     id.export2sqlite(dbfile)
@@ -155,4 +146,26 @@ def test_scene():
         with pytest.raises(RuntimeError):
             id.getOSV(osvdir, osvType='POE')
 
-    shutil.rmtree(tmp)
+    shutil.rmtree(tmpdir)
+
+
+def test_archive():
+    os.makedirs(tmpdir)
+    id = pyroSAR.identify(testfile1)
+    dbfile = os.path.join(tmpdir, 'scenes.db')
+    db = pyroSAR.Archive(dbfile)
+    db.insert(testfile1, verbose=False)
+    assert db.is_registered(testfile1) is True
+    assert len(db.get_unique_directories()) == 1
+    assert db.select_duplicates() == []
+    assert db.select_duplicates(outname_base='S1A__IW___A_20150222T170750', scene='scene.zip') == []
+    assert len(db.select(mindate='20141001T192312', maxdate='20201001T192312')) == 1
+    assert len(db.select(polarizations=['VV'])) == 1
+    assert len(db.select(vectorobject=id.bbox())) == 1
+    with pytest.raises(IOError):
+        db.filter_scenelist([1])
+    db.close()
+    # separately test the with statement
+    with pyroSAR.Archive(dbfile) as db:
+        assert db.size == (1, 0)
+    shutil.rmtree(tmpdir)
