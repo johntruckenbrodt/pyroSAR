@@ -123,7 +123,6 @@ def test_scene():
     assert id.is_processed(tmpdir) is False
     id.unpack(tmpdir, overwrite=True)
     assert id.compression is None
-    os.remove(dbfile)
     id.export2sqlite(dbfile)
     with pytest.raises(IOError):
         id.getGammaImages()
@@ -145,7 +144,6 @@ def test_scene():
     else:
         with pytest.raises(RuntimeError):
             id.getOSV(osvdir, osvType='POE')
-
     shutil.rmtree(tmpdir)
 
 
