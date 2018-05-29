@@ -106,7 +106,7 @@ def identify_many(scenes):
                 id = identify(scene)
                 idlist.append(id)
             except RuntimeError:
-                log.warn("Can not open the scene {}".format(id))
+                log.warn("Can not open the scene {}".format(scene))
                 continue
         pbar.update(i + 1)
     pbar.finish()
