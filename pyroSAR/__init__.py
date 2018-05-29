@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from .drivers import *
 
 import logging

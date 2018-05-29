@@ -24,7 +24,6 @@ import inspect
 import math
 import os
 import re
-import ssl
 import shutil
 import struct
 import tarfile as tf
@@ -32,7 +31,6 @@ import xml.etree.ElementTree as ET
 import zipfile as zf
 from datetime import datetime, timedelta
 from time import strptime, strftime
-from urllib2 import urlopen, URLError
 
 import numpy as np
 import progressbar as pb
@@ -367,16 +365,12 @@ class ID(object):
 
     def getHGT(self):
         """
-<<<<<<< HEAD
         get the names of all SRTM HGT tiles overlapping with the SAR scene
 
         Returns
         -------
         list
             names of the SRTM HGT tiles
-=======
-        Returns: names of all SRTM hgt tiles overlapping with the SAR scene
->>>>>>> Add logging to drivers.py
         """
 
         corners = self.getCorners()
@@ -768,8 +762,6 @@ class CEOS_PSR(ID):
             except IOError as e:
                 if i + 1 == len(patterns):
                     raise e
-                else:
-                    continue
 
         self.meta = self.scanMetadata()
 
@@ -952,8 +944,8 @@ class CEOS_PSR(ID):
         meta['product'] = match.group('level')
 
         try:
-            meta['start'] = self.parse_date(self.meta['Img_SceneStartDateTime'])
-            meta['stop'] = self.parse_date(self.meta['Img_SceneEndDateTime'])
+            meta['start'] = self.parse_date(meta['Img_SceneStartDateTime'])
+            meta['stop'] = self.parse_date(meta['Img_SceneEndDateTime'])
         except (AttributeError, KeyError):
             try:
                 start_string = re.search('Img_SceneStartDateTime[ ="0-9:.]*', led).group()
@@ -1273,7 +1265,6 @@ class SAFE(ID):
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
 
-<<<<<<< HEAD
     def getOSV(self, outdir, osvType='POE'):
         """
         download Orbit State Vector files for the scene
@@ -1309,36 +1300,8 @@ class SAFE(ID):
                 if len(files) == 0:
                     files = osv.catch('RES', before, after)
                 osv.retrieve(files)
-=======
-    def getOSV(self, outdir):
-        date = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
 
-        before = (date - timedelta(days=1)).strftime('%Y-%m-%d')
-        after = (date + timedelta(days=1)).strftime('%Y-%m-%d')
 
-        query = dict()
-        query['mission'] = self.sensor
-        query['validity_start_time'] = '{0}..{1}'.format(before, after)
-
-        remote_poe = 'https://qc.sentinel1.eo.esa.int/aux_poeorb/'
-
-        pattern = 'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
-
-        sslcontext = ssl._create_unverified_context()
-
-        subaddress = urlQueryParser(remote_poe, query)
-        response = urlopen(subaddress, context=sslcontext).read()
-        remotes = [os.path.join(remote_poe, x) for x in sorted(set(re.findall(pattern, response)))]
-
-        if not os.access(outdir, os.W_OK):
-            raise RuntimeError('insufficient directory permissions, unable to write')
-        downloads = [x for x in remotes if not os.path.isfile(os.path.join(outdir, os.path.basename(x)))]
-        for item in downloads:
-            infile = urlopen(item, context=sslcontext)
-            with open(os.path.join(outdir, os.path.basename(item)), 'wb') as outfile:
-                outfile.write(infile.read())
-            infile.close()
->>>>>>> Add logging to drivers.py
 
     def scanMetadata(self):
         manifest = self.getFileObj(self.findfiles('manifest.safe')[0]).getvalue()

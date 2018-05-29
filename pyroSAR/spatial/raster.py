@@ -51,13 +51,9 @@ class Raster(object):
             log.debug("Opening the raster object {}".format(filename))
             self.raster = gdal.Open(filename, GA_ReadOnly)
         else:
-<<<<<<< HEAD
             raise OSError('file does not exist')
 
-=======
-            raise IOError('file does not exist')
         log.debug("Declare metadata")
->>>>>>> Add logging to raster.py
         self.cols = self.raster.RasterXSize
         self.rows = self.raster.RasterYSize
         self.bands = self.raster.RasterCount
