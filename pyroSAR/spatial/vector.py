@@ -386,14 +386,17 @@ def centerdist(obj1, obj2):
 
 def intersect(obj1, obj2):
     if not isinstance(obj1, Vector) or not isinstance(obj2, Vector):
-        raise IOError('both objects must be of type Vector')
+        raise RuntimeError('both objects must be of type Vector')
+
+    if obj1.nfeatures > 1 or obj2.nfeatures > 1:
+        raise RuntimeError('only objects with one feature are currently supported')
 
     obj1.reproject(obj2.srs)
 
-    feature1 = obj1[0]
+    feature1 = obj1.getFeatureByIndex(0)
     geometry1 = feature1.GetGeometryRef()
 
-    feature2 = obj2[0]
+    feature2 = obj2.getFeatureByIndex(0)
     geometry2 = feature2.GetGeometryRef()
 
     intersect = geometry2.Intersection(geometry1)
