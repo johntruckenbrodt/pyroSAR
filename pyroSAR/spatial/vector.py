@@ -42,20 +42,21 @@ class Vector(object):
             self.init_layer()
 
     def __getitem__(self, expression):
+        if not isinstance(expression, (int, str)):
+            raise RuntimeError('expression must be of type int or str')
+        expression = parse_literal(expression) if isinstance(expression, str) else expression
         if isinstance(expression, int):
-            return self.getFeatureByIndex(expression)
-        elif isinstance(parse_literal(expression), int):
-            return self.getFeatureByIndex(parse_literal(expression))
+            feat = self.getFeatureByIndex(expression)
         else:
             try:
                 field, value = expression.split('=')
             except AttributeError:
                 raise KeyError('invalid expression')
             feat = self.getFeatureByAttribute(field, parse_literal(value))
-            if feat is None:
-                return None
-            else:
-                return feature2vector(feat, ref=self)
+        if feat is None:
+            return None
+        else:
+            return feature2vector(feat, ref=self)
 
     def init_layer(self):
         self.layer = self.vector.GetLayer()
