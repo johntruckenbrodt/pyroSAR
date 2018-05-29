@@ -233,6 +233,45 @@ class Vector(object):
             newfeature.Destroy()
         self.init_features()
 
+    def setCRS(self, crs):
+        """
+        directly reset the spatial reference system of the vector object
+        Parameters
+        ----------
+        crs: int, str or osr.SpatialReference
+            the input CRS
+
+        Returns
+        -------
+
+        Example
+        -------
+        >>> site = Vector('shape.shp')
+        >>> site.setCRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ')
+
+        """
+        # try to convert the input crs to osr.SpatialReference
+        srs_out = crsConvert(crs, 'osr')
+
+        # save all relevant info from the existing vector object
+        layername = self.layername
+        geomType = self.geomType
+        layer_definition = ogr.Feature(self.layer.GetLayerDefn())
+        fields = [layer_definition.GetFieldDefnRef(x) for x in range(layer_definition.GetFieldCount())]
+        features = self.getfeatures()
+
+        # initialize a new vector object and create a layer
+        self.__init__()
+        self.addlayer(layername, srs_out, geomType)
+
+        # add the fields to new layer
+        self.layer.CreateFields(fields)
+
+        # add the features to the newly created layer
+        for feat in features:
+            self.layer.CreateFeature(feat)
+        self.init_features()
+
     def write(self, outfile, format='ESRI Shapefile', overwrite=True):
         (outfilepath, outfilename) = os.path.split(outfile)
         basename = os.path.splitext(outfilename)[0]
