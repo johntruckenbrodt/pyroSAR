@@ -204,6 +204,12 @@ class Vector(object):
             feature = self.getfeatures()[index]
         return feature
 
+    def getUniqueAttributes(self, fieldname):
+        self.layer.ResetReading()
+        attributes = list(set([x.GetField(fieldname) for x in self.layer]))
+        self.layer.ResetReading()
+        return attributes
+
     def getfeatures(self):
         self.layer.ResetReading()
         features = [x.Clone() for x in self.layer]
