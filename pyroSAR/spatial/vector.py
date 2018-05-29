@@ -52,7 +52,10 @@ class Vector(object):
             except AttributeError:
                 raise KeyError('invalid expression')
             feat = self.getFeatureByAttribute(field, parse_literal(value))
-            return feature2vector(feat, ref=self)
+            if feat is None:
+                return None
+            else:
+                return feature2vector(feat, ref=self)
 
     def init_layer(self):
         self.layer = self.vector.GetLayer()
@@ -158,15 +161,23 @@ class Vector(object):
         return sum([x.GetGeometryRef().GetArea() for x in self.getfeatures()])
 
     def getFeatureByAttribute(self, fieldname, attribute):
+        attr = attribute.strip() if isinstance(attribute, str) else attribute
         if fieldname not in self.fieldnames:
-            raise KeyError("invalid field name")
-        out = None
+            raise KeyError('invalid field name')
+        out = []
         self.layer.ResetReading()
         for feature in self.layer:
-            if feature.GetField(fieldname).strip() == attribute.strip():
-                out = feature.Clone()
+            field = feature.GetField(fieldname)
+            field = field.strip() if isinstance(field, str) else field
+            if field == attr:
+                out.append(feature.Clone())
         self.layer.ResetReading()
-        return out
+        if len(out) == 0:
+            return None
+        elif len(out) == 1:
+            return out[0]
+        else:
+            return out
 
     def getFeatureByIndex(self, index):
         feature = self.layer[index]
@@ -209,7 +220,7 @@ class Vector(object):
             newfeature.Destroy()
         self.init_features()
 
-    def write(self, outfile, format="ESRI Shapefile", overwrite=True):
+    def write(self, outfile, format='ESRI Shapefile', overwrite=True):
         (outfilepath, outfilename) = os.path.split(outfile)
         basename = os.path.splitext(outfilename)[0]
 
@@ -246,13 +257,30 @@ class Vector(object):
 
 
 def feature2vector(feature, ref, layername=None):
+    """
+    create a Vector object from ogr features
+    Parameters
+    ----------
+    feature: ogr.Feature or list
+        a single feature or a list of features
+    ref: Vector
+        a reference Vector object to retrieve geo information
+    layername: str or None
+        the name of the output layer; retrieved from ref if None
+
+    Returns
+    -------
+
+    """
+    features = feature if isinstance(feature, list) else [feature]
     layername = layername if layername is not None else ref.layername
     vec = Vector(driver='Memory')
     vec.addlayer(layername, ref.srs, ref.geomType)
-    feat_def = feature.GetDefnRef()
+    feat_def = features[0].GetDefnRef()
     fields = [feat_def.GetFieldDefn(x) for x in range(0, feat_def.GetFieldCount())]
     vec.layer.CreateFields(fields)
-    vec.layer.CreateFeature(feature)
+    for feat in features:
+        vec.layer.CreateFeature(feat)
     vec.init_features()
     return vec
 
