@@ -156,6 +156,12 @@ class Vector(object):
         feature.Destroy()
         self.init_features()
 
+    def bbox(self, outname=None, format='ESRI Shapefile', overwrite=True):
+        if outname is None:
+            return bbox(self.extent, self.srs)
+        else:
+            bbox(self.extent, self.srs, outname=outname, format=format, overwrite=overwrite)
+
     def convert2wkt(self, set3D=True):
         """
         export the geometry of each feature as a wkt string
