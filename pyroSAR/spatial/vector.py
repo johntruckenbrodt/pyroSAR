@@ -5,8 +5,8 @@
 ##############################################################
 
 """
-This is intended as a vector meta information handler with options for reading and writing vector data in a convenient manner by simplifying the numerous options provided
-by the OGR python binding
+This is intended as a vector meta information handler with options for reading and writing vector data in a convenient
+manner by simplifying the numerous options provided by the OGR python binding
 """
 
 import os
@@ -42,17 +42,29 @@ class Vector(object):
             self.init_layer()
 
     def __getitem__(self, expression):
+        """
+        subset the vector object by index or attribute.
+        See `ogr.Layer.SetAttributeFilter <http://gdal.org/python/osgeo.ogr.Layer-class.html#SetAttributeFilter>`_
+        for details on the expression syntax.
+        Parameters
+        ----------
+        expression: int or str
+            the key or expression to be used for subsetting
+        Returns
+        -------
+        Vector
+            a vector object matching the specified criteria
+        """
         if not isinstance(expression, (int, str)):
             raise RuntimeError('expression must be of type int or str')
         expression = parse_literal(expression) if isinstance(expression, str) else expression
         if isinstance(expression, int):
             feat = self.getFeatureByIndex(expression)
         else:
-            try:
-                field, value = expression.split('=')
-            except AttributeError:
-                raise KeyError('invalid expression')
-            feat = self.getFeatureByAttribute(field, parse_literal(value))
+            self.layer.SetAttributeFilter(expression)
+            feat = self.getfeatures()
+            feat = feat if len(feat) > 0 else None
+            self.layer.SetAttributeFilter('')
         if feat is None:
             return None
         else:
