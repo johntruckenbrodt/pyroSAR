@@ -70,6 +70,18 @@ class Vector(object):
         else:
             return feature2vector(feat, ref=self)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self):
+        self.vector = None
+        for feature in self.__features:
+            if feature is not None:
+                feature.Destroy()
+
     def init_layer(self):
         self.layer = self.vector.GetLayer()
         self.__features = [None]*self.nfeatures
@@ -143,18 +155,53 @@ class Vector(object):
         self.vector.CreateLayer(name, srs, geomType)
         self.init_layer()
 
-    def addfeature(self, geometry, fieldname, fieldvalue):
+    def addfeature(self, geometry, fields):
+        """
+        add a feature to the vector object from a geometry
 
-        if fieldname not in self.fieldnames:
-            raise IOError("field does not exist")
+        Parameters
+        ----------
+        geometry: ogr.Geometry
+            the geometry to add as a feature
+        fields: dict
+            the field names and attributes to assign to the new feature
+
+        Returns
+        -------
+
+        """
+        for fieldname in self.fieldnames:
+            if fieldname not in fields.keys():
+                raise IOError('field "{}" is missing'.format(fieldname))
 
         featureDefn = self.layerdef
         feature = ogr.Feature(featureDefn)
         feature.SetGeometry(geometry)
-        feature.SetField(fieldname, fieldvalue)
+        for key, value in fields.items():
+            feature.SetField(key, value)
         self.layer.CreateFeature(feature)
         feature.Destroy()
         self.init_features()
+
+    def addvector(self, vec):
+        """
+        add a vector object to the current one
+        Parameters
+        ----------
+        vec: Vector
+            the vector object to add
+        merge: bool
+            merge overlapping polygons?
+
+        Returns
+        -------
+
+        """
+        vec.layer.ResetReading()
+        for feature in vec.layer:
+            self.layer.CreateFeature(feature)
+        self.init_features()
+        vec.layer.ResetReading()
 
     def bbox(self, outname=None, format='ESRI Shapefile', overwrite=True):
         if outname is None:
@@ -303,6 +350,7 @@ class Vector(object):
         for fieldDef in self.fieldDefs:
             outlayer.CreateField(fieldDef)
 
+        self.layer.ResetReading()
         for feature in self.layer:
             outFeature = ogr.Feature(outlayerdef)
             outFeature.SetGeometry(feature.GetGeometryRef())
@@ -311,6 +359,7 @@ class Vector(object):
             # add the feature to the shapefile
             outlayer.CreateFeature(outFeature)
             outFeature.Destroy()
+        self.layer.ResetReading()
 
         srs_out = self.srs.Clone()
         srs_out.MorphToESRI()
@@ -373,7 +422,7 @@ def bbox(coordinates, crs, outname=None, format='ESRI Shapefile', overwrite=True
     bbox = Vector(driver='Memory')
     bbox.addlayer('bbox', srs, ogr.wkbPolygon)
     bbox.addfield('id', width=4)
-    bbox.addfeature(geom, 'id', 1)
+    bbox.addfeature(geom, {'id': 1})
     geom.Destroy()
     if outname is None:
         return bbox
