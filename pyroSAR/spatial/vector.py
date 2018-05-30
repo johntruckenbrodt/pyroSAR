@@ -11,6 +11,11 @@ manner by simplifying the numerous options provided by the OGR python binding
 
 import os
 
+try:
+    from pysqlite2 import dbapi2 as sqlite3
+except ImportError:
+    import sqlite3
+
 from osgeo import ogr, osr
 
 from pyroSAR.spatial.auxil import crsConvert
@@ -463,3 +468,55 @@ def intersect(obj1, obj2):
     intersect = geometry2.Intersection(geometry1)
 
     return intersect if intersect.GetArea() > 0 else None
+
+
+def dissolve(infile, outfile, field, layername=None):
+    """
+    dissolve the polygons of a vector file by an attribute field
+    Parameters
+    ----------
+    infile: str
+        the input vector file
+    outfile: str
+        the output shapefile
+    field: str
+        the field name to merge the polygons by
+    layername: str
+        the name of the output vector layer;
+        If set to None the layername will be the basename of infile without extension
+
+    Returns
+    -------
+
+    """
+    with Vector(infile) as vec:
+        srs = vec.srs
+        feat = vec.layer[0]
+        d = feat.GetFieldDefnRef(field)
+        width = d.width
+        type = d.type
+        feat.Destroy()
+
+    layername = layername if layername is not None else os.path.splitext(os.path.basename(infile))[0]
+
+    # the following can be used if GDAL was compiled with the spatialite extension
+    # not tested, might need some additional/different lines
+    # with Vector(infile) as vec:
+    #     vec.vector.ExecuteSQL('SELECT ST_Union(geometry), {0} FROM {1} GROUP BY {0}'.format(field, vec.layername),
+    #                          dialect='SQLITE')
+    #     vec.write(outfile)
+
+    conn = sqlite3.connect(':memory:')
+    conn.enable_load_extension(True)
+    conn.load_extension('mod_spatialite.so')
+    conn.load_extension('libgdal.so')
+    conn.execute('CREATE VIRTUAL TABLE merge USING VirtualOGR("{}");'.format(infile))
+    select = conn.execute('SELECT {0},asText(ST_Union(geometry)) as geometry FROM merge GROUP BY {0};'.format(field))
+    fetch = select.fetchall()
+    with Vector(driver='Memory') as merge:
+        merge.addlayer(layername, srs, ogr.wkbPolygon)
+        merge.addfield(field, type=type, width=width)
+        for i in range(len(fetch)):
+            merge.addfeature(ogr.CreateGeometryFromWkt(fetch[i][1]), {field: fetch[i][0]})
+        merge.write(outfile)
+    conn.close()
