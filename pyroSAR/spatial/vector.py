@@ -439,11 +439,11 @@ def centerdist(obj1, obj2):
     if not isinstance(obj1, Vector) or isinstance(obj2, Vector):
         raise IOError('both objects must be of type Vector')
 
-    feature1 = obj1[0]
+    feature1 = obj1.getFeatureByIndex(0)
     geometry1 = feature1.GetGeometryRef()
     center1 = geometry1.Centroid()
 
-    feature2 = obj2[0]
+    feature2 = obj2.getFeatureByIndex(0)
     geometry2 = feature2.GetGeometryRef()
     center2 = geometry2.Centroid()
 
