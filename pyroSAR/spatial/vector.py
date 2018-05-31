@@ -276,7 +276,7 @@ class Vector(object):
 
     def reproject(self, projection):
 
-        srs_out = crsConvert(projection, "osr")
+        srs_out = crsConvert(projection, 'osr')
 
         # create the CoordinateTransformation
         coordTrans = osr.CoordinateTransformation(self.srs, srs_out)
@@ -284,9 +284,12 @@ class Vector(object):
         layername = self.layername
         geomType = self.geomType
         features = self.getfeatures()
+        feat_def = features[0].GetDefnRef()
+        fields = [feat_def.GetFieldDefn(x) for x in range(0, feat_def.GetFieldCount())]
 
         self.__init__()
         self.addlayer(layername, srs_out, geomType)
+        self.layer.CreateFields(fields)
 
         for feature in features:
             geom = feature.GetGeometryRef()
