@@ -606,3 +606,54 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
 
     # remove temporary directory and files
     shutil.rmtree(tmpdir)
+
+
+def rasterize(vectorobject, outname, reference, burn_values=1, expressions=None, nodata=0):
+    """
+    rasterize a vector object
+
+    Parameters
+    ----------
+    vectorobject: Vector
+        the vector object to be rasterized
+    outname: str
+        the name of the GeoTiff output file
+    reference: Raster
+        a reference Raster object to retrieve geo information and extent from
+    burn_values: int, or list
+        the values to be written to the raster file
+    expressions: list
+        SQL expressions to filter the vector object by attributes
+    nodata: int
+        the nodata value of the target raster file
+
+    Returns
+    -------
+
+    Example
+    -------
+    >>> from pyroSAR.spatial import Vector, Raster, rasterize
+    >>> vec = Vector('source.shp')
+    >>> ref = Raster('reference.tif')
+    >>> outname = 'target.tif'
+    >>> expressions = ['ATTRIBUTE=1', 'ATTRIBUTE=2']
+    >>> burn_values = [1, 2]
+    >>> rasterize(vec, outname, reference, burn_values, expressions)
+    """
+    if expressions is None:
+        expressions = ['']
+    if isinstance(burn_values, (int, float)):
+        burn_values = [burn_values]
+    if len(expressions) != len(burn_values):
+        raise RuntimeError('expressions and burn_values of different length')
+    target_ds = gdal.GetDriverByName('GTiff').Create(outname, reference.cols, reference.rows, 1, gdal.GDT_Byte)
+    target_ds.SetGeoTransform(reference.raster.GetGeoTransform())
+    target_ds.SetProjection(reference.raster.GetProjection())
+    band = target_ds.GetRasterBand(1)
+    band.SetNoDataValue(nodata)
+    band.FlushCache()
+    for expression, value in zip(expressions, burn_values):
+        vectorobject.layer.SetAttributeFilter(expression)
+        gdal.RasterizeLayer(target_ds, [1], vectorobject.layer, burn_values=[value])
+    vectorobject.layer.SetAttributeFilter('')
+    target_ds = None
