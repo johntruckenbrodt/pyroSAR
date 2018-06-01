@@ -4,7 +4,6 @@ import shutil
 import tarfile as tf
 import sys
 import os
-from osgeo import ogr
 from datetime import datetime
 
 testdir = os.getenv('TESTDATA_DIR', 'pyroSAR/tests/data/')
@@ -57,7 +56,6 @@ class Test_Metadata():
 
 
 testdata = 'pyroSAR/tests/data/'
-tmpdir = os.path.join(testdata, 'tmp')
 testfile1 = os.path.join(testdata, 'S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip')
 testfile2 = os.path.join(testdata, 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
 
@@ -91,38 +89,35 @@ def test_export2dict():
     pass
 
 
-def test_getFileObj():
+def test_getFileObj(tmpdir):
     scene = pyroSAR.identify(testfile1)
-    os.makedirs(tmpdir)
-    scene.unpack(tmpdir)
+    scene.unpack(str(tmpdir))
     scene = pyroSAR.identify(scene.scene)
     item = scene.findfiles('manifest.safe')[0]
     assert os.path.basename(item) == 'manifest.safe'
     assert isinstance(scene.getFileObj(item).read(), (bytes, str))
 
-    filename = os.path.join(tmpdir, os.path.basename(testfile1.replace('zip', 'tar.gz')))
+    filename = os.path.join(str(tmpdir), os.path.basename(testfile1.replace('zip', 'tar.gz')))
     with tf.open(filename, 'w:gz') as tar:
         tar.add(scene.scene, arcname=os.path.basename(scene.scene))
     scene = pyroSAR.identify(filename)
     assert scene.compression == 'tar'
     item = scene.findfiles('manifest.safe')[0]
     assert isinstance(scene.getFileObj(item).read(), (bytes, str))
-    shutil.rmtree(tmpdir)
     with pytest.raises(IOError):
         pyroSAR.getFileObj('foo', 'bar')
 
 
-def test_scene():
-    os.makedirs(tmpdir)
-    dbfile = os.path.join(tmpdir, 'scenes.db')
+def test_scene(tmpdir):
+    dbfile = os.path.join(str(tmpdir), 'scenes.db')
     id = pyroSAR.identify(testfile1)
     assert isinstance(id.export2dict(), dict)
     with pytest.raises(RuntimeError):
         assert isinstance(id.gdalinfo(), dict)
     id.summary()
-    id.bbox(outname=os.path.join(tmpdir, 'bbox_test.shp'), overwrite=True)
-    assert id.is_processed(tmpdir) is False
-    id.unpack(tmpdir, overwrite=True)
+    id.bbox(outname=os.path.join(str(tmpdir), 'bbox_test.shp'), overwrite=True)
+    assert id.is_processed(str(tmpdir)) is False
+    id.unpack(str(tmpdir), overwrite=True)
     assert id.compression is None
     id.export2sqlite(dbfile)
     with pytest.raises(IOError):
@@ -145,13 +140,11 @@ def test_scene():
     else:
         with pytest.raises(RuntimeError):
             id.getOSV(osvdir, osvType='POE')
-    shutil.rmtree(tmpdir)
 
 
-def test_archive():
-    os.makedirs(tmpdir)
+def test_archive(tmpdir):
     id = pyroSAR.identify(testfile1)
-    dbfile = os.path.join(tmpdir, 'scenes.db')
+    dbfile = os.path.join(str(tmpdir), 'scenes.db')
     db = pyroSAR.Archive(dbfile)
     db.insert(testfile1, verbose=False)
     assert db.is_registered(testfile1) is True
