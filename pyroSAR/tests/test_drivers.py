@@ -100,6 +100,9 @@ def test_getFileObj(tmpdir):
     filename = os.path.join(str(tmpdir), os.path.basename(testfile1.replace('zip', 'tar.gz')))
     with tf.open(filename, 'w:gz') as tar:
         tar.add(scene.scene, arcname=os.path.basename(scene.scene))
+    # test error if scene is not a directory, zip or tar
+    with pytest.raises(RuntimeError):
+        pyroSAR.getFileObj(scene=os.path.join(scene.scene, 'manifest.safe'), filename='bar')
     scene = pyroSAR.identify(filename)
     assert scene.compression == 'tar'
     item = scene.findfiles('manifest.safe')[0]
