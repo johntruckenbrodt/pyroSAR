@@ -158,6 +158,9 @@ def test_archive(tmpdir):
     assert len(db.select(mindate='20141001T192312', maxdate='20201001T192312')) == 1
     assert len(db.select(polarizations=['VV'])) == 1
     assert len(db.select(vectorobject=id.bbox())) == 1
+    assert len(db.select(sensor='S1A', vectorobject='foo', processdir=str(tmpdir), verbose=True)) == 1
+    assert len(db.select(sensor='S1A', mindate='foo', maxdate='bar', foobar='foobar')) == 1
+    assert len(db.select(vv=1, acquisition_mode=('IW', 'EW'))) == 1
     with pytest.raises(IOError):
         db.filter_scenelist([1])
     db.close()
