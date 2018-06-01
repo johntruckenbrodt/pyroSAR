@@ -1988,6 +1988,9 @@ def getFileObj(scene, filename):
     """
     membername = filename.replace(scene, '').strip('/')
 
+    if not os.path.exists(scene):
+        raise RuntimeError('scene does not exist')
+
     if os.path.isdir(scene):
         obj = BytesIO()
         with open(filename, 'rb') as infile:
