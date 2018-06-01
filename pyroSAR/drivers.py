@@ -45,7 +45,7 @@ except ImportError:
 from . import linesimplify as ls
 from .S1 import OSV
 from . import spatial
-from .ancillary import finder, parse_literal, run
+from .ancillary import finder, parse_literal
 from .xml_util import getNamespaces
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
@@ -1642,7 +1642,7 @@ class Archive(object):
         Returns
         -------
         """
-        run(['ogr2ogr', '-f', '"ESRI Shapefile"', shp, self.dbfile])
+        spatial.ogr2ogr(self.dbfile, shp, options={'format': 'ESRI Shapefile'})
 
     def filter_scenelist(self, scenelist):
         """
