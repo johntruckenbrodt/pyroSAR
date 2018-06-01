@@ -7,3 +7,7 @@
 .coverage
 
 docs/_build/
+
+dev_*
+
+.pytest_cache/
