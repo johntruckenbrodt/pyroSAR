@@ -2007,7 +2007,7 @@ def getFileObj(scene, filename):
         tar.close()
         obj.seek(0)
     else:
-        raise IOError('input must be either a file name or a location in an zip or tar archive')
+        raise RuntimeError('input must be either a file name or a location in an zip or tar archive')
     return obj
 
 

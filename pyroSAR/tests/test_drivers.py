@@ -104,7 +104,7 @@ def test_getFileObj(tmpdir):
     assert scene.compression == 'tar'
     item = scene.findfiles('manifest.safe')[0]
     assert isinstance(scene.getFileObj(item).read(), (bytes, str))
-    with pytest.raises(IOError):
+    with pytest.raises(RuntimeError):
         pyroSAR.getFileObj('foo', 'bar')
 
 
