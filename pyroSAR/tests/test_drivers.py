@@ -123,7 +123,11 @@ def test_scene(tmpdir):
     with pytest.raises(IOError):
         id.getGammaImages()
     assert id.getGammaImages(id.scene) == []
-    osvdir = os.path.join(id.scene, 'osv')
+
+
+def test_scene_osv(tmpdir):
+    id = pyroSAR.identify(testfile1)
+    osvdir = os.path.join(str(tmpdir), 'osv')
     if sys.version_info >= (2, 7, 9):
         id.getOSV(osvdir)
         with pyroSAR.OSV(osvdir) as osv:
