@@ -1,4 +1,5 @@
 import pyroSAR
+from pyroSAR import spatial
 import pytest
 import tarfile as tf
 import sys
@@ -156,9 +157,11 @@ def test_archive(tmpdir):
     with pytest.raises(IOError):
         db.filter_scenelist([1])
     db.close()
-    # separately test the with statement
     with pyroSAR.Archive(dbfile) as db:
         assert db.size == (1, 0)
+        shp = os.path.join(str(tmpdir), 'db.shp')
+        db.export2shp(shp)
+    assert spatial.Vector(shp).nfeatures == 1
     os.remove(dbfile)
     dbfile_old = os.path.join(testdata, 'archive_outdated.csv')
     with pytest.raises(OSError):
