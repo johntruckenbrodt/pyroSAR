@@ -603,7 +603,7 @@ class CEOS_ERS(ID):
         self.meta.update(self.scanMetadata())
 
         # register the standardized meta attributes as object attributes
-        ID.__init__(self, self.meta)
+        super(CEOS_ERS, self).__init__(self.meta)
 
     def getCorners(self):
         lat = [x[1][1] for x in self.meta['gcps']]
@@ -760,7 +760,7 @@ class CEOS_PSR(ID):
         self.meta = self.scanMetadata()
 
         # register the standardized meta attributes as object attributes
-        ID.__init__(self, self.meta)
+        super(CEOS_PSR, self).__init__(self.meta)
 
     def _getLeaderfile(self):
         led_filename = self.findfiles(self.pattern)[0]
@@ -1043,7 +1043,7 @@ class ESA(ID):
         self.meta['looks'] = (self.meta['SPH_RANGE_LOOKS'], self.meta['SPH_AZIMUTH_LOOKS'])
 
         # register the standardized meta attributes as object attributes
-        ID.__init__(self, self.meta)
+        super(ESA, self).__init__(self.meta)
 
     def getCorners(self):
         lon = [self.meta[x] for x in self.meta if re.search('LONG', x)]
@@ -1118,7 +1118,7 @@ class SAFE(ID):
         self.meta['lines'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfLines').text)
 
         # register the standardized meta attributes as object attributes
-        ID.__init__(self, self.meta)
+        super(SAFE, self).__init__(self.meta)
 
         self.gammafiles = {'slc': [], 'pri': [], 'grd': []}
 
@@ -1390,7 +1390,7 @@ class TSX(ID):
                                   'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
                                   'AUTHORITY["EPSG","4326"]]'
 
-        ID.__init__(self, self.meta)
+        super(TSX, self).__init__(self.meta)
 
     def getCorners(self):
         geocs = self.getFileObj(self.findfiles('GEOREF.xml')[0]).getvalue()
