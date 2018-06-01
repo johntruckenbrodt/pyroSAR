@@ -1,6 +1,5 @@
 import pyroSAR
 import pytest
-import shutil
 import tarfile as tf
 import sys
 import os
@@ -160,4 +159,8 @@ def test_archive(tmpdir):
     # separately test the with statement
     with pyroSAR.Archive(dbfile) as db:
         assert db.size == (1, 0)
-    shutil.rmtree(tmpdir)
+    os.remove(dbfile)
+    dbfile_old = os.path.join(testdata, 'archive_outdated.csv')
+    with pytest.raises(OSError):
+        with pyroSAR.Archive(dbfile) as db:
+            db.import_outdated(dbfile_old)
