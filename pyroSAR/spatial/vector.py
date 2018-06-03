@@ -429,7 +429,7 @@ def bbox(coordinates, crs, outname=None, format='ESRI Shapefile', overwrite=True
 
     bbox = Vector(driver='Memory')
     bbox.addlayer('bbox', srs, ogr.wkbPolygon)
-    bbox.addfield('id', width=4)
+    bbox.addfield('id', type=ogr.OFTInteger)
     bbox.addfeature(geom, {'id': 1})
     geom.Destroy()
     if outname is None:
