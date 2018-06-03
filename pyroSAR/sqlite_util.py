@@ -1,12 +1,32 @@
 import os
 import re
 
+from ctypes.util import find_library
+
+
+def check_loading():
+    try:
+        conn = sqlite3.connect(':memory:')
+        conn.enable_load_extension(True)
+    except sqlite3.OperationalError:
+        raise RuntimeError
+
+
+errormessage = 'sqlite3 does not support loading extensions and {}; ' \
+               'please refer to the pyroSAR installation instructions'
 try:
-    from pysqlite2 import dbapi2 as sqlite3
-except ImportError:
     import sqlite3
 
-from ctypes.util import find_library
+    check_loading()
+except RuntimeError:
+    try:
+        from pysqlite2 import dbapi2 as sqlite3
+
+        check_loading()
+    except ImportError:
+        raise RuntimeError(errormessage.format('pysqlite2 does not exist as alternative'))
+    except RuntimeError:
+        raise RuntimeError(errormessage.format('neither does pysqlite2'))
 
 
 def sqlite_setup(driver=':memory:', extensions=None):
