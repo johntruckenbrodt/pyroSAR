@@ -1494,10 +1494,8 @@ class Archive(object):
         cursor.execute(create_string)
         if 'bbox' not in self.get_colnames():
             cursor.execute('SELECT AddGeometryColumn("data","bbox" , 4326, "POLYGON", "XY", 0)')
-        self.conn.commit()
 
         create_string = '''CREATE TABLE if not exists duplicates (outname_base TEXT, scene TEXT)'''
-        cursor = self.conn.cursor()
         cursor.execute(create_string)
         self.conn.commit()
 
@@ -1574,15 +1572,16 @@ class Archive(object):
         if verbose:
             print('inserting scenes into temporary database...')
             pbar = pb.ProgressBar(max_value=len(scenes))
+        cursor = self.conn.cursor()
         for i, id in enumerate(scenes):
             insert_string, insertion = self.__prepare_insertion(id)
             try:
-                self.conn.execute(insert_string, insertion)
+                cursor.execute(insert_string, insertion)
                 counter_regulars += 1
             except sqlite3.IntegrityError as e:
                 if str(e) == 'UNIQUE constraint failed: data.outname_base':
-                    self.conn.execute('INSERT INTO duplicates(outname_base, scene) VALUES(?, ?)',
-                                      (id.outname_base(), id.scene))
+                    cursor.execute('INSERT INTO duplicates(outname_base, scene) VALUES(?, ?)',
+                                   (id.outname_base(), id.scene))
                     counter_duplicates += 1
                 else:
                     raise e
@@ -1649,9 +1648,10 @@ class Archive(object):
         for item in scenelist:
             if not isinstance(item, (ID, str)):
                 raise IOError('items in scenelist must be of type "str" or pyroSAR.ID')
-        cursor = self.conn.execute('SELECT scene FROM data')
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT scene FROM data')
         registered = [os.path.basename(x[0].encode('ascii')) for x in cursor.fetchall()]
-        cursor = self.conn.execute('SELECT scene FROM duplicates')
+        cursor.execute('SELECT scene FROM duplicates')
         duplicates = [os.path.basename(x[0].encode('ascii')) for x in cursor.fetchall()]
 
         names = [item.scene if isinstance(item, ID) else item for item in scenelist]
@@ -1668,7 +1668,8 @@ class Archive(object):
         list
             the column names of the data table
         """
-        cursor = self.conn.execute('''PRAGMA table_info(data)''')
+        cursor = self.conn.cursor()
+        cursor.execute('''PRAGMA table_info(data)''')
         return [str(x[1]) for x in cursor.fetchall()]
 
     def get_tablenames(self):
@@ -1680,7 +1681,8 @@ class Archive(object):
         list
             the table names
         """
-        cursor = self.conn.execute('''SELECT * FROM sqlite_master WHERE type="table"''')
+        cursor = self.conn.cursor()
+        cursor.execute('''SELECT * FROM sqlite_master WHERE type="table"''')
         return [x[1].encode('ascii') for x in cursor.fetchall()]
 
     def get_unique_directories(self):
@@ -1692,7 +1694,8 @@ class Archive(object):
         list
             the directory names
         """
-        cursor = self.conn.execute('SELECT scene FROM data')
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT scene FROM data')
         registered = [os.path.dirname(x[0].encode('ascii')) for x in cursor.fetchall()]
         return list(set(registered))
 
@@ -1742,6 +1745,7 @@ class Archive(object):
         failed = []
         double = []
         pbar = pb.ProgressBar(maxval=len(scenelist)).start()
+        cursor = self.conn.cursor()
         for i, scene in enumerate(scenelist):
             new = os.path.join(directory, os.path.basename(scene))
             if os.path.isfile(new):
@@ -1757,13 +1761,13 @@ class Archive(object):
             if self.select(scene=scene) != 0:
                 table = 'data'
             else:
-                cursor = self.conn.execute('''SELECT scene FROM duplicates WHERE scene=?''', (scene,))
+                cursor.execute('''SELECT scene FROM duplicates WHERE scene=?''', (scene,))
                 if len(cursor.fetchall()) != 0:
                     table = 'duplicates'
                 else:
                     table = None
             if table:
-                self.conn.execute('''UPDATE {} SET scene=? WHERE scene=?'''.format(table), (new, scene))
+                cursor.execute('''UPDATE {} SET scene=? WHERE scene=?'''.format(table), (new, scene))
                 self.conn.commit()
         pbar.finish()
         if len(failed) > 0:
@@ -1848,7 +1852,8 @@ class Archive(object):
         query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
         if verbose:
             print(query)
-        cursor = self.conn.execute(query, tuple(vals))
+        cursor = self.conn.cursor()
+        cursor.execute(query, tuple(vals))
         if processdir and os.path.isdir(processdir):
             scenes = [x for x in cursor.fetchall()
                       if len(finder(processdir, [x[1]], regex=True, recursive=recursive)) == 0]
@@ -1873,8 +1878,9 @@ class Archive(object):
         list
             the selected scene(s)
         """
+        cursor = self.conn.cursor()
         if not outname_base and not scene:
-            cursor = self.conn.execute('SELECT * from duplicates')
+            cursor.execute('SELECT * from duplicates')
         else:
             cond = []
             arg = []
@@ -1885,7 +1891,7 @@ class Archive(object):
                 cond.append('scene=?')
                 arg.append(scene)
             query = 'SELECT * from duplicates WHERE {}'.format(' AND '.join(cond))
-            cursor = self.conn.execute(query, tuple(arg))
+            cursor.execute(query, tuple(arg))
         return cursor.fetchall()
 
     @property
@@ -1898,9 +1904,10 @@ class Archive(object):
         tuple
             the number of scenes in (1) the main table and (2) the duplicates table
         """
-        cursor1 = self.conn.execute('''SELECT Count(*) FROM data''')
-        cursor2 = self.conn.execute('''SELECT Count(*) FROM duplicates''')
-        return (cursor1.fetchone()[0], cursor2.fetchone()[0])
+        cursor = self.conn.cursor()
+        r1 = cursor.execute('''SELECT Count(*) FROM data''').fetchone()[0]
+        r2 = cursor.execute('''SELECT Count(*) FROM duplicates''').fetchone()[0]
+        return (r1, r2)
 
     def __enter__(self):
         return self
@@ -1912,7 +1919,7 @@ class Archive(object):
         self.conn.close()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.conn.close()
+        self.close()
 
 
 def findfiles(scene, pattern, include_folders=False):
