@@ -29,7 +29,7 @@ class Vector(object):
     def __init__(self, filename=None, driver='ESRI Shapefile'):
 
         if driver not in ['ESRI Shapefile', 'Memory']:
-            raise IOError('driver not supported')
+            raise RuntimeError('driver not supported')
 
         if filename is None:
             driver = 'Memory'
@@ -42,7 +42,7 @@ class Vector(object):
 
         nlayers = self.vector.GetLayerCount()
         if nlayers > 1:
-            raise IOError('multiple layers are currently not supported')
+            raise RuntimeError('multiple layers are currently not supported')
         elif nlayers == 1:
             self.init_layer()
 
