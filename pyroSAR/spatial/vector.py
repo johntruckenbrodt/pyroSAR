@@ -505,7 +505,7 @@ def dissolve(infile, outfile, field, layername=None):
     #                          dialect='SQLITE')
     #     vec.write(outfile)
 
-    conn = sqlite_setup(extensions=['mod_spatialite', 'libgdal'])
+    conn = sqlite_setup(extensions=['spatialite', 'gdal'])
     conn.execute('CREATE VIRTUAL TABLE merge USING VirtualOGR("{}");'.format(infile))
     select = conn.execute('SELECT {0},asText(ST_Union(geometry)) as geometry FROM merge GROUP BY {0};'.format(field))
     fetch = select.fetchall()
