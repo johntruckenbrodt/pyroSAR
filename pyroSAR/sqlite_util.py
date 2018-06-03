@@ -61,8 +61,4 @@ class __Handler(object):
             if ext_mod is None:
                 raise RuntimeError('no library found for extension {}'.format(extension))
             print('loading extension {0} as {1}'.format(extension, ext_mod))
-            try:
-                self.conn.load_extension(ext_mod)
-            except sqlite3.OperationalError as e:
-                print(e)
-                raise RuntimeError('failed to load extension {}'.format(ext))
+            self.conn.load_extension(ext_mod)
