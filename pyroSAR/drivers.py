@@ -37,16 +37,12 @@ import progressbar as pb
 from osgeo import gdal, osr
 from osgeo.gdalconst import GA_ReadOnly, GA_Update
 
-try:
-    from pysqlite2 import dbapi2 as sqlite3
-except ImportError:
-    import sqlite3
-
 from . import linesimplify as ls
 from .S1 import OSV
 from . import spatial
 from .ancillary import finder, parse_literal
 from .xml_util import getNamespaces
+from .sqlite_util import sqlite_setup, sqlite3
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines']
@@ -1476,16 +1472,7 @@ class Archive(object):
 
     def __init__(self, dbfile):
         self.dbfile = dbfile
-        self.conn = sqlite3.connect(self.dbfile)
-        self.conn.enable_load_extension(True)
-        try:
-            self.conn.load_extension('mod_spatialite.so')
-            if 'spatial_ref_sys' not in self.get_tablenames():
-                self.conn.execute('SELECT InitSpatialMetaData(1);')
-        except sqlite3.OperationalError:
-            self.conn.load_extension('libspatialite.so')
-            if 'spatial_ref_sys' not in self.get_tablenames():
-                self.conn.execute('SELECT InitSpatialMetaData();')
+        self.conn = sqlite_setup(dbfile, ['spatialite'])
 
         self.lookup = {'sensor': 'TEXT',
                        'orbit': 'TEXT',
