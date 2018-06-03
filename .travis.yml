@@ -22,6 +22,7 @@ addons:
       - libspatialite-dev
       - swig2.0
       - libproj-dev
+      - gdal-bin
 
 python:
   - "2.7"
