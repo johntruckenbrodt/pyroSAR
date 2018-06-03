@@ -25,7 +25,7 @@ def test_haversine():
     assert haversine(50, 10, 51, 10) == 111194.92664455889
 
 
-def test_Vector(tmpdir):
+def test_Vector():
     scene = identify('pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip')
     bbox1 = scene.bbox()
     assert bbox1.getArea() == 7.573045244595988
@@ -51,22 +51,32 @@ def test_Vector(tmpdir):
     feat.Destroy()
     with pytest.raises(KeyError):
         select = bbox1.getFeatureByAttribute('foo', 'bar')
+    with pytest.raises(RuntimeError):
+        vec = Vector(driver='foobar')
+
+
+def test_dissolve(tmpdir):
+    scene = identify('pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip')
+    bbox1 = scene.bbox()
+    # retrieve extent and shift its coordinates by one degree
     ext = bbox1.extent
     for key in ext.keys():
         ext[key] += 1
+    # create new bbox shapefile with modified extent
     bbox2_name = os.path.join(str(tmpdir), 'bbox2.shp')
     bbox(ext, bbox1.srs, bbox2_name)
+    # assert intersection between the two bboxes and combine them into one
     with Vector(bbox2_name) as bbox2:
         assert intersect(bbox1, bbox2) is not None
         bbox1.addvector(bbox2)
+    # write combined bbox into new shapefile
     bbox3_name = os.path.join(str(tmpdir), 'bbox3.shp')
     bbox1.write(bbox3_name)
     bbox1.close()
+    # dissolve the geometries in bbox3 and write the result to new bbox4
     bbox4_name = os.path.join(str(tmpdir), 'bbox4.shp')
     dissolve(bbox3_name, bbox4_name, field='id')
     assert os.path.isfile(bbox4_name)
-    with pytest.raises(RuntimeError):
-        vec = Vector(driver='foobar')
 
 
 def test_Raster():
