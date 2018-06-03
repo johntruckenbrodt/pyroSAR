@@ -62,14 +62,19 @@ class __Handler(object):
 
     @property
     def version(self):
+        out = {'sqlite': sqlite3.version}
         cursor = self.conn.cursor()
-        cursor.execute('''SELECT spatialite_version()''')
-        spatialite_version = cursor.fetchall()[0][0].encode('ascii')
-        return {'sqlite': sqlite3.version, 'spatialite': spatialite_version}
+        try:
+            cursor.execute('SELECT spatialite_version()')
+            spatialite_version = cursor.fetchall()[0][0].encode('ascii')
+            out['spatialite'] = spatialite_version
+        except sqlite3.OperationalError:
+            pass
+        return out
 
     def get_tablenames(self):
         cursor = self.conn.cursor()
-        cursor.execute('''SELECT * FROM sqlite_master WHERE type="table"''')
+        cursor.execute('SELECT * FROM sqlite_master WHERE type="table"')
         return [x[1].encode('ascii') for x in cursor.fetchall()]
 
     def load_extension(self, extension):
