@@ -53,6 +53,7 @@ def test_Vector():
         select = bbox1.getFeatureByAttribute('foo', 'bar')
     with pytest.raises(RuntimeError):
         vec = Vector(driver='foobar')
+    bbox1.close()
 
 
 def test_dissolve(tmpdir):
