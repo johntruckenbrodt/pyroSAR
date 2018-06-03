@@ -11,15 +11,11 @@ manner by simplifying the numerous options provided by the OGR python binding
 
 import os
 
-try:
-    from pysqlite2 import dbapi2 as sqlite3
-except ImportError:
-    import sqlite3
-
 from osgeo import ogr, osr
 
 from pyroSAR.spatial.auxil import crsConvert
 from pyroSAR.ancillary import parse_literal
+from pyroSAR.sqlite_util import sqlite_setup
 
 ogr.UseExceptions()
 osr.UseExceptions()
@@ -509,10 +505,7 @@ def dissolve(infile, outfile, field, layername=None):
     #                          dialect='SQLITE')
     #     vec.write(outfile)
 
-    conn = sqlite3.connect(':memory:')
-    conn.enable_load_extension(True)
-    conn.load_extension('mod_spatialite.so')
-    conn.load_extension('libgdal.so')
+    conn = sqlite_setup(extensions=['mod_spatialite', 'libgdal'])
     conn.execute('CREATE VIRTUAL TABLE merge USING VirtualOGR("{}");'.format(infile))
     select = conn.execute('SELECT {0},asText(ST_Union(geometry)) as geometry FROM merge GROUP BY {0};'.format(field))
     fetch = select.fetchall()
