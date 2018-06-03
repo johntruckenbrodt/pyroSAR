@@ -54,7 +54,7 @@ class __Handler(object):
                 raise RuntimeError('failed to load extension {}'.format(ext))
             else:
                 if 'spatial_ref_sys' not in self.get_tablenames():
-                    param = 1 if re.search('spatialite', select) else ''
+                    param = 1 if re.search('mod_spatialite', select) else ''
                     self.conn.execute('SELECT InitSpatialMetaData({});'.format(param))
         else:
             ext_mod = find_library(ext.replace('lib', ''))
