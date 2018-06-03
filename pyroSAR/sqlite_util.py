@@ -44,7 +44,7 @@ class __Handler(object):
         ext = os.path.splitext(os.path.basename(extension))[0]
         if re.search('spatialite', ext):
             select = None
-            for option in ['mod_spatialite.so', 'mod_spatialite', 'libspatialite.so', 'libspatialite']:
+            for option in ['mod_spatialite', 'mod_spatialite.so', 'libspatialite', 'libspatialite.so']:
                 try:
                     self.conn.load_extension(option)
                     select = option
@@ -57,7 +57,12 @@ class __Handler(object):
                     param = 1 if re.search('spatialite', select) else ''
                     self.conn.execute('SELECT InitSpatialMetaData({});'.format(param))
         else:
+            ext_mod = find_library(ext.replace('lib', ''))
+            if ext_mod is None:
+                raise RuntimeError('no library found for extension {}'.format(extension))
+            print('loading extension {0} as {1}'.format(extension, ext_mod))
             try:
-                self.conn.load_extension(find_library(ext.replace('lib', '')))
-            except sqlite3.OperationalError:
+                self.conn.load_extension(ext_mod)
+            except sqlite3.OperationalError as e:
+                print(e)
                 raise RuntimeError('failed to load extension {}'.format(ext))
