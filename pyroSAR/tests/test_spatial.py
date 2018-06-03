@@ -4,7 +4,8 @@ import pytest
 import numpy as np
 from osgeo import ogr
 from pyroSAR import identify
-from pyroSAR.spatial import crsConvert, haversine, Raster, stack, ogr2ogr, gdal_translate, gdal_rasterize
+from pyroSAR.spatial import crsConvert, haversine, Raster, stack, ogr2ogr, gdal_translate, gdal_rasterize, Vector, bbox, intersect
+from pyroSAR.spatial.vector import feature2vector, dissolve
 from pyroSAR.ancillary import finder
 
 
@@ -24,19 +25,48 @@ def test_haversine():
     assert haversine(50, 10, 51, 10) == 111194.92664455889
 
 
-def test_Vector():
+def test_Vector(tmpdir):
     scene = identify('pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip')
-    bbox = scene.bbox()
-    assert bbox.getArea() == 7.573045244595988
-    assert bbox.extent == {'ymax': 52.183979, 'ymin': 50.295261, 'xmin': 8.017178, 'xmax': 12.0268}
-    assert bbox.nlayers == 1
-    assert bbox.getProjection('epsg') == 4326
-    assert bbox.proj4 == '+proj=longlat +datum=WGS84 +no_defs'
-    assert isinstance(bbox.getFeatureByIndex(0), ogr.Feature)
+    bbox1 = scene.bbox()
+    assert bbox1.getArea() == 7.573045244595988
+    assert bbox1.extent == {'ymax': 52.183979, 'ymin': 50.295261, 'xmin': 8.017178, 'xmax': 12.0268}
+    assert bbox1.nlayers == 1
+    assert bbox1.getProjection('epsg') == 4326
+    assert bbox1.proj4 == '+proj=longlat +datum=WGS84 +no_defs'
+    assert isinstance(bbox1.wkt, str)
+    assert isinstance(bbox1.getFeatureByIndex(0), ogr.Feature)
     with pytest.raises(IndexError):
-        bbox.getFeatureByIndex(1)
-    bbox.reproject(32633)
-    assert bbox.proj4 == '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs'
+        bbox1.getFeatureByIndex(1)
+    bbox1.reproject(32633)
+    assert bbox1.proj4 == '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs'
+    assert isinstance(bbox1['id=1'], Vector)
+    with pytest.raises(RuntimeError):
+        test = bbox1[0.1]
+    assert bbox1.fieldnames == ['id']
+    assert bbox1.getUniqueAttributes('id') == [1]
+    feat = bbox1.getFeatureByAttribute('id', 1)
+    assert isinstance(feat, ogr.Feature)
+    bbox2 = feature2vector(feat, ref=bbox1)
+    bbox2.close()
+    feat.Destroy()
+    with pytest.raises(KeyError):
+        select = bbox1.getFeatureByAttribute('foo', 'bar')
+    ext = bbox1.extent
+    for key in ext.keys():
+        ext[key] += 1
+    bbox2_name = os.path.join(str(tmpdir), 'bbox2.shp')
+    bbox(ext, bbox1.srs, bbox2_name)
+    with Vector(bbox2_name) as bbox2:
+        assert intersect(bbox1, bbox2) is not None
+        bbox1.addvector(bbox2)
+    bbox3_name = os.path.join(str(tmpdir), 'bbox3.shp')
+    bbox1.write(bbox3_name)
+    bbox1.close()
+    bbox4_name = os.path.join(str(tmpdir), 'bbox4.shp')
+    dissolve(bbox3_name, bbox4_name, field='id')
+    assert os.path.isfile(bbox4_name)
+    with pytest.raises(RuntimeError):
+        vec = Vector(driver='foobar')
 
 
 def test_Raster():
