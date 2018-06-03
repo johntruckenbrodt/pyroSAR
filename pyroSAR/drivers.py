@@ -1495,7 +1495,7 @@ class Archive(object):
         if 'bbox' not in self.get_colnames():
             cursor.execute('SELECT AddGeometryColumn("data","bbox" , 4326, "POLYGON", "XY", 0)')
 
-        create_string = '''CREATE TABLE if not exists duplicates (outname_base TEXT, scene TEXT)'''
+        create_string = 'CREATE TABLE if not exists duplicates (outname_base TEXT, scene TEXT)'
         cursor.execute(create_string)
         self.conn.commit()
 
@@ -1669,8 +1669,8 @@ class Archive(object):
             the column names of the data table
         """
         cursor = self.conn.cursor()
-        cursor.execute('''PRAGMA table_info(data)''')
-        return [str(x[1]) for x in cursor.fetchall()]
+        cursor.execute('PRAGMA table_info(data)')
+        return sorted([str(x[1]) for x in cursor.fetchall()])
 
     def get_tablenames(self):
         """
@@ -1682,8 +1682,8 @@ class Archive(object):
             the table names
         """
         cursor = self.conn.cursor()
-        cursor.execute('''SELECT * FROM sqlite_master WHERE type="table"''')
-        return [x[1].encode('ascii') for x in cursor.fetchall()]
+        cursor.execute('SELECT * FROM sqlite_master WHERE type="table"')
+        return sorted([x[1].encode('ascii') for x in cursor.fetchall()])
 
     def get_unique_directories(self):
         """
@@ -1761,13 +1761,13 @@ class Archive(object):
             if self.select(scene=scene) != 0:
                 table = 'data'
             else:
-                cursor.execute('''SELECT scene FROM duplicates WHERE scene=?''', (scene,))
+                cursor.execute('SELECT scene FROM duplicates WHERE scene=?', (scene,))
                 if len(cursor.fetchall()) != 0:
                     table = 'duplicates'
                 else:
                     table = None
             if table:
-                cursor.execute('''UPDATE {} SET scene=? WHERE scene=?'''.format(table), (new, scene))
+                cursor.execute('UPDATE {} SET scene=? WHERE scene=?'.format(table), (new, scene))
                 self.conn.commit()
         pbar.finish()
         if len(failed) > 0:
