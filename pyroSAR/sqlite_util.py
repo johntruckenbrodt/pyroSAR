@@ -62,12 +62,14 @@ class __Handler(object):
 
     @property
     def version(self):
-        spatialite_cursor = self.conn.execute('''SELECT spatialite_version()''')
-        spatialite_version = spatialite_cursor.fetchall()[0][0].encode('ascii')
+        cursor = self.conn.cursor()
+        cursor.execute('''SELECT spatialite_version()''')
+        spatialite_version = cursor.fetchall()[0][0].encode('ascii')
         return {'sqlite': sqlite3.version, 'spatialite': spatialite_version}
 
     def get_tablenames(self):
-        cursor = self.conn.execute('''SELECT * FROM sqlite_master WHERE type="table"''')
+        cursor = self.conn.cursor()
+        cursor.execute('''SELECT * FROM sqlite_master WHERE type="table"''')
         return [x[1].encode('ascii') for x in cursor.fetchall()]
 
     def load_extension(self, extension):
@@ -83,12 +85,18 @@ class __Handler(object):
                     break
                 except sqlite3.OperationalError:
                     continue
+
             if select is None:
                 self.__load_regular('spatialite')
-            else:
-                if 'spatial_ref_sys' not in self.get_tablenames():
-                    param = 1 if re.search('mod_spatialite', select) else ''
-                    self.conn.execute('SELECT InitSpatialMetaData({});'.format(param))
+
+            if 'spatial_ref_sys' not in self.get_tablenames():
+                cursor = self.conn.cursor()
+                if select is None:
+                    cursor.execute('SELECT InitSpatialMetaData(1);')
+                else:
+                    cursor.execute('SELECT InitSpatialMetaData();')
+                self.conn.commit()
+
         else:
             self.__load_regular(ext)
 
