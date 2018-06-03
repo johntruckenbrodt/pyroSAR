@@ -57,6 +57,8 @@ class __Handler(object):
         if isinstance(extensions, list):
             for ext in extensions:
                 self.load_extension(ext)
+        elif extensions is not None:
+            raise RuntimeError('extensions must either be a list or None')
 
     @property
     def version(self):
@@ -72,7 +74,7 @@ class __Handler(object):
         ext = os.path.splitext(os.path.basename(extension))[0]
         if re.search('spatialite', ext):
             select = None
-            for option in ['mod_spatialite', 'mod_spatialite.so', 'libspatialite', 'libspatialite.so']:
+            for option in ['mod_spatialite', 'mod_spatialite.so']:
                 try:
                     self.conn.load_extension(option)
                     select = option
@@ -82,15 +84,21 @@ class __Handler(object):
                 except sqlite3.OperationalError:
                     continue
             if select is None:
-                raise RuntimeError('failed to load extension {}'.format(ext))
+                self.__load_regular('spatialite')
             else:
                 if 'spatial_ref_sys' not in self.get_tablenames():
                     param = 1 if re.search('mod_spatialite', select) else ''
                     self.conn.execute('SELECT InitSpatialMetaData({});'.format(param))
         else:
-            ext_mod = find_library(ext.replace('lib', ''))
-            if ext_mod is None:
-                raise RuntimeError('no library found for extension {}'.format(extension))
-            print('loading extension {0} as {1}'.format(extension, ext_mod))
+            self.__load_regular(ext)
+
+    def __load_regular(self, extension):
+        ext_mod = find_library(extension.replace('lib', ''))
+        if ext_mod is None:
+            raise RuntimeError('no library found for extension {}'.format(extension))
+        print('loading extension {0} as {1}'.format(extension, ext_mod))
+        try:
             self.conn.load_extension(ext_mod)
             self.extensions.append(ext_mod)
+        except sqlite3.OperationalError:
+            raise RuntimeError('failed to load extension {}'.format(ext_mod))
