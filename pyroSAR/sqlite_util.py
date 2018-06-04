@@ -59,6 +59,9 @@ class __Handler(object):
                 self.load_extension(ext)
         elif extensions is not None:
             raise RuntimeError('extensions must either be a list or None')
+        print('using sqlite version {}'.format(self.version['sqlite']))
+        if 'spatialite' in self.version.keys():
+            print('using spatialite version {}'.format(self.version['spatialite']))
 
     @property
     def version(self):
