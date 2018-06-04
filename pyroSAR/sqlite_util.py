@@ -81,9 +81,9 @@ class __Handler(object):
         return [x[1].encode('ascii') for x in cursor.fetchall()]
 
     def load_extension(self, extension):
-        ext = os.path.splitext(os.path.basename(extension))[0]
-        if re.search('spatialite', ext):
+        if re.search('spatialite', extension):
             select = None
+            # first try to load the dedicated mod_spatialite adapter
             for option in ['mod_spatialite', 'mod_spatialite.so']:
                 try:
                     self.conn.load_extension(option)
@@ -94,9 +94,11 @@ class __Handler(object):
                 except sqlite3.OperationalError:
                     continue
 
+            # if loading mod_spatialite fails try to load libspatialite directly
             if select is None:
                 self.__load_regular('spatialite')
 
+            # initialize spatial support
             if 'spatial_ref_sys' not in self.get_tablenames():
                 cursor = self.conn.cursor()
                 if select is None:
@@ -108,16 +110,41 @@ class __Handler(object):
                 self.conn.commit()
 
         else:
-            self.__load_regular(ext)
+            self.__load_regular(extension)
 
     def __load_regular(self, extension):
+        options = []
+
+        # create an extension library option starting with 'lib' without extension suffices;
+        # e.g. 'libgdal' but not 'gdal.so'
+        ext_base = self.__split_ext(extension)
+        if not ext_base.startswith('lib'):
+            ext_base = 'lib' + ext_base
+        options.append(ext_base)
+
+        # get the full extension library name; e.g. 'libgdal.so.20'
         ext_mod = find_library(extension.replace('lib', ''))
         if ext_mod is None:
             raise RuntimeError('no library found for extension {}'.format(extension))
-        print('loading extension {0} as {1}'.format(extension, ext_mod))
-        try:
-            self.conn.load_extension(ext_mod)
-            self.extensions.append(ext_mod)
-        except sqlite3.OperationalError as e:
-            print(e)
-            raise RuntimeError('failed to load extension {}'.format(ext_mod))
+        options.append(ext_mod)
+
+        # loop through extension library name options and try to load them
+        success = False
+        for option in options:
+            try:
+                self.conn.load_extension(option)
+                self.extensions.append(option)
+                print('loading extension {0} as {1}'.format(extension, option))
+                success = True
+                break
+            except sqlite3.OperationalError:
+                continue
+
+        if not success:
+            raise RuntimeError('failed to load extension {}'.format(extension))
+
+    def __split_ext(self, extension):
+        base = extension
+        while re.search('\.', base):
+            base = os.path.splitext(base)[0]
+        return base
