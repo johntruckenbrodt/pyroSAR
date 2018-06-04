@@ -85,7 +85,7 @@ class Vector(object):
         self.vector = None
         for feature in self.__features:
             if feature is not None:
-                feature.Destroy()
+                feature = None
 
     def init_layer(self):
         self.layer = self.vector.GetLayer()
@@ -185,7 +185,7 @@ class Vector(object):
         for key, value in fields.items():
             feature.SetField(key, value)
         self.layer.CreateFeature(feature)
-        feature.Destroy()
+        feature = None
         self.init_features()
 
     def addvector(self, vec):
@@ -297,7 +297,7 @@ class Vector(object):
             newfeature = feature.Clone()
             newfeature.SetGeometry(geom)
             self.layer.CreateFeature(newfeature)
-            newfeature.Destroy()
+            newfeature = None
         self.init_features()
 
     def setCRS(self, crs):
@@ -366,7 +366,7 @@ class Vector(object):
                 outFeature.SetField(self.fieldnames[j], feature.GetField(j))
             # add the feature to the shapefile
             outlayer.CreateFeature(outFeature)
-            outFeature.Destroy()
+            outFeature = None
         self.layer.ResetReading()
 
         srs_out = self.srs.Clone()
@@ -374,7 +374,7 @@ class Vector(object):
         with open(os.path.join(outfilepath, basename+".prj"), "w") as prj:
             prj.write(srs_out.ExportToWkt())
 
-        outdataset.Destroy()
+        outdataset = None
 
 
 def feature2vector(feature, ref, layername=None):
@@ -431,7 +431,7 @@ def bbox(coordinates, crs, outname=None, format='ESRI Shapefile', overwrite=True
     bbox.addlayer('bbox', srs, ogr.wkbPolygon)
     bbox.addfield('id', width=4)
     bbox.addfeature(geom, {'id': 1})
-    geom.Destroy()
+    geom = None
     if outname is None:
         return bbox
     else:
@@ -498,7 +498,7 @@ def dissolve(infile, outfile, field, layername=None):
         d = feat.GetFieldDefnRef(field)
         width = d.width
         type = d.type
-        feat.Destroy()
+        feat = None
 
     layername = layername if layername is not None else os.path.splitext(os.path.basename(infile))[0]
 
