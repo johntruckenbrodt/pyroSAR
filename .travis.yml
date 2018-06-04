@@ -23,7 +23,6 @@ addons:
       - swig2.0
       - libproj-dev
       - gdal-bin
-      - sqlite3
 
 python:
   - "2.7"
