@@ -97,9 +97,11 @@ class __Handler(object):
             if 'spatial_ref_sys' not in self.get_tablenames():
                 cursor = self.conn.cursor()
                 if select is None:
-                    cursor.execute('SELECT InitSpatialMetaData(1);')
-                else:
+                    # libspatialite extension
                     cursor.execute('SELECT InitSpatialMetaData();')
+                else:
+                    # mod_spatialite extension
+                    cursor.execute('SELECT InitSpatialMetaData(1);')
                 self.conn.commit()
 
         else:
