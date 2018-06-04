@@ -75,7 +75,17 @@ class Raster(object):
         self.res = [abs(float(self.geo['xres'])), abs(float(self.geo['yres']))]
         self.nodata = self.raster.GetRasterBand(1).GetNoDataValue()
 
+        # a list to contain arrays
         self.__data = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self):
+        self.raster = None
 
     @staticmethod
     def typemap():
