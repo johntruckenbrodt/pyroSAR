@@ -8,6 +8,8 @@ from pyroSAR.spatial import crsConvert, haversine, Raster, stack, ogr2ogr, gdal_
 from pyroSAR.spatial.vector import feature2vector, dissolve
 from pyroSAR.ancillary import finder
 
+travis = 'TRAVIS' in os.environ.keys()
+
 
 def test_crsConvert():
     assert crsConvert(crsConvert(4326, 'wkt'), 'proj4') == '+proj=longlat +datum=WGS84 +no_defs '
@@ -72,12 +74,13 @@ def test_dissolve(tmpdir):
         bbox1.addvector(bbox2)
     # write combined bbox into new shapefile
     bbox3_name = os.path.join(str(tmpdir), 'bbox3.shp')
-    # dissolve the geometries in bbox3 and write the result to new bbox4
-    # this test is currently disabled as the current sqlite3 version on Travis seems to not support loading gdal as
-    # extension; Travis CI setup: Ubuntu 14.04 (Trusty), sqlite3 version 3.8.2 (2018-06-04)
-    # bbox4_name = os.path.join(str(tmpdir), 'bbox4.shp')
-    # dissolve(bbox3_name, bbox4_name, field='id')
-    # assert os.path.isfile(bbox4_name)
+    if not travis:
+        # dissolve the geometries in bbox3 and write the result to new bbox4
+        # this test is currently disabled for Travis as the current sqlite3 version on Travis seems to not support
+        # loading gdal as extension; Travis CI setup: Ubuntu 14.04 (Trusty), sqlite3 version 3.8.2 (2018-06-04)
+        bbox4_name = os.path.join(str(tmpdir), 'bbox4.shp')
+        dissolve(bbox3_name, bbox4_name, field='id')
+        assert os.path.isfile(bbox4_name)
 
 
 def test_Raster():
