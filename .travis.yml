@@ -46,7 +46,7 @@ install:
 #  - travis_wait 40 . ./pyroSAR/install/download_testdata.sh
 
 script:
-  - coverage run --source pyroSAR/ -m pytest pyroSAR/tests/test_spatial.py
+  - coverage run --source pyroSAR/ -m pytest -s
 
 after_success:
 - coveralls
