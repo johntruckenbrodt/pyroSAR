@@ -65,7 +65,7 @@ class __Handler(object):
 
     @property
     def version(self):
-        out = {'sqlite': sqlite3.version}
+        out = {'sqlite': sqlite3.sqlite_version}
         cursor = self.conn.cursor()
         try:
             cursor.execute('SELECT spatialite_version()')
@@ -118,5 +118,6 @@ class __Handler(object):
         try:
             self.conn.load_extension(ext_mod)
             self.extensions.append(ext_mod)
-        except sqlite3.OperationalError:
+        except sqlite3.OperationalError as e:
+            print(e)
             raise RuntimeError('failed to load extension {}'.format(ext_mod))
