@@ -402,7 +402,7 @@ class Raster(object):
         # assign newly computed array to raster object
         self.assign(rounded)
 
-    def write(self, outname, dtype='default', format='ENVI', dim='full', nodata='default'):
+    def write(self, outname, dtype='default', format='ENVI', dim='full', nodata='default', compress_tif=False):
         """
         write the raster object to a file
         if the data itself has been loaded to self.data (by function load), the in-memory data will be written to the file, otherwise the data is copied from the source file
@@ -417,6 +417,8 @@ class Raster(object):
             nodata: int, float or str
                 the nodata value to set to the output image;
                 if set to 'default' the value is read from the currently opened file
+            compress_tif: bool
+                compress the created GeoTiff?
 
         Returns:
 
@@ -432,13 +434,17 @@ class Raster(object):
 
         geo = list(self.raster.GetGeoTransform())
 
+        options = []
+        if format == 'GTiff' and compress_tif:
+            options += ['COMPRESS=DEFLATE', 'PREDICTOR=2']
+
         if dim != 'full':
             geo[0] += dim[0] * geo[1]
             geo[3] += dim[1] * geo[5]
 
         dim = [0, 0, self.cols, self.rows] if dim == 'full' else dim
         driver = gdal.GetDriverByName(format)
-        outDataset = driver.Create(outname, dim[2], dim[3], self.bands, dtype)
+        outDataset = driver.Create(outname, dim[2], dim[3], self.bands, dtype, options if len(options) > 0 else None)
         outDataset.SetMetadata(self.raster.GetMetadata())
         if self.geo is not None:
             outDataset.SetGeoTransform(geo)
