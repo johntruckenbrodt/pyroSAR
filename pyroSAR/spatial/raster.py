@@ -16,7 +16,7 @@ from math import sqrt
 from time import gmtime, strftime
 import numpy as np
 
-#from pyroSAR._common import (SpatialResults, nan_to_num, subset, test_import_type,
+# from pyroSAR._common import (SpatialResults, nan_to_num, subset, test_import_type,
 #                             test_string, test_data)
 from pyroSAR import envi
 from pyroSAR.spatial.auxil import (gdalwarp, gdalbuildvrt)
@@ -41,6 +41,7 @@ class Raster(object):
     Upon initializing a Raster object only metadata is loaded, the actual data can be, for example,
     loaded to memory by calling functions matrix or load.
     """
+
     # todo: init a Raster object from array data not only from a filename
     def __init__(self, filename):
         if os.path.isfile(filename):
@@ -76,7 +77,7 @@ class Raster(object):
         self.nodata = self.raster.GetRasterBand(1).GetNoDataValue()
 
         # a list to contain arrays
-        self.__data = []
+        self.__data = [None] * self.bands
 
     def __enter__(self):
         return self
@@ -97,14 +98,14 @@ class Raster(object):
             if hasattr(obj, 'dtype'):
                 try:
                     npn = obj(0)
-#                    nat = np.asscalar(npn)
+                    #                    nat = np.asscalar(npn)
                     if gdal_array.NumericTypeCodeToGDALTypeCode(npn.dtype.type):
                         TYPEMAP[npn.dtype.name] = gdal_array.NumericTypeCodeToGDALTypeCode(npn.dtype.type)
                 except:
                     pass
 
         return TYPEMAP
-    
+
     @property
     def proj4args(self):
         args = [x.split('=') for x in re.split('[+ ]+', self.proj4) if len(x) > 0]
@@ -151,21 +152,6 @@ class Raster(object):
             return bbox(self.geo, self.proj4)
         else:
             bbox(self.geo, self.proj4, outname=outname, format=format, overwrite=overwrite)
-
-    @staticmethod
-    def dtypes(typestring):
-        """
-        translate raster data type descriptions
-
-        Args:
-            typestring:
-
-        Returns:
-
-        """
-        dictionary = {'Byte': GDT_Byte, 'Int16': GDT_Int16, 'UInt16': GDT_UInt16, 'Int32': GDT_Int32,
-                      'UInt32': GDT_UInt32, 'Float32': GDT_Float32, 'Float64': GDT_Float64}
-        return dictionary[typestring]
 
     def extract(self, px, py, radius=1, no_data=0):
         """
@@ -272,7 +258,7 @@ class Raster(object):
         """
         dim = [0, 0, self.cols, self.rows] if dim == 'full' else dim
         for i in range(1, self.bands + 1):
-            self.__data.append(self.matrix(i, dim))
+            self.__data[i - 1] = self.matrix(i, dim)
 
     def matrix(self, band=1, dim='full'):
         """
@@ -286,7 +272,7 @@ class Raster(object):
 
         """
         dim = [0, 0, self.cols, self.rows] if dim == 'full' else dim
-        if len(self.__data) >= band:
+        if self.__data[band - 1] is not None:
             return self.__data[band - 1][dim[1]:dim[3], dim[0]:dim[2]]
         else:
             return self.raster.GetRasterBand(band).ReadAsArray(*dim)
@@ -382,32 +368,29 @@ class Raster(object):
         # assign newly computed array to raster object
         self.assign(rounded)
 
-    def write(self, outname, dtype='default', format='ENVI', dim='full', overwrite=True):
+    def write(self, outname, dtype='default', format='ENVI', dim='full'):
         """
         write the raster object to a file
         if the data itself has been loaded to self.data (by function load), the in-memory data will be written to the file, otherwise the data is copied from the source file
         the parameter dim gives the opportunity to write a cropped version of the raster file; a dim-formatted list is, for example, returned by function crop
 
         Args:
-            outname:
-            dtype:
-            format:
+            outname: str
+                the name of the file to be written
+            dtype: str
+            format: str
             dim:
-            overwrite:
 
         Returns:
 
         """
-        # if overwrite:
-        #     for item in finder(os.path.basename(outname), [os.path.splitext(os.path.basename(outname))[0]], regex=True):
-        #         os.remove(item)
-        # else:
-        #     raise RuntimeError('file already exists')
+        if os.path.isfile(outname):
+            raise RuntimeError('target file already exists')
 
         if format == 'GTiff' and not re.search('\.tif[f]*$', outname):
             outname += '.tif'
 
-        dtype = self.dtype if dtype == 'default' else dtype
+        dtype = dtypes(self.dtype if dtype == 'default' else dtype)
 
         geo = list(self.raster.GetGeoTransform())
 
@@ -417,7 +400,7 @@ class Raster(object):
 
         dim = [0, 0, self.cols, self.rows] if dim == 'full' else dim
         driver = gdal.GetDriverByName(format)
-        outDataset = driver.Create(outname, dim[2], dim[3], self.bands, self.dtypes(dtype))
+        outDataset = driver.Create(outname, dim[2], dim[3], self.bands, dtype)
         outDataset.SetMetadata(self.raster.GetMetadata())
         if self.geo is not None:
             outDataset.SetGeoTransform(geo)
@@ -426,7 +409,10 @@ class Raster(object):
         for i in range(1, self.bands + 1):
             outband = outDataset.GetRasterBand(i)
             outband.SetNoDataValue(self.nodata)
-            mat = self.raster.GetRasterBand(i).ReadAsArray(*dim) if len(self.__data) == 0 else self.__data[i - 1]
+            if self.__data[i - 1] is None:
+                mat = self.raster.GetRasterBand(i).ReadAsArray(*dim)
+            else:
+                mat = self.__data[i - 1]
             outband.WriteArray(mat)
             outband.FlushCache()
         if format == 'GTiff':
@@ -667,3 +653,24 @@ def rasterize(vectorobject, outname, reference, burn_values=1, expressions=None,
         gdal.RasterizeLayer(target_ds, [1], vectorobject.layer, burn_values=[value])
     vectorobject.layer.SetAttributeFilter('')
     target_ds = None
+
+
+def dtypes(typestring):
+    """
+    translate raster data type descriptions to GDAl data type codes
+
+    Args:
+        typestring: str
+            the data type string to be converted
+
+    Returns:
+    int
+        the GDAL data type code
+    """
+    dictionary = {'Byte': GDT_Byte, 'Int16': GDT_Int16, 'UInt16': GDT_UInt16, 'Int32': GDT_Int32,
+                  'UInt32': GDT_UInt32, 'Float32': GDT_Float32, 'Float64': GDT_Float64}
+    try:
+        out = dictionary[typestring]
+    except KeyError:
+        raise RuntimeError("unknown data type; use one of the following: ['{}']".format("', '".join(dictionary.keys())))
+    return out
