@@ -72,8 +72,10 @@ def test_dissolve(tmpdir):
     with Vector(bbox2_name) as bbox2:
         assert intersect(bbox1, bbox2) is not None
         bbox1.addvector(bbox2)
-    # write combined bbox into new shapefile
-    bbox3_name = os.path.join(str(tmpdir), 'bbox3.shp')
+        # write combined bbox into new shapefile
+        bbox3_name = os.path.join(str(tmpdir), 'bbox3.shp')
+        bbox1.write(bbox3_name)
+
     if not travis:
         # dissolve the geometries in bbox3 and write the result to new bbox4
         # this test is currently disabled for Travis as the current sqlite3 version on Travis seems to not support
