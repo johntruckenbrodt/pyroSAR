@@ -444,7 +444,7 @@ class Raster(object):
 
         dim = [0, 0, self.cols, self.rows] if dim == 'full' else dim
         driver = gdal.GetDriverByName(format)
-        outDataset = driver.Create(outname, dim[2], dim[3], self.bands, dtype, options if len(options) > 0 else None)
+        outDataset = driver.Create(outname, dim[2], dim[3], self.bands, dtype, options)
         outDataset.SetMetadata(self.raster.GetMetadata())
         if self.geo is not None:
             outDataset.SetGeoTransform(geo)
