@@ -50,32 +50,6 @@ class Raster(object):
         else:
             raise OSError('file does not exist')
 
-        self.cols = self.raster.RasterXSize
-        self.rows = self.raster.RasterYSize
-        self.bands = self.raster.RasterCount
-        self.dim = [self.rows, self.cols, self.bands]
-        self.driver = self.raster.GetDriver()
-        self.format = self.driver.ShortName
-        self.dtype = gdal.GetDataTypeName(self.raster.GetRasterBand(1).DataType)
-        self.projection = self.raster.GetProjection()
-        self.srs = osr.SpatialReference(wkt=self.projection)
-        self.proj4 = self.srs.ExportToProj4()
-        try:
-            self.epsg = crsConvert(self.srs, 'epsg')
-        except RuntimeError:
-            self.epsg = None
-        self.geogcs = self.srs.GetAttrValue('geogcs')
-        self.projcs = self.srs.GetAttrValue('projcs') if self.srs.IsProjected() else None
-        self.geo = dict(
-            zip(['xmin', 'xres', 'rotation_x', 'ymax', 'rotation_y', 'yres'], self.raster.GetGeoTransform()))
-
-        # note: yres is negative!
-        self.geo['xmax'] = self.geo['xmin'] + self.geo['xres'] * self.cols
-        self.geo['ymin'] = self.geo['ymax'] + self.geo['yres'] * self.rows
-
-        self.res = [abs(float(self.geo['xres'])), abs(float(self.geo['yres']))]
-        self.nodata = self.raster.GetRasterBand(1).GetNoDataValue()
-
         # a list to contain arrays
         self.__data = [None] * self.bands
 
@@ -87,6 +61,84 @@ class Raster(object):
 
     def close(self):
         self.raster = None
+
+    @property
+    def cols(self):
+        return self.raster.RasterXSize
+
+    @property
+    def rows(self):
+        return self.raster.RasterYSize
+
+    @property
+    def bands(self):
+        return self.raster.RasterCount
+
+    @property
+    def dim(self):
+        return [self.rows, self.cols, self.bands]
+
+    @property
+    def driver(self):
+        return self.raster.GetDriver()
+
+    @property
+    def format(self):
+        return self.driver.ShortName
+
+    @property
+    def dtype(self):
+        return gdal.GetDataTypeName(self.raster.GetRasterBand(1).DataType)
+
+    @property
+    def projection(self):
+        return self.raster.GetProjection()
+
+    @property
+    def srs(self):
+        return osr.SpatialReference(wkt=self.projection)
+
+    @property
+    def proj4(self):
+        return self.srs.ExportToProj4()
+
+    @property
+    def epsg(self):
+        try:
+            return crsConvert(self.srs, 'epsg')
+        except RuntimeError:
+            return None
+
+    @property
+    def geogcs(self):
+        return self.srs.GetAttrValue('geogcs')
+
+    @property
+    def projcs(self):
+        return self.srs.GetAttrValue('projcs') if self.srs.IsProjected() else None
+
+    @property
+    def geo(self):
+        out = dict(zip(['xmin', 'xres', 'rotation_x', 'ymax', 'rotation_y', 'yres'],
+                       self.raster.GetGeoTransform()))
+
+        # note: yres is negative!
+        out['xmax'] = out['xmin'] + out['xres'] * self.cols
+        out['ymin'] = out['ymax'] + out['yres'] * self.rows
+        return out
+
+    @property
+    def res(self):
+        return [abs(float(self.geo['xres'])), abs(float(self.geo['yres']))]
+
+    @property
+    def nodata(self):
+        return self.raster.GetRasterBand(1).GetNoDataValue()
+
+    @nodata.setter
+    def nodata(self, value):
+        for i in range(1, self.bands + 1):
+            self.raster.GetRasterBand(i).SetNoDataValue(value)
 
     @property
     def proj4args(self):
@@ -350,7 +402,7 @@ class Raster(object):
         # assign newly computed array to raster object
         self.assign(rounded)
 
-    def write(self, outname, dtype='default', format='ENVI', dim='full'):
+    def write(self, outname, dtype='default', format='ENVI', dim='full', nodata='default'):
         """
         write the raster object to a file
         if the data itself has been loaded to self.data (by function load), the in-memory data will be written to the file, otherwise the data is copied from the source file
@@ -362,6 +414,9 @@ class Raster(object):
             dtype: str
             format: str
             dim:
+            nodata: int, float or str
+                the nodata value to set to the output image;
+                if set to 'default' the value is read from the currently opened file
 
         Returns:
 
@@ -373,6 +428,7 @@ class Raster(object):
             outname += '.tif'
 
         dtype = dtypes(self.dtype if dtype == 'default' else dtype)
+        nodata = self.nodata if nodata == 'default' else nodata
 
         geo = list(self.raster.GetGeoTransform())
 
@@ -390,7 +446,7 @@ class Raster(object):
             outDataset.SetProjection(self.projection)
         for i in range(1, self.bands + 1):
             outband = outDataset.GetRasterBand(i)
-            outband.SetNoDataValue(self.nodata)
+            outband.SetNoDataValue(nodata)
             if self.__data[i - 1] is None:
                 mat = self.raster.GetRasterBand(i).ReadAsArray(*dim)
             else:
