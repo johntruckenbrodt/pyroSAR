@@ -1,10 +1,9 @@
 import pyroSAR
+from pyroSAR import spatial
 import pytest
-import shutil
 import tarfile as tf
 import sys
 import os
-from osgeo import ogr
 from datetime import datetime
 
 testdir = os.getenv('TESTDATA_DIR', 'pyroSAR/tests/data/')
@@ -57,7 +56,6 @@ class Test_Metadata():
 
 
 testdata = 'pyroSAR/tests/data/'
-tmpdir = os.path.join(testdata, 'tmp')
 testfile1 = os.path.join(testdata, 'S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip')
 testfile2 = os.path.join(testdata, 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
 
@@ -91,44 +89,48 @@ def test_export2dict():
     pass
 
 
-def test_getFileObj():
+def test_getFileObj(tmpdir):
     scene = pyroSAR.identify(testfile1)
-    os.makedirs(tmpdir)
-    scene.unpack(tmpdir)
+    scene.unpack(str(tmpdir))
     scene = pyroSAR.identify(scene.scene)
     item = scene.findfiles('manifest.safe')[0]
     assert os.path.basename(item) == 'manifest.safe'
     assert isinstance(scene.getFileObj(item).read(), (bytes, str))
 
-    filename = os.path.join(tmpdir, os.path.basename(testfile1.replace('zip', 'tar.gz')))
+    filename = os.path.join(str(tmpdir), os.path.basename(testfile1.replace('zip', 'tar.gz')))
     with tf.open(filename, 'w:gz') as tar:
         tar.add(scene.scene, arcname=os.path.basename(scene.scene))
+    # test error if scene is not a directory, zip or tar
+    with pytest.raises(RuntimeError):
+        pyroSAR.getFileObj(scene=os.path.join(scene.scene, 'manifest.safe'), filename='bar')
     scene = pyroSAR.identify(filename)
     assert scene.compression == 'tar'
     item = scene.findfiles('manifest.safe')[0]
     assert isinstance(scene.getFileObj(item).read(), (bytes, str))
-    shutil.rmtree(tmpdir)
-    with pytest.raises(IOError):
+    with pytest.raises(RuntimeError):
         pyroSAR.getFileObj('foo', 'bar')
 
 
-def test_scene():
-    os.makedirs(tmpdir)
-    dbfile = os.path.join(tmpdir, 'scenes.db')
+def test_scene(tmpdir):
+    dbfile = os.path.join(str(tmpdir), 'scenes.db')
     id = pyroSAR.identify(testfile1)
     assert isinstance(id.export2dict(), dict)
     with pytest.raises(RuntimeError):
         assert isinstance(id.gdalinfo(), dict)
     id.summary()
-    id.bbox(outname=os.path.join(tmpdir, 'bbox_test.shp'), overwrite=True)
-    assert id.is_processed(tmpdir) is False
-    id.unpack(tmpdir, overwrite=True)
+    id.bbox(outname=os.path.join(str(tmpdir), 'bbox_test.shp'), overwrite=True)
+    assert id.is_processed(str(tmpdir)) is False
+    id.unpack(str(tmpdir), overwrite=True)
     assert id.compression is None
     id.export2sqlite(dbfile)
     with pytest.raises(IOError):
         id.getGammaImages()
     assert id.getGammaImages(id.scene) == []
-    osvdir = os.path.join(id.scene, 'osv')
+
+
+def test_scene_osv(tmpdir):
+    id = pyroSAR.identify(testfile1)
+    osvdir = os.path.join(str(tmpdir), 'osv')
     if sys.version_info >= (2, 7, 9):
         id.getOSV(osvdir)
         with pyroSAR.OSV(osvdir) as osv:
@@ -145,13 +147,11 @@ def test_scene():
     else:
         with pytest.raises(RuntimeError):
             id.getOSV(osvdir, osvType='POE')
-    shutil.rmtree(tmpdir)
 
 
-def test_archive():
-    os.makedirs(tmpdir)
+def test_archive(tmpdir):
     id = pyroSAR.identify(testfile1)
-    dbfile = os.path.join(tmpdir, 'scenes.db')
+    dbfile = os.path.join(str(tmpdir), 'scenes.db')
     db = pyroSAR.Archive(dbfile)
     db.insert(testfile1, verbose=False)
     assert db.is_registered(testfile1) is True
@@ -161,10 +161,19 @@ def test_archive():
     assert len(db.select(mindate='20141001T192312', maxdate='20201001T192312')) == 1
     assert len(db.select(polarizations=['VV'])) == 1
     assert len(db.select(vectorobject=id.bbox())) == 1
+    assert len(db.select(sensor='S1A', vectorobject='foo', processdir=str(tmpdir), verbose=True)) == 1
+    assert len(db.select(sensor='S1A', mindate='foo', maxdate='bar', foobar='foobar')) == 1
+    assert len(db.select(vv=1, acquisition_mode=('IW', 'EW'))) == 1
     with pytest.raises(IOError):
         db.filter_scenelist([1])
     db.close()
-    # separately test the with statement
     with pyroSAR.Archive(dbfile) as db:
         assert db.size == (1, 0)
-    shutil.rmtree(tmpdir)
+        shp = os.path.join(str(tmpdir), 'db.shp')
+        db.export2shp(shp)
+    assert spatial.Vector(shp).nfeatures == 1
+    os.remove(dbfile)
+    dbfile_old = os.path.join(testdata, 'archive_outdated.csv')
+    with pytest.raises(OSError):
+        with pyroSAR.Archive(dbfile) as db:
+            db.import_outdated(dbfile_old)

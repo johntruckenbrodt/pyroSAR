@@ -11,15 +11,11 @@ manner by simplifying the numerous options provided by the OGR python binding
 
 import os
 
-try:
-    from pysqlite2 import dbapi2 as sqlite3
-except ImportError:
-    import sqlite3
-
 from osgeo import ogr, osr
 
 from pyroSAR.spatial.auxil import crsConvert
 from pyroSAR.ancillary import parse_literal
+from pyroSAR.sqlite_util import sqlite_setup
 
 ogr.UseExceptions()
 osr.UseExceptions()
@@ -29,7 +25,7 @@ class Vector(object):
     def __init__(self, filename=None, driver='ESRI Shapefile'):
 
         if driver not in ['ESRI Shapefile', 'Memory']:
-            raise IOError('driver not supported')
+            raise RuntimeError('driver not supported')
 
         if filename is None:
             driver = 'Memory'
@@ -42,7 +38,7 @@ class Vector(object):
 
         nlayers = self.vector.GetLayerCount()
         if nlayers > 1:
-            raise IOError('multiple layers are currently not supported')
+            raise RuntimeError('multiple layers are currently not supported')
         elif nlayers == 1:
             self.init_layer()
 
@@ -429,7 +425,7 @@ def bbox(coordinates, crs, outname=None, format='ESRI Shapefile', overwrite=True
 
     bbox = Vector(driver='Memory')
     bbox.addlayer('bbox', srs, ogr.wkbPolygon)
-    bbox.addfield('id', width=4)
+    bbox.addfield('id', type=ogr.OFTInteger)
     bbox.addfeature(geom, {'id': 1})
     geom = None
     if outname is None:
@@ -509,10 +505,7 @@ def dissolve(infile, outfile, field, layername=None):
     #                          dialect='SQLITE')
     #     vec.write(outfile)
 
-    conn = sqlite3.connect(':memory:')
-    conn.enable_load_extension(True)
-    conn.load_extension('mod_spatialite.so')
-    conn.load_extension('libgdal.so')
+    conn = sqlite_setup(extensions=['spatialite', 'gdal'])
     conn.execute('CREATE VIRTUAL TABLE merge USING VirtualOGR("{}");'.format(infile))
     select = conn.execute('SELECT {0},asText(ST_Union(geometry)) as geometry FROM merge GROUP BY {0};'.format(field))
     fetch = select.fetchall()

@@ -20,12 +20,16 @@ pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as
 Alternatively, one can use <a href="https://github.com/nextgis/pygdal">pygdal</a>, 
 a virtualenv and setuptools friendly version of standard GDAL python bindings.
 ###### Ubuntu
-Currently Ubuntu comes with GDAL 1.11. By adding the ubuntugis repository to e.g. apt you can install 
-version >2.1:
+Starting with release Yakkety (16.10), Ubuntu comes with GDAL >2.1. 
+See <a href="https://launchpad.net/ubuntu/yakkety/amd64/gdal-bin">here</a>. 
+You can install it like this:
+```bash
+sudo apt-get install python-gdal python3-gdal gdal-bin
+```
+For older Ubuntu releases you can add the ubuntugis repository to apt prior to installation to install version >2.1:
 ```sh
 sudo add-apt-repository ppa:ubuntugis/ppa
 sudo apt-get update
-sudo apt-get install python-gdal python3-gdal gdal-bin
 ```
 This way the required dependencies (GEOS and PROJ4 in particular) are also installed.
 You can check the version by typing:
