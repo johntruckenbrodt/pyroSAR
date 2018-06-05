@@ -49,13 +49,10 @@ def test_Raster():
     assert ras.rows == 217
     assert ras.dim == [217, 268, 1]
     assert ras.dtype == 'Float32'
-    assert dtypes(ras.dtype) == 6
     assert ras.epsg == 32631
     assert ras.format == 'GTiff'
     assert ras.geo == {'ymax': 4830114.70107, 'rotation_y': 0.0, 'rotation_x': 0.0, 'xmax': 625408.241204, 'xres': 20.0,
                        'xmin': 620048.241204, 'ymin': 4825774.70107, 'yres': -20.0}
-    assert ras.typemap() == {'int32': 5, 'int16': 3, 'float64': 7, 'complex128': 11, 'uint8': 1, 'uint16': 2,
-                             'complex64': 10, 'uint32': 4, 'int8': 1, 'float32': 6}
     assert ras.geogcs == 'WGS 84'
     assert ras.is_valid() is True
     assert ras.proj4args == {'units': 'm', 'no_defs': None, 'datum': 'WGS84', 'proj': 'utm', 'zone': '31'}
@@ -71,6 +68,12 @@ def test_Raster():
     ras.write('pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db_new.tif')
     for item in finder('pyroSAR/tests/data', ['S1A*_new*']):
         os.remove(item)
+
+
+def test_dtypes():
+    assert dtypes('Float32') == 6
+    with pytest.raises(ValueError):
+        dtypes('foobar')
 
 
 def test_stack():

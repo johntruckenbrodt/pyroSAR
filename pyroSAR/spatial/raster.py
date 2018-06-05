@@ -88,24 +88,6 @@ class Raster(object):
     def close(self):
         self.raster = None
 
-    @staticmethod
-    def typemap():
-        """ Conversion from np.dtype to GDAL dtype
-        """
-        TYPEMAP = {}
-        for name in dir(np):
-            obj = getattr(np, name)
-            if hasattr(obj, 'dtype'):
-                try:
-                    npn = obj(0)
-                    #                    nat = np.asscalar(npn)
-                    if gdal_array.NumericTypeCodeToGDALTypeCode(npn.dtype.type):
-                        TYPEMAP[npn.dtype.name] = gdal_array.NumericTypeCodeToGDALTypeCode(npn.dtype.type)
-                except:
-                    pass
-
-        return TYPEMAP
-
     @property
     def proj4args(self):
         args = [x.split('=') for x in re.split('[+ ]+', self.proj4) if len(x) > 0]
@@ -345,7 +327,7 @@ class Raster(object):
 
     def rescale(self, function):
         """
-        perform raster computations with custom functions and assign them to the exitsting raster object in memory
+        perform raster computations with custom functions and assign them to the existing raster object in memory
 
         Args:
             function:
@@ -354,7 +336,7 @@ class Raster(object):
 
         """
         if self.bands != 1:
-            raise ValueError('only single band images supported')
+            raise ValueError('only single band images are currently supported')
 
         # load array
         mat = self.matrix()
@@ -667,10 +649,37 @@ def dtypes(typestring):
     int
         the GDAL data type code
     """
+    # create dictionary with GDAL style descriptions
     dictionary = {'Byte': GDT_Byte, 'Int16': GDT_Int16, 'UInt16': GDT_UInt16, 'Int32': GDT_Int32,
                   'UInt32': GDT_UInt32, 'Float32': GDT_Float32, 'Float64': GDT_Float64}
-    try:
-        out = dictionary[typestring]
-    except KeyError:
-        raise RuntimeError("unknown data type; use one of the following: ['{}']".format("', '".join(dictionary.keys())))
-    return out
+
+    # add numpy style descriptions
+    dictionary.update(typemap())
+
+    if typestring not in dictionary.keys():
+        raise ValueError("unknown data type; use one of the following: ['{}']".format("', '".join(dictionary.keys())))
+
+    return dictionary[typestring]
+
+
+def typemap():
+    """
+    create a dictionary for mapping numpy data types to GDAL data type codes
+
+    Returns
+    -------
+    dict
+        the type map
+    """
+    TYPEMAP = {}
+    for name in dir(np):
+        obj = getattr(np, name)
+        if hasattr(obj, 'dtype'):
+            try:
+                npn = obj(0)
+                code = gdal_array.NumericTypeCodeToGDALTypeCode(npn.dtype.type)
+                if code:
+                    TYPEMAP[npn.dtype.name] = code
+            except (TypeError, ValueError, AttributeError):
+                pass
+    return TYPEMAP
