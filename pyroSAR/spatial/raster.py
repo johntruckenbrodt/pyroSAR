@@ -736,6 +736,6 @@ def typemap():
                 code = gdal_array.NumericTypeCodeToGDALTypeCode(npn.dtype.type)
                 if code:
                     TYPEMAP[npn.dtype.name] = code
-            except (TypeError, ValueError, AttributeError):
+            except (TypeError, ValueError, AttributeError, OSError):
                 pass
     return TYPEMAP

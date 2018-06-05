@@ -8,7 +8,7 @@ def check_loading():
     try:
         conn = sqlite3.connect(':memory:')
         conn.enable_load_extension(True)
-    except sqlite3.OperationalError:
+    except (sqlite3.OperationalError, AttributeError):
         raise RuntimeError
 
 
