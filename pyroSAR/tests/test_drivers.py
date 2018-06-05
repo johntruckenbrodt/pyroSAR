@@ -6,38 +6,40 @@ import sys
 import os
 from datetime import datetime
 
-testdir = os.getenv('TESTDATA_DIR', 'pyroSAR/tests/data/')
 
-testcases = [
-    #SAFE
-    {'path': os.path.join('pyroSAR/tests/data/', 'S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'),
-     'acquisition_mode': 'IW',
-     'bbox_area': 7.573045244595988,
-     'compression': 'zip',
-     'corners': {'ymax': 52.183979, 'ymin': 50.295261, 'xmin': 8.017178, 'xmax': 12.0268},
-     'hgt_len': 15,
-     'lines': 16685,
-     'outname': 'S1A__IW___A_20150222T170750',
-     'orbit': 'A',
-     'polarizations': ['VV', 'VH'],
-     'product': 'GRD',
-     'samples': 25368,
-     'sensor': 'S1A',
-     'spacing': (10.0, 9.998647),
-     'start': '20150222T170750',
-     'stop': '20150222T170815'
-     }
-]
+@pytest.fixture()
+def testcases():
+    cases = {
+        's1':
+            {'acquisition_mode': 'IW',
+             'bbox_area': 7.573045244595988,
+             'compression': 'zip',
+             'corners': {'ymax': 52.183979, 'ymin': 50.295261, 'xmin': 8.017178, 'xmax': 12.0268},
+             'hgt_len': 15,
+             'lines': 16685,
+             'outname': 'S1A__IW___A_20150222T170750',
+             'orbit': 'A',
+             'polarizations': ['VV', 'VH'],
+             'product': 'GRD',
+             'samples': 25368,
+             'sensor': 'S1A',
+             'spacing': (10.0, 9.998647),
+             'start': '20150222T170750',
+             'stop': '20150222T170815'
+             }
+    }
+    return cases
 
 
 @pytest.fixture
-def scene(case):
-    case['pyro'] = pyroSAR.identify(case['path'])
+def scene(testcases, testdata, request):
+    case = testcases[request.param]
+    case['pyro'] = pyroSAR.identify(testdata[request.param])
     return case
 
 
-@pytest.mark.parametrize('case', testcases)
 class Test_Metadata():
+    @pytest.mark.parametrize('scene', ['s1'], indirect=True)
     def test_attributes(self, scene):
         assert scene['pyro'].acquisition_mode == scene['acquisition_mode']
         assert scene['pyro'].compression == scene['compression']
@@ -55,26 +57,20 @@ class Test_Metadata():
         assert len(scene['pyro'].getHGT()) == scene['hgt_len']
 
 
-testdata = 'pyroSAR/tests/data/'
-testfile1 = os.path.join(testdata, 'S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip')
-testfile2 = os.path.join(testdata, 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
-
-
-def test_identify_fail():
+def test_identify_fail(testdir, testdata):
     with pytest.raises(OSError):
         pyroSAR.identify(os.path.join(testdir, 'foobar'))
     with pytest.raises(RuntimeError):
-        pyroSAR.identify(testfile2)
+        pyroSAR.identify(testdata['tif'])
 
 
-def test_identify_many_fail():
-    assert pyroSAR.identify_many([testfile2]) == []
+def test_identify_many_fail(testdata):
+    assert pyroSAR.identify_many([testdata['tif']]) == []
 
 
-def test_filter_processed():
-    scene = pyroSAR.identify(testfile1)
-    outdir = 'pyroSAR/tests'
-    assert len(pyroSAR.filter_processed([scene], outdir)) == 1
+def test_filter_processed(tmpdir, testdata):
+    scene = pyroSAR.identify(testdata['s1'])
+    assert len(pyroSAR.filter_processed([scene], str(tmpdir))) == 1
 
 
 def test_parse_date():
@@ -89,15 +85,15 @@ def test_export2dict():
     pass
 
 
-def test_getFileObj(tmpdir):
-    scene = pyroSAR.identify(testfile1)
+def test_getFileObj(tmpdir, testdata):
+    scene = pyroSAR.identify(testdata['s1'])
     scene.unpack(str(tmpdir))
     scene = pyroSAR.identify(scene.scene)
     item = scene.findfiles('manifest.safe')[0]
     assert os.path.basename(item) == 'manifest.safe'
     assert isinstance(scene.getFileObj(item).read(), (bytes, str))
 
-    filename = os.path.join(str(tmpdir), os.path.basename(testfile1.replace('zip', 'tar.gz')))
+    filename = os.path.join(str(tmpdir), os.path.basename(testdata['s1'].replace('zip', 'tar.gz')))
     with tf.open(filename, 'w:gz') as tar:
         tar.add(scene.scene, arcname=os.path.basename(scene.scene))
     # test error if scene is not a directory, zip or tar
@@ -111,9 +107,9 @@ def test_getFileObj(tmpdir):
         pyroSAR.getFileObj('foo', 'bar')
 
 
-def test_scene(tmpdir):
+def test_scene(tmpdir, testdata):
     dbfile = os.path.join(str(tmpdir), 'scenes.db')
-    id = pyroSAR.identify(testfile1)
+    id = pyroSAR.identify(testdata['s1'])
     assert isinstance(id.export2dict(), dict)
     with pytest.raises(RuntimeError):
         assert isinstance(id.gdalinfo(), dict)
@@ -128,8 +124,8 @@ def test_scene(tmpdir):
     assert id.getGammaImages(id.scene) == []
 
 
-def test_scene_osv(tmpdir):
-    id = pyroSAR.identify(testfile1)
+def test_scene_osv(tmpdir, testdata):
+    id = pyroSAR.identify(testdata['s1'])
     osvdir = os.path.join(str(tmpdir), 'osv')
     if sys.version_info >= (2, 7, 9):
         id.getOSV(osvdir)
@@ -149,12 +145,12 @@ def test_scene_osv(tmpdir):
             id.getOSV(osvdir, osvType='POE')
 
 
-def test_archive(tmpdir):
-    id = pyroSAR.identify(testfile1)
+def test_archive(tmpdir, testdata):
+    id = pyroSAR.identify(testdata['s1'])
     dbfile = os.path.join(str(tmpdir), 'scenes.db')
     db = pyroSAR.Archive(dbfile)
-    db.insert(testfile1, verbose=False)
-    assert db.is_registered(testfile1) is True
+    db.insert(testdata['s1'], verbose=False)
+    assert db.is_registered(testdata['s1']) is True
     assert len(db.get_unique_directories()) == 1
     assert db.select_duplicates() == []
     assert db.select_duplicates(outname_base='S1A__IW___A_20150222T170750', scene='scene.zip') == []
@@ -173,7 +169,6 @@ def test_archive(tmpdir):
         db.export2shp(shp)
     assert spatial.Vector(shp).nfeatures == 1
     os.remove(dbfile)
-    dbfile_old = os.path.join(testdata, 'archive_outdated.csv')
     with pytest.raises(OSError):
         with pyroSAR.Archive(dbfile) as db:
-            db.import_outdated(dbfile_old)
+            db.import_outdated(testdata['archive_old'])

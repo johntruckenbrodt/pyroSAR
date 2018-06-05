@@ -1,14 +1,10 @@
 import os
-import shutil
 import pytest
 import numpy as np
 from osgeo import ogr
 from pyroSAR import identify
 from pyroSAR.spatial import crsConvert, haversine, Raster, stack, ogr2ogr, gdal_translate, gdal_rasterize, dtypes, bbox
 from pyroSAR.spatial.vector import feature2vector, dissolve, Vector, intersect
-from pyroSAR.ancillary import finder
-
-travis = 'TRAVIS' in os.environ.keys()
 
 
 def test_crsConvert():
@@ -27,8 +23,8 @@ def test_haversine():
     assert haversine(50, 10, 51, 10) == 111194.92664455889
 
 
-def test_Vector():
-    scene = identify('pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip')
+def test_Vector(testdata):
+    scene = identify(testdata['s1'])
     bbox1 = scene.bbox()
     assert bbox1.getArea() == 7.573045244595988
     assert bbox1.extent == {'ymax': 52.183979, 'ymin': 50.295261, 'xmin': 8.017178, 'xmax': 12.0268}
@@ -58,8 +54,8 @@ def test_Vector():
     bbox1.close()
 
 
-def test_dissolve(tmpdir):
-    scene = identify('pyroSAR/tests/data/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip')
+def test_dissolve(tmpdir, travis, testdata):
+    scene = identify(testdata['s1'])
     bbox1 = scene.bbox()
     # retrieve extent and shift its coordinates by one degree
     ext = bbox1.extent
@@ -85,10 +81,10 @@ def test_dissolve(tmpdir):
         assert os.path.isfile(bbox4_name)
 
 
-def test_Raster():
+def test_Raster(tmpdir, testdata):
     with pytest.raises(OSError):
         ras = Raster('foobar')
-    ras = Raster('pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
+    ras = Raster(testdata['tif'])
     assert ras.bands == 1
     assert ras.proj4 == '+proj=utm +zone=31 +datum=WGS84 +units=m +no_defs '
     assert ras.cols == 268
@@ -111,9 +107,7 @@ def test_Raster():
     ras.assign(mat)
     # ras.reduce()
     ras.rescale(lambda x: 10 * x)
-    ras.write('pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db_new.tif')
-    for item in finder('pyroSAR/tests/data', ['S1A*_new*']):
-        os.remove(item)
+    ras.write(os.path.join(str(tmpdir), 'test.tif'))
 
 
 def test_dtypes():
@@ -122,9 +116,9 @@ def test_dtypes():
         dtypes('foobar')
 
 
-def test_stack():
-    name = 'pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'
-    outname = 'pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db_sub'
+def test_stack(tmpdir, testdata):
+    name = testdata['tif']
+    outname = os.path.join(str(tmpdir), 'test')
     tr = (30, 30)
     with pytest.raises(IOError):
         stack(srcfiles=[], resampling='near', targetres=tr,
@@ -152,18 +146,13 @@ def test_stack():
 
     stack(srcfiles=[name, name], resampling='near', targetres=tr, overwrite=True,
           srcnodata=-99, dstnodata=-99, dstfile=outname)
-    for item in finder('pyroSAR/tests/data', ['S1A*_sub*']):
-        os.remove(item)
 
 
-def test_auxil():
-    dir = 'pyroSAR/tests/data/subdir'
-    if not os.path.exists(dir):
-        os.makedirs(dir)
-    ras = Raster('pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
+def test_auxil(tmpdir, testdata):
+    dir = str(tmpdir)
+    ras = Raster(testdata['tif'])
     bbox = os.path.join(dir, 'bbox.shp')
     ras.bbox(bbox)
     ogr2ogr(bbox, os.path.join(dir, 'bbox.gml'), {'format': 'GML'})
     gdal_translate(ras.raster, os.path.join(dir, 'test'), {'format': 'ENVI'})
     gdal_rasterize(bbox, os.path.join(dir, 'test2'), {'format': 'GTiff', 'xRes': 20, 'yRes': 20})
-    shutil.rmtree(dir)

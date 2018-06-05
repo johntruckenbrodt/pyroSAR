@@ -29,10 +29,9 @@ def test_seconds():
     assert anc.seconds('test_20151212T234411') == 3658952651.0
 
 
-def test_run(tmpdir):
+def test_run(tmpdir, testdata):
     log = os.path.join(str(tmpdir), 'test_run.log')
-    out, err = anc.run(cmd=['gdalinfo',
-                            'pyroSAR/tests/data/S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'],
+    out, err = anc.run(cmd=['gdalinfo', testdata['tif']],
                        logfile=log, void=False)
     with pytest.raises(OSError):
         anc.run(['foobar'])
