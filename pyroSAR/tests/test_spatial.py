@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 from osgeo import ogr
 from pyroSAR import identify
-from pyroSAR.spatial import crsConvert, haversine, Raster, stack, ogr2ogr, gdal_translate, gdal_rasterize
+from pyroSAR.spatial import crsConvert, haversine, Raster, stack, ogr2ogr, gdal_translate, gdal_rasterize, dtypes
 from pyroSAR.ancillary import finder
 
 
@@ -49,7 +49,7 @@ def test_Raster():
     assert ras.rows == 217
     assert ras.dim == [217, 268, 1]
     assert ras.dtype == 'Float32'
-    assert ras.dtypes(ras.dtype) == 6
+    assert dtypes(ras.dtype) == 6
     assert ras.epsg == 32631
     assert ras.format == 'GTiff'
     assert ras.geo == {'ymax': 4830114.70107, 'rotation_y': 0.0, 'rotation_x': 0.0, 'xmax': 625408.241204, 'xres': 20.0,
