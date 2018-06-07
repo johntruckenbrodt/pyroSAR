@@ -689,6 +689,16 @@ def rasterize(vectorobject, outname, reference, burn_values=1, expressions=None,
         burn_values = [burn_values]
     if len(expressions) != len(burn_values):
         raise RuntimeError('expressions and burn_values of different length')
+
+    failed = []
+    for exp in expressions:
+        try:
+            vectorobject.layer.SetAttributeFilter(exp)
+        except RuntimeError:
+            failed.append(exp)
+    if len(failed) > 0:
+        raise RuntimeError('failed to set the following attribute filter(s): ["{}"]'.format('", '.join(failed)))
+
     if append:
         target_ds = gdal.Open(outname, GA_Update)
     else:
