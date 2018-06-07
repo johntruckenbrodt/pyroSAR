@@ -668,7 +668,7 @@ def rasterize(vectorobject, outname, reference, burn_values=1, expressions=None,
         the nodata value of the target raster file
     append: bool
         if the output file already exists, update this file with new rasterized values?
-        If set to True, parameters reference and nodata are ignored.
+        If set to True and the output file exists, parameters reference and nodata are ignored.
 
     Returns
     -------
@@ -699,9 +699,11 @@ def rasterize(vectorobject, outname, reference, burn_values=1, expressions=None,
     if len(failed) > 0:
         raise RuntimeError('failed to set the following attribute filter(s): ["{}"]'.format('", '.join(failed)))
 
-    if append:
+    if append and os.path.isfile(outname):
         target_ds = gdal.Open(outname, GA_Update)
     else:
+        if not isinstance(reference, Raster):
+            raise RuntimeError("parameter 'reference must be of type Raster'")
         target_ds = gdal.GetDriverByName('GTiff').Create(outname, reference.cols, reference.rows, 1, gdal.GDT_Byte)
         target_ds.SetGeoTransform(reference.raster.GetGeoTransform())
         target_ds.SetProjection(reference.raster.GetProjection())
