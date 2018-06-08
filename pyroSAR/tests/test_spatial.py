@@ -84,30 +84,34 @@ def test_dissolve(tmpdir, travis, testdata):
 def test_Raster(tmpdir, testdata):
     with pytest.raises(OSError):
         ras = Raster('foobar')
-    ras = Raster(testdata['tif'])
-    assert ras.bands == 1
-    assert ras.proj4 == '+proj=utm +zone=31 +datum=WGS84 +units=m +no_defs '
-    assert ras.cols == 268
-    assert ras.rows == 217
-    assert ras.dim == [217, 268, 1]
-    assert ras.dtype == 'Float32'
-    assert ras.epsg == 32631
-    assert ras.format == 'GTiff'
-    assert ras.geo == {'ymax': 4830114.70107, 'rotation_y': 0.0, 'rotation_x': 0.0, 'xmax': 625408.241204, 'xres': 20.0,
-                       'xmin': 620048.241204, 'ymin': 4825774.70107, 'yres': -20.0}
-    assert ras.geogcs == 'WGS 84'
-    assert ras.is_valid() is True
-    assert ras.proj4args == {'units': 'm', 'no_defs': None, 'datum': 'WGS84', 'proj': 'utm', 'zone': '31'}
-    assert ras.allstats == [[-26.65471076965332, 1.4325850009918213, -12.124929534450377, 4.738273594738293]]
-    assert ras.bbox().getArea() == 23262400.0
-    assert len(ras.layers()) == 1
-    ras.load()
-    mat = ras.matrix()
-    assert isinstance(mat, np.ndarray)
-    ras.assign(mat)
-    # ras.reduce()
-    ras.rescale(lambda x: 10 * x)
-    ras.write(os.path.join(str(tmpdir), 'test.tif'))
+    with Raster(testdata['tif']) as ras:
+        assert ras.bands == 1
+        assert ras.proj4 == '+proj=utm +zone=31 +datum=WGS84 +units=m +no_defs '
+        assert ras.cols == 268
+        assert ras.rows == 217
+        assert ras.dim == [217, 268, 1]
+        assert ras.dtype == 'Float32'
+        assert ras.epsg == 32631
+        assert ras.format == 'GTiff'
+        assert ras.geo == {'ymax': 4830114.70107, 'rotation_y': 0.0, 'rotation_x': 0.0, 'xmax': 625408.241204,
+                           'xres': 20.0, 'xmin': 620048.241204, 'ymin': 4825774.70107, 'yres': -20.0}
+        assert ras.geogcs == 'WGS 84'
+        assert ras.is_valid() is True
+        assert ras.proj4args == {'units': 'm', 'no_defs': None, 'datum': 'WGS84', 'proj': 'utm', 'zone': '31'}
+        assert ras.allstats == [[-26.65471076965332, 1.4325850009918213, -12.124929534450377, 4.738273594738293]]
+        assert ras.bbox().getArea() == 23262400.0
+        assert len(ras.layers()) == 1
+        assert ras.projcs == 'WGS 84 / UTM zone 31N'
+        assert ras.res == [20.0, 20.0]
+        ras.load()
+        mat = ras.matrix()
+        assert isinstance(mat, np.ndarray)
+        ras.assign(mat)
+        # ras.reduce()
+        ras.rescale(lambda x: 10 * x)
+        ras.write(os.path.join(str(tmpdir), 'test'), format='GTiff', compress_tif=True)
+        with pytest.raises(RuntimeError):
+            ras.write(os.path.join(str(tmpdir), 'test.tif'), format='GTiff')
 
 
 def test_dtypes():
