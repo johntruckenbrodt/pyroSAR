@@ -249,7 +249,7 @@ class ID(object):
         """
         return findfiles(self.scene, pattern, include_folders)
 
-    def gdalinfo(self, scene):
+    def gdalinfo(self):
         """
         read metadata directly from the GDAL SAR image drivers
 
@@ -263,7 +263,6 @@ class ID(object):
         dict
             the metadata attributes
         """
-        self.scene = os.path.realpath(scene)
         files = self.findfiles('(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)')
 
         if len(files) == 1:
@@ -589,7 +588,7 @@ class CEOS_ERS(ID):
         if re.search('IM__0', match.group('product_id')):
             raise IOError('product level 0 not supported (yet)')
 
-        self.meta = self.gdalinfo(self.scene)
+        self.meta = self.gdalinfo()
 
         self.meta['acquisition_mode'] = match2.group('image_mode')
         self.meta['polarizations'] = ['VV']
@@ -1025,7 +1024,7 @@ class ESA(ID):
         if re.search('IM__0', match.group('product_id')):
             raise IOError('product level 0 not supported (yet)')
 
-        self.meta = self.gdalinfo(self.scene)
+        self.meta = self.gdalinfo()
 
         self.meta['acquisition_mode'] = match2.group('image_mode')
 
@@ -1825,10 +1824,13 @@ class Archive(object):
         arg_format = []
         vals = []
         for key in arg_valid:
-            if isinstance(args[key], (float, int, str)):
-                arg_format.append('{0}="{1}"'.format(key, args[key]))
-            elif isinstance(args[key], (tuple, list)):
-                arg_format.append('{0} IN ("{1}")'.format(key, '", "'.join(map(str, args[key]))))
+            if key == 'scene':
+                arg_format.append('scene LIKE "%{0}%"'.format(os.path.basename(args[key])))
+            else:
+                if isinstance(args[key], (float, int, str)):
+                    arg_format.append('{0}="{1}"'.format(key, args[key]))
+                elif isinstance(args[key], (tuple, list)):
+                    arg_format.append('{0} IN ("{1}")'.format(key, '", "'.join(map(str, args[key]))))
         if mindate:
             if re.search('[0-9]{8}T[0-9]{6}', mindate):
                 arg_format.append('start>=?')
@@ -1988,7 +1990,7 @@ def getFileObj(scene, filename):
 
     if os.path.isdir(scene):
         obj = BytesIO()
-        with open(filename) as infile:
+        with open(filename, 'rb') as infile:
             obj.write(infile.read())
         obj.seek(0)
 
