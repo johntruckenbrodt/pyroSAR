@@ -101,7 +101,7 @@ class Vector(object):
 
     @property
     def fieldnames(self):
-        return [field.GetName() for field in self.fieldDefs]
+        return sorted([field.GetName() for field in self.fieldDefs])
 
     @property
     def geomType(self):
@@ -256,7 +256,7 @@ class Vector(object):
         self.layer.ResetReading()
         attributes = list(set([x.GetField(fieldname) for x in self.layer]))
         self.layer.ResetReading()
-        return attributes
+        return sorted(attributes)
 
     def getfeatures(self):
         self.layer.ResetReading()

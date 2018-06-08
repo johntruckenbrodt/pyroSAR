@@ -24,7 +24,7 @@ from pyroSAR.spatial.vector import (Vector, bbox, crsConvert, intersect)
 from pyroSAR.ancillary import (dissolve, multicore)
 
 from osgeo import (gdal, gdal_array, osr)
-from osgeo.gdalconst import (GA_ReadOnly, GDT_Byte, GDT_Int16, GDT_UInt16,
+from osgeo.gdalconst import (GA_ReadOnly, GA_Update, GDT_Byte, GDT_Int16, GDT_UInt16,
                              GDT_Int32, GDT_UInt32, GDT_Float32, GDT_Float64)
 
 os.environ['GDAL_PAM_PROXY_DIR'] = '/tmp'
@@ -692,7 +692,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     shutil.rmtree(tmpdir)
 
 
-def rasterize(vectorobject, outname, reference, burn_values=1, expressions=None, nodata=0):
+def rasterize(vectorobject, outname, reference, burn_values=1, expressions=None, nodata=0, append=False):
     """
     rasterize a vector object
 
@@ -710,6 +710,9 @@ def rasterize(vectorobject, outname, reference, burn_values=1, expressions=None,
         SQL expressions to filter the vector object by attributes
     nodata: int
         the nodata value of the target raster file
+    append: bool
+        if the output file already exists, update this file with new rasterized values?
+        If set to True and the output file exists, parameters reference and nodata are ignored.
 
     Returns
     -------
@@ -730,12 +733,28 @@ def rasterize(vectorobject, outname, reference, burn_values=1, expressions=None,
         burn_values = [burn_values]
     if len(expressions) != len(burn_values):
         raise RuntimeError('expressions and burn_values of different length')
-    target_ds = gdal.GetDriverByName('GTiff').Create(outname, reference.cols, reference.rows, 1, gdal.GDT_Byte)
-    target_ds.SetGeoTransform(reference.raster.GetGeoTransform())
-    target_ds.SetProjection(reference.raster.GetProjection())
-    band = target_ds.GetRasterBand(1)
-    band.SetNoDataValue(nodata)
-    band.FlushCache()
+
+    failed = []
+    for exp in expressions:
+        try:
+            vectorobject.layer.SetAttributeFilter(exp)
+        except RuntimeError:
+            failed.append(exp)
+    if len(failed) > 0:
+        raise RuntimeError('failed to set the following attribute filter(s): ["{}"]'.format('", '.join(failed)))
+
+    if append and os.path.isfile(outname):
+        target_ds = gdal.Open(outname, GA_Update)
+    else:
+        if not isinstance(reference, Raster):
+            raise RuntimeError("parameter 'reference must be of type Raster'")
+        target_ds = gdal.GetDriverByName('GTiff').Create(outname, reference.cols, reference.rows, 1, gdal.GDT_Byte)
+        target_ds.SetGeoTransform(reference.raster.GetGeoTransform())
+        target_ds.SetProjection(reference.raster.GetProjection())
+        band = target_ds.GetRasterBand(1)
+        band.SetNoDataValue(nodata)
+        band.FlushCache()
+        band = None
     for expression, value in zip(expressions, burn_values):
         vectorobject.layer.SetAttributeFilter(expression)
         gdal.RasterizeLayer(target_ds, [1], vectorobject.layer, burn_values=[value])
