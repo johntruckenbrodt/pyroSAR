@@ -477,16 +477,60 @@ class Raster(object):
         #     sp.check_call([str(x) for x in cmd])
 
 
-def reproject(rasterobject, reference, outname, resampling='bilinear', format='ENVI'):
+def reproject(rasterobject, reference, outname, targetres=None, resampling='bilinear', format='GTiff'):
     """
     reproject a raster file
+
+    Parameters
+    ----------
+    rasterobject: Raster or str
+        the raster image to be reprojected
+    reference: Raster, Vector, str, int or osr.SpatialReference
+        either a projection string or a spatial object with an attribute 'projection'
+    outname: str
+        the name of the output file
+    targetres: tuple
+        the output resolution in the target SRS; a two-entry tuple is required: (xres, yres)
+    resampling: str
+        the resampling algorithm to be used
+    format: str
+        the output file format
+
+    Returns
+    -------
+
     """
-    rasterobject = rasterobject if type(rasterobject) == Raster else Raster(rasterobject)
-    projection = reference.projection if type(reference) == Raster else reference
-    sp.check_call(['gdalwarp', '-overwrite', '-q', '-r', resampling, '-of', format,
-                   '-tr', str(rasterobject.res[0]), str(rasterobject.res[1]),
-                   '-srcnodata', str(rasterobject.nodata), '-dstnodata', str(rasterobject.nodata),
-                   '-t_srs', projection, rasterobject.filename, outname])
+    if isinstance(rasterobject, str):
+        rasterobject = Raster(rasterobject)
+    if not isinstance(rasterobject, Raster):
+        raise RuntimeError('rasterobject must be of type Raster or str')
+    if isinstance(reference, (Raster, Vector)):
+        projection = reference.projection
+        if targetres is not None:
+            xres, yres = targetres
+        elif hasattr(reference, 'res'):
+            xres, yres = reference.res
+        else:
+            raise RuntimeError('parameter targetres is missing and cannot be read from the reference')
+    elif isinstance(reference, (int, str, osr.SpatialReference)):
+        try:
+            projection = crsConvert(reference, 'proj4')
+        except TypeError:
+            raise RuntimeError('reference projection cannot be read')
+        if targetres is None:
+            raise RuntimeError('parameter targetres is missing and cannot be read from the reference')
+        else:
+            xres, yres = targetres
+    else:
+        raise TypeError('reference must be of type Raster, Vector, osr.SpatialReference, str or int')
+    options = {'format': format,
+               'resampleAlg': resampling,
+               'xRes': xres,
+               'yRes': yres,
+               'srcNodata': rasterobject.nodata,
+               'dstNodata': rasterobject.nodata,
+               'dstSRS': projection}
+    gdalwarp(rasterobject, outname, options)
 
 
 # todo improve speed until aborting when all target files already exist
