@@ -50,3 +50,6 @@ script:
 
 after_success:
 - coveralls
+
+notifications:
+  slack: pyrosar:bs03zodEkRSYr8MN5HrgfSeB
