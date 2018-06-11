@@ -199,20 +199,36 @@ class Raster(object):
         else:
             bbox(self.geo, self.proj4, outname=outname, format=format, overwrite=overwrite)
 
-    def extract(self, px, py, radius=1, no_data=0):
+    def extract(self, px, py, radius=1, nodata=None):
         """
-        extract weighted average of pixels intersecting with a defined radius to a point
-        radius is a multiple of the pixel resolution
+        extract weighted average of pixels intersecting with a defined radius to a point.
 
-        Args:
-            px:
-            py:
-            radius:
-            no_data:
+        Parameters
+        ----------
+        px: int or float
+            the x coordinate in units of the Raster SRS
+        py: int or float
+            the y coordinate in units of the Raster SRS
+        radius: int or float
+            the radius around the point to extract pixel values from; defined as multiples of the pixel resolution
+        nodata: int
+            a value to ignore from the computations; If None, the nodata value of the Raster object is used
 
-        Returns:
+        Returns
+        -------
+        int or float
+            the the weighted average of all pixels within the defined radius
 
         """
+        if not self.geo['xmin'] < px < self.geo['xmax']:
+            raise RuntimeError('px is out of bounds')
+
+        if not self.geo['ymin'] < py < self.geo['ymax']:
+            raise RuntimeError('py is out of bounds')
+
+        if nodata is None:
+            nodata = self.nodata
+
         xres, yres = self.res
 
         hx = xres / 2.0
@@ -245,7 +261,7 @@ class Raster(object):
             for y in range(ymin, ymax):
                 # check whether point is a valid image index
                 val = array[y - ymin, x - xmin]
-                if val != no_data:
+                if val != nodata:
                     # compute distances of pixel center coordinate to requested point
 
                     xc = x * xres + hx + self.geo['xmin']
@@ -260,13 +276,12 @@ class Raster(object):
                     weightsum += weight
                     counter += 1
 
-        if sum > 0:
-            return sum / weightsum
+        array = None
+
+        if counter > 0:
+            return sum/weightsum
         else:
-            if counter > 0:
-                return 0
-            else:
-                return no_data
+            return nodata
 
     def is_valid(self):
         """
