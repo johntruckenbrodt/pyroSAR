@@ -296,7 +296,7 @@ class ExamineSnap(ExamineExe):
             try:
                 self.set_etc(self.etc)
             except OSError:
-                raise RuntimeError("No snap/etc directory is saved. Please enter a valid path to the etc directory of snap with the function ExamineSnap.set_etc(path).")
+                warnings.warn("No snap/etc directory is saved. Please enter a valid path to the etc directory of snap with the function ExamineSnap.set_etc(path).")
 
     def set_etc(self, path):
         self.etc = path
