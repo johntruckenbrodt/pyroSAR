@@ -59,6 +59,21 @@ class Raster(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+    def __str__(self):
+        vals = dict()
+        vals['rows'], vals['cols'], vals['bands'] = self.dim
+        vals.update(self.geo)
+        vals['proj4'] = self.proj4
+        vals['filename'] = self.filename
+
+        info = 'class      : pyroSAR Raster object\n' \
+               'dimensions : {rows}, {cols}, {bands} (rows, cols, bands)\n' \
+               'resolution : {xres}, {yres} (x, y)\n' \
+               'extent     : {xmin}, {xmax}, {ymin}, {ymax} (xmin, xmax, ymin, ymax)\n' \
+               'coord. ref.: {proj4}\n' \
+               'data source: {filename}'.format(**vals)
+        return info
+
     def close(self):
         self.raster = None
 
