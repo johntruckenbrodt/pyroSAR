@@ -243,7 +243,7 @@ def get_etc_from_config():
             for i in fd:
                 entry = i.split('::')
                 if entry:
-                    content.update({entry[0]: entry[1]})
+                    content.update({entry[0]: entry[1].rstrip()})
 
         return content['snap_etc']
 
@@ -279,6 +279,8 @@ class ExamineSnap(ExamineExe):
         try:
             try:
                 self.etc = get_etc_from_config()
+                self.auxdata = os.listdir(self.etc)
+                self.config_path = os.path.join(self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
 
             except RuntimeError:
                 make_dir()
@@ -290,13 +292,7 @@ class ExamineSnap(ExamineExe):
 
         except (OSError, IndexError):
             warnings.warn(
-                "The snap//etc directory is not existent. Please enter the full path to the snap//etc directory. By default the directory should be in 'C:\Program Files\snap\etc'")
-
-            self.etc = input("Path to snap//etc directory: ")
-            try:
-                self.set_etc(self.etc)
-            except OSError:
-                warnings.warn("No snap/etc directory is saved. Please enter a valid path to the etc directory of snap with the function ExamineSnap.set_etc(path).")
+                "No snap/etc directory is saved or existent. Please enter a valid path to the etc directory of snap with the function pyrosar.snap.snap_config.set_etc(path_to_etc). By default the directory should be in 'C:\Program Files\snap\etc")
 
     def set_etc(self, path):
         self.etc = path
