@@ -1,3 +1,6 @@
+"""
+This is a only a test module to build an automated download class.
+"""
 import os
 import sys
 
