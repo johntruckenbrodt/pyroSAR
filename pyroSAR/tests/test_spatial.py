@@ -109,6 +109,9 @@ def test_Raster(tmpdir, testdata):
         ras.assign(mat)
         # ras.reduce()
         ras.rescale(lambda x: 10 * x)
+        assert ras.extract(px=624000, py=4830000, radius=5) == -10.241134288213118
+        with pytest.raises(RuntimeError):
+            ras.extract(1, 2)
         ras.write(os.path.join(str(tmpdir), 'test'), format='GTiff', compress_tif=True)
         with pytest.raises(RuntimeError):
             ras.write(os.path.join(str(tmpdir), 'test.tif'), format='GTiff')
