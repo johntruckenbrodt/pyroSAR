@@ -145,6 +145,7 @@ def make_dir(path=expanduser("~"), dirname='.pyrosar'):
     if not os.path.exists(directory):
         os.makedirs(directory)
 
+
 def write_config_file(data, header=None, path=os.path.join(expanduser("~"), '.pyrosar')):
     files = os.path.join(path, 'config.txt')
     # file_name = open(files, "a")
@@ -153,6 +154,7 @@ def write_config_file(data, header=None, path=os.path.join(expanduser("~"), '.py
             x_file.write('{0} \n'.format(data))
         else:
             x_file.write('{0}:{1} \n'.format(header, data))
+
 
 class ExamineExe(object):
     def __init__(self):
@@ -170,7 +172,6 @@ class ExamineExe(object):
 
                 # Check True values
                 True_values = [item for item in executable_list if item]
-                # True_values = executable[np.where(executable is True)]
 
             if len(True_values) > 1:
                 raise ValueError(
@@ -194,8 +195,9 @@ class ExamineExe(object):
         else:
             status = find_executable(name) is not None
             if status is False:
-                warnings.warn("The executables {0} must be installed. You can download it from http://step.esa.int/main/toolboxes/snap/ or you can specify a path with snap_config.set_path(path_to_snap)".format(name), UserWarning)
+                warnings.warn(
+                    "The executables {0} must be installed. You can download it from http://step.esa.int/main/toolboxes/snap/ or you can specify a path with snap_config.set_path(path_to_snap)".format(
+                        name), UserWarning)
 
-                # raise ValueError("The executables {0} must be installed.".format(name))
             else:
                 return status, os.path.abspath(find_executable(name))
