@@ -277,7 +277,7 @@ class ExamineSnap(ExamineExe):
             self.auxdatapath = os.path.join(expanduser("~"), '.snap/auxdata')
 
             self.__get_etc()
-            self.__read_config()
+            # self.__read_config()
 
         except TypeError:
             warnings.warn(
