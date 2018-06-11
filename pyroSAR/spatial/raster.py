@@ -11,13 +11,10 @@ from __future__ import division
 import os
 import re
 import shutil
-import subprocess as sp
 from math import sqrt
 from time import gmtime, strftime
 import numpy as np
 
-# from pyroSAR._common import (SpatialResults, nan_to_num, subset, test_import_type,
-#                             test_string, test_data)
 from pyroSAR import envi
 from pyroSAR.spatial.auxil import (gdalwarp, gdalbuildvrt)
 from pyroSAR.spatial.vector import (Vector, bbox, crsConvert, intersect)
