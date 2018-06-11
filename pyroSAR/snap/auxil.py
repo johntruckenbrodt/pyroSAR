@@ -192,6 +192,13 @@ def gpt(xmlfile):
     input is a readily formatted workflow xml file as created by function geocode in module snap.util
     """
 
+    # Test if SNAP is installed:
+    status, _ = ExamineExe.examine(('snap64.exe', 'snap32.exe', 'snap.exe', 'snap'))
+
+    if not status:
+        warnings.warn(
+            "No snap/etc directory is saved or existent. Please enter a valid path to the etc directory of snap with the function pyrosar.snap.snap_config.set_etc(path_to_etc). By default the directory should be in 'C:\Program Files\snap\etc")
+
     with open(xmlfile, 'r') as infile:
         workflow = ET.fromstring(infile.read())
     write = workflow.find('.//node[@id="Write"]')
@@ -248,8 +255,8 @@ def get_etc_from_config():
         return content['snap_etc']
 
     except (IOError, KeyError):
-        raise RuntimeError(
-            "No snap/etc directory is saved. Please enter a valid path to the etc directory of snap with the function ExamineSnap.set_etc(path).")
+        warnings.warn(
+            "No snap/etc directory is saved or existent. Please enter a valid path to the etc directory of snap with the function pyrosar.snap.snap_config.set_etc(path_to_etc). By default the directory should be in 'C:\Program Files\snap\etc")
 
 
 class ExamineSnap(ExamineExe):
@@ -273,7 +280,9 @@ class ExamineSnap(ExamineExe):
             self.__read_config()
 
         except TypeError:
-            pass
+            warnings.warn(
+                "No snap/etc directory is saved or existent. Please enter a valid path to the etc directory of snap with the function pyrosar.snap.snap_config.set_etc(path_to_etc). By default the directory should be in 'C:\Program Files\snap\etc")
+
 
     def __get_etc(self):
         try:
