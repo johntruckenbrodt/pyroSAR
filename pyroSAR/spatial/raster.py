@@ -11,7 +11,7 @@ from __future__ import division
 import os
 import re
 import shutil
-from math import sqrt
+from math import sqrt, floor, ceil
 from time import gmtime, strftime
 import numpy as np
 
@@ -220,10 +220,10 @@ class Raster(object):
             the the weighted average of all pixels within the defined radius
 
         """
-        if not self.geo['xmin'] < px < self.geo['xmax']:
+        if not self.geo['xmin'] <= px <= self.geo['xmax']:
             raise RuntimeError('px is out of bounds')
 
-        if not self.geo['ymin'] < py < self.geo['ymax']:
+        if not self.geo['ymin'] <= py <= self.geo['ymax']:
             raise RuntimeError('py is out of bounds')
 
         if nodata is None:
@@ -238,21 +238,28 @@ class Raster(object):
         ylim = float(yres * radius)
 
         # compute minimum x and y pixel coordinates
-        xmin = int((px - self.geo['xmin'] - xlim) // xres)
-        ymin = int((self.geo['ymax'] - py - xlim) // yres)
+        xmin = int(floor((px - self.geo['xmin'] - xlim) / xres))
+        ymin = int(floor((self.geo['ymax'] - py - ylim) / yres))
 
         xmin = xmin if xmin >= 0 else 0
         ymin = ymin if ymin >= 0 else 0
 
         # compute maximum x and y pixel coordinates
-        xmax = int((px - self.geo['xmin'] + xlim) // xres) + 2
-        ymax = int((self.geo['ymax'] - py + ylim) // yres) + 2
+        xmax = int(ceil((px - self.geo['xmin'] + xlim) / xres))
+        ymax = int(ceil((self.geo['ymax'] - py + ylim) / yres))
 
         xmax = xmax if xmax <= self.cols else self.cols
         ymax = ymax if ymax <= self.rows else self.rows
 
         # load array subset
-        array = self.raster.GetRasterBand(1).ReadAsArray(xmin, ymin, xmax - xmin, ymax - ymin)
+        if self.__data[0] is not None:
+            array = self.__data[0][ymin:ymax, xmin:xmax]
+            # print('using loaded array of size {}, '
+            #       'indices [{}:{}, {}:{}] (row/y, col/x)'.format(array.shape, ymin, ymax, xmin, xmax))
+        else:
+            array = self.raster.GetRasterBand(1).ReadAsArray(xmin, ymin, xmax - xmin, ymax - ymin)
+            # print('loading array of size {}, '
+            #       'indices [{}:{}, {}:{}] (row/y, col/x)'.format(array.shape, ymin, ymax, xmin, xmax))
 
         sum = 0
         counter = 0
@@ -279,7 +286,7 @@ class Raster(object):
         array = None
 
         if counter > 0:
-            return sum/weightsum
+            return sum / weightsum
         else:
             return nodata
 
