@@ -107,7 +107,7 @@ def test_Raster(tmpdir, testdata):
         ras.load()
         mat = ras.matrix()
         assert isinstance(mat, np.ndarray)
-        ras.assign(mat)
+        ras.assign(mat, index=0)
         # ras.reduce()
         ras.rescale(lambda x: 10 * x)
         assert ras.extract(px=624000, py=4830000, radius=5) == -10.241134288213118
