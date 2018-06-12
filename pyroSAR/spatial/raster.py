@@ -168,11 +168,11 @@ class Raster(object):
             statcollect.append(stats)
         return statcollect
 
-    def assign(self, array, dim='full'):
+    def assign(self, array, index, dim='full'):
         """
         assign an array to an existing Raster object
         """
-        self.__data = [array]
+        self.__data[index] = array
         if dim != 'full':
             shape = array.shape
             if len(shape) == 2:
@@ -400,7 +400,7 @@ class Raster(object):
         mat = mat[:, mask1]
 
         if outname is None:
-            self.assign(mat, dim=[left, top, cols, rows])
+            self.assign(mat, dim=[left, top, cols, rows], index=0)
         else:
             self.write(outname, dim=[left, top, cols, rows], format=format)
 
@@ -427,7 +427,7 @@ class Raster(object):
         rounded = np.rint(scaled)
 
         # assign newly computed array to raster object
-        self.assign(rounded)
+        self.assign(rounded, index=0)
 
     def write(self, outname, dtype='default', format='ENVI', dim='full', nodata='default', compress_tif=False):
         """
