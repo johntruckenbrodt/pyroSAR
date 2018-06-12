@@ -110,12 +110,34 @@ def test_Raster(tmpdir, testdata):
         ras.assign(mat, index=0)
         # ras.reduce()
         ras.rescale(lambda x: 10 * x)
-        assert ras.extract(px=624000, py=4830000, radius=5) == -10.241134288213118
-        with pytest.raises(RuntimeError):
-            ras.extract(1, 2)
+
         ras.write(os.path.join(str(tmpdir), 'test'), format='GTiff', compress_tif=True)
         with pytest.raises(RuntimeError):
             ras.write(os.path.join(str(tmpdir), 'test.tif'), format='GTiff')
+
+
+def test_Raster_extract(testdata):
+    with Raster(testdata['tif']) as ras:
+        ras.load()
+        assert ras.extract(px=624000, py=4830000, radius=5) == -10.48837461270875
+        with pytest.raises(RuntimeError):
+            ras.extract(1, 4830000)
+        with pytest.raises(RuntimeError):
+            ras.extract(624000, 1)
+
+        # ensure corner extraction capability
+        assert ras.extract(px=ras.geo['xmin'], py=ras.geo['ymax']) == -10.147890090942383
+        assert ras.extract(px=ras.geo['xmin'], py=ras.geo['ymin']) == -14.640368461608887
+        assert ras.extract(px=ras.geo['xmax'], py=ras.geo['ymax']) == -9.599242210388182
+        assert ras.extract(px=ras.geo['xmax'], py=ras.geo['ymin']) == -9.406558990478516
+
+        # test nodata handling capability and correct indexing
+        mat = ras.matrix()
+        mat[0:10, 0:10] = ras.nodata
+        mat[207:217, 258:268] = ras.nodata
+        ras.assign(mat, index=0)
+        assert ras.extract(px=ras.geo['xmin'], py=ras.geo['ymax'], radius=5) == ras.nodata
+        assert ras.extract(px=ras.geo['xmax'], py=ras.geo['ymin'], radius=5) == ras.nodata
 
 
 def test_dtypes():
