@@ -5,6 +5,7 @@ from osgeo import ogr
 from pyroSAR import identify
 from pyroSAR.spatial import crsConvert, haversine, Raster, stack, ogr2ogr, gdal_translate, gdal_rasterize, dtypes, bbox
 from pyroSAR.spatial.vector import feature2vector, dissolve, Vector, intersect
+from pyroSAR.spatial.raster import rasterize
 
 
 def test_crsConvert():
@@ -193,3 +194,28 @@ def test_auxil(tmpdir, testdata):
     ogr2ogr(bbox, os.path.join(dir, 'bbox.gml'), {'format': 'GML'})
     gdal_translate(ras.raster, os.path.join(dir, 'test'), {'format': 'ENVI'})
     gdal_rasterize(bbox, os.path.join(dir, 'test2'), {'format': 'GTiff', 'xRes': 20, 'yRes': 20})
+
+
+def test_rasterize(tmpdir, testdata):
+    outname = os.path.join(str(tmpdir), 'test.shp')
+    with Raster(testdata['tif']) as ras:
+        vec = ras.bbox()
+
+        # test length mismatch between burn_values and expressions
+        with pytest.raises(RuntimeError):
+            rasterize(vec, outname, reference=ras, burn_values=[1], expressions=['foo', 'bar'])
+
+        # test a faulty expression
+        with pytest.raises(RuntimeError):
+            rasterize(vec, outname, reference=ras, burn_values=[1], expressions=['foo'])
+
+        # test default parametrization
+        rasterize(vec, outname, reference=ras)
+        assert os.path.isfile(outname)
+
+        # test appending to existing file with valid expression
+        rasterize(vec, outname, reference=ras, append=True, burn_values=[1], expressions=['id=1'])
+
+        # test wrong input type for reference
+        with pytest.raises(RuntimeError):
+            rasterize(vec, outname, reference='foobar')
