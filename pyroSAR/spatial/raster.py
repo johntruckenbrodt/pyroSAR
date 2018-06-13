@@ -116,10 +116,7 @@ class Raster(object):
 
     @property
     def epsg(self):
-        try:
-            return crsConvert(self.srs, 'epsg')
-        except RuntimeError:
-            return None
+        return crsConvert(self.srs, 'epsg')
 
     @property
     def geogcs(self):
@@ -738,7 +735,7 @@ def rasterize(vectorobject, outname, reference, burn_values=1, expressions=None,
         the name of the GeoTiff output file
     reference: Raster
         a reference Raster object to retrieve geo information and extent from
-    burn_values: int, or list
+    burn_values: int or list
         the values to be written to the raster file
     expressions: list
         SQL expressions to filter the vector object by attributes
