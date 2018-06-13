@@ -118,7 +118,6 @@ def test_Raster(tmpdir, testdata):
 
 def test_Raster_extract(testdata):
     with Raster(testdata['tif']) as ras:
-        ras.load()
         assert ras.extract(px=624000, py=4830000, radius=5) == -10.48837461270875
         with pytest.raises(RuntimeError):
             ras.extract(1, 4830000)
