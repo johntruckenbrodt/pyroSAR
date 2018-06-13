@@ -487,7 +487,7 @@ class Raster(object):
             if self.__data[i - 1] is None:
                 mat = self.raster.GetRasterBand(i).ReadAsArray(*dim)
             else:
-                mat = self.__data[i - 1]
+                mat = self.__data[i - 1][dim[0]:dim[2], dim[1]:dim[3]]
             outband.WriteArray(mat)
             outband.FlushCache()
         if format == 'GTiff':
