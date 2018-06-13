@@ -115,6 +115,14 @@ def test_Raster(tmpdir, testdata):
         with pytest.raises(RuntimeError):
             ras.write(os.path.join(str(tmpdir), 'test.tif'), format='GTiff')
 
+    # test writing a raster subset file with no data in memory
+    outname = os.path.join(str(tmpdir), 'test_sub.tif')
+    with Raster(testdata['tif']) as ras:
+        ras.write(outname, format='GTiff', dim=(0, 0, 100, 100))
+    with Raster(outname) as ras:
+        assert ras.cols == 100
+        assert ras.rows == 100
+
 
 def test_Raster_extract(testdata):
     with Raster(testdata['tif']) as ras:
