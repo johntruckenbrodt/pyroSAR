@@ -144,11 +144,6 @@ class Raster(object):
     def nodata(self):
         return self.raster.GetRasterBand(1).GetNoDataValue()
 
-    @nodata.setter
-    def nodata(self, value):
-        for i in range(1, self.bands + 1):
-            self.raster.GetRasterBand(i).SetNoDataValue(value)
-
     @property
     def proj4args(self):
         args = [x.split('=') for x in re.split('[+ ]+', self.proj4) if len(x) > 0]
