@@ -240,9 +240,8 @@ def gpt(xmlfile):
         shutil.rmtree(outname)
 
 
-def get_etc_from_config():
+def get_etc_from_config(path=os.path.join(expanduser("~"), '.pyrosar')):
     try:
-        path = os.path.join(expanduser("~"), '.pyrosar')
         files = os.path.join(path, 'config.txt')
 
         with open(files, 'r') as fd:
