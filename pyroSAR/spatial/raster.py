@@ -430,23 +430,28 @@ class Raster(object):
 
     def write(self, outname, dtype='default', format='ENVI', dim='full', nodata='default', compress_tif=False):
         """
-        write the raster object to a file
-        if the data itself has been loaded to self.data (by function load), the in-memory data will be written to the file, otherwise the data is copied from the source file
-        the parameter dim gives the opportunity to write a cropped version of the raster file; a dim-formatted list is, for example, returned by function crop
+        write the raster object to a file. If the data itself has been loaded to memory (e.g. by function load),
+        the in-memory data will be written to the file, otherwise the data is copied from the source file.
+        The parameter dim gives the opportunity to write a cropped version of the raster file.
 
-        Args:
-            outname: str
-                the name of the file to be written
-            dtype: str
-            format: str
-            dim:
-            nodata: int, float or str
-                the nodata value to set to the output image;
-                if set to 'default' the value is read from the currently opened file
-            compress_tif: bool
-                compress the created GeoTiff?
+        Parameters
+        ----------
+        outname: str
+            the file to be written
+        dtype: str
+            the data type of the written file; e.g. 'Float32' or 'Byte'
+        format:
+            the file format; e.g. 'GTiff'
+        dim: list or tuple
+            a raster subset in pixel coordinates with (col_min, row_min, col_max, row_max).
+            By default (0, 0, ncols, nrows)
+        nodata: int or float
+            the nodata value to write to the file
+        compress_tif: bool
+            if the format is GeoTiff, compress the written file?
 
-        Returns:
+        Returns
+        -------
 
         """
         if os.path.isfile(outname):
@@ -468,7 +473,7 @@ class Raster(object):
             geo[0] += dim[0] * geo[1]
             geo[3] += dim[1] * geo[5]
 
-        dim = [0, 0, self.cols, self.rows] if dim == 'full' else dim
+        dim = (0, 0, self.cols, self.rows) if dim == 'full' else dim
         driver = gdal.GetDriverByName(format)
         outDataset = driver.Create(outname, dim[2], dim[3], self.bands, dtype, options)
         outDataset.SetMetadata(self.raster.GetMetadata())
