@@ -72,6 +72,7 @@ def test_dissolve(tmpdir, travis, testdata):
         # write combined bbox into new shapefile
         bbox3_name = os.path.join(str(tmpdir), 'bbox3.shp')
         bbox1.write(bbox3_name)
+    bbox1.close()
 
     if not travis:
         # dissolve the geometries in bbox3 and write the result to new bbox4
@@ -188,11 +189,11 @@ def test_stack(tmpdir, testdata):
 
 def test_auxil(tmpdir, testdata):
     dir = str(tmpdir)
-    ras = Raster(testdata['tif'])
-    bbox = os.path.join(dir, 'bbox.shp')
-    ras.bbox(bbox)
-    ogr2ogr(bbox, os.path.join(dir, 'bbox.gml'), {'format': 'GML'})
-    gdal_translate(ras.raster, os.path.join(dir, 'test'), {'format': 'ENVI'})
+    with Raster(testdata['tif']) as ras:
+        bbox = os.path.join(dir, 'bbox.shp')
+        ras.bbox(bbox)
+        ogr2ogr(bbox, os.path.join(dir, 'bbox.gml'), {'format': 'GML'})
+        gdal_translate(ras.raster, os.path.join(dir, 'test'), {'format': 'ENVI'})
     gdal_rasterize(bbox, os.path.join(dir, 'test2'), {'format': 'GTiff', 'xRes': 20, 'yRes': 20})
 
 
