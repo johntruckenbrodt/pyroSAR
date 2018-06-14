@@ -476,8 +476,8 @@ class Raster(object):
 
         geo['xmin'] += col_f * self.res[0]
         geo['xmax'] -= (self.cols - col_l) * self.res[0]
-        geo['ymin'] += row_f * self.res[1]
-        geo['ymax'] -= (self.rows - row_l) * self.res[1]
+        geo['ymin'] += (self.rows - row_l) * self.res[1]
+        geo['ymax'] -= row_f * self.res[1]
 
         driver = gdal.GetDriverByName(format)
         outDataset = driver.Create(outname, ncol, nrow, self.bands, dtype, options)
