@@ -468,12 +468,11 @@ class Raster(object):
         dtype = dtypes(self.dtype if dtype == 'default' else dtype)
         nodata = self.nodata if nodata == 'default' else nodata
 
-        geo = self.geo
-
         options = []
         if format == 'GTiff' and compress_tif:
             options += ['COMPRESS=DEFLATE', 'PREDICTOR=2']
 
+        geo = self.geo
         geo['xmin'] += col_f * self.res[0]
         geo['xmax'] -= (self.cols - col_l) * self.res[0]
         geo['ymin'] += (self.rows - row_l) * self.res[1]
@@ -834,15 +833,11 @@ def typemap():
     dict
         the type map
     """
-    TYPEMAP = {}
-    for name in dir(np):
-        obj = getattr(np, name)
-        if hasattr(obj, 'dtype'):
-            try:
-                npn = obj(0)
-                code = gdal_array.NumericTypeCodeToGDALTypeCode(npn.dtype.type)
-                if code:
-                    TYPEMAP[npn.dtype.name] = code
-            except (TypeError, ValueError, AttributeError, OSError):
-                pass
-    return TYPEMAP
+    tmap = {}
+
+    for group in ['int', 'uint', 'float', 'complex']:
+        for dtype in np.sctypes[group]:
+            code = gdal_array.NumericTypeCodeToGDALTypeCode(dtype)
+            if code is not None:
+                tmap[dtype().dtype.name] = code
+    return tmap
