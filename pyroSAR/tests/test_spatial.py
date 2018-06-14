@@ -106,6 +106,14 @@ def test_Raster(tmpdir, testdata):
         assert len(ras.layers()) == 1
         assert ras.projcs == 'WGS 84 / UTM zone 31N'
         assert ras.res == [20.0, 20.0]
+
+        # test writing a subset with no original data in memory
+        outname = os.path.join(str(tmpdir), 'test_sub.tif')
+        ras.write(outname, format='GTiff', dim=(0, 0, 100, 200))
+        with Raster(outname) as ras2:
+            assert ras2.cols == 100
+            assert ras2.rows == 200
+
         ras.load()
         mat = ras.matrix()
         assert isinstance(mat, np.ndarray)
@@ -113,17 +121,10 @@ def test_Raster(tmpdir, testdata):
         # ras.reduce()
         ras.rescale(lambda x: 10 * x)
 
+        # test writing data with original data in memory
         ras.write(os.path.join(str(tmpdir), 'test'), format='GTiff', compress_tif=True)
         with pytest.raises(RuntimeError):
             ras.write(os.path.join(str(tmpdir), 'test.tif'), format='GTiff')
-
-    # test writing a raster subset file with no data in memory
-    outname = os.path.join(str(tmpdir), 'test_sub.tif')
-    with Raster(testdata['tif']) as ras:
-        ras.write(outname, format='GTiff', dim=(0, 0, 100, 100))
-    with Raster(outname) as ras:
-        assert ras.cols == 100
-        assert ras.rows == 100
 
 
 def test_Raster_extract(testdata):
