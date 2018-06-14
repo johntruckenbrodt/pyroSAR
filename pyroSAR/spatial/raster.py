@@ -454,6 +454,11 @@ class Raster(object):
         -------
 
         """
+        dim = (0, 0, self.cols, self.rows) if dim == 'full' else dim
+        col_f, row_f, col_l, row_l = dim
+        ncol = col_l - col_f
+        nrow = row_l - row_f
+
         if os.path.isfile(outname):
             raise RuntimeError('target file already exists')
 
@@ -463,33 +468,35 @@ class Raster(object):
         dtype = dtypes(self.dtype if dtype == 'default' else dtype)
         nodata = self.nodata if nodata == 'default' else nodata
 
-        geo = list(self.raster.GetGeoTransform())
+        geo = self.geo
 
         options = []
         if format == 'GTiff' and compress_tif:
             options += ['COMPRESS=DEFLATE', 'PREDICTOR=2']
 
-        if dim != 'full':
-            geo[0] += dim[0] * geo[1]
-            geo[3] += dim[1] * geo[5]
+        geo['xmin'] += col_f * self.res[0]
+        geo['xmax'] -= (self.cols - col_l) * self.res[0]
+        geo['ymin'] += row_f * self.res[1]
+        geo['ymax'] -= (self.rows - row_l) * self.res[1]
 
-        dim = (0, 0, self.cols, self.rows) if dim == 'full' else dim
         driver = gdal.GetDriverByName(format)
-        outDataset = driver.Create(outname, dim[2], dim[3], self.bands, dtype, options)
+        outDataset = driver.Create(outname, ncol, nrow, self.bands, dtype, options)
+        driver = None
         outDataset.SetMetadata(self.raster.GetMetadata())
-        if self.geo is not None:
-            outDataset.SetGeoTransform(geo)
+        outDataset.SetGeoTransform([geo[x] for x in ['xmin', 'xres', 'rotation_x', 'ymax', 'rotation_y', 'yres']])
         if self.projection is not None:
             outDataset.SetProjection(self.projection)
         for i in range(1, self.bands + 1):
             outband = outDataset.GetRasterBand(i)
             outband.SetNoDataValue(nodata)
             if self.__data[i - 1] is None:
-                mat = self.raster.GetRasterBand(i).ReadAsArray(*dim)
+                mat = self.raster.GetRasterBand(i).ReadAsArray(col_f, row_f, ncol, nrow)
             else:
-                mat = self.__data[i - 1][dim[0]:dim[2], dim[1]:dim[3]]
+                mat = self.__data[i - 1][row_f:row_l, col_f:col_l]
             outband.WriteArray(mat)
+            del mat
             outband.FlushCache()
+            outband = None
         if format == 'GTiff':
             outDataset.SetMetadataItem('TIFFTAG_DATETIME', strftime('%Y:%m:%d %H:%M:%S', gmtime()))
         outDataset = None
