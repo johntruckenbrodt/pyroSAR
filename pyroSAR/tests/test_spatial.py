@@ -172,6 +172,10 @@ def test_stack(tmpdir, testdata):
         stack(srcfiles=[name, name], resampling='near', targetres=30,
               srcnodata=-99, dstnodata=-99, dstfile=outname)
 
+    with pytest.raises(IOError):
+        stack(srcfiles=[name], resampling='near', targetres=tr, overwrite=True,
+              srcnodata=-99, dstnodata=-99, dstfile=outname)
+
     with pytest.raises(RuntimeError):
         stack(srcfiles=[name, name], resampling='near', targetres=(30, 30, 30),
               srcnodata=-99, dstnodata=-99, dstfile=outname)
@@ -186,6 +190,16 @@ def test_stack(tmpdir, testdata):
 
     stack(srcfiles=[name, name], resampling='near', targetres=tr, overwrite=True,
           srcnodata=-99, dstnodata=-99, dstfile=outname)
+
+    outdir = os.path.join(str(tmpdir), 'subdir')
+    stack(srcfiles=[name, name], resampling='near', targetres=tr, overwrite=True, layernames=['test1', 'test2'],
+          srcnodata=-99, dstnodata=-99, dstfile=outdir, separate=True, compress=True)
+
+    with Raster(outname) as ras:
+        assert ras.bands == 2
+        # Raster.rescale currently only supports one band
+        with pytest.raises(ValueError):
+            ras.rescale(lambda x: x * 10)
 
 
 def test_auxil(tmpdir, testdata):
