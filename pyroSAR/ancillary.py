@@ -209,13 +209,13 @@ def multicore(function, cores, multiargs, **singleargs):
             pool = mp.Pool(processes=cores)
         except NameError:
             raise ImportError("package 'pathos' could not be imported")
-        result = pool.imap_unordered(lambda x: function(**x), processlist)
+        result = pool.imap(lambda x: function(**x), processlist)
         pool.close()
         pool.join()
 
     # evaluate the return of the processing function;
     # if any value is not None then the whole list of results is returned
-    result = [x for x in result]
+    result = list(result)
     eval = [x for x in result if x is not None]
     if len(eval) == 0:
         return None
