@@ -322,14 +322,20 @@ class Raster(object):
 
     def matrix(self, band=1, dim='full'):
         """
-        returns an array of a raster band
+        read a raster band (subset) into a numpy ndarray
 
-        Args:
-            band:
-            dim:
+        Parameters
+        ----------
+        band: int
+            the band to read the matrix from; 1-based indexing
+        dim: list or tuple
+            a raster subset in pixel coordinates with (col_min, row_min, col_max, row_max).
+            By default (0, 0, ncols, nrows)
 
-        Returns:
-
+        Returns
+        -------
+        np.ndarray
+            the matrix (subset) of the selected band
         """
         dim = [0, 0, self.cols, self.rows] if dim == 'full' else dim
 
@@ -438,7 +444,7 @@ class Raster(object):
 
     def write(self, outname, dtype='default', format='ENVI', dim='full', nodata='default', compress_tif=False):
         """
-        write the raster object to a file. If the data itself has been loaded to memory (e.g. by function load),
+        write the raster object to a file. If the data itself has been loaded to memory (e.g. by method load),
         the in-memory data will be written to the file, otherwise the data is copied from the source file.
         The parameter dim gives the opportunity to write a cropped version of the raster file.
 
@@ -447,7 +453,8 @@ class Raster(object):
         outname: str
             the file to be written
         dtype: str
-            the data type of the written file; e.g. 'Float32' or 'Byte'
+            the data type of the written file;
+            data type notations of GDAL (e.g. 'Float32') and numpy (e.g. 'int8') are supported.
         format:
             the file format; e.g. 'GTiff'
         dim: list or tuple
@@ -792,7 +799,7 @@ def rasterize(vectorobject, outname, reference, burn_values=1, expressions=None,
         target_ds = gdal.Open(outname, GA_Update)
     else:
         if not isinstance(reference, Raster):
-            raise RuntimeError("parameter 'reference must be of type Raster'")
+            raise RuntimeError("parameter 'reference' must be of type Raster")
         target_ds = gdal.GetDriverByName('GTiff').Create(outname, reference.cols, reference.rows, 1, gdal.GDT_Byte)
         target_ds.SetGeoTransform(reference.raster.GetGeoTransform())
         target_ds.SetProjection(reference.raster.GetProjection())
