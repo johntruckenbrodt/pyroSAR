@@ -47,8 +47,6 @@ def test_which():
 
 
 def test_multicore():
-    def add(x, y, z):
-        return x + y + z
-
+    add = lambda x, y, z: x + y + z
     assert anc.multicore(add, cores=2, multiargs={'x': [1, 2]}, y=5, z=9) == [15, 16]
     assert anc.multicore(add, cores=2, multiargs={'x': [1, 2], 'y': [5, 6]}, z=9) == [15, 17]
