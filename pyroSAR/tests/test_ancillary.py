@@ -40,7 +40,10 @@ def test_run(tmpdir, testdata):
 
 
 def test_which():
-    assert os.path.isfile(anc.which('gdalinfo'))
+    program = anc.which('gdalinfo')
+    assert os.path.isfile(program)
+    assert anc.which(program) == program
+    assert anc.which('foobar') is None
 
 
 def test_multicore():
