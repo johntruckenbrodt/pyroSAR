@@ -32,13 +32,23 @@ except ImportError:
     pass
 
 
-def blockPrint():
+class HiddenPrints:
     """
     suppress console stdout prints, i.e. redirect them to a temporary string object
-    call enablePrint() to reverse the effect
+    adapted from https://stackoverflow.com/questions/8391411/suppress-calls-to-print-python
+
+    Examples
+    --------
+    >>> with HiddenPrints():
+    >>>     print('foobar')
+    >>> print('foobar')
     """
-    if isinstance(sys.stdout, file):
+    def __enter__(self):
+        self._original_stdout = sys.stdout
         sys.stdout = StringIO()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stdout = self._original_stdout
 
 
 def dictmerge(x, y):
@@ -60,14 +70,6 @@ def dissolve(inlist):
         i = list(i) if isinstance(i, tuple) else i
         out.extend(dissolve(i)) if isinstance(i, list) else out.append(i)
     return out
-
-
-def enablePrint():
-    """
-    reverse console stdout print suppression from function blockPrint
-    """
-    if not isinstance(sys.stdout, file):
-        sys.stdout = sys.__stdout__
 
 
 def finder(folder, matchlist, foldermode=0, regex=False, recursive=True):
@@ -200,19 +202,16 @@ def multicore(function, cores, multiargs, **singleargs):
                    for i in range(len(multiargs[list(multiargs.keys())[0]]))]
 
     # block printing of the executed function
-    blockPrint()
-
-    # start pool of processes and do the work
-    try:
-        pool = mp.Pool(processes=cores)
-    except NameError:
-        raise ImportError("package 'pathos' could not be imported")
-    result = pool.imap_unordered(lambda x: function(**x), processlist)
-    pool.close()
-    pool.join()
-
-    # unblock the printing
-    enablePrint()
+    result = None
+    with HiddenPrints():
+        # start pool of processes and do the work
+        try:
+            pool = mp.Pool(processes=cores)
+        except NameError:
+            raise ImportError("package 'pathos' could not be imported")
+        result = pool.imap_unordered(lambda x: function(**x), processlist)
+        pool.close()
+        pool.join()
 
     # evaluate the return of the processing function;
     # if any value is not None then the whole list of results is returned
