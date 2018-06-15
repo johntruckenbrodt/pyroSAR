@@ -76,14 +76,25 @@ def finder(folder, matchlist, foldermode=0, regex=False, recursive=True):
     """
     function for finding files/folders in folders and their subdirectories
 
-    :param folder: the directory to be searched
-    :param matchlist: a list of search patterns
-    :param foldermode:
-        0: only files
-        1: files and folders
+    Parameters
+    ----------
+    folder: str or list of str
+        the directory or al ist of directories to be searched
+    matchlist: list
+        a list of search patterns
+    foldermode: int
+        0: only files;
+        1: files and folders;
         2: only folders
-    :param regex: are the search patterns in matchlist regular expressions or unix shell standard (default)?
-    :param recursive: search folder recursively into all subdirectories or only in the top level?
+    regex: bool
+        are the search patterns in matchlist regular expressions or unix shell standard (default)?
+    recursive: bool
+        search folder recursively into all subdirectories or only in the top level?
+
+    Returns
+    -------
+    list of str
+        the absolute names of files matching the patterns
     """
     # match patterns
     if isinstance(folder, str):
@@ -103,7 +114,7 @@ def finder(folder, matchlist, foldermode=0, regex=False, recursive=True):
         groups = [finder(x, matchlist, foldermode, regex, recursive) for x in folder]
         return list(itertools.chain(*groups))
     else:
-        raise IOError('parameter folder must be either a string or a list')
+        raise TypeError("parameter 'folder' must be of type str or list")
 
 
 def groupbyTime(images, function, time):
