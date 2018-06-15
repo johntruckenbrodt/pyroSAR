@@ -43,6 +43,7 @@ class HiddenPrints:
     >>>     print('foobar')
     >>> print('foobar')
     """
+
     def __enter__(self):
         self._original_stdout = sys.stdout
         sys.stdout = StringIO()
@@ -121,26 +122,34 @@ def groupbyTime(images, function, time):
     """
     function to group images by their acquisition time difference
 
-    :param images: a list of image names
-    :param function: a function to derive the time from the image names
-    :param time: a time difference in seconds by which to group the images
-    :return: a list of sub-lists containing the grouped images
+    Parameters
+    ----------
+    images: list of str
+        a list of image names
+    function: function
+        a function to derive the time from the image names
+    time: int or float
+        a time difference in seconds by which to group the images
+
+    Returns
+    -------
+    list
+        a list of sub-lists containing the grouped images
     """
     # sort images by time stamp
     srcfiles = sorted(images, key=function)
 
-    groups = []
-    temp = []
-    for item in srcfiles:
-        if len(temp) == 0:
-            temp.append(item)
+    groups = [[srcfiles[0]]]
+    group = groups[0]
+
+    for i in range(1, len(srcfiles)):
+        item = srcfiles[i]
+        if 0 < abs(function(item) - function(group[-1])) <= time:
+            group.append(item)
         else:
-            if 0 < abs(function(item) - function(temp[-1])) < time:
-                temp.append(item)
-            else:
-                groups.append(temp) if len(temp) > 1 else groups.append(temp[0])
-                temp = [item]
-    return groups
+            groups.append([item])
+            group = groups[-1]
+    return [x[0] if len(x) == 1 else x for x in groups]
 
 
 def multicore(function, cores, multiargs, **singleargs):
