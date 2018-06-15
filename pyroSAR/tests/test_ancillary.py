@@ -101,3 +101,21 @@ def test_Stack():
     assert st.pop() == 'd'
     st.flush()
     assert st.empty() is True
+
+
+def test_groupbyTime():
+    filenames = ['S1__IW___A_20151212T120000',
+                 'S1__IW___A_20151212T120100',
+                 'S1__IW___A_20151212T120300']
+    groups = anc.groupbyTime(filenames, anc.seconds, 60)
+    print(groups)
+    assert len(groups) == 2
+    assert isinstance(groups[0], list)
+    assert len(groups[0]) == 2
+
+    filenames = ['S1__IW___A_20151212T120000',
+                 'S1__IW___A_20151212T120100',
+                 'S1__IW___A_20151212T120200']
+    groups = anc.groupbyTime(filenames, anc.seconds, 60)
+    print(groups)
+    assert len(groups[0]) == 3
