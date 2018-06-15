@@ -503,10 +503,7 @@ class Raster(object):
         for i in range(1, self.bands + 1):
             outband = outDataset.GetRasterBand(i)
             outband.SetNoDataValue(nodata)
-            if self.__data[i - 1] is None:
-                mat = self.raster.GetRasterBand(i).ReadAsArray(col_f, row_f, ncol, nrow)
-            else:
-                mat = self.__data[i - 1][row_f:row_l, col_f:col_l]
+            mat = self.matrix(band=i, dim=dim)
             outband.WriteArray(mat)
             del mat
             outband.FlushCache()
