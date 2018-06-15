@@ -332,10 +332,18 @@ class Raster(object):
 
         """
         dim = [0, 0, self.cols, self.rows] if dim == 'full' else dim
-        if self.__data[band - 1] is not None:
-            return self.__data[band - 1][dim[1]:dim[3], dim[0]:dim[2]]
+
+        col_f, row_f, col_l, row_l = dim
+        ncol = col_l - col_f
+        nrow = row_l - row_f
+
+        mat = self.__data[band - 1]
+        if mat is not None:
+            mat = mat[row_f:row_l, col_f:col_l]
         else:
-            return self.raster.GetRasterBand(band).ReadAsArray(*dim)
+            mat = self.raster.GetRasterBand(band).ReadAsArray(col_f, row_f, ncol, nrow)
+        return mat
+
 
     # compute basic statistic measures from selected bands (provided by either single integer keys or a list of integers)
     # def getstat(self, statistic, bands='all'):
