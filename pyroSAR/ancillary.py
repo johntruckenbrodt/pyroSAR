@@ -87,7 +87,7 @@ def finder(folder, matchlist, foldermode=0, regex=False, recursive=True):
     if isinstance(folder, str):
         pattern = r'|'.join(matchlist if regex else [fnmatch.translate(x) for x in matchlist])
         if recursive:
-            out = dissolve([[os.path.join(root, x) for x in dirs+files if re.search(pattern, x)]
+            out = dissolve([[os.path.join(root, x) for x in dirs + files if re.search(pattern, x)]
                             for root, dirs, files in os.walk(folder)])
         else:
             out = [os.path.join(folder, x) for x in os.listdir(folder) if re.search(pattern, x)]
@@ -122,7 +122,7 @@ def groupbyTime(images, function, time):
         if len(temp) == 0:
             temp.append(item)
         else:
-            if 0 < abs(function(item)-function(temp[-1])) < time:
+            if 0 < abs(function(item) - function(temp[-1])) < time:
                 temp.append(item)
             else:
                 groups.append(temp) if len(temp) > 1 else groups.append(temp[0])
@@ -134,31 +134,54 @@ def multicore(function, cores, multiargs, **singleargs):
     """
     wrapper for multicore process execution
 
-    :param function: individual function to be applied to each process item
-    :param cores: the number of subprocesses started/CPUs used; this value is reduced in case the number of subprocesses is smaller
-    :param multiargs: a dictionary containing subfunction argument names as keys and lists of arguments to be distributed among the processes as values
-    :param singleargs: all remaining arguments which are invariant among the subprocesses
-    important:
-    -all multiargs value lists must be of same length, i.e. all argument keys must be explicitly defined for each subprocess
-    -all function arguments passed via singleargs must be provided with the full argument name and its value (i.e. argname=argval); default function args are not accepted
-    if the processes return anything else than None, this function will return a list of results
-    if all processes return None, this function will be of type void
-    example:
-    def add(x, y, z):
-        return x+y+z
-    multicore(add, cores=2, multiargs={'x': [1, 2]}, y=5, z=9)
-    -> returns [15, 16]
-    multicore(add, cores=2, multiargs={'x': [1, 2], 'y': [5, 6]}, z=9)
-    -> returns [15, 17]
+    Parameters
+    ----------
+    function
+        individual function to be applied to each process item
+    cores: int
+        the number of subprocesses started/CPUs used;
+        this value is reduced in case the number of subprocesses is smaller
+    multiargs: dict
+        a dictionary containing sub-function argument names as keys and lists of arguments to be
+        distributed among the processes as values
+    singleargs
+        all remaining arguments which are invariant among the subprocesses
+
+    Returns
+    -------
+    None or list
+        the return of or function for all the subprocesses
+
+    Notes
+    -----
+    - all multiargs value lists must be of same length, i.e. all argument keys must be explicitly defined for each
+    subprocess
+    - all function arguments passed via singleargs must be provided with the full argument name and its value
+    (i.e. argname=argval); default function args are not accepted
+    - if the processes return anything else than None, this function will return a list of results
+    - if all processes return None, this function will be of type void
+
+    Examples
+    --------
+    >>> def add(x, y, z):
+    >>>     return x+y+z
+    >>> multicore(add, cores=2, multiargs={'x': [1, 2]}, y=5, z=9)
+    [15, 16]
+    >>> multicore(add, cores=2, multiargs={'x': [1, 2], 'y': [5, 6]}, z=9)
+    [15, 17]
     """
 
     # compare the function arguments with the multi and single arguments and raise errors if mismatches occur
-    function_check = inspect.getargspec(function)
-    keywords = function_check[2]
-    varargs = function_check[1]
-    if not varargs and not keywords:
-        multiargs_check = [x for x in multiargs if x not in function_check[0]]
-        singleargs_check = [x for x in singleargs if x not in function_check[0]]
+    if sys.version_info >= (3, 0):
+        check = inspect.getfullargspec(function)
+        varkw = check.varkw
+    else:
+        check = inspect.getargspec(function)
+        varkw = check.keywords
+
+    if not check.varargs and not varkw:
+        multiargs_check = [x for x in multiargs if x not in check.args]
+        singleargs_check = [x for x in singleargs if x not in check.args]
         if len(multiargs_check) > 0:
             raise AttributeError('incompatible multi arguments: {0}'.format(', '.join(multiargs_check)))
         if len(singleargs_check) > 0:
@@ -174,13 +197,16 @@ def multicore(function, cores, multiargs, **singleargs):
 
     # create a list of dictionaries each containing the arguments for individual function calls to be passed to the multicore processes
     processlist = [dictmerge(dict([(arg, multiargs[arg][i]) for arg in multiargs]), singleargs)
-                   for i in range(len(multiargs[multiargs.keys()[0]]))]
+                   for i in range(len(multiargs[list(multiargs.keys())[0]]))]
 
     # block printing of the executed function
     blockPrint()
 
     # start pool of processes and do the work
-    pool = mp.Pool(processes=cores)
+    try:
+        pool = mp.Pool(processes=cores)
+    except NameError:
+        raise ImportError("package 'pathos' could not be imported")
     result = pool.imap_unordered(lambda x: function(**x), processlist)
     pool.close()
     pool.join()
@@ -188,12 +214,14 @@ def multicore(function, cores, multiargs, **singleargs):
     # unblock the printing
     enablePrint()
 
-    # return result
-
-    # # evaluate the return of the processing function; if any value is not None then the whole list of results is returned
-    # eval = [x for x in result if x is None]
-    # if len(eval) != len(result):
-    #     return result
+    # evaluate the return of the processing function;
+    # if any value is not None then the whole list of results is returned
+    result = [x for x in result]
+    eval = [x for x in result if x is not None]
+    if len(eval) == 0:
+        return None
+    else:
+        return result
 
 
 def parse_literal(x):
@@ -221,6 +249,7 @@ class Queue(object):
     """
     classical queue implementation
     """
+
     def __init__(self, inlist=None):
         self.stack = [] if inlist is None else inlist
 
@@ -244,6 +273,7 @@ class ReadPar(object):
     """
     read processing parameter text files
     """
+
     def __init__(self, filename, splits='[:|\t|=\s]', type=''):
         if type == 'exe':
             splits = '[\t\n]'
@@ -291,7 +321,7 @@ def run(cmd, outdir=None, logfile=None, inlist=None, void=True, errorpass=False)
         outdir = os.getcwd()
     log = sp.PIPE if logfile is None else open(logfile, 'a')
     proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=log, stderr=sp.PIPE, cwd=outdir, universal_newlines=True)
-    instream = None if inlist is None else ''.join([str(x)+'\n' for x in inlist])
+    instream = None if inlist is None else ''.join([str(x) + '\n' for x in inlist])
     out, err = proc.communicate(instream)
     if not errorpass and proc.returncode != 0:
         raise sp.CalledProcessError(proc.returncode, cmd, err)
@@ -329,6 +359,7 @@ class Stack(object):
     classical stack implementation
     input can be a list, a single value or None (i.e. Stack())
     """
+
     def __init__(self, inlist=None):
         if isinstance(inlist, list):
             self.stack = inlist
@@ -384,7 +415,7 @@ def writer(filename, arguments, strfill=True):
     """
     write parameter textfile
     """
-    argstring = '\n'.join(['\t'.join(x) for x in arguments])+'\n'
+    argstring = '\n'.join(['\t'.join(x) for x in arguments]) + '\n'
     if strfill:
         argstring = argstring.replace(' ', '_')
     with open(filename, 'w') as out:
@@ -397,8 +428,10 @@ def which(program):
     taken from this post: http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
     can be replaced by shutil.which() in Python 3.3
     """
+
     def is_exe(fpath):
         return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
     fpath, fname = os.path.split(program)
     if fpath:
         if is_exe(program):
