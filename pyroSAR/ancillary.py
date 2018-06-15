@@ -288,33 +288,6 @@ class Queue(object):
             return val
 
 
-class ReadPar(object):
-    """
-    read processing parameter text files
-    """
-
-    def __init__(self, filename, splits='[:|\t|=\s]', type=''):
-        if type == 'exe':
-            splits = '[\t\n]'
-        with open(filename, 'r') as infile:
-            self.index = []
-            for line in infile:
-                if not line.startswith('#'):
-                    items = filter(None, re.split(splits, line))
-                    if len(items) > 1:
-                        if len(items) > 2:
-                            entry = items[1] if items[2] in ['m', 'decimal', 'arc-sec', 'degrees'] else items[1:]
-                            entry = [x for x in items if x not in ['m', 'decimal', 'arc-sec', 'degrees']]
-                            if ''.join(entry) == 'WGS1984':
-                                entry = 'WGS84'
-                        else:
-                            entry = items[1]
-                        if type == 'exe':
-                            items[0] = items[0].replace(' ', '_')
-                        setattr(self, items[0], entry)
-                        self.index.append(items[0])
-
-
 def rescale(inlist, newrange=(0, 1)):
     """
     rescale the values in a list between the values in newrange (a tuple with the new minimum and maximum)
@@ -428,17 +401,6 @@ def urlQueryParser(url, querydict):
     """
     address_parse = urlparse(url)
     return urlunparse(address_parse._replace(query=urlencode(querydict)))
-
-
-def writer(filename, arguments, strfill=True):
-    """
-    write parameter textfile
-    """
-    argstring = '\n'.join(['\t'.join(x) for x in arguments]) + '\n'
-    if strfill:
-        argstring = argstring.replace(' ', '_')
-    with open(filename, 'w') as out:
-        out.write(argstring)
 
 
 def which(program):
