@@ -5,11 +5,9 @@
 import sys
 
 if sys.version_info >= (3, 0):
-    from urllib.parse import urlparse, urlunparse, urlencode
     from urllib.request import urlopen
 else:
-    from urllib import urlopen, urlencode
-    from urlparse import urlparse, urlunparse
+    from urllib import urlopen
 
 import os
 import re
@@ -17,7 +15,7 @@ import ssl
 import time
 from datetime import datetime
 
-from ..ancillary import finder
+from ..ancillary import finder, urlQueryParser
 
 try:
     import argparse
@@ -136,7 +134,6 @@ class OSV(object):
             the URLs of the remote OSV files
         """
         address, outdir = self._typeEvaluate(osvtype)
-        address_parse = urlparse(address)
         # a dictionary for storing the url arguments
         query = {'page': 1}
         # the collection of files to be returned
@@ -158,7 +155,7 @@ class OSV(object):
         # iterate through the url pages and look for files
         while True:
             # parse the url
-            subaddress = urlunparse(address_parse._replace(query=urlencode(query)))
+            subaddress = urlQueryParser(address, query)
             # read the remote content
             try:
                 response = urlopen(subaddress, context=self.sslcontext).read().decode('utf-8')
