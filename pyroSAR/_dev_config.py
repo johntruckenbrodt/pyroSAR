@@ -71,9 +71,7 @@ class Storage(dict):
         return list(self.keys())
 
 
-# ==============================================================================
 # LOOKUP
-# ==============================================================================
 snap_suffix = {'Apply-Orbit-File': 'Orb',
                'Calibration': 'Cal',
                'Cross-Correlation': '',
@@ -106,9 +104,7 @@ LOOKUP = Storage(snap=snap,
                              'hv': 'INTEGER',
                              'vh': 'INTEGER'})
 
-# ==============================================================================
 # URL
-# ==============================================================================
 dem = Storage(ace2='http://step.esa.int/auxdata/dem/ACE2/5M/',
               ace='http://step.esa.int/auxdata/dem/ACE30/',
               srtm3_FTP='xftp.jrc.it',
@@ -129,16 +125,12 @@ URL = Storage(dem=dem,
               orbit=orbit,
               auxcal=auxcal)
 
-# ==============================================================================
 # Merge
-# ==============================================================================
 STORAGE = Storage(URL=URL,
                   LOOKUP=LOOKUP)
 
 
-# ==============================================================================
-# Class Definitions
-# ==============================================================================
+# Auxiliary functions
 def make_dir(path=expanduser("~"), dirname='.pyrosar'):
     directory = os.path.join(path, dirname)
 
@@ -146,9 +138,9 @@ def make_dir(path=expanduser("~"), dirname='.pyrosar'):
         os.makedirs(directory)
 
 
-def write_config_file(data, header=None, path=os.path.join(expanduser("~"), '.pyrosar')):
+def write_config_file(data, header, path=os.path.join(expanduser("~"), '.pyrosar')):
     files = os.path.join(path, 'config.txt')
-    # file_name = open(files, "a")
+
     with open(files, 'a') as x_file:
         if header is None:
             x_file.write('{0} \n'.format(data))
@@ -156,6 +148,7 @@ def write_config_file(data, header=None, path=os.path.join(expanduser("~"), '.py
             x_file.write('{0}:{1} \n'.format(header, data))
 
 
+# Class Definitions
 class ExamineExe(object):
     def __init__(self):
         # todo: Update Docstrings
