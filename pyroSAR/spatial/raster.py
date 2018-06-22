@@ -597,19 +597,20 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
     resampling: {near, bilinear, cubic, cubicspline, lanczos, average, mode, max, min, med, Q1, Q3}
         the resampling method; see documentation of gdalwarp
     targetres: tuple
-        a list with two entries for x and y spatial resolution
+        a list with two entries for x and y spatial resolution in units of the source CRS
     srcnodata: int or float
         the nodata value of the source files
     dstnodata: int or float
         the nodata value of the destination file(s)
-    shapefile: str or spatial.vector.Vector
+    shapefile: str, spatial.vector.Vector or None
         a shapefile for defining the area of the destination files
     layernames: list
         the names of the output layers; if None, the basenames of the input files are used
     sortfun: function
         a function for sorting the input files; this is needed for defining the mosaicking order
     separate: bool
-        should the files be written to a single raster block or separate files? If separate, each tile is written to geotiff.
+        should the files be written to a single raster block or separate files?
+        If separate, each tile is written to geotiff.
     overwrite: bool
         overwrite the file if it already exists?
     compress: bool
@@ -619,6 +620,12 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
 
     Returns
     -------
+
+    Notes
+    -----
+    This function does not reproject the any raster files. Thus, the CRS must be the same for all input raster files.
+    This is checked prior to executing gdalwarp. In case a shapefile is defined, it is reprojected internally prior to
+    retrieving the extent.
     """
     if len(dissolve(srcfiles)) == 0:
         raise IOError('no input files provided to function raster.stack')
