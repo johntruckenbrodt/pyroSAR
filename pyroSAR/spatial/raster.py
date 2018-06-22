@@ -623,7 +623,7 @@ def stack(srcfiles, dstfile, resampling, targetres, srcnodata, dstnodata, shapef
 
     Notes
     -----
-    This function does not reproject the any raster files. Thus, the CRS must be the same for all input raster files.
+    This function does not reproject any raster files. Thus, the CRS must be the same for all input raster files.
     This is checked prior to executing gdalwarp. In case a shapefile is defined, it is reprojected internally prior to
     retrieving the extent.
     """
