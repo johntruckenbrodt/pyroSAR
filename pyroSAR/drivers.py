@@ -777,6 +777,10 @@ class CEOS_PSR(ID):
             summary[x] = parse_literal(y)
         return summary
 
+    @property
+    def led_filename(self):
+        return self.findfiles(self.pattern)[0]
+
     def scanMetadata(self):
         ################################################################################################################
         # read leader (LED) file
