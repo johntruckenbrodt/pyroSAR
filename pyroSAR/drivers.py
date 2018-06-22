@@ -785,21 +785,11 @@ class CEOS_PSR(ID):
         led = led_obj.read()
         led_obj.close()
 
-        # read sumamry text file
+        # read summary text file
         meta = self._parseSummary()
 
         # read polarizations from image file names
         meta['polarizations'] = [re.search('[HV]{2}', os.path.basename(x)).group(0) for x in self.findfiles('^IMG-')]
-        ################################################################################################################
-        # read leader file name information
-
-        match = re.match(re.compile(self.pattern), os.path.basename(led_filename))
-
-        if meta['sensor'] == 'PSR1':
-            meta['acquisition_mode'] = match.group('sub') + match.group('mode')
-        else:
-            meta['acquisition_mode'] = match.group('mode')
-        meta['product'] = match.group('level')
         ################################################################################################################
         # read start and stop time
 
@@ -832,6 +822,16 @@ class CEOS_PSR(ID):
         dqs_n = int(fileDescriptor[252:258])
         dqs_l = int(fileDescriptor[258:264])
         meta['sensor'] = {'AL1': 'PSR1', 'AL2': 'PSR2'}[fileDescriptor[48:51].decode('utf-8')]
+        ################################################################################################################
+        # read leader file name information
+
+        match = re.match(re.compile(self.pattern), os.path.basename(led_filename))
+
+        if meta['sensor'] == 'PSR1':
+            meta['acquisition_mode'] = match.group('sub') + match.group('mode')
+        else:
+            meta['acquisition_mode'] = match.group('mode')
+        meta['product'] = match.group('level')
         ################################################################################################################
         # read led records
         p0 = p1
