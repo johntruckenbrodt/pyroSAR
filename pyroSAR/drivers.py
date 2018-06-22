@@ -778,13 +778,44 @@ class CEOS_PSR(ID):
         return summary
 
     def scanMetadata(self):
+        ################################################################################################################
+        # read leader (LED) file
         led_filename = self.findfiles(self.pattern)[0]
         led_obj = self.getFileObj(led_filename)
         led = led_obj.read()
         led_obj.close()
 
+        # read sumamry text file
         meta = self._parseSummary()
 
+        # read polarizations from image file names
+        meta['polarizations'] = [re.search('[HV]{2}', os.path.basename(x)).group(0) for x in self.findfiles('^IMG-')]
+        ################################################################################################################
+        # read leader file name information
+
+        match = re.match(re.compile(self.pattern), os.path.basename(led_filename))
+
+        if meta['sensor'] == 'PSR1':
+            meta['acquisition_mode'] = match.group('sub') + match.group('mode')
+        else:
+            meta['acquisition_mode'] = match.group('mode')
+        meta['product'] = match.group('level')
+        ################################################################################################################
+        # read start and stop time
+
+        try:
+            meta['start'] = self.parse_date(meta['Img_SceneStartDateTime'])
+            meta['stop'] = self.parse_date(meta['Img_SceneEndDateTime'])
+        except (AttributeError, KeyError):
+            try:
+                start_string = re.search('Img_SceneStartDateTime[ ="0-9:.]*', led).group()
+                stop_string = re.search('Img_SceneEndDateTime[ ="0-9:.]*', led).group()
+                meta['start'] = self.parse_date(re.search('\d+\s[\d:.]+', start_string).group())
+                meta['stop'] = self.parse_date(re.search('\d+\s[\d:.]+', stop_string).group())
+            except AttributeError:
+                raise IndexError('start and stop time stamps cannot be extracted; see file {}'.format(led_filename))
+        ################################################################################################################
+        # read file descriptor record
         p0 = 0
         p1 = struct.unpack('>i', led[8:12])[0]
         fileDescriptor = led[p0:p1]
@@ -801,7 +832,8 @@ class CEOS_PSR(ID):
         dqs_n = int(fileDescriptor[252:258])
         dqs_l = int(fileDescriptor[258:264])
         meta['sensor'] = {'AL1': 'PSR1', 'AL2': 'PSR2'}[fileDescriptor[48:51].decode('utf-8')]
-
+        ################################################################################################################
+        # read led records
         p0 = p1
         p1 += dss_l * dss_n
         dataSetSummary = led[p0:p1]
@@ -810,7 +842,35 @@ class CEOS_PSR(ID):
             p0 = p1
             p1 += mpd_l * mpd_n
             mapProjectionData = led[p0:p1]
+        else:
+            mapProjectionData = None
 
+        p0 = p1
+        p1 += ppd_l * ppd_n
+        platformPositionData = led[p0:p1]
+
+        p0 = p1
+        p1 += adr_l * adr_n
+        attitudeData = led[p0:p1]
+
+        p0 = p1
+        p1 += rdr_l * rdr_n
+        radiometricData = led[p0:p1]
+
+        p0 = p1
+        p1 += dqs_l * dqs_n
+        dataQualitySummary = led[p0:p1]
+
+        facilityRelatedData = []
+        while p1 < len(led):
+            p0 = p1
+            length = struct.unpack('>i', led[(p0 + 8):(p0 + 12)])[0]
+            p1 += length
+            facilityRelatedData.append(led[p0:p1])
+        ################################################################################################################
+        # read map projection data record
+
+        if mapProjectionData is not None:
             lat = list(map(float, [mapProjectionData[1072:1088],
                                    mapProjectionData[1104:1120],
                                    mapProjectionData[1136:1152],
@@ -865,47 +925,8 @@ class CEOS_PSR(ID):
                                  'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
                                  'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
                                  'AUTHORITY["EPSG","4326"]]'
-
-        p0 = p1
-        p1 += ppd_l * ppd_n
-        platformPositionData = led[p0:p1]
-
-        # the following can be used to read platform position time from the led file
-        # this covers a larger time frame than the actual scene sensing time
-        # y, m, d, nd, s = platformPositionData[144:182].split()
-        # start = datetime(int(y), int(m), int(d)) + timedelta(seconds=float(s))
-        # npoints = int(platformPositionData[140:144])
-        # interval = float(platformPositionData[182:204])
-        # stop = start + timedelta(seconds=(npoints - 1) * interval)
-        # parse_date(start)
-        # parse_date(stop)
-
-        p0 = p1
-        p1 += adr_l * adr_n
-        attitudeData = led[p0:p1]
-        p0 = p1
-        p1 += rdr_l * rdr_n
-        radiometricData = led[p0:p1]
-        p0 = p1
-        p1 += dqs_l * dqs_n
-        dataQualitySummary = led[p0:p1]
-
-        facilityRelatedData = []
-
-        while p1 < len(led):
-            p0 = p1
-            length = struct.unpack('>i', led[(p0 + 8):(p0 + 12)])[0]
-            p1 += length
-            facilityRelatedData.append(led[p0:p1])
-
-        # for i in range(0, 10):
-        #     p0 = p1
-        #     length = struct.unpack('>i', led[(p0 + 8):(p0 + 12)])[0]
-        #     print length
-        #     p1 += length
-        #     facilityRelatedData[i] = led[p0:p1]
-        #
-        # facilityRelatedData[10] = led[p1:]
+        ################################################################################################################
+        # read data set summary record
 
         meta['lines'] = int(dataSetSummary[324:332]) * 2
         meta['samples'] = int(dataSetSummary[332:340]) * 2
@@ -924,29 +945,23 @@ class CEOS_PSR(ID):
         spacing_azimuth = float(dataSetSummary[1686:1702])
         spacing_range = float(dataSetSummary[1702:1718])
         meta['spacing'] = (spacing_range, spacing_azimuth)
+        ################################################################################################################
+        # read radiometric data record
 
-        match = re.match(re.compile(self.pattern), os.path.basename(led_filename))
-
-        if meta['sensor'] == 'PSR1':
-            meta['acquisition_mode'] = match.group('sub') + match.group('mode')
-        else:
-            meta['acquisition_mode'] = match.group('mode')
-        meta['product'] = match.group('level')
-
-        try:
-            meta['start'] = self.parse_date(meta['Img_SceneStartDateTime'])
-            meta['stop'] = self.parse_date(meta['Img_SceneEndDateTime'])
-        except (AttributeError, KeyError):
-            try:
-                start_string = re.search('Img_SceneStartDateTime[ ="0-9:.]*', led).group()
-                stop_string = re.search('Img_SceneEndDateTime[ ="0-9:.]*', led).group()
-                meta['start'] = self.parse_date(re.search('\d+\s[\d:.]+', start_string).group())
-                meta['stop'] = self.parse_date(re.search('\d+\s[\d:.]+', stop_string).group())
-            except AttributeError:
-                raise IndexError('start and stop time stamps cannot be extracted; see file {}'.format(led_filename))
-
-        meta['polarizations'] = [re.search('[HV]{2}', os.path.basename(x)).group(0) for x in self.findfiles('^IMG-')]
         meta['k_dB'] = float(radiometricData[20:36])
+        ################################################################################################################
+        # additional notes
+
+        # the following can be used to read platform position time from the led file
+        # this covers a larger time frame than the actual scene sensing time
+        # y, m, d, nd, s = platformPositionData[144:182].split()
+        # start = datetime(int(y), int(m), int(d)) + timedelta(seconds=float(s))
+        # npoints = int(platformPositionData[140:144])
+        # interval = float(platformPositionData[182:204])
+        # stop = start + timedelta(seconds=(npoints - 1) * interval)
+        # parse_date(start)
+        # parse_date(stop)
+
         return meta
 
     def unpack(self, directory, overwrite=False):
