@@ -783,10 +783,7 @@ class CEOS_PSR(ID):
     def scanMetadata(self):
         ################################################################################################################
         # read leader (LED) file
-        led_filename = self.findfiles(self.pattern)[0]
-        led_obj = self.getFileObj(led_filename)
-        led = led_obj.read()
-        led_obj.close()
+        led = self._getLeaderfileContent()
 
         # read summary text file
         meta = self._parseSummary()
@@ -806,7 +803,8 @@ class CEOS_PSR(ID):
                 meta['start'] = self.parse_date(re.search('\d+\s[\d:.]+', start_string).group())
                 meta['stop'] = self.parse_date(re.search('\d+\s[\d:.]+', stop_string).group())
             except AttributeError:
-                raise IndexError('start and stop time stamps cannot be extracted; see file {}'.format(led_filename))
+                raise IndexError('start and stop time stamps cannot be extracted; see file {}'
+                                 .format(self.led_filename))
         ################################################################################################################
         # read file descriptor record
         p0 = 0
@@ -828,7 +826,7 @@ class CEOS_PSR(ID):
         ################################################################################################################
         # read leader file name information
 
-        match = re.match(re.compile(self.pattern), os.path.basename(led_filename))
+        match = re.match(re.compile(self.pattern), os.path.basename(self.led_filename))
 
         if meta['sensor'] == 'PSR1':
             meta['acquisition_mode'] = match.group('sub') + match.group('mode')
