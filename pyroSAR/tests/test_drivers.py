@@ -10,23 +10,39 @@ from datetime import datetime
 @pytest.fixture()
 def testcases():
     cases = {
-        's1':
-            {'acquisition_mode': 'IW',
-             'bbox_area': 7.573045244595988,
-             'compression': 'zip',
-             'corners': {'ymax': 52.183979, 'ymin': 50.295261, 'xmin': 8.017178, 'xmax': 12.0268},
-             'hgt_len': 15,
-             'lines': 16685,
-             'outname': 'S1A__IW___A_20150222T170750',
-             'orbit': 'A',
-             'polarizations': ['VV', 'VH'],
-             'product': 'GRD',
-             'samples': 25368,
-             'sensor': 'S1A',
-             'spacing': (10.0, 9.998647),
-             'start': '20150222T170750',
-             'stop': '20150222T170815'
-             }
+        's1': {
+            'acquisition_mode': 'IW',
+            'bbox_area': 7.573045244595988,
+            'compression': 'zip',
+            'corners': {'ymax': 52.183979, 'ymin': 50.295261, 'xmin': 8.017178, 'xmax': 12.0268},
+            'hgt_len': 15,
+            'lines': 16685,
+            'orbit': 'A',
+            'outname': 'S1A__IW___A_20150222T170750',
+            'polarizations': ['VV', 'VH'],
+            'product': 'GRD',
+            'samples': 25368,
+            'sensor': 'S1A',
+            'spacing': (10.0, 9.998647),
+            'start': '20150222T170750',
+            'stop': '20150222T170815'
+        },
+        'psr2': {
+            'acquisition_mode': 'FBD',
+            'compression': 'zip',
+            'corners': {'xmin': -62.9005207, 'xmax': -62.1629744, 'ymin': -11.4233051, 'ymax': -10.6783401},
+            'hgt_len': 2,
+            'lines': 13160,
+            'orbit': 'A',
+            'outname': 'PSR2_FBD__A_20140909T043342',
+            'polarizations': ['HH', 'HV'],
+            'product': '1.5',
+            'samples': 12870,
+            'sensor': 'PSR2',
+            'spacing': (6.25, 6.25),
+            'start': '20140909T043342',
+            'stop': '20140909T043352'
+        }
     }
     return cases
 
@@ -39,7 +55,7 @@ def scene(testcases, testdata, request):
 
 
 class Test_Metadata():
-    @pytest.mark.parametrize('scene', ['s1'], indirect=True)
+    @pytest.mark.parametrize('scene', ['s1', 'psr2'], indirect=True)
     def test_attributes(self, scene):
         assert scene['pyro'].acquisition_mode == scene['acquisition_mode']
         assert scene['pyro'].compression == scene['compression']
