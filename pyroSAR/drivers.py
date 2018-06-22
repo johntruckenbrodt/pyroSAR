@@ -758,9 +758,8 @@ class CEOS_PSR(ID):
         # register the standardized meta attributes as object attributes
         super(CEOS_PSR, self).__init__(self.meta)
 
-    def _getLeaderfile(self):
-        led_filename = self.findfiles(self.pattern)[0]
-        led_obj = self.getFileObj(led_filename)
+    def _getLeaderfileContent(self):
+        led_obj = self.getFileObj(self.led_filename)
         led = led_obj.read()
         led_obj.close()
         return led
