@@ -190,6 +190,11 @@ def gpt(xmlfile):
     wrapper for ESA SNAP Graph Processing Tool GPT
     input is a readily formatted workflow xml file as created by function geocode in module snap.util
     """
+    try:
+        snap_exec = ExamineSnap().path
+    except AttributeError:
+        raise RuntimeError('could not find SNAP executable')
+    gpt_exec = os.path.join(os.path.dirname(snap_exec), 'gpt')
 
     with open(xmlfile, 'r') as infile:
         workflow = ET.fromstring(infile.read())
@@ -200,7 +205,7 @@ def gpt(xmlfile):
     infile = workflow.find('.//node[@id="Read"]/parameters/file').text
 
     if format == 'GeoTiff-BigTIFF':
-        cmd = ['gpt',
+        cmd = [gpt_exec,
                # '-Dsnap.dataio.reader.tileWidth=*',
                # '-Dsnap.dataio.reader.tileHeight=1',
                '-Dsnap.dataio.bigtiff.tiling.width=256',
