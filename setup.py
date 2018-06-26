@@ -10,7 +10,7 @@ if not os.path.exists(directory):
 setup(name='pyroSAR',
       packages=find_packages(),
       include_package_data=True,
-      version='0.3',
+      version='0.3.1',
       description='a framework for large-scale SAR satellite data processing',
       classifiers=[
           'Programming Language :: Python',
