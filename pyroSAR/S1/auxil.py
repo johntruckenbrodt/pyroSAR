@@ -149,8 +149,11 @@ class OSV(object):
         else:
             date_stop = time.strftime('%Y-%m-%d')
 
+        # pattern for scanning urlopen response for links to OSV files
+        pattern_url = 'http.*{}'.format(self.pattern)
+
         # append the time frame to the query dictionary
-        query['validity_start_time'] = '{0}..{1}'.format(date_start, date_stop)
+        query['validity_start'] = '{0}..{1}'.format(date_start, date_stop)
         print('searching for new {} files'.format(osvtype))
         # iterate through the url pages and look for files
         while True:
@@ -163,7 +166,7 @@ class OSV(object):
             except IOError as e:
                 raise RuntimeError(e)
             # list all osv files found on the page
-            remotes = [os.path.join(address, x) for x in sorted(set(re.findall(self.pattern, response)))]
+            remotes = sorted(set(re.findall(pattern_url, response)))
             # do a more accurate filtering of the time stamps
             if start is not None:
                 remotes = [x for x in remotes if self.date(x, 'stop') > start]
