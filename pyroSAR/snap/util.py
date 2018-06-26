@@ -76,6 +76,8 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     if id.sensor in ['ASAR', 'ERS1', 'ERS2']:
         formatName = 'ENVISAT'
     elif id.sensor in ['S1A', 'S1B']:
+        if id.product == 'SLC':
+            raise RuntimeError('Sentinel-1 SLC data is not supported yet')
         formatName = 'SENTINEL-1'
     else:
         raise RuntimeError('sensor not supported (yet)')
