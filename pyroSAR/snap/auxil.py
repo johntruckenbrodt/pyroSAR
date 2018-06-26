@@ -214,7 +214,7 @@ def gpt(xmlfile):
                # '-Dsnap.dataio.bigtiff.compression.quality=0.75',
                xmlfile]
     else:
-        cmd = ['gpt', xmlfile]
+        cmd = [gpt_exec, xmlfile]
 
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     out, err = proc.communicate()
