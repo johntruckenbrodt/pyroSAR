@@ -149,10 +149,11 @@ def test_scene_osv(tmpdir, testdata):
             with pytest.raises(IOError):
                 osv.catch(osvtype='XYZ')
             res = osv.catch(osvtype='RES', start=osv.mindate('POE'), stop=osv.maxdate('POE'))
-            osv.retrieve(res)
+            assert len(res) == 21
+            osv.retrieve(res[0:3])
 
             assert len(osv.getLocals('POE')) == 3
-            assert len(osv.getLocals('RES')) == 21
+            assert len(osv.getLocals('RES')) == 3
             assert osv.match(id.start, 'POE') is not None
             assert osv.match(id.start, 'RES') is None
             osv.clean_res()
