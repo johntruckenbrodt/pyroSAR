@@ -33,59 +33,7 @@ from ..spatial import raster
 from . import ISPPar, process, UTM, slc_corners
 
 import pyroSAR
-from pyroSAR.ancillary import finder, run, ReadPar
-
-
-def main():
-    """
-    legacy compatibility to gammaGUI interface; will be remove in the future
-    """
-    print('#############################################')
-    print('preparing SRTM mosaic:')
-    # read parameter textfile
-    par = ReadPar(os.path.join(os.getcwd(), 'PAR/srtm.par'))
-
-    demdir = None
-    if hasattr(par, 'SRTM_archive'):
-        if os.path.isdir(par.SRTM_archive):
-            demdir = par.SRTM_archive
-
-    parfiles = finder(os.getcwd(), ['*slc.par', '*mli.par', '*cal.par'])
-
-    # define (and create) directories for processing results and logfile
-    path_dem = os.path.join(os.getcwd(), 'DEM/')
-    path_log = os.path.join(os.getcwd(), 'LOG/GEO/')
-    for path in [path_log, path_dem]:
-        if not os.path.exists(path):
-            os.makedirs(path)
-
-    # find SRTM tiles for mosaicing
-    demlist = hgt_collect(parfiles, path_dem, demdir=demdir, arcsec=int(par.arcsec))
-
-    # remove files created by this function
-    for item in finder(path_dem, ['mosaic*', 'dem*', '*.par']):
-        os.remove(item)
-
-    if len(demlist) == 0:
-        raise IOError('no hgt files found')
-
-    # perform mosaicing if multiple files are found
-    if len(demlist) > 1:
-        print('mosaicing...')
-        dem = os.path.join(path_dem, 'mosaic')
-        mosaic(demlist, dem)
-    else:
-        dem = demlist[0]
-        dempar(dem)
-    fill(dem, os.path.join(path_dem, 'dem_final'), path_log)
-    dem = os.path.join(path_dem, 'dem_final')
-
-    # transform DEM to UTM
-    if par.utm == 'True':
-        print('transforming to UTM...')
-        transform(dem, dem+'_utm', int(par.targetres))
-        hdr(dem+'_utm.par')
-    print('...done')
+from pyroSAR.ancillary import finder, run
 
 
 def fill(dem, dem_out, logpath=None, replace=False):

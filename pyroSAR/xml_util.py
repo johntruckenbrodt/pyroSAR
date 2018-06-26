@@ -1,6 +1,6 @@
 ##############################################################
 # utility collection for xml files
-# John Truckenbrodt 2016-2017
+# John Truckenbrodt 2016-2018
 ##############################################################
 
 import os
@@ -30,9 +30,9 @@ class XMLHandler(object):
                     self.text = str(xml)
                     del tree
                 except ET.ParseError:
-                    raise IOError(errormessage)
+                    raise RuntimeError(errormessage)
         else:
-            raise IOError(errormessage)
+            raise RuntimeError(errormessage)
         defs = re.findall('xmlns:[a-z0-9]+="[^"]*"', self.text)
         dictstring = '{{{}}}'.format(re.sub(r'xmlns:([a-z0-9]*)=', r'"\1":', ', '.join(defs)))
         self.namespaces = ast.literal_eval(dictstring)

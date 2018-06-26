@@ -127,7 +127,7 @@ def gdalwarp(src, dst, options):
     out = None
 
 
-def gdalbuildvrt(src, dst, options):
+def gdalbuildvrt(src, dst, options=None):
     """
     a simple wrapper for gdal.BuildVRT
 
@@ -145,6 +145,7 @@ def gdalbuildvrt(src, dst, options):
     -------
 
     """
+    options = {} if options is None else options
     out = gdal.BuildVRT(dst, src, options=gdal.BuildVRTOptions(**options))
     out = None
 
