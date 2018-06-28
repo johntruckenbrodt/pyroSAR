@@ -219,12 +219,15 @@ def gpt(xmlfile):
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     out, err = proc.communicate()
     if proc.returncode != 0:
-        print('failed: ', os.path.basename(infile))
         if os.path.isfile(outname + '.tif'):
             os.remove(outname + '.tif')
         elif os.path.isdir(outname):
             shutil.rmtree(outname)
-        raise RuntimeError(err)
+        print(out+err)
+        print('failed: {}'.format(os.path.basename(infile)))
+        err_match = re.search('Error: (.*)\n', out+err)
+        errmessage = err_match.group(1) if err_match else err
+        raise RuntimeError(errmessage)
 
     if format == 'ENVI':
         id = pyroSAR.identify(infile)
