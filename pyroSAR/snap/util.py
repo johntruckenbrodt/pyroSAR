@@ -87,7 +87,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         polarizations = id.polarizations
     else:
         polarizations = [x for x in polarizations if x in id.polarizations]
-
+    print("Polarizations:", polarizations)
     format = 'GeoTiff-BigTIFF' if len(polarizations) == 1 else 'ENVI'
 
     ############################################
@@ -124,12 +124,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
 
     cal = workflow.find('.//node[@id="Calibration"]')
 
-    if len(polarizations) > 1:
-        cal.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
-        cal.find('.//parameters/sourceBands').text = ','.join(['Intensity_' + x for x in polarizations])
-    else:
-        cal.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
-        cal.find('.//parameters/sourceBands').text = 'Intensity'
+    cal.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
+    cal.find('.//parameters/sourceBands').text = ','.join(['Intensity_' + x for x in polarizations])
     ############################################
     # terrain flattening node configuration
 
