@@ -158,9 +158,21 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     tc.find('.//parameters/pixelSpacingInMeter').text = str(tr)
 
     try:
-        t_srs = spatial.crsConvert(t_srs, 'wkt')
+        t_srs = spatial.crsConvert(t_srs, 'epsg')
     except TypeError:
         raise RuntimeError("format of parameter 't_srs' not recognized")
+
+    if t_srs == 4326:
+        t_srs = 'GEOGCS["WGS84(DD)",' \
+                'DATUM["WGS84",' \
+                'SPHEROID["WGS84", 6378137.0, 298.257223563]],' \
+                'PRIMEM["Greenwich", 0.0],' \
+                'UNIT["degree", 0.017453292519943295],' \
+                'AXIS["Geodetic longitude", EAST],' \
+                'AXIS["Geodetic latitude", NORTH]]'
+    else:
+        t_srs = 'EPSG:{}'.format(t_srs)
+
     tc.find('.//parameters/mapProjection').text = t_srs
     ############################################
     # add node for conversion from linear to db scaling
