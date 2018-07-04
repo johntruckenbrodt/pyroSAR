@@ -14,7 +14,9 @@ Not everything is working properly, stay tuned...
 
 
 ### Installation of dependencies
-
+If you are using Windows, the easiest way to work with pyroSAR and Python in general is by using 
+[Anaconda](https://www.anaconda.com/download/). It comes with all basic requirements of pyroSAR.
+The more specific instructions below are intended for Linux users.
 ##### GDAL
 pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as the GDAL Python binding. 
 Alternatively, one can use <a href="https://github.com/nextgis/pygdal">pygdal</a>, 
@@ -72,15 +74,19 @@ from pysqlite2 import dbapi2 as sqlite3
 Installing this package is likely to cause problems with the sqlite3 library installed on the system. 
 Thus, it is safer to build a static sqlite3 library for it (see installation script).
 ### Installation of pyroSAR
-Once everything is set up, pyroSAR is ready to be installed:
-```sh
-sudo pip install git+https://github.com/johntruckenbrodt/pyroSAR.git
-```
-You might need to install pip and git for this to work:
+For the installation we need the Python tool pip and the version control system git. On Windows pip is 
+installed together with Anaconda, git can be downloaded from [here](https://git-scm.com/downloads).
+On Linux you can easily install both via command line:
 ```sh
 sudo apt-get install python-pip
 sudo apt-get install git
 ```
+Once everything is set up, pyroSAR is ready to be installed:
+```sh
+sudo pip install git+https://github.com/johntruckenbrodt/pyroSAR.git
+```
+On Windows you need to use the Anaconda Prompt and leave out `sudo` in the above command.
+
 ### A small example
 Now that everything is installed, we can start working with our satellite data.
 Let's assume you have a Sentinel-1 scene in a local directory. 
