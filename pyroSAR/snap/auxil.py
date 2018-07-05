@@ -23,7 +23,11 @@ import pyroSAR
 from pyroSAR import identify
 from pyroSAR.ancillary import dissolve, finder
 from pyroSAR.spatial import gdal_translate
-from .._dev_config import LOOKUP, ExamineExe, make_dir, write_config_file
+from .._dev_config import LOOKUP, CONFIG, ExamineExe
+from .. import __config
+
+config = __config
+
 import warnings
 
 
@@ -240,24 +244,6 @@ def gpt(xmlfile):
         shutil.rmtree(outname)
 
 
-def get_etc_from_config(path=os.path.join(expanduser("~"), '.pyrosar')):
-    try:
-        files = os.path.join(path, 'config.txt')
-
-        with open(files, 'r') as fd:
-            content = {}
-            for i in fd:
-                entry = i.split('::')
-                if entry:
-                    content.update({entry[0]: entry[1].rstrip()})
-
-        return content['snap_etc']
-
-    except (IOError, KeyError):
-        warnings.warn(
-            "No snap/etc directory is saved or existent. Please enter a valid path to the etc directory of snap with the function pyrosar.snap.snap_config.set_etc(path_to_etc). By default the directory should be in 'C:\Program Files\snap\etc")
-
-
 class ExamineSnap(ExamineExe):
     """
     Class to check if snap is installed. This will be called with snap.__init__
@@ -282,21 +268,26 @@ class ExamineSnap(ExamineExe):
             warnings.warn(
                 "No snap/etc directory is saved or existent. Please enter a valid path to the etc directory of snap with the function pyrosar.snap.snap_config.set_etc(path_to_etc). By default the directory should be in 'C:\Program Files\snap\etc")
 
-
     def __get_etc(self):
         try:
             try:
-                self.etc = get_etc_from_config()
+                self.etc = config.get(CONFIG.section.snap, CONFIG.key.snap.etc_path)
                 self.auxdata = os.listdir(self.etc)
-                self.config_path = os.path.join(self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
+                self.config_path = os.path.join(self.etc,
+                                                [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
 
-            except RuntimeError:
-                make_dir()
+                config.set(CONFIG.section.snap, CONFIG.key.snap.auxdata_path, self.auxdata)
+                config.set(CONFIG.section.snap, CONFIG.key.snap.config_path, self.config_path)
+
+            except (RuntimeError, KeyError):
                 self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
-                write_config_file(data=self.etc, header='snap_etc:')
+                config.set(CONFIG.section.snap, CONFIG.key.snap.etc_path, self.etc)
 
             self.auxdata = os.listdir(self.etc)
             self.config_path = os.path.join(self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
+
+            config.set(CONFIG.section.snap, CONFIG.key.snap.auxdata_path, self.auxdata)
+            config.set(CONFIG.section.snap, CONFIG.key.snap.config_path, self.config_path)
 
         except (OSError, IndexError):
             warnings.warn(
@@ -305,11 +296,11 @@ class ExamineSnap(ExamineExe):
     def set_etc(self, path):
         self.etc = path
 
-        make_dir()
         self.auxdata = os.listdir(self.etc)
         self.config_path = os.path.join(self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
 
-        write_config_file(data=self.etc, header='snap_etc:')
+        config.set(CONFIG.section.snap, CONFIG.key.snap.auxdata_path, self.auxdata)
+        config.set(CONFIG.section.snap, CONFIG.key.snap.config_path, self.config_path)
 
     def set_path(self, path):
         self.path = os.path.abspath(path)
