@@ -9,7 +9,6 @@ import warnings
 from distutils.spawn import find_executable
 from os.path import expanduser
 import ConfigParser
-import io
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode',
              'start', 'stop', 'product', 'spacing', 'samples', 'lines']
