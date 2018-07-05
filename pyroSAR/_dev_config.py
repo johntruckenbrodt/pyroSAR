@@ -271,7 +271,6 @@ class Config(object):
                 items = dict(cfgp.items(section))
                 return items[key]
 
-
 # config = Config()
 #
 # config.print_config()
