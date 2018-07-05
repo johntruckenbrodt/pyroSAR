@@ -201,7 +201,7 @@ def gpt(xmlfile):
 
     if not status:
         warnings.warn(
-            "No snap/etc directory is saved or existent. Please enter a valid path to the etc directory of snap with the function pyrosar.snap.snap_config.set_etc(path_to_etc). By default the directory should be in 'C:\Program Files\snap\etc")
+            "No snap/etc directory is saved or existent. Please enter a valid path to the etc directory of snap with the function pyrosar.snap.snap_path.set_etc(path_to_etc). By default the directory should be in 'C:\Program Files\snap\etc")
 
     with open(xmlfile, 'r') as infile:
         workflow = ET.fromstring(infile.read())
