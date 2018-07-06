@@ -9,7 +9,7 @@ from pyroSAR import spatial
 from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt
 
 
-def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=None, scaling='dB',
+def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BoderNoise=True, offset=None, externalDEMFile=None,
             externalDEMNoDataValue=None, externalDEMApplyEGM=True, test=False):
     """
@@ -21,9 +21,10 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
         the SAR scene to be processed
     outdir: str
         The directory to write the final files to.
-    t_srs: str, osr.SpatialReference instance or None, optional
-        A target geographic reference system (e.g. a string in WKT, EPSG or PROJ4 format).
-        Default is None.
+    t_srs: int, str or osr.SpatialReference
+        A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
+        See function :func:`~pyroSAR.spatial.auxil.crsConvert()` for details.
+        Default: `4326 <http://spatialreference.org/ref/epsg/4326/>`_.
     tr: int or float, optional
         The target resolution in meters. Default is 20
     polarizations: list or {'VV', 'HH', 'VH', 'HV', 'all'}, optional
@@ -76,6 +77,8 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     if id.sensor in ['ASAR', 'ERS1', 'ERS2']:
         formatName = 'ENVISAT'
     elif id.sensor in ['S1A', 'S1B']:
+        if id.product == 'SLC':
+            raise RuntimeError('Sentinel-1 SLC data is not supported yet')
         formatName = 'SENTINEL-1'
     else:
         raise RuntimeError('sensor not supported (yet)')
@@ -153,18 +156,24 @@ def geocode(infile, outdir, t_srs=None, tr=20, polarizations='all', shapefile=No
     else:
         raise RuntimeError('geocode_type not recognized')
     tc.find('.//parameters/pixelSpacingInMeter').text = str(tr)
-    if t_srs:
-        t_srs = spatial.crsConvert(t_srs, 'wkt')
-        tc.find('.//parameters/mapProjection').text = t_srs
+
+    try:
+        t_srs = spatial.crsConvert(t_srs, 'epsg')
+    except TypeError:
+        raise RuntimeError("format of parameter 't_srs' not recognized")
+
+    if t_srs == 4326:
+        t_srs = 'GEOGCS["WGS84(DD)",' \
+                'DATUM["WGS84",' \
+                'SPHEROID["WGS84", 6378137.0, 298.257223563]],' \
+                'PRIMEM["Greenwich", 0.0],' \
+                'UNIT["degree", 0.017453292519943295],' \
+                'AXIS["Geodetic longitude", EAST],' \
+                'AXIS["Geodetic latitude", NORTH]]'
     else:
-        tc.find('.//parameters/mapProjection').text = \
-            'GEOGCS["WGS84(DD)",' \
-            'DATUM["WGS84",' \
-            'SPHEROID["WGS84", 6378137.0, 298.257223563]],' \
-            'PRIMEM["Greenwich", 0.0],' \
-            'UNIT["degree", 0.017453292519943295],' \
-            'AXIS["Geodetic longitude", EAST],' \
-            'AXIS["Geodetic latitude", NORTH]]'
+        t_srs = 'EPSG:{}'.format(t_srs)
+
+    tc.find('.//parameters/mapProjection').text = t_srs
     ############################################
     # add node for conversion from linear to db scaling
 

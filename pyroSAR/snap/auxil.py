@@ -195,6 +195,11 @@ def gpt(xmlfile):
     wrapper for ESA SNAP Graph Processing Tool GPT
     input is a readily formatted workflow xml file as created by function geocode in module snap.util
     """
+    try:
+        snap_exec = ExamineSnap().path
+    except AttributeError:
+        raise RuntimeError('could not find SNAP executable')
+    gpt_exec = os.path.join(os.path.dirname(snap_exec), 'gpt')
 
     # Test if SNAP is installed:
     status, _ = ExamineExe.examine(('snap64.exe', 'snap32.exe', 'snap.exe', 'snap'))
@@ -212,7 +217,7 @@ def gpt(xmlfile):
     infile = workflow.find('.//node[@id="Read"]/parameters/file').text
 
     if format == 'GeoTiff-BigTIFF':
-        cmd = ['gpt',
+        cmd = [gpt_exec,
                # '-Dsnap.dataio.reader.tileWidth=*',
                # '-Dsnap.dataio.reader.tileHeight=1',
                '-Dsnap.dataio.bigtiff.tiling.width=256',
@@ -221,17 +226,20 @@ def gpt(xmlfile):
                # '-Dsnap.dataio.bigtiff.compression.quality=0.75',
                xmlfile]
     else:
-        cmd = ['gpt', xmlfile]
+        cmd = [gpt_exec, xmlfile]
 
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     out, err = proc.communicate()
     if proc.returncode != 0:
-        print('failed: ', os.path.basename(infile))
         if os.path.isfile(outname + '.tif'):
             os.remove(outname + '.tif')
         elif os.path.isdir(outname):
             shutil.rmtree(outname)
-        raise RuntimeError(err)
+        print(out+err)
+        print('failed: {}'.format(os.path.basename(infile)))
+        err_match = re.search('Error: (.*)\n', out+err)
+        errmessage = err_match.group(1) if err_match else err
+        raise RuntimeError(errmessage)
 
     if format == 'ENVI':
         id = pyroSAR.identify(infile)

@@ -5,11 +5,9 @@
 import sys
 
 if sys.version_info >= (3, 0):
-    from urllib.parse import urlparse, urlunparse, urlencode
     from urllib.request import urlopen
 else:
-    from urllib import urlopen, urlencode
-    from urlparse import urlparse, urlunparse
+    from urllib import urlopen
 
 import os
 import re
@@ -17,7 +15,7 @@ import ssl
 import time
 from datetime import datetime
 
-from ..ancillary import finder
+from ..ancillary import finder, urlQueryParser
 
 try:
     import argparse
@@ -136,7 +134,6 @@ class OSV(object):
             the URLs of the remote OSV files
         """
         address, outdir = self._typeEvaluate(osvtype)
-        address_parse = urlparse(address)
         # a dictionary for storing the url arguments
         query = {'page': 1}
         # the collection of files to be returned
@@ -152,13 +149,16 @@ class OSV(object):
         else:
             date_stop = time.strftime('%Y-%m-%d')
 
+        # pattern for scanning urlopen response for links to OSV files
+        pattern_url = 'http.*{}'.format(self.pattern)
+
         # append the time frame to the query dictionary
-        query['validity_start_time'] = '{0}..{1}'.format(date_start, date_stop)
+        query['validity_start'] = '{0}..{1}'.format(date_start, date_stop)
         print('searching for new {} files'.format(osvtype))
         # iterate through the url pages and look for files
         while True:
             # parse the url
-            subaddress = urlunparse(address_parse._replace(query=urlencode(query)))
+            subaddress = urlQueryParser(address, query)
             # read the remote content
             try:
                 response = urlopen(subaddress, context=self.sslcontext).read().decode('utf-8')
@@ -166,7 +166,7 @@ class OSV(object):
             except IOError as e:
                 raise RuntimeError(e)
             # list all osv files found on the page
-            remotes = [os.path.join(address, x) for x in sorted(set(re.findall(self.pattern, response)))]
+            remotes = sorted(set(re.findall(pattern_url, response)))
             # do a more accurate filtering of the time stamps
             if start is not None:
                 remotes = [x for x in remotes if self.date(x, 'stop') > start]

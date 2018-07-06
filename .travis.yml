@@ -12,9 +12,17 @@ env:
 
 addons:
   apt:
+    sources:
+      - sourceline: 'ppa:ubuntugis/ubuntugis-unstable'
     packages:
-    - libspatialite-dev
-    - swig2.0
+      - libgdal-dev
+      - libudunits2-dev
+      - python-gdal
+      - python3-gdal
+      - libspatialite-dev
+      - swig2.0
+      - libproj-dev
+      - gdal-bin
 
 python:
   - "2.7"
@@ -24,10 +32,6 @@ virtualenv:
   system_site_packages: true
 
 before_install:
-  - sudo add-apt-repository ppa:ubuntugis/ppa -y
-  - sudo apt-get update -q
-  - sudo apt-get install gdal-bin python-gdal python3-gdal libproj-dev libgdal-dev -y
-  - sudo apt-get install wget
   - wget -O esa-snap_sentinel_unix_6_0.sh http://step.esa.int/downloads/6.0/installers/esa-snap_sentinel_unix_6_0.sh
   - sudo chmod +x esa-snap_sentinel_unix_6_0.sh
   - yes "" | ./esa-snap_sentinel_unix_6_0.sh
@@ -35,8 +39,7 @@ before_install:
 
 install:
   - pip install -r requirements.txt
-  - pip install coveralls
-  - pip install coverage
+  - pip install coveralls coverage
   - python setup.py install
 
 #before_script:
@@ -47,3 +50,6 @@ script:
 
 after_success:
 - coveralls
+
+notifications:
+  slack: pyrosar:bs03zodEkRSYr8MN5HrgfSeB

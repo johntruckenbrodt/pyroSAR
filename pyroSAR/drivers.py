@@ -37,16 +37,12 @@ import progressbar as pb
 from osgeo import gdal, osr
 from osgeo.gdalconst import GA_ReadOnly, GA_Update
 
-try:
-    from pysqlite2 import dbapi2 as sqlite3
-except ImportError:
-    import sqlite3
-
 from . import linesimplify as ls
 from .S1 import OSV
 from . import spatial
-from .ancillary import finder, parse_literal, run
+from .ancillary import finder, parse_literal
 from .xml_util import getNamespaces
+from .sqlite_util import sqlite_setup, sqlite3
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines']
@@ -603,7 +599,7 @@ class CEOS_ERS(ID):
         self.meta.update(self.scanMetadata())
 
         # register the standardized meta attributes as object attributes
-        ID.__init__(self, self.meta)
+        super(CEOS_ERS, self).__init__(self.meta)
 
     def getCorners(self):
         lat = [x[1][1] for x in self.meta['gcps']]
@@ -760,11 +756,10 @@ class CEOS_PSR(ID):
         self.meta = self.scanMetadata()
 
         # register the standardized meta attributes as object attributes
-        ID.__init__(self, self.meta)
+        super(CEOS_PSR, self).__init__(self.meta)
 
-    def _getLeaderfile(self):
-        led_filename = self.findfiles(self.pattern)[0]
-        led_obj = self.getFileObj(led_filename)
+    def _getLeaderfileContent(self):
+        led_obj = self.getFileObj(self.led_filename)
         led = led_obj.read()
         led_obj.close()
         return led
@@ -781,14 +776,37 @@ class CEOS_PSR(ID):
             summary[x] = parse_literal(y)
         return summary
 
-    def scanMetadata(self):
-        led_filename = self.findfiles(self.pattern)[0]
-        led_obj = self.getFileObj(led_filename)
-        led = led_obj.read()
-        led_obj.close()
+    @property
+    def led_filename(self):
+        return self.findfiles(self.pattern)[0]
 
+    def scanMetadata(self):
+        ################################################################################################################
+        # read leader (LED) file
+        led = self._getLeaderfileContent()
+
+        # read summary text file
         meta = self._parseSummary()
 
+        # read polarizations from image file names
+        meta['polarizations'] = [re.search('[HV]{2}', os.path.basename(x)).group(0) for x in self.findfiles('^IMG-')]
+        ################################################################################################################
+        # read start and stop time
+
+        try:
+            meta['start'] = self.parse_date(meta['Img_SceneStartDateTime'])
+            meta['stop'] = self.parse_date(meta['Img_SceneEndDateTime'])
+        except (AttributeError, KeyError):
+            try:
+                start_string = re.search('Img_SceneStartDateTime[ ="0-9:.]*', led).group()
+                stop_string = re.search('Img_SceneEndDateTime[ ="0-9:.]*', led).group()
+                meta['start'] = self.parse_date(re.search('\d+\s[\d:.]+', start_string).group())
+                meta['stop'] = self.parse_date(re.search('\d+\s[\d:.]+', stop_string).group())
+            except AttributeError:
+                raise IndexError('start and stop time stamps cannot be extracted; see file {}'
+                                 .format(self.led_filename))
+        ################################################################################################################
+        # read file descriptor record
         p0 = 0
         p1 = struct.unpack('>i', led[8:12])[0]
         fileDescriptor = led[p0:p1]
@@ -805,7 +823,18 @@ class CEOS_PSR(ID):
         dqs_n = int(fileDescriptor[252:258])
         dqs_l = int(fileDescriptor[258:264])
         meta['sensor'] = {'AL1': 'PSR1', 'AL2': 'PSR2'}[fileDescriptor[48:51].decode('utf-8')]
+        ################################################################################################################
+        # read leader file name information
 
+        match = re.match(re.compile(self.pattern), os.path.basename(self.led_filename))
+
+        if meta['sensor'] == 'PSR1':
+            meta['acquisition_mode'] = match.group('sub') + match.group('mode')
+        else:
+            meta['acquisition_mode'] = match.group('mode')
+        meta['product'] = match.group('level')
+        ################################################################################################################
+        # read led records
         p0 = p1
         p1 += dss_l * dss_n
         dataSetSummary = led[p0:p1]
@@ -814,7 +843,35 @@ class CEOS_PSR(ID):
             p0 = p1
             p1 += mpd_l * mpd_n
             mapProjectionData = led[p0:p1]
+        else:
+            mapProjectionData = None
 
+        p0 = p1
+        p1 += ppd_l * ppd_n
+        platformPositionData = led[p0:p1]
+
+        p0 = p1
+        p1 += adr_l * adr_n
+        attitudeData = led[p0:p1]
+
+        p0 = p1
+        p1 += rdr_l * rdr_n
+        radiometricData = led[p0:p1]
+
+        p0 = p1
+        p1 += dqs_l * dqs_n
+        dataQualitySummary = led[p0:p1]
+
+        facilityRelatedData = []
+        while p1 < len(led):
+            p0 = p1
+            length = struct.unpack('>i', led[(p0 + 8):(p0 + 12)])[0]
+            p1 += length
+            facilityRelatedData.append(led[p0:p1])
+        ################################################################################################################
+        # read map projection data record
+
+        if mapProjectionData is not None:
             lat = list(map(float, [mapProjectionData[1072:1088],
                                    mapProjectionData[1104:1120],
                                    mapProjectionData[1136:1152],
@@ -869,47 +926,8 @@ class CEOS_PSR(ID):
                                  'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
                                  'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
                                  'AUTHORITY["EPSG","4326"]]'
-
-        p0 = p1
-        p1 += ppd_l * ppd_n
-        platformPositionData = led[p0:p1]
-
-        # the following can be used to read platform position time from the led file
-        # this covers a larger time frame than the actual scene sensing time
-        # y, m, d, nd, s = platformPositionData[144:182].split()
-        # start = datetime(int(y), int(m), int(d)) + timedelta(seconds=float(s))
-        # npoints = int(platformPositionData[140:144])
-        # interval = float(platformPositionData[182:204])
-        # stop = start + timedelta(seconds=(npoints - 1) * interval)
-        # parse_date(start)
-        # parse_date(stop)
-
-        p0 = p1
-        p1 += adr_l * adr_n
-        attitudeData = led[p0:p1]
-        p0 = p1
-        p1 += rdr_l * rdr_n
-        radiometricData = led[p0:p1]
-        p0 = p1
-        p1 += dqs_l * dqs_n
-        dataQualitySummary = led[p0:p1]
-
-        facilityRelatedData = []
-
-        while p1 < len(led):
-            p0 = p1
-            length = struct.unpack('>i', led[(p0 + 8):(p0 + 12)])[0]
-            p1 += length
-            facilityRelatedData.append(led[p0:p1])
-
-        # for i in range(0, 10):
-        #     p0 = p1
-        #     length = struct.unpack('>i', led[(p0 + 8):(p0 + 12)])[0]
-        #     print length
-        #     p1 += length
-        #     facilityRelatedData[i] = led[p0:p1]
-        #
-        # facilityRelatedData[10] = led[p1:]
+        ################################################################################################################
+        # read data set summary record
 
         meta['lines'] = int(dataSetSummary[324:332]) * 2
         meta['samples'] = int(dataSetSummary[332:340]) * 2
@@ -928,29 +946,23 @@ class CEOS_PSR(ID):
         spacing_azimuth = float(dataSetSummary[1686:1702])
         spacing_range = float(dataSetSummary[1702:1718])
         meta['spacing'] = (spacing_range, spacing_azimuth)
+        ################################################################################################################
+        # read radiometric data record
 
-        match = re.match(re.compile(self.pattern), os.path.basename(led_filename))
-
-        if meta['sensor'] == 'PSR1':
-            meta['acquisition_mode'] = match.group('sub') + match.group('mode')
-        else:
-            meta['acquisition_mode'] = match.group('mode')
-        meta['product'] = match.group('level')
-
-        try:
-            meta['start'] = self.parse_date(meta['Img_SceneStartDateTime'])
-            meta['stop'] = self.parse_date(meta['Img_SceneEndDateTime'])
-        except (AttributeError, KeyError):
-            try:
-                start_string = re.search('Img_SceneStartDateTime[ ="0-9:.]*', led).group()
-                stop_string = re.search('Img_SceneEndDateTime[ ="0-9:.]*', led).group()
-                meta['start'] = self.parse_date(re.search('\d+\s[\d:.]+', start_string).group())
-                meta['stop'] = self.parse_date(re.search('\d+\s[\d:.]+', stop_string).group())
-            except AttributeError:
-                raise IndexError('start and stop time stamps cannot be extracted; see file {}'.format(led_filename))
-
-        meta['polarizations'] = [re.search('[HV]{2}', os.path.basename(x)).group(0) for x in self.findfiles('^IMG-')]
         meta['k_dB'] = float(radiometricData[20:36])
+        ################################################################################################################
+        # additional notes
+
+        # the following can be used to read platform position time from the led file
+        # this covers a larger time frame than the actual scene sensing time
+        # y, m, d, nd, s = platformPositionData[144:182].split()
+        # start = datetime(int(y), int(m), int(d)) + timedelta(seconds=float(s))
+        # npoints = int(platformPositionData[140:144])
+        # interval = float(platformPositionData[182:204])
+        # stop = start + timedelta(seconds=(npoints - 1) * interval)
+        # parse_date(start)
+        # parse_date(stop)
+
         return meta
 
     def unpack(self, directory, overwrite=False):
@@ -1043,7 +1055,7 @@ class ESA(ID):
         self.meta['looks'] = (self.meta['SPH_RANGE_LOOKS'], self.meta['SPH_AZIMUTH_LOOKS'])
 
         # register the standardized meta attributes as object attributes
-        ID.__init__(self, self.meta)
+        super(ESA, self).__init__(self.meta)
 
     def getCorners(self):
         lon = [self.meta[x] for x in self.meta if re.search('LONG', x)]
@@ -1118,7 +1130,7 @@ class SAFE(ID):
         self.meta['lines'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfLines').text)
 
         # register the standardized meta attributes as object attributes
-        ID.__init__(self, self.meta)
+        super(SAFE, self).__init__(self.meta)
 
         self.gammafiles = {'slc': [], 'pri': [], 'grd': []}
 
@@ -1390,7 +1402,7 @@ class TSX(ID):
                                   'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
                                   'AUTHORITY["EPSG","4326"]]'
 
-        ID.__init__(self, self.meta)
+        super(TSX, self).__init__(self.meta)
 
     def getCorners(self):
         geocs = self.getFileObj(self.findfiles('GEOREF.xml')[0]).getvalue()
@@ -1476,16 +1488,7 @@ class Archive(object):
 
     def __init__(self, dbfile):
         self.dbfile = dbfile
-        self.conn = sqlite3.connect(self.dbfile)
-        self.conn.enable_load_extension(True)
-        try:
-            self.conn.load_extension('mod_spatialite.so')
-            if 'spatial_ref_sys' not in self.get_tablenames():
-                self.conn.execute('SELECT InitSpatialMetaData(1);')
-        except sqlite3.OperationalError:
-            self.conn.load_extension('libspatialite.so')
-            if 'spatial_ref_sys' not in self.get_tablenames():
-                self.conn.execute('SELECT InitSpatialMetaData();')
+        self.conn = sqlite_setup(dbfile, ['spatialite'])
 
         self.lookup = {'sensor': 'TEXT',
                        'orbit': 'TEXT',
@@ -1507,10 +1510,8 @@ class Archive(object):
         cursor.execute(create_string)
         if 'bbox' not in self.get_colnames():
             cursor.execute('SELECT AddGeometryColumn("data","bbox" , 4326, "POLYGON", "XY", 0)')
-        self.conn.commit()
 
-        create_string = '''CREATE TABLE if not exists duplicates (outname_base TEXT, scene TEXT)'''
-        cursor = self.conn.cursor()
+        create_string = 'CREATE TABLE if not exists duplicates (outname_base TEXT, scene TEXT)'
         cursor.execute(create_string)
         self.conn.commit()
 
@@ -1587,15 +1588,16 @@ class Archive(object):
         if verbose:
             print('inserting scenes into temporary database...')
             pbar = pb.ProgressBar(max_value=len(scenes))
+        cursor = self.conn.cursor()
         for i, id in enumerate(scenes):
             insert_string, insertion = self.__prepare_insertion(id)
             try:
-                self.conn.execute(insert_string, insertion)
+                cursor.execute(insert_string, insertion)
                 counter_regulars += 1
             except sqlite3.IntegrityError as e:
                 if str(e) == 'UNIQUE constraint failed: data.outname_base':
-                    self.conn.execute('INSERT INTO duplicates(outname_base, scene) VALUES(?, ?)',
-                                      (id.outname_base(), id.scene))
+                    cursor.execute('INSERT INTO duplicates(outname_base, scene) VALUES(?, ?)',
+                                   (id.outname_base(), id.scene))
                     counter_duplicates += 1
                 else:
                     raise e
@@ -1642,7 +1644,7 @@ class Archive(object):
         Returns
         -------
         """
-        run(['ogr2ogr', '-f', '"ESRI Shapefile"', shp, self.dbfile])
+        spatial.ogr2ogr(self.dbfile, shp, options={'format': 'ESRI Shapefile'})
 
     def filter_scenelist(self, scenelist):
         """
@@ -1662,9 +1664,10 @@ class Archive(object):
         for item in scenelist:
             if not isinstance(item, (ID, str)):
                 raise IOError('items in scenelist must be of type "str" or pyroSAR.ID')
-        cursor = self.conn.execute('SELECT scene FROM data')
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT scene FROM data')
         registered = [os.path.basename(x[0].encode('ascii')) for x in cursor.fetchall()]
-        cursor = self.conn.execute('SELECT scene FROM duplicates')
+        cursor.execute('SELECT scene FROM duplicates')
         duplicates = [os.path.basename(x[0].encode('ascii')) for x in cursor.fetchall()]
 
         names = [item.scene if isinstance(item, ID) else item for item in scenelist]
@@ -1681,8 +1684,9 @@ class Archive(object):
         list
             the column names of the data table
         """
-        cursor = self.conn.execute('''PRAGMA table_info(data)''')
-        return [str(x[1]) for x in cursor.fetchall()]
+        cursor = self.conn.cursor()
+        cursor.execute('PRAGMA table_info(data)')
+        return sorted([str(x[1]) for x in cursor.fetchall()])
 
     def get_tablenames(self):
         """
@@ -1693,8 +1697,9 @@ class Archive(object):
         list
             the table names
         """
-        cursor = self.conn.execute('''SELECT * FROM sqlite_master WHERE type="table"''')
-        return [x[1].encode('ascii') for x in cursor.fetchall()]
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM sqlite_master WHERE type="table"')
+        return sorted([x[1].encode('ascii') for x in cursor.fetchall()])
 
     def get_unique_directories(self):
         """
@@ -1705,7 +1710,8 @@ class Archive(object):
         list
             the directory names
         """
-        cursor = self.conn.execute('SELECT scene FROM data')
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT scene FROM data')
         registered = [os.path.dirname(x[0].encode('ascii')) for x in cursor.fetchall()]
         return list(set(registered))
 
@@ -1755,6 +1761,7 @@ class Archive(object):
         failed = []
         double = []
         pbar = pb.ProgressBar(maxval=len(scenelist)).start()
+        cursor = self.conn.cursor()
         for i, scene in enumerate(scenelist):
             new = os.path.join(directory, os.path.basename(scene))
             if os.path.isfile(new):
@@ -1770,13 +1777,13 @@ class Archive(object):
             if self.select(scene=scene) != 0:
                 table = 'data'
             else:
-                cursor = self.conn.execute('''SELECT scene FROM duplicates WHERE scene=?''', (scene,))
+                cursor.execute('SELECT scene FROM duplicates WHERE scene=?', (scene,))
                 if len(cursor.fetchall()) != 0:
                     table = 'duplicates'
                 else:
                     table = None
             if table:
-                self.conn.execute('''UPDATE {} SET scene=? WHERE scene=?'''.format(table), (new, scene))
+                cursor.execute('UPDATE {} SET scene=? WHERE scene=?'.format(table), (new, scene))
                 self.conn.commit()
         pbar.finish()
         if len(failed) > 0:
@@ -1861,7 +1868,8 @@ class Archive(object):
         query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
         if verbose:
             print(query)
-        cursor = self.conn.execute(query, tuple(vals))
+        cursor = self.conn.cursor()
+        cursor.execute(query, tuple(vals))
         if processdir and os.path.isdir(processdir):
             scenes = [x for x in cursor.fetchall()
                       if len(finder(processdir, [x[1]], regex=True, recursive=recursive)) == 0]
@@ -1886,8 +1894,9 @@ class Archive(object):
         list
             the selected scene(s)
         """
+        cursor = self.conn.cursor()
         if not outname_base and not scene:
-            cursor = self.conn.execute('SELECT * from duplicates')
+            cursor.execute('SELECT * from duplicates')
         else:
             cond = []
             arg = []
@@ -1898,7 +1907,7 @@ class Archive(object):
                 cond.append('scene=?')
                 arg.append(scene)
             query = 'SELECT * from duplicates WHERE {}'.format(' AND '.join(cond))
-            cursor = self.conn.execute(query, tuple(arg))
+            cursor.execute(query, tuple(arg))
         return cursor.fetchall()
 
     @property
@@ -1911,9 +1920,10 @@ class Archive(object):
         tuple
             the number of scenes in (1) the main table and (2) the duplicates table
         """
-        cursor1 = self.conn.execute('''SELECT Count(*) FROM data''')
-        cursor2 = self.conn.execute('''SELECT Count(*) FROM duplicates''')
-        return (cursor1.fetchone()[0], cursor2.fetchone()[0])
+        cursor = self.conn.cursor()
+        r1 = cursor.execute('''SELECT Count(*) FROM data''').fetchone()[0]
+        r2 = cursor.execute('''SELECT Count(*) FROM duplicates''').fetchone()[0]
+        return (r1, r2)
 
     def __enter__(self):
         return self
@@ -1925,7 +1935,7 @@ class Archive(object):
         self.conn.close()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.conn.close()
+        self.close()
 
 
 def findfiles(scene, pattern, include_folders=False):
@@ -1988,6 +1998,9 @@ def getFileObj(scene, filename):
     """
     membername = filename.replace(scene, '').strip('/')
 
+    if not os.path.exists(scene):
+        raise RuntimeError('scene does not exist')
+
     if os.path.isdir(scene):
         obj = BytesIO()
         with open(filename, 'rb') as infile:
@@ -2007,7 +2020,7 @@ def getFileObj(scene, filename):
         tar.close()
         obj.seek(0)
     else:
-        raise IOError('input must be either a file name or a location in an zip or tar archive')
+        raise RuntimeError('input must be either a file name or a location in an zip or tar archive')
     return obj
 
 

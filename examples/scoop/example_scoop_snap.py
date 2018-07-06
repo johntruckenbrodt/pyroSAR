@@ -48,7 +48,7 @@ def worker(sitename):
     sites = vector.Vector('/.../testsites.shp')
 
     # query the test site by name; a column name 'Site_Name' must be saved in your shapefile
-    site = sites['Site_Name={}'.format(sitename)]
+    site = sites["Site_Name='{}'".format(sitename)]
     #######################################################################################
     # query the database for scenes to be processed
     with Archive(dbfile) as archive:

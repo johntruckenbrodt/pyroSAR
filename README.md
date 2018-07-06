@@ -14,18 +14,24 @@ Not everything is working properly, stay tuned...
 
 
 ### Installation of dependencies
-
+If you are using Windows, the easiest way to work with pyroSAR and Python in general is by using 
+[Anaconda](https://www.anaconda.com/download/). It comes with all basic requirements of pyroSAR.
+The more specific instructions below are intended for Linux users.
 ##### GDAL
 pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as the GDAL Python binding. 
 Alternatively, one can use <a href="https://github.com/nextgis/pygdal">pygdal</a>, 
 a virtualenv and setuptools friendly version of standard GDAL python bindings.
 ###### Ubuntu
-Currently Ubuntu comes with GDAL 1.11. By adding the ubuntugis repository to e.g. apt you can install 
-version >2.1:
+Starting with release Yakkety (16.10), Ubuntu comes with GDAL >2.1. 
+See <a href="https://launchpad.net/ubuntu/yakkety/amd64/gdal-bin">here</a>. 
+You can install it like this:
+```bash
+sudo apt-get install python-gdal python3-gdal gdal-bin
+```
+For older Ubuntu releases you can add the ubuntugis repository to apt prior to installation to install version >2.1:
 ```sh
 sudo add-apt-repository ppa:ubuntugis/ppa
 sudo apt-get update
-sudo apt-get install python-gdal python3-gdal gdal-bin
 ```
 This way the required dependencies (GEOS and PROJ4 in particular) are also installed.
 You can check the version by typing:
@@ -68,15 +74,19 @@ from pysqlite2 import dbapi2 as sqlite3
 Installing this package is likely to cause problems with the sqlite3 library installed on the system. 
 Thus, it is safer to build a static sqlite3 library for it (see installation script).
 ### Installation of pyroSAR
-Once everything is set up, pyroSAR is ready to be installed:
-```sh
-sudo pip install git+https://github.com/johntruckenbrodt/pyroSAR.git
-```
-You might need to install pip and git for this to work:
+For the installation we need the Python tool pip and the version control system git. On Windows pip is 
+installed together with Anaconda, git can be downloaded from [here](https://git-scm.com/downloads).
+On Linux you can easily install both via command line:
 ```sh
 sudo apt-get install python-pip
 sudo apt-get install git
 ```
+Once everything is set up, pyroSAR is ready to be installed:
+```sh
+sudo pip install git+https://github.com/johntruckenbrodt/pyroSAR.git
+```
+On Windows you need to use the Anaconda Prompt and leave out `sudo` in the above command.
+
 ### A small example
 Now that everything is installed, we can start working with our satellite data.
 Let's assume you have a Sentinel-1 scene in a local directory. 
