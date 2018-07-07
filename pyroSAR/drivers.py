@@ -42,7 +42,7 @@ from .S1 import OSV
 from . import spatial
 from .ancillary import finder, parse_literal
 from .xml_util import getNamespaces
-from .sqlite_util import sqlite_setup, sqlite3
+from pyroSAR.spatial.sqlite_util import sqlite_setup, sqlite3
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines']
