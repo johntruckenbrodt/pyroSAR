@@ -5,7 +5,6 @@
 
 
 # todo: function to write data with the same metadata as a given file
-# todo: documentation
 
 from __future__ import division
 import os
