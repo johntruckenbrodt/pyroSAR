@@ -37,8 +37,7 @@ import progressbar as pb
 from osgeo import gdal, osr
 from osgeo.gdalconst import GA_ReadOnly, GA_Update
 
-from . import linesimplify as ls
-from .S1 import OSV
+from .S1 import OSV, linesimplify as ls
 from . import spatial
 from .ancillary import finder, parse_literal
 from .xml_util import getNamespaces
