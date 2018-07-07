@@ -15,7 +15,7 @@ obj.write()
 """
 import os
 import re
-from .ancillary import union, parse_literal
+from pyroSAR.ancillary import union, parse_literal
 
 
 def hdr(data, filename='same'):

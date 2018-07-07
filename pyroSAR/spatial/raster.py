@@ -15,7 +15,7 @@ from math import sqrt, floor, ceil
 from time import gmtime, strftime
 import numpy as np
 
-from pyroSAR import envi
+from . import envi
 from .auxil import gdalwarp, gdalbuildvrt
 from .vector import Vector, bbox, crsConvert, intersect
 from pyroSAR.ancillary import dissolve, multicore
