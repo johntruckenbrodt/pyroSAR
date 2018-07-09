@@ -19,7 +19,7 @@ else:
 
 from osgeo import ogr
 
-from .. import envi
+from ..spatial import envi
 from ..drivers import *
 from ..spatial import haversine
 

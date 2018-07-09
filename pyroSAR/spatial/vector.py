@@ -13,9 +13,9 @@ import os
 
 from osgeo import ogr, osr
 
-from pyroSAR.spatial.auxil import crsConvert
+from .auxil import crsConvert
 from pyroSAR.ancillary import parse_literal
-from pyroSAR.sqlite_util import sqlite_setup
+from .sqlite_util import sqlite_setup
 
 ogr.UseExceptions()
 osr.UseExceptions()

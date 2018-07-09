@@ -37,12 +37,10 @@ import progressbar as pb
 from osgeo import gdal, osr
 from osgeo.gdalconst import GA_ReadOnly, GA_Update
 
-from . import linesimplify as ls
-from .S1 import OSV
+from .S1 import OSV, linesimplify as ls
 from . import spatial
 from .ancillary import finder, parse_literal
 from .xml_util import getNamespaces
-from .sqlite_util import sqlite_setup, sqlite3
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines']
@@ -1488,7 +1486,7 @@ class Archive(object):
 
     def __init__(self, dbfile):
         self.dbfile = dbfile
-        self.conn = sqlite_setup(dbfile, ['spatialite'])
+        self.conn = spatial.sqlite_setup(dbfile, ['spatialite'])
 
         self.lookup = {'sensor': 'TEXT',
                        'orbit': 'TEXT',
@@ -1594,7 +1592,7 @@ class Archive(object):
             try:
                 cursor.execute(insert_string, insertion)
                 counter_regulars += 1
-            except sqlite3.IntegrityError as e:
+            except spatial.sqlite3.IntegrityError as e:
                 if str(e) == 'UNIQUE constraint failed: data.outname_base':
                     cursor.execute('INSERT INTO duplicates(outname_base, scene) VALUES(?, ?)',
                                    (id.outname_base(), id.scene))
