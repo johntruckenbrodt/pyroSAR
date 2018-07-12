@@ -9,7 +9,7 @@ def travis():
 
 @pytest.fixture
 def testdir():
-    return os.path.abspath('data')
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 
 
 @pytest.fixture
