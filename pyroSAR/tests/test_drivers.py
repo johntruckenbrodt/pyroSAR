@@ -1,6 +1,7 @@
 import pyroSAR
 from pyroSAR import spatial
 import pytest
+import platform
 import tarfile as tf
 import sys
 import os
@@ -103,7 +104,11 @@ def test_export2dict():
 
 def test_getFileObj(tmpdir, testdata):
     scene = pyroSAR.identify(testdata['s1'])
-    scene.unpack(str(tmpdir))
+    if platform.system() == 'Windows':
+        directory = u'\\\\?\\' + str(tmpdir)
+    else:
+        directory = str(tmpdir)
+    scene.unpack(directory)
     scene = pyroSAR.identify(scene.scene)
     item = scene.findfiles('manifest.safe')[0]
     assert os.path.basename(item) == 'manifest.safe'
