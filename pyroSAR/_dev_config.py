@@ -162,7 +162,7 @@ class ExamineExe(object):
                     'Define which one you want to use with self.set_path(...)')
 
             else:
-                status = any(item == True for item in executable_list)
+                status = any(item is True for item in executable_list)
 
                 try:
                     temp_loc = [item for item, executable_list in enumerate(executable_list) if executable_list][0]

@@ -24,7 +24,7 @@ def not_raises(ExpectedException):
         )
 
 
-class TestExemineExe:
+class TestExamineExe:
     def test_exception(self):
         with pytest.warns(UserWarning):
             ExamineExe.examine('some_exe_file.exe')
