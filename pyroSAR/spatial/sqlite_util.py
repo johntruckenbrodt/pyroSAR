@@ -1,5 +1,6 @@
 import os
 import re
+import platform
 
 from ctypes.util import find_library
 
@@ -81,10 +82,13 @@ class __Handler(object):
         return [x[1].encode('ascii') for x in cursor.fetchall()]
 
     def load_extension(self, extension):
+        if platform.system() == 'Windows':
+            ext_path = os.path.join(os.path.expanduser('~'), '.pyrosar', 'mod_spatialite')
+            os.environ['PATH'] = '{}{}{}'.format(os.environ['PATH'], os.path.pathsep, ext_path)
         if re.search('spatialite', extension):
             select = None
             # first try to load the dedicated mod_spatialite adapter
-            for option in ['mod_spatialite', 'mod_spatialite.so']:
+            for option in ['mod_spatialite', 'mod_spatialite.so', 'mod_spatialite.dll']:
                 try:
                     self.conn.load_extension(option)
                     select = option
