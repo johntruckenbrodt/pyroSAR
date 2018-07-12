@@ -1,4 +1,5 @@
 import sys
+import warnings
 
 if sys.version_info >= (3, 0):
     from io import StringIO
@@ -21,9 +22,9 @@ from os.path import expanduser
 
 import pyroSAR
 from pyroSAR import identify
-from pyroSAR.ancillary import dissolve, finder
+from pyroSAR.ancillary import dissolve, finder, which
 from pyroSAR.spatial import gdal_translate
-from .._dev_config import LOOKUP, ExamineExe
+from .._dev_config import LOOKUP
 
 
 def parse_recipe(name):
@@ -223,9 +224,9 @@ def gpt(xmlfile):
             os.remove(outname + '.tif')
         elif os.path.isdir(outname):
             shutil.rmtree(outname)
-        print(out+err)
+        print(out + err)
         print('failed: {}'.format(os.path.basename(infile)))
-        err_match = re.search('Error: (.*)\n', out+err)
+        err_match = re.search('Error: (.*)\n', out + err)
         errmessage = err_match.group(1) if err_match else err
         raise RuntimeError(errmessage)
 
@@ -240,38 +241,47 @@ def gpt(xmlfile):
         shutil.rmtree(outname)
 
 
-class ExamineSnap(ExamineExe):
+class ExamineSnap(object):
     """
     Class to check if snap is installed. This will be called with snap.__init__
     as snap_config. If you are running multiple snap versions or the package can
     not find the snap executable, you can set an path via: snap_config.set_path("path")
     """
 
-    def __init__(self, snap_executable=('snap64.exe', 'snap32.exe', 'snap.exe', 'snap')):
-        super(ExamineSnap, self).__init__()
+    def __init__(self):
 
-        try:
-            self.status, self.path = self.examine(snap_executable)
+        candidates = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
+        executables = list(filter(None, [which(x) for x in candidates]))
 
-            if os.path.islink(self.path):
-                self.path = os.path.realpath(self.path)
+        if len(executables) == 0:
+            warnings.warn(
+                'Cannot find SNAP installation. You can download it from '
+                'http://step.esa.int/main/download/ or you can specify a path with '
+                'snap_config.set_path(path_to_snap)', UserWarning)
 
-            self.auxdatapath = os.path.join(expanduser("~"), '.snap/auxdata')
+        elif len(executables) > 1:
+            raise warnings.warn(
+                'There are more than one instances of SNAP installed. '
+                'Define which one you would like to use with ExamineSnap.set_path(...)', UserWarning)
 
-            self.__get_etc()
-            self.__read_config()
+        self.path = executables[0]
 
-        except TypeError:
-            pass
+        if os.path.islink(self.path):
+            self.path = os.path.realpath(self.path)
+
+        self.auxdatapath = os.path.join(expanduser('~'), '.snap/auxdata')
+
+        self.__get_etc()
+        self.__read_config()
 
     def __get_etc(self):
         try:
             self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
             self.auxdata = os.listdir(self.etc)
-            self.config_path = os.path.join(self.etc, [s for s in self.auxdata if "snap.auxdata.properties" in s][0])
+            self.config_path = os.path.join(self.etc, [s for s in self.auxdata if 'snap.auxdata.properties' in s][0])
 
         except OSError:
-            raise AssertionError("ETC directory is not existent.")
+            raise AssertionError('ETC directory is not existent.')
 
     def set_path(self, path):
         self.path = os.path.abspath(path)
