@@ -14,9 +14,15 @@ directory = os.path.join(os.path.expanduser('~'), '.pyrosar')
 if not os.path.exists(directory):
     os.makedirs(directory)
 
+if platform.system() is 'Windows':
+    package_data = {'pyroSAR': 'pkgs/mod_spatialite/*'}
+else:
+    package_data = {}
+
 setup(name='pyroSAR',
       packages=find_packages(),
       include_package_data=True,
+      package_data=package_data,
       version='0.4',
       description='a framework for large-scale SAR satellite data processing',
       classifiers=[
@@ -38,15 +44,11 @@ if platform.system() is 'Windows':
         os.makedirs(subdir)
     mod_spatialite = os.path.join(subdir, 'mod_spatialite.dll')
     if not os.path.isfile(mod_spatialite):
-        source_dir = 'https://github.com/johntruckenbrodt/spatialist/tree/master/pkgs/mod_spatialite'
+        source_dir = os.path.join(os.path.dirname(__file__), 'pkgs', 'mod_spatialite')
         if platform.machine().endswith('64'):
             source = os.path.join(source_dir, 'mod_spatialite-4.3.0a-win-amd64.zip')
         else:
             source = os.path.join(source_dir, 'mod_spatialite-4.3.0a-win-x86.zip')
-        target = os.path.join(directory, os.path.basename(source))
-        with open(target, 'wb') as outfile:
-            outfile.write(urlopen(source).read())
-        archive = zf.ZipFile(target, 'r')
+        archive = zf.ZipFile(source, 'r')
         archive.extractall(directory)
         archive.close()
-        os.remove(target)
