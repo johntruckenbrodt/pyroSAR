@@ -9,7 +9,7 @@ def travis():
 
 @pytest.fixture
 def testdir():
-    return 'pyroSAR/tests/data'
+    return os.path.abspath('data')
 
 
 @pytest.fixture
