@@ -254,25 +254,30 @@ class ExamineSnap(object):
         executables = list(filter(None, [which(x) for x in candidates]))
 
         if len(executables) == 0:
+
+            self.path = None
+
             warnings.warn(
                 'Cannot find SNAP installation. You can download it from '
                 'http://step.esa.int/main/download/ or you can specify a path with '
                 'snap_config.set_path(path_to_snap)', UserWarning)
+        else:
+            self.path = executables[0]
 
-        elif len(executables) > 1:
-            raise warnings.warn(
-                'There are more than one instances of SNAP installed. '
-                'Define which one you would like to use with ExamineSnap.set_path(...)', UserWarning)
+            if os.path.islink(self.path):
+                self.path = os.path.realpath(self.path)
 
-        self.path = executables[0]
+            if len(executables) > 1:
+                raise warnings.warn(
+                    'There are more than one instances of SNAP installed:\n{options}\n'
+                    'Using the first option:\n{select}\n'
+                    'You can define a different one with ExamineSnap.set_path()'
+                    ''.format(options='\n'.join(executables), select=self.path), UserWarning)
 
-        if os.path.islink(self.path):
-            self.path = os.path.realpath(self.path)
+            self.__get_etc()
+            self.__read_config()
 
         self.auxdatapath = os.path.join(expanduser('~'), '.snap/auxdata')
-
-        self.__get_etc()
-        self.__read_config()
 
     def __get_etc(self):
         try:
@@ -282,10 +287,6 @@ class ExamineSnap(object):
 
         except OSError:
             raise AssertionError('ETC directory is not existent.')
-
-    def set_path(self, path):
-        self.path = os.path.abspath(path)
-        self.__get_etc()
 
     def __read_config(self):
         with open(self.config_path) as config:
