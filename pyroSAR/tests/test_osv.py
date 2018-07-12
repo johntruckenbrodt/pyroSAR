@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import pytest
 import pyroSAR
 
@@ -25,6 +26,9 @@ def test_scene_osv(tmpdir, testdata):
                 os.remove(item)
             assert len(osv.getLocals('POE')) == 1
             osv.clean_res()
+            res = osv.catch(osvtype='POE', stop='20140823T120000')
+            assert len(res) == 3
+            res = osv.catch(osvtype='POE', start=time.strftime('%Y%m%dT%H%M%S'))
     else:
         with pytest.raises(RuntimeError):
             id.getOSV(osvdir, osvType='POE')
