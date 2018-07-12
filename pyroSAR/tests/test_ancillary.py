@@ -41,7 +41,7 @@ def test_run(tmpdir, testdata):
 
 def test_which():
     env = os.environ['PATH']
-    os.environ['PATH'] = '{}{}{}'.format(os.environ['PATH'], os.path.sep, os.path.dirname(os.__file__))
+    os.environ['PATH'] = '{}{}{}'.format(os.environ['PATH'], os.path.pathsep, os.path.dirname(os.__file__))
     program = anc.which(os.__file__)
     assert os.path.isfile(program)
     assert anc.which(program) == program
