@@ -39,7 +39,7 @@ install:
     # Configure the VM.
     - cmd: conda.exe install -n root --quiet --yes gdal
     - "python -m pip install --upgrade pip"
-    - "pip install -r requirements.txt coveralls coverage"
+    - "python -m pip install -r requirements.txt coveralls coverage"
     - cmd: python.exe setup.py install
 
 # Skip .NET project specific build phase.
