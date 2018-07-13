@@ -94,6 +94,7 @@ class __Handler(object):
 
             select = None
             # try to load the dedicated mod_spatialite adapter; loading libspatialite directly is not recommended
+            messages = []
             for option in ['mod_spatialite', 'mod_spatialite.so', 'mod_spatialite.dll']:
                 try:
                     self.conn.load_extension(option)
@@ -101,10 +102,12 @@ class __Handler(object):
                     self.extensions.append(option)
                     print('loading extension {0} as {1}'.format(extension, option))
                     break
-                except sqlite3.OperationalError:
+                except sqlite3.OperationalError as e:
+                    messages.append(str(e))
                     continue
 
             if select is None:
+                print('\n'.join(messages))
                 raise RuntimeError('failed to load extension {}'.format(extension))
 
             # initialize spatial support
