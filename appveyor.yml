@@ -1,3 +1,4 @@
+# thanks a lot to the Nansat project (https://github.com/nansencenter/nansat) from which this file was adapted
 environment:
   matrix:
     - TARGET_ARCH: x64
