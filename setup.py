@@ -42,6 +42,7 @@ if platform.system() is 'Windows':
         source_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pyroSAR', 'pkgs', 'mod_spatialite')
         suffix = 'amd64' if platform.machine().endswith('64') else 'x86'
         source = os.path.join(source_dir, 'mod_spatialite-4.3.0a-win-{}.zip'.format(suffix))
+        print('extracting mod_spatialite to {}'.format(subdir))
         archive = zf.ZipFile(source, 'r')
         archive.extractall(subdir)
         archive.close()
