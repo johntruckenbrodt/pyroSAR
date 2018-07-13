@@ -84,6 +84,10 @@ class __Handler(object):
     def load_extension(self, extension):
         if platform.system() == 'Windows':
             ext_path = os.path.join(os.path.expanduser('~'), '.pyrosar', 'mod_spatialite')
+            print('mod_spatialite ext_path exists? {}'.format(os.path.isdir(ext_path)))
+            file_exists = os.path.isfile(os.path.join(ext_path, 'mod_spatialite.dll'))
+            print('mod_spatialite.dll exists? {}'.format(file_exists))
+            print('appending to PATH: {}'.format(ext_path))
             os.environ['PATH'] = '{}{}{}'.format(os.environ['PATH'], os.path.pathsep, ext_path)
         if re.search('spatialite', extension):
             select = None
