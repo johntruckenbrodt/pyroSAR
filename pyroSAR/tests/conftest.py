@@ -8,6 +8,11 @@ def travis():
 
 
 @pytest.fixture
+def appveyor():
+    return 'APPVEYOR' in os.environ.keys()
+
+
+@pytest.fixture
 def testdir():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 
