@@ -4,7 +4,8 @@ environment:
       CONDA_PY: 36
       CONDA_INSTALL_LOCN: C:\\Miniconda3-x64
       GDAL_DATA: C:\Miniconda-x64\Library\share\gdal
-      SNAP_INSTALL: C:\snap
+      PROJECT_DIR: C:\projects\pyrosar
+      SNAP_INSTALL: %PROJECT_DIR%\snap
 
 platform:
     - x64
@@ -31,8 +32,8 @@ install:
     - cmd: conda.exe config --add channels conda-forge
 
     - cmd: |
-        powershell -Command "(New-Object Net.WebClient).DownloadFile('step.esa.int/downloads/6.0/installers/esa-snap_sentinel_windows-x64_6_0.exe', 'esa-snap_sentinel_windows-x64_6_0.exe')"
-        powershell -Command "esa-snap_sentinel_windows-x64_6_0.exe -q -dir %SNAP_INSTALL%"
+        powershell -Command "(New-Object Net.WebClient).DownloadFile('step.esa.int/downloads/6.0/installers/esa-snap_sentinel_windows-x64_6_0.exe', '%PROJECT_DIR%\esa-snap_sentinel_windows-x64_6_0.exe')"
+        powershell -Command "%PROJECT_DIR%\esa-snap_sentinel_windows-x64_6_0.exe -q -dir %SNAP_INSTALL%"
 
     - "SET PATH=%PATH%;%SNAP_INSTALL%;"
 
