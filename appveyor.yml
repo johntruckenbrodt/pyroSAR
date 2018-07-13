@@ -5,7 +5,7 @@ environment:
       CONDA_INSTALL_LOCN: C:\\Miniconda3-x64
       GDAL_DATA: C:\Miniconda-x64\Library\share\gdal
       PROJECT_DIR: C:\projects\pyrosar
-      SNAP_INSTALL: %PROJECT_DIR%\snap
+      SNAP_INSTALL: C:\projects\pyrosar\snap
 
 platform:
     - x64
