@@ -82,16 +82,18 @@ class __Handler(object):
         return [x[1].encode('ascii') for x in cursor.fetchall()]
 
     def load_extension(self, extension):
-        if platform.system() == 'Windows':
-            ext_path = os.path.join(os.path.expanduser('~'), '.pyrosar', 'mod_spatialite')
-            print('mod_spatialite ext_path exists? {}'.format(os.path.isdir(ext_path)))
-            file_exists = os.path.isfile(os.path.join(ext_path, 'mod_spatialite.dll'))
-            print('mod_spatialite.dll exists? {}'.format(file_exists))
-            print('appending to PATH: {}'.format(ext_path))
-            os.environ['PATH'] = '{}{}{}'.format(os.environ['PATH'], os.path.pathsep, ext_path)
         if re.search('spatialite', extension):
+
+            if platform.system() == 'Windows':
+                ext_path = os.path.join(os.path.expanduser('~'), '.pyrosar', 'mod_spatialite')
+                print('mod_spatialite ext_path exists? {}'.format(os.path.isdir(ext_path)))
+                file_exists = os.path.isfile(os.path.join(ext_path, 'mod_spatialite.dll'))
+                print('mod_spatialite.dll exists? {}'.format(file_exists))
+                print('appending to PATH: {}'.format(ext_path))
+                os.environ['PATH'] = '{}{}{}'.format(os.environ['PATH'], os.path.pathsep, ext_path)
+
             select = None
-            # first try to load the dedicated mod_spatialite adapter
+            # try to load the dedicated mod_spatialite adapter; loading libspatialite directly is not recommended
             for option in ['mod_spatialite', 'mod_spatialite.so', 'mod_spatialite.dll']:
                 try:
                     self.conn.load_extension(option)
@@ -102,19 +104,13 @@ class __Handler(object):
                 except sqlite3.OperationalError:
                     continue
 
-            # if loading mod_spatialite fails try to load libspatialite directly
             if select is None:
-                self.__load_regular('spatialite')
+                raise RuntimeError('failed to load extension {}'.format(extension))
 
             # initialize spatial support
             if 'spatial_ref_sys' not in self.get_tablenames():
                 cursor = self.conn.cursor()
-                if select is None:
-                    # libspatialite extension
-                    cursor.execute('SELECT InitSpatialMetaData();')
-                else:
-                    # mod_spatialite extension
-                    cursor.execute('SELECT InitSpatialMetaData(1);')
+                cursor.execute('SELECT InitSpatialMetaData(1);')
                 self.conn.commit()
 
         else:
