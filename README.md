@@ -1,5 +1,14 @@
 # pyroSAR
-[![Build Status](https://www.travis-ci.org/johntruckenbrodt/pyroSAR.svg?branch=master)](https://www.travis-ci.org/johntruckenbrodt/pyroSAR) [![Coverage Status](https://coveralls.io/repos/github/johntruckenbrodt/pyroSAR/badge.svg?branch=master)](https://coveralls.io/github/johntruckenbrodt/pyroSAR?branch=master) [![Documentation Status](https://readthedocs.org/projects/pyrosar/badge/?version=latest)](http://pyrosar.readthedocs.io/en/latest/?badge=latest)
+[![Linux Build Status] [1]][2] [![Windows Build Status][3]][4] [![Coverage Status][5]][6] [![Documentation Status][7]][8]
+
+[1]: https://www.travis-ci.org/johntruckenbrodt/pyroSAR.svg?branch=master
+[2]: https://www.travis-ci.org/johntruckenbrodt/pyroSAR
+[3]: https://ci.appveyor.com/api/projects/status/won0layps8mkss9h?svg=true
+[4]: https://ci.appveyor.com/project/johntruckenbrodt/pyrosar
+[5]: https://coveralls.io/repos/github/johntruckenbrodt/pyroSAR/badge.svg?branch=master
+[6]: https://coveralls.io/github/johntruckenbrodt/pyroSAR?branch=master
+[7]: https://readthedocs.org/projects/pyrosar/badge/?version=latest
+[8]: http://pyrosar.readthedocs.io/en/latest/?badge=latest
 
 ### a Python framework for large-scale SAR satellite data processing
 
