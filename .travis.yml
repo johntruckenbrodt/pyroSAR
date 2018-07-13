@@ -19,7 +19,7 @@ addons:
       - libudunits2-dev
       - python-gdal
       - python3-gdal
-      - libspatialite-dev
+      - libsqlite3-mod-spatialite
       - swig2.0
       - libproj-dev
       - gdal-bin
