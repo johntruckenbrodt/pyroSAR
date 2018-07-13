@@ -39,7 +39,7 @@ if platform.system() is 'Windows':
         os.makedirs(subdir)
     mod_spatialite = os.path.join(subdir, 'mod_spatialite.dll')
     if not os.path.isfile(mod_spatialite):
-        source_dir = os.path.join(os.path.dirname(__file__), 'pkgs', 'mod_spatialite')
+        source_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pkgs', 'mod_spatialite')
         if platform.machine().endswith('64'):
             source = os.path.join(source_dir, 'mod_spatialite-4.3.0a-win-amd64.zip')
         else:
