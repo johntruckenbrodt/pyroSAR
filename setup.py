@@ -43,7 +43,7 @@ if platform.system() is 'Windows':
         print('machine: {}'.format(platform.machine()))
         suffix = 'amd64' if platform.machine().endswith('64') else 'x86'
         source = os.path.join(source_dir, 'mod_spatialite-4.3.0a-win-{}.zip'.format(suffix))
-        print('extracting {} to {}'.format(os.path.dirname(source), subdir))
+        print('extracting {} to {}'.format(os.path.basename(source), subdir))
         archive = zf.ZipFile(source, 'r')
         archive.extractall(subdir)
         archive.close()
