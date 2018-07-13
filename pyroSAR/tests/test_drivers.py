@@ -128,7 +128,7 @@ def test_getFileObj(tmpdir, testdata):
         pyroSAR.getFileObj('foo', 'bar')
 
 
-def test_scene(tmpdir, testdata):
+def test_scene(tmpdir, testdata, appveyor):
     dbfile = os.path.join(str(tmpdir), 'scenes.db')
     id = pyroSAR.identify(testdata['s1'])
     assert isinstance(id.export2dict(), dict)
@@ -139,7 +139,8 @@ def test_scene(tmpdir, testdata):
     assert id.is_processed(str(tmpdir)) is False
     id.unpack(str(tmpdir), overwrite=True)
     assert id.compression is None
-    id.export2sqlite(dbfile)
+    if not appveyor:
+        id.export2sqlite(dbfile)
     with pytest.raises(IOError):
         id.getGammaImages()
     assert id.getGammaImages(id.scene) == []
@@ -167,30 +168,31 @@ def test_scene_osv(tmpdir, testdata):
             id.getOSV(osvdir, osvType='POE')
 
 
-def test_archive(tmpdir, testdata):
+def test_archive(tmpdir, testdata, appveyor):
     id = pyroSAR.identify(testdata['s1'])
     dbfile = os.path.join(str(tmpdir), 'scenes.db')
-    db = pyroSAR.Archive(dbfile)
-    db.insert(testdata['s1'], verbose=False)
-    assert db.is_registered(testdata['s1']) is True
-    assert len(db.get_unique_directories()) == 1
-    assert db.select_duplicates() == []
-    assert db.select_duplicates(outname_base='S1A__IW___A_20150222T170750', scene='scene.zip') == []
-    assert len(db.select(mindate='20141001T192312', maxdate='20201001T192312')) == 1
-    assert len(db.select(polarizations=['VV'])) == 1
-    assert len(db.select(vectorobject=id.bbox())) == 1
-    assert len(db.select(sensor='S1A', vectorobject='foo', processdir=str(tmpdir), verbose=True)) == 1
-    assert len(db.select(sensor='S1A', mindate='foo', maxdate='bar', foobar='foobar')) == 1
-    assert len(db.select(vv=1, acquisition_mode=('IW', 'EW'))) == 1
-    with pytest.raises(IOError):
-        db.filter_scenelist([1])
-    db.close()
-    with pyroSAR.Archive(dbfile) as db:
-        assert db.size == (1, 0)
-        shp = os.path.join(str(tmpdir), 'db.shp')
-        db.export2shp(shp)
-    assert spatial.Vector(shp).nfeatures == 1
-    os.remove(dbfile)
-    with pytest.raises(OSError):
+    if not appveyor:
+        db = pyroSAR.Archive(dbfile)
+        db.insert(testdata['s1'], verbose=False)
+        assert db.is_registered(testdata['s1']) is True
+        assert len(db.get_unique_directories()) == 1
+        assert db.select_duplicates() == []
+        assert db.select_duplicates(outname_base='S1A__IW___A_20150222T170750', scene='scene.zip') == []
+        assert len(db.select(mindate='20141001T192312', maxdate='20201001T192312')) == 1
+        assert len(db.select(polarizations=['VV'])) == 1
+        assert len(db.select(vectorobject=id.bbox())) == 1
+        assert len(db.select(sensor='S1A', vectorobject='foo', processdir=str(tmpdir), verbose=True)) == 1
+        assert len(db.select(sensor='S1A', mindate='foo', maxdate='bar', foobar='foobar')) == 1
+        assert len(db.select(vv=1, acquisition_mode=('IW', 'EW'))) == 1
+        with pytest.raises(IOError):
+            db.filter_scenelist([1])
+        db.close()
         with pyroSAR.Archive(dbfile) as db:
-            db.import_outdated(testdata['archive_old'])
+            assert db.size == (1, 0)
+            shp = os.path.join(str(tmpdir), 'db.shp')
+            db.export2shp(shp)
+        assert spatial.Vector(shp).nfeatures == 1
+        os.remove(dbfile)
+        with pytest.raises(OSError):
+            with pyroSAR.Archive(dbfile) as db:
+                db.import_outdated(testdata['archive_old'])
