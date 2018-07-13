@@ -2,11 +2,6 @@ from setuptools import setup, find_packages
 import platform
 import zipfile as zf
 import os
-import sys
-if sys.version_info >= (3, 0):
-    from urllib.request import urlopen
-else:
-    from urllib import urlopen
 
 # Create .pyrosar in HOME - Directory
 directory = os.path.join(os.path.expanduser('~'), '.pyrosar')
@@ -15,7 +10,7 @@ if not os.path.exists(directory):
     os.makedirs(directory)
 
 if platform.system() is 'Windows':
-    package_data = {'pyroSAR': 'pkgs/mod_spatialite/*'}
+    package_data = {'pyroSAR': ['pkgs/mod_spatialite/*']}
 else:
     package_data = {}
 
