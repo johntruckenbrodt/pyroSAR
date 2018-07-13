@@ -92,8 +92,7 @@ class __Handler(object):
                 print('appending to PATH: {}'.format(ext_path))
                 os.environ['PATH'] = '{}{}{}'.format(os.environ['PATH'], os.path.pathsep, ext_path)
             select = None
-            # try to load the dedicated mod_spatialite adapter; loading libspatialite directly is not recommended
-            messages = []
+            # try to load the dedicated mod_spatialite adapter
             for option in ['mod_spatialite', 'mod_spatialite.so', 'mod_spatialite.dll']:
                 try:
                     self.conn.load_extension(option)
@@ -102,17 +101,22 @@ class __Handler(object):
                     print('loading extension {0} as {1}'.format(extension, option))
                     break
                 except sqlite3.OperationalError as e:
-                    messages.append('{0}: {1}'.format(option, str(e)))
+                    print('{0}: {1}'.format(option, str(e)))
                     continue
 
+            # if loading mod_spatialite fails try to load libspatialite directly
             if select is None:
-                print('\n'.join(messages))
-                raise RuntimeError('failed to load extension {}'.format(extension))
+                self.__load_regular('spatialite')
 
             # initialize spatial support
             if 'spatial_ref_sys' not in self.get_tablenames():
                 cursor = self.conn.cursor()
-                cursor.execute('SELECT InitSpatialMetaData(1);')
+                if select is None:
+                    # libspatialite extension
+                    cursor.execute('SELECT InitSpatialMetaData();')
+                else:
+                    # mod_spatialite extension
+                    cursor.execute('SELECT InitSpatialMetaData(1);')
                 self.conn.commit()
 
         else:
