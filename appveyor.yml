@@ -2,8 +2,8 @@ environment:
   matrix:
     - TARGET_ARCH: x64
       CONDA_PY: 36
-      CONDA_INSTALL_LOCN: C:\\Miniconda3-x64
-      GDAL_DATA: C:\Miniconda-x64\Library\share\gdal
+      CONDA_INSTALL_LOCN: C:\Miniconda3-x64
+      GDAL_DATA: %CONDA_INSTALL_LOCN%\Library\share\gdal
       PROJECT_DIR: C:\projects\pyrosar
       SNAP_INSTALL: C:\projects\snap
 
@@ -12,35 +12,38 @@ platform:
 
 install:
     # If there is a newer build queued for the same PR, cancel this one.
-    - cmd: appveyor DownloadFile https://raw.githubusercontent.com/conda-forge/conda-forge-build-setup-feedstock/master/recipe/ff_ci_pr_build.py
-    - cmd: ff_ci_pr_build -v --ci "appveyor" "%APPVEYOR_ACCOUNT_NAME%/%APPVEYOR_PROJECT_SLUG%" "%APPVEYOR_BUILD_NUMBER%" "%APPVEYOR_PULL_REQUEST_NUMBER%"
-    - cmd: del ff_ci_pr_build.py
+    - appveyor DownloadFile https://raw.githubusercontent.com/conda-forge/conda-forge-build-setup-feedstock/master/recipe/ff_ci_pr_build.py
+    - ff_ci_pr_build -v --ci "appveyor" "%APPVEYOR_ACCOUNT_NAME%/%APPVEYOR_PROJECT_SLUG%" "%APPVEYOR_BUILD_NUMBER%" "%APPVEYOR_PULL_REQUEST_NUMBER%"
+    - del ff_ci_pr_build.py
 
     # Cywing's git breaks conda-build. (See https://github.com/conda-forge/conda-smithy-feedstock/pull/2.)
-    - cmd: rmdir C:\cygwin /s /q
+    - rmdir C:\cygwin /s /q
 
     # Add path, activate `conda` and update conda.
-    - cmd: call %CONDA_INSTALL_LOCN%\Scripts\activate.bat
-    - cmd: conda update --yes --quiet conda
+    - call %CONDA_INSTALL_LOCN%\Scripts\activate.bat
+    - conda update --yes --quiet conda
 
-    - cmd: set PYTHONUNBUFFERED=1
+    - set PYTHONUNBUFFERED=1
 
     # Add our channels.
-    - cmd: conda config --set show_channel_urls true
-    - cmd: conda config --remove channels defaults
-    - cmd: conda config --add channels defaults
-    - cmd: conda config --add channels conda-forge
+    - conda config --set show_channel_urls true
+    - conda config --remove channels defaults
+    - conda config --add channels defaults
+    - conda config --add channels conda-forge
 
-    - cmd: appveyor DownloadFile https://step.esa.int/downloads/6.0/installers/esa-snap_sentinel_windows-x64_6_0.exe
-    - cmd: esa-snap_sentinel_windows-x64_6_0.exe -q -dir %SNAP_INSTALL%
+    # install ESA SNAP
+    - appveyor DownloadFile https://step.esa.int/downloads/6.0/installers/esa-snap_sentinel_windows-x64_6_0.exe
+    - esa-snap_sentinel_windows-x64_6_0.exe -q -dir %SNAP_INSTALL%
 
-    - "SET PATH=%PATH%;%SNAP_INSTALL%\bin;"
+    - set PATH=%PATH%;%SNAP_INSTALL%\bin
+
+    - echo %PATH%
 
     # Configure the VM.
-    - cmd: conda install -n root --quiet --yes gdal swig
-    - cmd: python -m pip install --upgrade pip
-    - cmd: python -m pip install -r requirements-dev.txt coveralls coverage
-    - cmd: python setup.py install
+    - conda install -n root --quiet --yes gdal swig
+    - python -m pip install --upgrade pip
+    - python -m pip install -r requirements-dev.txt coveralls coverage
+    - python setup.py install
 
 # Skip .NET project specific build phase.
 build: off
