@@ -1,0 +1,49 @@
+environment:
+  matrix:
+    - TARGET_ARCH: x64
+      CONDA_PY: 36
+      CONDA_INSTALL_LOCN: C:\\Miniconda3-x64
+      GDAL_DATA: C:\Miniconda-x64\Library\share\gdal
+      SNAP_INSTALL: C:\snap
+
+platform:
+    - x64
+
+install:
+    # If there is a newer build queued for the same PR, cancel this one.
+    - cmd: |
+        powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/conda-forge/conda-forge-build-setup-feedstock/master/recipe/ff_ci_pr_build.py', 'ff_ci_pr_build.py')"
+        ff_ci_pr_build -v --ci "appveyor" "%APPVEYOR_ACCOUNT_NAME%/%APPVEYOR_PROJECT_SLUG%" "%APPVEYOR_BUILD_NUMBER%" "%APPVEYOR_PULL_REQUEST_NUMBER%"
+        del ff_ci_pr_build.py
+    # Cywing's git breaks conda-build. (See https://github.com/conda-forge/conda-smithy-feedstock/pull/2.)
+    - cmd: rmdir C:\cygwin /s /q
+
+    # Add path, activate `conda` and update conda.
+    - cmd: call %CONDA_INSTALL_LOCN%\Scripts\activate.bat
+    - cmd: conda.exe update --yes --quiet conda
+
+    - cmd: set PYTHONUNBUFFERED=1
+
+    # Add our channels.
+    - cmd: conda.exe config --set show_channel_urls true
+    - cmd: conda.exe config --remove channels defaults
+    - cmd: conda.exe config --add channels defaults
+    - cmd: conda.exe config --add channels conda-forge
+
+    - cmd: |
+        powershell -Command "(New-Object Net.WebClient).DownloadFile('step.esa.int/downloads/6.0/installers/esa-snap_sentinel_windows-x64_6_0.exe', 'esa-snap_sentinel_windows-x64_6_0.exe')"
+        powershell -Command "esa-snap_sentinel_windows-x64_6_0.exe -q -dir %SNAP_INSTALL%"
+
+    - "SET PATH=%PATH%;%SNAP_INSTALL%;"
+
+    # Configure the VM.
+    - cmd: conda.exe install -n root --quiet --yes gdal
+    - "python -m pip install --upgrade pip"
+    - "pip install -r requirements.txt coveralls coverage"
+    - cmd: python.exe setup.py install
+
+# Skip .NET project specific build phase.
+build: off
+
+test_script:
+    - coverage run --source pyroSAR/ -m pytest
