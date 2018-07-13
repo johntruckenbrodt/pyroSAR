@@ -91,7 +91,8 @@ class __Handler(object):
                 print('mod_spatialite.dll exists? {}'.format(file_exists))
                 print('appending to PATH: {}'.format(ext_path))
                 os.environ['PATH'] = '{}{}{}'.format(os.environ['PATH'], os.path.pathsep, ext_path)
-
+                print('PATH:')
+                print(os.environ['PATH'])
             select = None
             # try to load the dedicated mod_spatialite adapter; loading libspatialite directly is not recommended
             messages = []
@@ -103,11 +104,11 @@ class __Handler(object):
                     print('loading extension {0} as {1}'.format(extension, option))
                     break
                 except sqlite3.OperationalError as e:
-                    messages.append(str(e))
+                    messages.append('{0}: {1}'.format(option, str(e)))
                     continue
 
             if select is None:
-                print('\n'.join(messages))
+                print(''.join(messages))
                 raise RuntimeError('failed to load extension {}'.format(extension))
 
             # initialize spatial support
