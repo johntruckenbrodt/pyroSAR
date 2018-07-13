@@ -5,7 +5,7 @@ environment:
       CONDA_INSTALL_LOCN: C:\\Miniconda3-x64
       GDAL_DATA: C:\Miniconda-x64\Library\share\gdal
       PROJECT_DIR: C:\projects\pyrosar
-      SNAP_INSTALL: C:\projects\pyrosar\snap
+      SNAP_INSTALL: C:\projects\snap
 
 platform:
     - x64
@@ -34,7 +34,7 @@ install:
     - cmd: appveyor DownloadFile https://step.esa.int/downloads/6.0/installers/esa-snap_sentinel_windows-x64_6_0.exe
     - cmd: esa-snap_sentinel_windows-x64_6_0.exe -q -dir %SNAP_INSTALL%
 
-    - "SET PATH=%PATH%;%SNAP_INSTALL%;"
+    - "SET PATH=%PATH%;%SNAP_INSTALL%\bin;"
 
     # Configure the VM.
     - cmd: conda install -n root --quiet --yes gdal swig
