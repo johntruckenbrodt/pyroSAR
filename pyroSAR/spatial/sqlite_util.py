@@ -1,5 +1,6 @@
 import os
 import re
+import platform
 
 from ctypes.util import find_library
 
@@ -82,16 +83,25 @@ class __Handler(object):
 
     def load_extension(self, extension):
         if re.search('spatialite', extension):
+
+            if platform.system() == 'Windows':
+                ext_path = os.path.join(os.path.expanduser('~'), '.pyrosar', 'mod_spatialite')
+                print('mod_spatialite ext_path exists? {}'.format(os.path.isdir(ext_path)))
+                file_exists = os.path.isfile(os.path.join(ext_path, 'mod_spatialite.dll'))
+                print('mod_spatialite.dll exists? {}'.format(file_exists))
+                print('appending to PATH: {}'.format(ext_path))
+                os.environ['PATH'] = '{}{}{}'.format(os.environ['PATH'], os.path.pathsep, ext_path)
             select = None
-            # first try to load the dedicated mod_spatialite adapter
-            for option in ['mod_spatialite', 'mod_spatialite.so']:
+            # try to load the dedicated mod_spatialite adapter
+            for option in ['mod_spatialite', 'mod_spatialite.so', 'mod_spatialite.dll']:
                 try:
                     self.conn.load_extension(option)
                     select = option
                     self.extensions.append(option)
                     print('loading extension {0} as {1}'.format(extension, option))
                     break
-                except sqlite3.OperationalError:
+                except sqlite3.OperationalError as e:
+                    print('{0}: {1}'.format(option, str(e)))
                     continue
 
             # if loading mod_spatialite fails try to load libspatialite directly

@@ -8,8 +8,13 @@ def travis():
 
 
 @pytest.fixture
+def appveyor():
+    return 'APPVEYOR' in os.environ.keys()
+
+
+@pytest.fixture
 def testdir():
-    return 'pyroSAR/tests/data'
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 
 
 @pytest.fixture

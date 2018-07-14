@@ -19,7 +19,11 @@ class XMLHandler(object):
             self.text = xml.read()
             xml.seek(0)
         elif isinstance(xml, (bytes, str)):
-            if os.path.isfile(xml):
+            try:
+                isfile = os.path.isfile(xml)
+            except ValueError:
+                isfile = False
+            if isfile:
                 self.infile = xml
                 with open(xml, 'r') as infile:
                     self.text = infile.read()
