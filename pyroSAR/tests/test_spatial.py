@@ -2,6 +2,7 @@ import os
 import pytest
 import numpy as np
 from osgeo import ogr
+import platform
 from pyroSAR import identify
 from pyroSAR.spatial import crsConvert, haversine, Raster, stack, ogr2ogr, gdal_translate, gdal_rasterize, dtypes, bbox
 from pyroSAR.spatial.vector import feature2vector, dissolve, Vector, intersect
@@ -74,7 +75,7 @@ def test_dissolve(tmpdir, travis, testdata):
         bbox1.write(bbox3_name)
     bbox1.close()
 
-    if not travis:
+    if not travis and platform.system() != 'Windows':
         # dissolve the geometries in bbox3 and write the result to new bbox4
         # this test is currently disabled for Travis as the current sqlite3 version on Travis seems to not support
         # loading gdal as extension; Travis CI setup: Ubuntu 14.04 (Trusty), sqlite3 version 3.8.2 (2018-06-04)

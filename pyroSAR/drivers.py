@@ -520,7 +520,7 @@ class ID(object):
             if header.endswith('/'):
                 for item in sorted(names):
                     if item != header:
-                        outname = os.path.join(directory, item.replace(header, '', 1))
+                        outname = os.path.join(directory, item.replace(header, '', 1)).replace('/', os.path.sep)
                         if item.endswith('/'):
                             os.makedirs(outname)
                         else:
@@ -1994,7 +1994,7 @@ def getFileObj(scene, filename):
     io.BytesIO
         a file object
     """
-    membername = filename.replace(scene, '').strip('/')
+    membername = filename.replace(scene, '').strip('\/')
 
     if not os.path.exists(scene):
         raise RuntimeError('scene does not exist')

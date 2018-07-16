@@ -1,0 +1,53 @@
+# thanks a lot to the Nansat project (https://github.com/nansencenter/nansat) from which this file was adapted
+environment:
+  matrix:
+    - TARGET_ARCH: x64
+      CONDA_PY: 36
+      CONDA_INSTALL_LOCN: C:\Miniconda3-x64
+      GDAL_DATA: C:\Miniconda3-x64\Library\share\gdal
+      PROJECT_DIR: C:\projects\pyrosar
+      SNAP_INSTALL: C:\projects\snap
+
+platform:
+    - x64
+
+install:
+    # If there is a newer build queued for the same PR, cancel this one.
+    - appveyor DownloadFile https://raw.githubusercontent.com/conda-forge/conda-forge-build-setup-feedstock/master/recipe/ff_ci_pr_build.py
+    - ff_ci_pr_build -v --ci "appveyor" "%APPVEYOR_ACCOUNT_NAME%/%APPVEYOR_PROJECT_SLUG%" "%APPVEYOR_BUILD_NUMBER%" "%APPVEYOR_PULL_REQUEST_NUMBER%"
+    - del ff_ci_pr_build.py
+
+    # Cygwin's git breaks conda-build. (See https://github.com/conda-forge/conda-smithy-feedstock/pull/2.)
+    - rmdir C:\cygwin /s /q
+
+    # Add path, activate `conda` and update conda.
+    - call %CONDA_INSTALL_LOCN%\Scripts\activate.bat
+    - conda update --yes --quiet conda
+
+    - set PYTHONUNBUFFERED=1
+
+    # Add our channels.
+    - conda config --set show_channel_urls true
+    - conda config --remove channels defaults
+    - conda config --add channels defaults
+    - conda config --add channels conda-forge
+
+    # install ESA SNAP
+    - appveyor DownloadFile https://step.esa.int/downloads/6.0/installers/esa-snap_sentinel_windows-x64_6_0.exe
+    - esa-snap_sentinel_windows-x64_6_0.exe -q -dir %SNAP_INSTALL%
+
+    - set PATH=%PATH%;%SNAP_INSTALL%\bin
+
+    - echo %PATH%
+
+    # Configure the VM.
+    - conda install -n root --quiet --yes gdal swig
+    - python -m pip install --upgrade pip
+    - python -m pip install -r requirements-dev.txt coveralls coverage
+    - python setup.py install
+
+# Skip .NET project specific build phase.
+build: off
+
+test_script:
+    - coverage run --source pyroSAR/ -m pytest
