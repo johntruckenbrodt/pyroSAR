@@ -1,7 +1,4 @@
 from .drivers import *
-from ._dev_config import Config, CONFIG
+from ._dev_config import ConfigHandler
 
-__config = Config()
-
-# Initialise Config File
-__config.add_section(CONFIG.section.snap)
+ConfigHandler = ConfigHandler()
