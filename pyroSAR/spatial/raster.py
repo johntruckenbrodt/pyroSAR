@@ -5,7 +5,6 @@
 
 
 # todo: function to write data with the same metadata as a given file
-# todo: documentation
 
 from __future__ import division
 import os
@@ -15,10 +14,10 @@ from math import sqrt, floor, ceil
 from time import gmtime, strftime
 import numpy as np
 
-from pyroSAR import envi
-from pyroSAR.spatial.auxil import (gdalwarp, gdalbuildvrt)
-from pyroSAR.spatial.vector import (Vector, bbox, crsConvert, intersect)
-from pyroSAR.ancillary import (dissolve, multicore)
+from . import envi
+from .auxil import gdalwarp, gdalbuildvrt
+from .vector import Vector, bbox, crsConvert, intersect
+from pyroSAR.ancillary import dissolve, multicore
 
 from osgeo import (gdal, gdal_array, osr)
 from osgeo.gdalconst import (GA_ReadOnly, GA_Update, GDT_Byte, GDT_Int16, GDT_UInt16,

@@ -1,4 +1,4 @@
 from .util import geocode
 from .auxil import ExamineSnap, gpt
 
-snap_path = ExamineSnap()
+snap_config = ExamineSnap()

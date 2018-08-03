@@ -28,7 +28,7 @@ import re
 import shutil
 import zipfile as zf
 
-from ..envi import HDRobject, hdr
+from ..spatial.envi import HDRobject, hdr
 from ..spatial import raster
 from . import ISPPar, process, UTM, slc_corners
 
