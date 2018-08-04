@@ -21,7 +21,7 @@ from xml.dom import minidom
 from os.path import expanduser
 
 import pyroSAR
-from pyroSAR import identify
+from pyroSAR import identify, ConfigHandler
 from pyroSAR.ancillary import dissolve, finder, which
 from pyroSAR.spatial import gdal_translate
 from .._dev_config import LOOKUP
@@ -274,22 +274,92 @@ class ExamineSnap(object):
                     'You can define a different one with ExamineSnap.set_path()'
                     ''.format(options='\n'.join(executables), select=self.path), UserWarning)
 
-            self.__get_etc()
             self.__read_config()
+            self.__read_snap_config()
 
-        self.auxdatapath = os.path.join(expanduser('~'), '.snap/auxdata')
+    def __read_config(self):
+        if 'SNAP' in ConfigHandler.sections:
+            if 'etc' in ConfigHandler.keys('SNAP'):
+                self.etc = ConfigHandler.get('SNAP', 'etc')
+
+                if not os.path.exists(self.etc):
+                    self.__get_etc()
+
+            else:
+                self.__get_etc()
+
+            if 'auxdata' in ConfigHandler.keys('SNAP'):
+                self.auxdata = ConfigHandler.get('SNAP', 'auxdata')
+
+                if not os.path.exists(self.auxdata):
+                    self.__get_auxdata()
+
+            else:
+                self.__get_auxdata()
+
+            if 'properties' in ConfigHandler.keys('SNAP'):
+                self.properties = ConfigHandler.get('SNAP', 'properties')
+
+                if not os.path.exists(self.properties):
+                    self.__get_properties()
+
+            else:
+                self.__get_properties()
+
+            if 'auxdatapath' in ConfigHandler.keys('SNAP'):
+                self.auxdatapath = ConfigHandler.get('SNAP', 'auxdatapath')
+
+                if not os.path.exists(self.auxdatapath):
+                    self.auxdatapath = os.path.join(expanduser('~'), '.snap/auxdata')
+                    ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath)
+
+            else:
+                self.auxdatapath = os.path.join(expanduser('~'), '.snap/auxdata')
+                ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath)
+
+        else:
+            ConfigHandler.add_section('SNAP')
+            self.__get_etc()
+            self.__get_auxdata()
+            self.__get_properties()
+
+            self.auxdatapath = os.path.join(expanduser('~'), '.snap/auxdata')
+            ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath)
 
     def __get_etc(self):
         try:
             self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
-            self.auxdata = os.listdir(self.etc)
-            self.config_path = os.path.join(self.etc, [s for s in self.auxdata if 'snap.auxdata.properties' in s][0])
+            ConfigHandler.set('SNAP', 'etc', self.etc)
 
         except OSError:
             raise AssertionError('ETC directory is not existent.')
 
-    def __read_config(self):
-        with open(self.config_path) as config:
+    def __get_auxdata(self):
+        try:
+            self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
+            self.auxdata = os.listdir(self.etc)
+
+            ConfigHandler.set('SNAP', 'etc', self.etc, True)
+            ConfigHandler.set('SNAP', 'auxdata', self.auxdata)
+
+        except OSError:
+            raise AssertionError('ETC directory is not existent.')
+
+    def __get_properties(self):
+        try:
+            self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
+            self.auxdata = os.listdir(self.etc)
+            self.properties = os.path.join(self.etc, [s for s in self.auxdata if 'snap.auxdata.properties' in s][0])
+
+            ConfigHandler.set('SNAP', 'etc', self.etc, True)
+            ConfigHandler.set('SNAP', 'auxdata', self.auxdata, True)
+            ConfigHandler.set('SNAP', 'properties', self.properties)
+
+        except OSError:
+            raise AssertionError('ETC directory is not existent.')
+
+    def __read_snap_config(self):
+        with open(self.properties) as config:
             self.config = []
             for line in config:
                 self.config.append(line)
