@@ -194,6 +194,7 @@ class ConfigHandler(object):
         "etc": "etc",
         "exe": "executable",
         "aux": "auxdata",
+        "auxpath": "auxdatapath",
         "pro": "properties"
     }
 
@@ -371,7 +372,8 @@ class ConfigHandler(object):
                         self.parser.write(item)
 
                 else:
-                    warnings.warn("Value already exists.")
+                    pass
+                    # warnings.warn("Value already exists.")
 
             else:
                 self.parser.set(section, key, value)
