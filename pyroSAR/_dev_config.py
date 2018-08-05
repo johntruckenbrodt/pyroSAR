@@ -163,29 +163,6 @@ class ConfigHandler(object):
     -----
     The syntax is the same as in ConfigParser. Here, keys are called options.
 
-    Examples
-    --------
-    >>> from pyroSAR import ConfigHandler
-    >>> config = ConfigHandler()
-    >>> config.add_section('SNAP')
-    >>> config.set('SNAP', 'etc', 'C:\Users\user\dir_1')
-    >>> config.set('SNAP', 'auxdata', 'C:\Users\user\dir_2')
-    >>> print config
-        'Class    : Config
-         Path     : C:\Users\ibari\.pyrosar\ConfigHandler.ini
-         Sections : 1
-
-         Contents:
-           Section: SNAP
-	            x etc :: C:\Users\user\dir_1 :: <type 'str'>
-	            x auxdata :: C:\Users\user\dir_2 :: <type 'str'>'
-
-    >>> config.SNAP
-        {'auxdata': 'C:\\Users\\user\\dir_2', 'etc': 'C:\\Users\\user\\dir_1'}
-    >>> config.SNAP['etc']
-        'C:\\Users\\user\\dir_1'
-    >>> config.SNAP['auxdata']
-        'C:\\Users\\user\\dir_2'
     """
 
     # ---- Define Global Variables ----
