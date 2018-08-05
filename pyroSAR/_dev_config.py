@@ -248,7 +248,7 @@ class ConfigHandler(object):
         }
 
         if os.path.isfile(self.__GLOBAL['config']):
-            self.parser = ConfigParser.RawConfigParser()
+            self.parser = ConfigParser.RawConfigParser(allow_no_value=True)
             self.parser.read(self.__GLOBAL['config'])
 
         else:
