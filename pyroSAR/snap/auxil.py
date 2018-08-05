@@ -1,5 +1,6 @@
 import sys
 import warnings
+import pkg_resources
 
 if sys.version_info >= (3, 0):
     from io import StringIO
@@ -370,7 +371,8 @@ class ExamineSnap(object):
             ConfigHandler.set('SNAP', 'properties', self.properties)
 
         except OSError:
-            raise AssertionError('ETC directory is not existent.')
+            path = 'data/snap.auxdata.properties'
+            self.properties = pkg_resources.resource_filename(__name__, path)
 
     def __read_snap_properties(self):
         """
@@ -397,28 +399,23 @@ class ExamineSnap(object):
         ConfigHandler.add_section('OUTPUT')
         ConfigHandler.add_section('URL')
 
-        try:
+        for i in range(len(self.snap_properties)):
+            item = self.snap_properties[i]
 
-            for i in range(len(self.snap_properties)):
-                item = self.snap_properties[i]
+            if len(item.split()) <= 1:
+                pass
+            else:
+                if '${AuxDataPath}' in item:
+                    line = item.replace('${AuxDataPath}', self.auxdatapath)
+                    line = line.replace('\\', '/')
 
-                if len(item.split()) <= 1:
-                    pass
-                else:
-                    if '${AuxDataPath}' in item:
-                        line = item.replace('${AuxDataPath}', self.auxdatapath)
-                        line = line.replace('\\', '/')
+                if '${demPath}' in item:
+                    line = item.replace('${demPath}', demPath)
+                    line = line.replace('\\', '/')
 
-                    if '${demPath}' in item:
-                        line = item.replace('${demPath}', demPath)
-                        line = line.replace('\\', '/')
+                if '${landCoverPath}' in item:
+                    line = item.replace('${landCoverPath}', landCoverPath)
+                    line = line.replace('\\', '/')
 
-                    if '${landCoverPath}' in item:
-                        line = item.replace('${landCoverPath}', landCoverPath)
-                        line = line.replace('\\', '/')
-
-                    item_list = line.split()
-                    ConfigHandler.set('OUTPUT', key=item_list[0], value=item_list[-1])
-
-        except AttributeError:
-            pass
+                item_list = line.split()
+                ConfigHandler.set('OUTPUT', key=item_list[0], value=item_list[-1])
