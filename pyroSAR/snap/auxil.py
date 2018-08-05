@@ -275,7 +275,8 @@ class ExamineSnap(object):
                     ''.format(options='\n'.join(executables), select=self.path), UserWarning)
 
             self.__read_config()
-            self.__read_snap_config()
+            self.__read_snap_properties()
+            self.__set_properties_paths()
 
     def __read_config(self):
         """
@@ -310,20 +311,25 @@ class ExamineSnap(object):
                 self.auxdatapath = ConfigHandler.get('SNAP', 'auxdatapath')
 
                 if not os.path.exists(self.auxdatapath):
-                    self.auxdatapath = os.path.join(expanduser('~'), '.snap/auxdata')
-                    ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath)
+                    self.auxdatapath = os.path.join(expanduser('~'), '.snap\\auxdata')
+                    ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath, True)
 
             else:
-                self.auxdatapath = os.path.join(expanduser('~'), '.snap/auxdata')
-                ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath)
+                self.auxdatapath = os.path.join(expanduser('~'), '.snap\\auxdata')
+                ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath, True)
 
         else:
             ConfigHandler.add_section('SNAP')
             self.__get_etc()
             self.__get_properties()
 
-            self.auxdatapath = os.path.join(expanduser('~'), '.snap/auxdata')
-            ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath)
+            self.auxdatapath = os.path.join(expanduser('~'), '.snap\\auxdata')
+            ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath, True)
+
+    def set_auxdatapath(self, path):
+        if not os.path.exists(path):
+            self.auxdatapath = path
+            ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath, True)
 
     def __get_etc(self):
         """
@@ -366,7 +372,7 @@ class ExamineSnap(object):
         except OSError:
             raise AssertionError('ETC directory is not existent.')
 
-    def __read_snap_config(self):
+    def __read_snap_properties(self):
         """
         Read the properties file.
 
@@ -375,7 +381,44 @@ class ExamineSnap(object):
         None
 
         """
+
         with open(self.properties) as config:
-            self.config = []
+            self.snap_properties = []
             for line in config:
-                self.config.append(line)
+                if '#' not in line:
+                    self.snap_properties.append(line)
+                else:
+                    pass
+
+    def __set_properties_paths(self):
+        demPath = os.path.join(self.auxdatapath, 'dem')
+        landCoverPath = os.path.join(self.auxdatapath, 'LandCover')
+
+        ConfigHandler.add_section('OUTPUT')
+        ConfigHandler.add_section('URL')
+
+        try:
+
+            for i in range(len(self.snap_properties)):
+                item = self.snap_properties[i]
+
+                if len(item.split()) <= 1:
+                    pass
+                else:
+                    if '${AuxDataPath}' in item:
+                        line = item.replace('${AuxDataPath}', self.auxdatapath)
+                        line = line.replace('\\', '/')
+
+                    if '${demPath}' in item:
+                        line = item.replace('${demPath}', demPath)
+                        line = line.replace('\\', '/')
+
+                    if '${landCoverPath}' in item:
+                        line = item.replace('${landCoverPath}', landCoverPath)
+                        line = line.replace('\\', '/')
+
+                    item_list = line.split()
+                    ConfigHandler.set('OUTPUT', key=item_list[0], value=item_list[-1])
+
+        except AttributeError:
+            pass
