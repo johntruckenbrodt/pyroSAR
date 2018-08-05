@@ -278,6 +278,15 @@ class ExamineSnap(object):
             self.__read_snap_config()
 
     def __read_config(self):
+        """
+        This method reads the config.ini to examine the snap paths. If the snap paths are not in the config.ini or the
+        paths are wrong they will be automatically created.
+
+        Returns
+        -------
+        None
+
+        """
         if 'SNAP' in ConfigHandler.sections:
             if 'etc' in ConfigHandler.keys('SNAP'):
                 self.etc = ConfigHandler.get('SNAP', 'etc')
@@ -311,13 +320,20 @@ class ExamineSnap(object):
         else:
             ConfigHandler.add_section('SNAP')
             self.__get_etc()
-            self.__get_auxdata()
             self.__get_properties()
 
             self.auxdatapath = os.path.join(expanduser('~'), '.snap/auxdata')
             ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath)
 
     def __get_etc(self):
+        """
+        Try to locate the etc directory and write it to config.ini.
+
+        Returns
+        -------
+        None
+
+        """
         try:
             self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
             self.auxdata = os.listdir(self.etc)
@@ -329,6 +345,15 @@ class ExamineSnap(object):
             raise AssertionError('ETC directory is not existent.')
 
     def __get_properties(self):
+        """
+        Try to locate the properties file and write the path to config.ini.
+
+        Returns
+        -------
+        None
+
+        """
+
         try:
             self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
             self.auxdata = os.listdir(self.etc)
@@ -342,6 +367,14 @@ class ExamineSnap(object):
             raise AssertionError('ETC directory is not existent.')
 
     def __read_snap_config(self):
+        """
+        Read the properties file.
+
+        Returns
+        -------
+        None
+
+        """
         with open(self.properties) as config:
             self.config = []
             for line in config:
