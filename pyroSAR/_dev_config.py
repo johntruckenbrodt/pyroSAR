@@ -174,23 +174,64 @@ class ConfigHandler(object):
 
     # ---- Define Global Variables ----
 
-    __SNAP_KEYS = {
+    __KEYS = {
         "etc": "etc",
         "exe": "executable",
         "aux": "auxdata",
         "auxpath": "auxdatapath",
-        "pro": "properties"
+        "pro": "properties",
+        "demPath": "demPath",
+        "DEM.aceDEMDataPath": "DEM.aceDEMDataPath",
+        "DEM.aceDEM_HTTP": "DEM.aceDEM_HTTP",
+        "DEM.aceDEM_HTTP": "DEM.aceDEM_HTTP",
+        "DEM.ace2_5MinDEMDataPath": "DEM.ace2_5MinDEMDataPath",
+        "DEM.ace2_5MinDEM_HTTP": "DEM.ace2_5MinDEM_HTTP",
+        "DEM.CDEM_HTTP": "DEM.CDEM_HTTP",
+        "DEM.gtopo30DEMDataPath": "DEM.gtopo30DEMDataPath",
+        "DEM.AsterDEMDataPath": "DEM.AsterDEMDataPath",
+        "DEM.Getasse30DEMDataPath": "DEM.Getasse30DEMDataPath",
+        "DEM.srtm3GeoTiffDEMDataPath": "DEM.srtm3GeoTiffDEMDataPath",
+        "DEM.srtm3GeoTiffDEM_FTP": "DEM.srtm3GeoTiffDEM_FTP",
+        "DEM.srtm3GeoTiffDEM_remotePath": "DEM.srtm3GeoTiffDEM_remotePath",
+        "DEM.srtm3GeoTiffDEM_HTTP": "DEM.srtm3GeoTiffDEM_HTTP",
+        "DEM.srtm1HgtDEM_HTTP": "DEM.srtm1HgtDEM_HTTP",
+        "DEM.srtm1GridDEMDataPath": "DEM.srtm1GridDEMDataPath",
+        "landCoverPath": "landCoverPath",
+        "LandCover.glc2000DataPath": "LandCover.glc2000DataPath",
+        "LandCover.globcoverDataPath": "LandCover.globcoverDataPath",
+        "OrbitFiles.dorisHTTP_vor_remotePath": "OrbitFiles.dorisHTTP_vor_remotePath",
+        "OrbitFiles.dorisVOROrbitPath": "OrbitFiles.dorisVOROrbitPath",
+        "OrbitFiles.dorisPOROrbitPath": "OrbitFiles.dorisPOROrbitPath",
+        "OrbitFiles.delftEnvisatOrbitPath": "OrbitFiles.delftEnvisatOrbitPath",
+        "OrbitFiles.delftERS1OrbitPath": "OrbitFiles.delftERS1OrbitPath",
+        "OrbitFiles.delftERS2OrbitPath": "OrbitFiles.delftERS2OrbitPath",
+        "OrbitFiles.delftFTP": "OrbitFiles.delftFTP",
+        "OrbitFiles.delftFTP_ENVISAT_precise_remotePath": "OrbitFiles.delftFTP_ENVISAT_precise_remotePath",
+        "OrbitFiles.delftFTP_ERS1_precise_remotePath": "OrbitFiles.delftFTP_ERS1_precise_remotePath",
+        "OrbitFiles.delftFTP_ERS2_precise_remotePath": "OrbitFiles.delftFTP_ERS2_precise_remotePath",
+        "OrbitFiles.prareHTTP_ERS1_remotePath": "OrbitFiles.prareHTTP_ERS1_remotePath",
+        "OrbitFiles.prareHTTP_ERS2_remotePath": "OrbitFiles.prareHTTP_ERS2_remotePath",
+        "OrbitFiles.prareERS1OrbitPath": "OrbitFiles.prareERS1OrbitPath",
+        "OrbitFiles.prareERS2OrbitPath": "OrbitFiles.prareERS2OrbitPath",
+        "OrbitFiles.sentinel1POEOrbitPath": "OrbitFiles.sentinel1POEOrbitPath",
+        "OrbitFiles.sentinel1RESOrbitPath": "OrbitFiles.sentinel1RESOrbitPath",
+        "OrbitFiles.sentinel1POEOrbit_remotePath": "OrbitFiles.sentinel1POEOrbit_remotePath",
+        "OrbitFiles.sentinel1RESOrbit_remotePath": "OrbitFiles.sentinel1RESOrbit_remotePath",
+        "AuxCal.Sentinel1.remotePath": "AuxCal.Sentinel1.remotePath",
+        "AuxCal.ENVISAT.remotePath": "AuxCal.ENVISAT.remotePath",
+        "AuxCal.ERS.remotePath": "AuxCal.ERS.remotePath",
+
     }
 
     __SECTIONS = {
-        "snap": "SNAP"
+        "snap": "SNAP",
+        "outputpaths": "OUTPUT",
+        "url": "URL"
     }
 
     ___AUXDATANAMES = {
-        "dem": "dem",
-        "landcover": "LandCover",
-        "orbits": "Orbits",
-        "puborbits": "/pub/orbits"
+        "demPath": "${AuxDataPath}/dem",
+        "landCoverPath": "${AuxDataPath}/LandCover",
     }
 
     # Define __setter to control changeable keys (optional)
@@ -350,9 +391,10 @@ class ConfigHandler(object):
         if not self.parser.has_section(section):
             raise AttributeError("Section {0} does not exist.".format(str(section)))
 
-        elif key not in ConfigHandler.__SNAP_KEYS.values():
+        elif key not in ConfigHandler.__KEYS.values():
             raise AttributeError(
-                "Only the following keys are allowed: {0}.".format(str(ConfigHandler.__SNAP_KEYS.values())))
+                "Your key is {0}. Only the following keys are allowed: {1}.".format(str(key),
+                                                                                    str(ConfigHandler.__KEYS.values())))
 
         else:
             if key in self.parser.options(section):
