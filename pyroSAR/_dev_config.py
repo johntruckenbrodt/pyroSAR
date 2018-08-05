@@ -367,7 +367,7 @@ class ConfigHandler(object):
         else:
             self.parser.add_section(section)
             with open(self.__GLOBAL['config'], 'wb') as item:
-                self.parser.write(item).encode()
+                self.parser.write(item)
 
     def set(self, section, key, value, overwrite=False):
         """
