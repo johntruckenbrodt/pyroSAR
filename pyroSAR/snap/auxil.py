@@ -328,9 +328,23 @@ class ExamineSnap(object):
             ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath, True)
 
     def set_auxdatapath(self, path):
+        """
+        Set a new auxdata path.
+
+        Parameters
+        ----------
+        path : str
+            Path to auxdata.
+
+        Returns
+        -------
+        None
+
+        """
         if not os.path.exists(path):
             self.auxdatapath = path
             ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath, True)
+            self.__set_properties_paths()
 
     def __get_etc(self):
         """
@@ -393,6 +407,14 @@ class ExamineSnap(object):
                     pass
 
     def __set_properties_paths(self):
+        """
+        Write all DEM, ORBIT etc. paths to config.ini
+
+        Returns
+        -------
+        None
+
+        """
         demPath = os.path.join(self.auxdatapath, 'dem')
         landCoverPath = os.path.join(self.auxdatapath, 'LandCover')
 
