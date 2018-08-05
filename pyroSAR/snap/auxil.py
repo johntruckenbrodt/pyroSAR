@@ -288,15 +288,6 @@ class ExamineSnap(object):
             else:
                 self.__get_etc()
 
-            if 'auxdata' in ConfigHandler.keys('SNAP'):
-                self.auxdata = ConfigHandler.get('SNAP', 'auxdata')
-
-                if not os.path.exists(self.auxdata):
-                    self.__get_auxdata()
-
-            else:
-                self.__get_auxdata()
-
             if 'properties' in ConfigHandler.keys('SNAP'):
                 self.properties = ConfigHandler.get('SNAP', 'properties')
 
@@ -327,14 +318,6 @@ class ExamineSnap(object):
             ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath)
 
     def __get_etc(self):
-        try:
-            self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
-            ConfigHandler.set('SNAP', 'etc', self.etc)
-
-        except OSError:
-            raise AssertionError('ETC directory is not existent.')
-
-    def __get_auxdata(self):
         try:
             self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
             self.auxdata = os.listdir(self.etc)
