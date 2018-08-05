@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
-import ConfigParser
+import sys
+
+# Python 3 comparability
+if sys.version_info >= (3, 0):
+    import configparser as ConfigParser
+else:
+    import ConfigParser
+
 import os
 import warnings
 
@@ -177,6 +184,13 @@ class ConfigHandler(object):
 
     __SECTIONS = {
         "snap": "SNAP"
+    }
+
+    ___AUXDATANAMES = {
+        "dem": "dem",
+        "landcover": "LandCover",
+        "orbits": "Orbits",
+        "puborbits": "/pub/orbits"
     }
 
     # Define __setter to control changeable keys (optional)
