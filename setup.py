@@ -14,7 +14,7 @@ with open(os.path.join(directory, 'README.md'), encoding='utf-8') as f:
 setup(name='pyroSAR',
       packages=find_packages(),
       include_package_data=True,
-      version='0.4',
+      version='0.5',
       description='a framework for large-scale SAR satellite data processing',
       classifiers=[
           'Programming Language :: Python',

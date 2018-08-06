@@ -31,9 +31,9 @@ sys.path.insert(0, os.path.abspath('..') + os.sep)
 # built documents.
 #
 # The short X.Y version.
-version = '0.4'
+version = '0.5'
 # The full version, including alpha/beta/rc tags.
-release = '0.4'
+release = '0.5'
 
 # -- General configuration ------------------------------------------------
 MOCK_MODULES = ['__future__', 'osgeo', 'osgeo.gdal', 'osgeo.osr', 'osgeo.gdalconst']  # This should be changed.
