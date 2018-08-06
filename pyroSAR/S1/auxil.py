@@ -269,8 +269,9 @@ class OSV(object):
     def match(self, timestamp, osvtype='POE'):
         """
         return the corresponding OSV file for the provided time stamp.
-        The file return is on which covers the acquisition time and, if multiple exist, the one which was published last.
-        In case a list of options is provided as type, the file of higher accuracy (i.e. POE over RES) is returned
+        The file returned is one which covers the acquisition time and, if multiple exist,
+        the one which was published last.
+        In case a list of options is provided as osvtype, the file of higher accuracy (i.e. POE over RES) is returned.
 
         Parameters
         ----------

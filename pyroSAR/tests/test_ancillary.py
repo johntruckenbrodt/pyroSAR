@@ -15,13 +15,9 @@ def test_union():
     assert anc.union([1], [1]) == [1]
 
 
-def test_dictmerge():
-    assert anc.dictmerge({'a': 1, 'b': 2}, {'c': 3, 'd': 4}) == {'a': 1, 'b': 2, 'c': 3, 'd': 4}
-
-
 def test_parse_literal():
     assert anc.parse_literal(['1', '2.2', 'a']) == [1, 2.2, 'a']
-    with pytest.raises(IOError):
+    with pytest.raises(TypeError):
         anc.parse_literal(1)
 
 
@@ -84,26 +80,6 @@ def test_rescale():
     assert anc.rescale([1000, 2000, 3000], [1, 3]) == [1, 2, 3]
     with pytest.raises(RuntimeError):
         anc.rescale([1000, 1000])
-
-
-def test_Queue():
-    st = anc.Queue()
-    st.push('a')
-    assert st.pop() == 'a'
-    assert st.length() == 0
-
-
-def test_Stack():
-    st = anc.Stack()
-    assert st.empty() is True
-    st = anc.Stack(['a', 'b'])
-    assert st.length() == 2
-    st = anc.Stack('a')
-    st.push('b')
-    st.push(['c', 'd'])
-    assert st.pop() == 'd'
-    st.flush()
-    assert st.empty() is True
 
 
 def test_groupbyTime():

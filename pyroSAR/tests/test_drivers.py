@@ -3,7 +3,6 @@ from pyroSAR import spatial
 import pytest
 import platform
 import tarfile as tf
-import sys
 import os
 from datetime import datetime
 
@@ -144,28 +143,6 @@ def test_scene(tmpdir, testdata, appveyor):
     with pytest.raises(IOError):
         id.getGammaImages()
     assert id.getGammaImages(id.scene) == []
-
-
-def test_scene_osv(tmpdir, testdata):
-    id = pyroSAR.identify(testdata['s1'])
-    osvdir = os.path.join(str(tmpdir), 'osv')
-    if sys.version_info >= (2, 7, 9):
-        id.getOSV(osvdir)
-        with pyroSAR.OSV(osvdir) as osv:
-            with pytest.raises(IOError):
-                osv.catch(osvtype='XYZ')
-            res = osv.catch(osvtype='RES', start=osv.mindate('POE'), stop=osv.maxdate('POE'))
-            assert len(res) == 21
-            osv.retrieve(res[0:3])
-
-            assert len(osv.getLocals('POE')) == 3
-            assert len(osv.getLocals('RES')) == 3
-            assert osv.match(id.start, 'POE') is not None
-            assert osv.match(id.start, 'RES') is None
-            osv.clean_res()
-    else:
-        with pytest.raises(RuntimeError):
-            id.getOSV(osvdir, osvType='POE')
 
 
 def test_archive(tmpdir, testdata, appveyor):
