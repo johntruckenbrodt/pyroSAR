@@ -366,8 +366,15 @@ class ConfigHandler(object):
 
         else:
             self.parser.add_section(section)
-            with open(self.__GLOBAL['config'], 'wb') as item:
-                self.parser.write(item)
+            if sys.version_info >= (3, 0):
+                with open(self.__GLOBAL['config'], 'w', encoding='utf8') as item:
+                    self.parser.write(item)
+            else:
+                with open(self.__GLOBAL['config'], 'w') as item:
+                    self.parser.write(item)
+
+            # with open(self.__GLOBAL['config'], 'wb') as item:
+            #     self.parser.write(item)
 
     def set(self, section, key, value, overwrite=False):
         """
@@ -401,8 +408,12 @@ class ConfigHandler(object):
 
                 if overwrite:
                     self.parser.set(section, key, value)
-                    with open(self.__GLOBAL['config'], 'wb') as item:
-                        self.parser.write(item)
+                    if sys.version_info >= (3, 0):
+                        with open(self.__GLOBAL['config'], 'w', encoding='utf8') as item:
+                            self.parser.write(item)
+                    else:
+                        with open(self.__GLOBAL['config'], 'w') as item:
+                            self.parser.write(item)
 
                 else:
                     pass
@@ -438,8 +449,12 @@ class ConfigHandler(object):
             self.parser.remove_option(section, key)
 
             # write changes back to the config file
-            with open(self.__GLOBAL['config'], "wb") as config_file:
-                self.parser.write(config_file)
+            if sys.version_info >= (3, 0):
+                with open(self.__GLOBAL['config'], 'w', encoding='utf8') as item:
+                    self.parser.write(item)
+            else:
+                with open(self.__GLOBAL['config'], 'w') as item:
+                    self.parser.write(item)
 
     def get(self, section, key=None):
         """
