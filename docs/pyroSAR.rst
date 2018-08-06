@@ -1,6 +1,3 @@
-API documentation
-=================
-
 Drivers
 =======
 
@@ -40,13 +37,5 @@ Raster Tools
 
 .. automodule:: pyroSAR.spatial.raster
     :members: stack
-    :undoc-members:
-    :show-inheritance:
-
-General Spatial Tools
-=====================
-
-.. automodule:: pyroSAR.spatial.auxil
-    :members:
     :undoc-members:
     :show-inheritance:
