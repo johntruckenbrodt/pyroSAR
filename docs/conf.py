@@ -36,7 +36,9 @@ version = '0.5'
 release = '0.5'
 
 # -- General configuration ------------------------------------------------
-MOCK_MODULES = ['osgeo', 'osgeo.gdal', 'osgeo.osr', 'osgeo.gdalconst']  # This should be changed.
+MOCK_MODULES = ['osgeo', 'osgeo.gdal', 'osgeo.osr', 'osgeo.gdalconst',
+                'spatialist', 'spatialist.ancillary',
+                'pyroSAR.spatial', 'pyroSAR.spatial.raster', 'pyroSAR.spatial.envi']  # This should be changed.
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
 
