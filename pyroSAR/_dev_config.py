@@ -421,8 +421,12 @@ class ConfigHandler(object):
 
             else:
                 self.parser.set(section, key, value)
-                with open(self.__GLOBAL['config'], 'wb') as item:
-                    self.parser.write(item)
+                if sys.version_info >= (3, 0):
+                    with open(self.__GLOBAL['config'], 'w', encoding='utf8') as item:
+                        self.parser.write(item)
+                else:
+                    with open(self.__GLOBAL['config'], 'w') as item:
+                        self.parser.write(item)
 
     def remove_option(self, section, key):
         """
