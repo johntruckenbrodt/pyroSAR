@@ -2,4 +2,4 @@ progressbar2
 pathos>=0.2
 numpy
 scoop
-spatialist
+spatialist>=0.2.3
