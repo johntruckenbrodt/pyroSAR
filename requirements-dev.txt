@@ -2,6 +2,7 @@ progressbar2
 pathos>=0.2
 numpy
 scoop
+spatialist>=0.2.4
 
 #Testing requirements
 pytest
