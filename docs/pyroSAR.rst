@@ -1,7 +1,24 @@
 Drivers
 =======
 
-The ID class and its subclasses allows easy and standardized access to the metadata of SAR scenes of different sensors.
+This is the core module of package pyroSAR. It contains the drivers for the different SAR image formats and offers
+functionality for retrieving metadata, unpacking images, downloading ancillary files like DEMs and
+Orbit State Vector files as well as archiving scenes in a database. The ID class and its subclasses allow easy and
+standardized access to the metadata of SAR scenes of different sensors.
+
+.. autosummary::
+    :nosignatures:
+
+    ~pyroSAR.drivers.ID
+    ~pyroSAR.drivers.Archive
+    ~pyroSAR.drivers.CEOS_PSR
+    ~pyroSAR.drivers.CEOS_ERS
+    ~pyroSAR.drivers.ESA
+    ~pyroSAR.drivers.SAFE
+    ~pyroSAR.drivers.TSX
+    ~pyroSAR.drivers.identify
+    ~pyroSAR.drivers.identify_many
+    ~pyroSAR.drivers.filter_processed
 
 .. automodule:: pyroSAR.drivers
     :members:
