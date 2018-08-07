@@ -65,7 +65,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
 
     Parameters
     ----------
-    id: pyroSAR.ID
+    id: ~pyroSAR.drivers.ID
         an SAR scene object of type pyroSAR.ID or any subclass
     directory: str
         the output directory for the converted images
@@ -257,7 +257,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
 
     Parameters
     ----------
-    scene: str or pyroSAR.ID
+    scene: str or ~pyroSAR.drivers.ID
         the SAR scene to be processed
     dem: str
         the reference DEM in GAMMA format

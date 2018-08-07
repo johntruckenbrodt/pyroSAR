@@ -17,20 +17,20 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
 
     Parameters
     ----------
-    infile: str or pyroSAR.ID class instance
+    infile: str or ~pyroSAR.drivers.ID
         the SAR scene to be processed
     outdir: str
         The directory to write the final files to.
     t_srs: int, str or osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
-        See function :func:`~pyroSAR.spatial.auxil.crsConvert()` for details.
+        See function :func:`spatialist.auxil.crsConvert()` for details.
         Default: `4326 <http://spatialreference.org/ref/epsg/4326/>`_.
     tr: int or float, optional
         The target resolution in meters. Default is 20
     polarizations: list or {'VV', 'HH', 'VH', 'HV', 'all'}, optional
         The polarizations to be processed; can be a string for a single polarization e.g. 'VV' or a list of several
         polarizations e.g. ['VV', 'VH']. Default is 'all'.
-    shapefile: str or spatial.vector.Vector class instance, optional
+    shapefile: str or :py:class:`~spatialist.vector.Vector`, optional
         A vector geometry for subsetting the SAR scene to a test site. Default is None.
     scaling: {'dB', 'db', 'linear'}, optional
         Should the output be in linear or decibel scaling? Default is 'dB'.
@@ -61,8 +61,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
 
     See Also
     --------
-    :class:`pyroSAR.drivers.ID`
-    :class:`pyroSAR.spatial.vector.Vector`
+    :class:`pyroSAR.drivers.ID`,
+    :class:`spatialist.vector.Vector`,
+    :func:`spatialist.auxil.crsConvert()`
     """
 
     id = infile if isinstance(infile, pyroSAR.ID) else pyroSAR.identify(infile)

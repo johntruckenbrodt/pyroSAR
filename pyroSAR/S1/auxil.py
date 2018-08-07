@@ -105,8 +105,16 @@ class OSV(object):
     def _typeEvaluate(self, osvtype):
         """
         evaluate the 'osvtype' method argument and return the corresponding remote repository and local directory
-        :param osvtype: the type of orbit files required; either 'POE' or 'RES'
-        :return: the remote repository and local directory of the osv type
+
+        Parameters
+        ----------
+        osvtype: str
+            the type of orbit files required; either 'POE' or 'RES'
+
+        Returns
+        -------
+        tuple of str
+            the remote repository and local directory of the osv type
         """
         if osvtype not in ['POE', 'RES']:
             raise IOError('type must be either "POE" or "RES"')
@@ -214,10 +222,12 @@ class OSV(object):
     def getLocals(self, osvtype='POE'):
         """
         get a list of local files of specific type
+
         Parameters
         ----------
         osvtype: {'POE', 'RES'}
             the type of orbit files required
+
         Returns
         -------
         list

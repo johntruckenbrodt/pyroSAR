@@ -2,11 +2,7 @@
 # Reading and Organizing system for SAR images
 # John Truckenbrodt, Felix Cremer 2016-2018
 ##############################################################
-"""
-This is the core script of package pyroSAR. It contains the drivers for the different SAR image formats and offers
-functionality for retrieving metadata, unpacking images, downloading ancillary files like DEMs and
-Orbit State Vector files as well as archiving scenes in a database.
-"""
+
 from __future__ import print_function
 import sys
 
@@ -57,7 +53,7 @@ def identify(scene):
 
     Returns
     -------
-    a subclass of :class:`~drivers.ID`
+    a subclass object of :class:`~pyroSAR.drivers.ID`
         a pyroSAR metadata handler
     """
     if not os.path.exists(scene):
@@ -73,7 +69,8 @@ def identify(scene):
 
 def identify_many(scenes):
     """
-    wrapper function for returning metadata handlers of all valid scenes in a list, similar to function :func:`identify`.
+    wrapper function for returning metadata handlers of all valid scenes in a list, similar to function
+    :func:`~pyroSAR.drivers.identify`.
     Prints a progressbar.
 
     Parameters
@@ -154,7 +151,7 @@ class ID(object):
 
         Returns
         -------
-        pyroSAR.spatial.vector.Vector or None
+        ~spatialist.vector.Vector or None
             the vector object if `outname` is None, None otherwise
         """
         if outname is None:
@@ -195,8 +192,12 @@ class ID(object):
     def export2sqlite(self, dbfile):
         """
         Export relevant metadata to a sqlite database
-        :param dbfile: the database file
-        :return: None
+
+        Parameters
+        ----------
+        dbfile: str
+            the database file
+
         """
         with Archive(dbfile) as archive:
             archive.insert(self)
@@ -302,25 +303,22 @@ class ID(object):
         Returns
         -------
         dict
-            dictionary with keys xmin, xmax, ymin and ymax
+            dictionary with keys `xmin`, `xmax`, `ymin` and `ymax`
         """
         raise NotImplementedError
 
     def getFileObj(self, filename):
         """
         Load a file into a readable file object.
-        If the scene is unpacked this will be a regular `file` object.
-        For a tarfile this is an object of type `tarfile.ExtFile`.
-        For a zipfile this is an `StringIO` object (the `zipfile.ExtFile` object does not support setting file pointers via function `seek`, which is needed later on)
 
         Parameters
         ----------
         filename: str
-            the name of a file in the scene archive, easiest to get with method :func:`~ID.findfiles`
+            the name of a file in the scene archive, easiest to get with method :meth:`~ID.findfiles`
 
         Returns
         -------
-        tarfile.ExtFile or StringIO
+        ~io.BytesIO
             a file pointer object
         """
         return getFileObj(self.scene, filename)
@@ -334,7 +332,8 @@ class ID(object):
         directory: str
             the directory to be scanned; if left empty the object attribute `gammadir` is scanned
 
-
+        Returns
+        -------
         list
             the file names of the images processed by GAMMA
 
@@ -402,7 +401,7 @@ class ID(object):
         """
         parse a string containing basic information about the scene in standardized format.
         Currently this id contains the sensor (4 digits), acquisition mode (4 digits), orbit (1 digit)
-        and acquisition start time (15 digits)., e.g. 'S1A__IW___A_20150523T122350'
+        and acquisition start time (15 digits)., e.g. `S1A__IW___A_20150523T122350`
 
         Returns
         -------
@@ -1650,7 +1649,7 @@ class Archive(object):
 
         Parameters
         ----------
-        scenelist: list of str or pyroSAR.ID
+        scenelist: :obj:`list` of :obj:`str` or :obj:`pyroSAR.drivers.ID`
             the scenes to be filtered
 
         Returns
@@ -1796,7 +1795,7 @@ class Archive(object):
 
         Parameters
         ----------
-        vectorobject: spatial.vector.Vector
+        vectorobject: :class:`~spatialist.vector.Vector`
             a geometry with which the scenes need to overlap
         mindate:str
             the minimum acquisition date in format YYYYmmddTHHMMSS
@@ -1810,9 +1809,9 @@ class Archive(object):
         polarizations: list
             a list of polarization strings, e.g. ['HH', 'VV']
         verbose: bool
-            print details about hte selection including the SQL query?
+            print details about the selection including the SQL query?
         **args:
-            any further arguments (columns), which are registered in the database. See :func:`~Archive.get_colnames()`
+            any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
 
         Returns
         -------
@@ -1985,13 +1984,13 @@ def getFileObj(scene, filename):
     Parameters
     ----------
     scene: str
-        the scene archive. Can be either a directory or a compressed archive of type zip or tar.gz.
+        the scene archive. Can be either a directory or a compressed archive of type `zip` or `tar.gz`.
     filename: str
-        the name of a file in the scene archive, easiest to get with method :func:`~ID.findfiles`
+        the name of a file in the scene archive, easiest to get with method :meth:`~ID.findfiles`
 
     Returns
     -------
-    io.BytesIO
+    ~io.BytesIO
         a file object
     """
     membername = filename.replace(scene, '').strip('\/')
@@ -2029,7 +2028,7 @@ def parse_date(x):
 
     Parameters
     ----------
-    x: str or datetime.datetime
+    x: str or ~datetime.datetime
         the time stamp to be converted
 
     Returns
