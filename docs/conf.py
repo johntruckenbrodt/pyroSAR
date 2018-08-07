@@ -16,7 +16,7 @@ import sys
 import os
 import datetime
 
-project = 'spatialist'
+project = 'pyroSAR'
 authors = 'John Truckenbrodt, Felix Cremer, Ismail Baris'
 year = datetime.datetime.now().year
 
