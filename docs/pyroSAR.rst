@@ -6,21 +6,32 @@ functionality for retrieving metadata, unpacking images, downloading ancillary f
 Orbit State Vector files as well as archiving scenes in a database. The ID class and its subclasses allow easy and
 standardized access to the metadata of images from different SAR sensors.
 
-.. currentmodule:: pyroSAR.drivers
+.. automodule:: pyroSAR.drivers
 
-.. autosummary::
-    :nosignatures:
+    .. rubric:: classes
 
-    ID
-    CEOS_PSR
-    CEOS_ERS
-    ESA
-    SAFE
-    TSX
-    identify
-    identify_many
-    filter_processed
-    Archive
+    .. autosummary::
+        :nosignatures:
+
+        ID
+        CEOS_PSR
+        CEOS_ERS
+        ESA
+        SAFE
+        TSX
+        Archive
+
+    .. rubric:: functions
+
+    .. autosummary::
+        :nosignatures:
+
+        identify
+        identify_many
+        filter_processed
+        findfiles
+        getFileObj
+        parse_date
 
 .. automodule:: pyroSAR.drivers
     :members:
