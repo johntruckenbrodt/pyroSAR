@@ -46,11 +46,15 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.coverage',
     'sphinx.ext.napoleon',
-    'sphinx.ext.autosummary'
+    'sphinx.ext.autosummary',
+    'sphinx.ext.intersphinx'
 ]
 
-autodoc_default_flags = ['members']
+# autodoc_default_flags = ['members']
 autosummary_generate = True
+
+intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
+                       'spatialist': ('https://spatialist.readthedocs.io/en/latest', None)}
 
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
