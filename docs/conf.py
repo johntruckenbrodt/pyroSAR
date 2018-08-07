@@ -45,8 +45,12 @@ needs_sphinx = '1.6'
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.coverage',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinx.ext.autosummary'
 ]
+
+autodoc_default_flags = ['members']
+autosummary_generate = True
 
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
