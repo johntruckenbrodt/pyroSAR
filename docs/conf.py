@@ -14,7 +14,6 @@
 
 import sys
 import os
-import mock
 import datetime
 
 project = 'spatialist'
@@ -35,15 +34,10 @@ version = '0.5'
 # The full version, including alpha/beta/rc tags.
 release = '0.5'
 
-# -- General configuration ------------------------------------------------
-MOCK_MODULES = ['osgeo', 'osgeo.gdal', 'osgeo.osr', 'osgeo.gdalconst',
-                'spatialist', 'spatialist.ancillary',
-                'pyroSAR.spatial', 'pyroSAR.spatial.raster', 'pyroSAR.spatial.envi']  # This should be changed.
-for mod_name in MOCK_MODULES:
-    sys.modules[mod_name] = mock.Mock()
+autodoc_mock_imports = ['osgeo', 'spatialist', 'pyroSAR.spatial']
 
 # If your documentation needs a minimal Sphinx version, state it here.
-# needs_sphinx = '1.0'
+needs_sphinx = '1.6'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
