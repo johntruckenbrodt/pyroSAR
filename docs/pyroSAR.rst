@@ -31,11 +31,3 @@ Sentinel-1 Tools
     :members: OSV
     :undoc-members:
     :show-inheritance:
-
-Raster Tools
-============
-
-.. automodule:: pyroSAR.spatial.raster
-    :members: stack
-    :undoc-members:
-    :show-inheritance:
