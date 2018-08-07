@@ -6,14 +6,9 @@
 Welcome to pyroSAR's documentation!
 ===================================
 
-Contents:
-
-This is the documentation of pyroSAR.
-
 .. toctree::
 
    pyroSAR
-
 
 
 Indices and tables
@@ -22,4 +17,3 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-
