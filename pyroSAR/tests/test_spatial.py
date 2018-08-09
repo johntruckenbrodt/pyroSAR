@@ -4,25 +4,23 @@ import numpy as np
 from osgeo import ogr
 import platform
 from pyroSAR import identify
-from pyroSAR.spatial import crsConvert, haversine, Raster, stack, ogr2ogr, gdal_translate, gdal_rasterize, dtypes, bbox
-from pyroSAR.spatial.vector import feature2vector, dissolve, Vector, intersect
-from pyroSAR.spatial.raster import rasterize
+import pyroSAR.spatial as sp
 
 
 def test_crsConvert():
-    assert crsConvert(crsConvert(4326, 'wkt'), 'proj4') == '+proj=longlat +datum=WGS84 +no_defs '
-    assert crsConvert(crsConvert(4326, 'prettyWkt'), 'opengis') == 'http://www.opengis.net/def/crs/EPSG/0/4326'
-    assert crsConvert('+proj=longlat +datum=WGS84 +no_defs ', 'epsg') == 4326
-    assert crsConvert('http://www.opengis.net/def/crs/EPSG/0/4326', 'epsg') == 4326
-    assert crsConvert(crsConvert('http://www.opengis.net/def/crs/EPSG/0/4326', 'osr'), 'epsg') == 4326
+    assert sp.crsConvert(sp.crsConvert(4326, 'wkt'), 'proj4') == '+proj=longlat +datum=WGS84 +no_defs '
+    assert sp.crsConvert(sp.crsConvert(4326, 'prettyWkt'), 'opengis') == 'http://www.opengis.net/def/crs/EPSG/0/4326'
+    assert sp.crsConvert('+proj=longlat +datum=WGS84 +no_defs ', 'epsg') == 4326
+    assert sp.crsConvert('http://www.opengis.net/def/crs/EPSG/0/4326', 'epsg') == 4326
+    assert sp.crsConvert(sp.crsConvert('http://www.opengis.net/def/crs/EPSG/0/4326', 'osr'), 'epsg') == 4326
     with pytest.raises(TypeError):
-        crsConvert('xyz', 'epsg')
+        sp.crsConvert('xyz', 'epsg')
     with pytest.raises(ValueError):
-        crsConvert(4326, 'xyz')
+        sp.crsConvert(4326, 'xyz')
 
 
 def test_haversine():
-    assert haversine(50, 10, 51, 10) == 111194.92664455889
+    assert sp.haversine(50, 10, 51, 10) == 111194.92664455889
 
 
 def test_Vector(testdata):
@@ -33,26 +31,25 @@ def test_Vector(testdata):
     assert bbox1.nlayers == 1
     assert bbox1.getProjection('epsg') == 4326
     assert bbox1.proj4 == '+proj=longlat +datum=WGS84 +no_defs'
-    assert isinstance(bbox1.wkt, str)
     assert isinstance(bbox1.getFeatureByIndex(0), ogr.Feature)
     with pytest.raises(IndexError):
         bbox1.getFeatureByIndex(1)
     bbox1.reproject(32633)
     assert bbox1.proj4 == '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs'
-    assert isinstance(bbox1['id=1'], Vector)
+    assert isinstance(bbox1['id=1'], sp.Vector)
     with pytest.raises(RuntimeError):
         test = bbox1[0.1]
     assert bbox1.fieldnames == ['id']
     assert bbox1.getUniqueAttributes('id') == [1]
     feat = bbox1.getFeatureByAttribute('id', 1)
     assert isinstance(feat, ogr.Feature)
-    bbox2 = feature2vector(feat, ref=bbox1)
+    bbox2 = sp.vector.feature2vector(feat, ref=bbox1)
     bbox2.close()
     feat.Destroy()
     with pytest.raises(KeyError):
         select = bbox1.getFeatureByAttribute('foo', 'bar')
     with pytest.raises(RuntimeError):
-        vec = Vector(driver='foobar')
+        vec = sp.Vector(driver='foobar')
     bbox1.close()
 
 
@@ -65,10 +62,10 @@ def test_dissolve(tmpdir, travis, testdata):
         ext[key] += 1
     # create new bbox shapefile with modified extent
     bbox2_name = os.path.join(str(tmpdir), 'bbox2.shp')
-    bbox(ext, bbox1.srs, bbox2_name)
+    sp.bbox(ext, bbox1.srs, bbox2_name)
     # assert intersection between the two bboxes and combine them into one
-    with Vector(bbox2_name) as bbox2:
-        assert intersect(bbox1, bbox2) is not None
+    with sp.Vector(bbox2_name) as bbox2:
+        assert sp.intersect(bbox1, bbox2) is not None
         bbox1.addvector(bbox2)
         # write combined bbox into new shapefile
         bbox3_name = os.path.join(str(tmpdir), 'bbox3.shp')
@@ -80,20 +77,20 @@ def test_dissolve(tmpdir, travis, testdata):
         # this test is currently disabled for Travis as the current sqlite3 version on Travis seems to not support
         # loading gdal as extension; Travis CI setup: Ubuntu 14.04 (Trusty), sqlite3 version 3.8.2 (2018-06-04)
         bbox4_name = os.path.join(str(tmpdir), 'bbox4.shp')
-        dissolve(bbox3_name, bbox4_name, field='id')
+        sp.vector.dissolve(bbox3_name, bbox4_name, field='id')
         assert os.path.isfile(bbox4_name)
 
 
 def test_Raster(tmpdir, testdata):
     with pytest.raises(OSError):
-        ras = Raster('foobar')
-    with Raster(testdata['tif']) as ras:
+        ras = sp.Raster('foobar')
+    with sp.Raster(testdata['tif']) as ras:
         print(ras)
         assert ras.bands == 1
         assert ras.proj4 == '+proj=utm +zone=31 +datum=WGS84 +units=m +no_defs '
         assert ras.cols == 268
         assert ras.rows == 217
-        assert ras.dim == [217, 268, 1]
+        assert ras.dim == (217, 268, 1)
         assert ras.dtype == 'Float32'
         assert ras.epsg == 32631
         assert ras.format == 'GTiff'
@@ -102,23 +99,25 @@ def test_Raster(tmpdir, testdata):
         assert ras.geogcs == 'WGS 84'
         assert ras.is_valid() is True
         assert ras.proj4args == {'units': 'm', 'no_defs': None, 'datum': 'WGS84', 'proj': 'utm', 'zone': '31'}
-        assert ras.allstats == [[-26.65471076965332, 1.4325850009918213, -12.124929534450377, 4.738273594738293]]
+        assert ras.allstats() == [{'min': -26.65471076965332, 'max': 1.4325850009918213,
+                                   'mean': -12.124929534450377, 'sdev': 4.738273594738293}]
         assert ras.bbox().getArea() == 23262400.0
         assert len(ras.layers()) == 1
         assert ras.projcs == 'WGS 84 / UTM zone 31N'
-        assert ras.res == [20.0, 20.0]
+        assert ras.res == (20.0, 20.0)
 
         # test writing a subset with no original data in memory
         outname = os.path.join(str(tmpdir), 'test_sub.tif')
-        ras.write(outname, format='GTiff', dim=(0, 0, 100, 200))
-        with Raster(outname) as ras2:
+        with ras[0:200, 0:100] as sub:
+            sub.write(outname, format='GTiff')
+        with sp.Raster(outname) as ras2:
             assert ras2.cols == 100
             assert ras2.rows == 200
 
         ras.load()
         mat = ras.matrix()
         assert isinstance(mat, np.ndarray)
-        ras.assign(mat, index=0)
+        ras.assign(mat, band=0)
         # ras.reduce()
         ras.rescale(lambda x: 10 * x)
 
@@ -129,7 +128,7 @@ def test_Raster(tmpdir, testdata):
 
 
 def test_Raster_extract(testdata):
-    with Raster(testdata['tif']) as ras:
+    with sp.Raster(testdata['tif']) as ras:
         assert ras.extract(px=624000, py=4830000, radius=5) == -10.48837461270875
         with pytest.raises(RuntimeError):
             ras.extract(1, 4830000)
@@ -146,15 +145,15 @@ def test_Raster_extract(testdata):
         mat = ras.matrix()
         mat[0:10, 0:10] = ras.nodata
         mat[207:217, 258:268] = ras.nodata
-        ras.assign(mat, index=0)
+        ras.assign(mat, band=0)
         assert ras.extract(px=ras.geo['xmin'], py=ras.geo['ymax'], radius=5) == ras.nodata
         assert ras.extract(px=ras.geo['xmax'], py=ras.geo['ymin'], radius=5) == ras.nodata
 
 
 def test_dtypes():
-    assert dtypes('Float32') == 6
+    assert sp.dtypes('Float32') == 6
     with pytest.raises(ValueError):
-        dtypes('foobar')
+        sp.dtypes('foobar')
 
 
 def test_stack(tmpdir, testdata):
@@ -162,41 +161,41 @@ def test_stack(tmpdir, testdata):
     outname = os.path.join(str(tmpdir), 'test')
     tr = (30, 30)
     with pytest.raises(IOError):
-        stack(srcfiles=[], resampling='near', targetres=tr,
+        sp.stack(srcfiles=[], resampling='near', targetres=tr,
               srcnodata=-99, dstnodata=-99, dstfile=outname)
 
     with pytest.raises(IOError):
-        stack(srcfiles=[name, name], resampling='near', targetres=tr,
+        sp.stack(srcfiles=[name, name], resampling='near', targetres=tr,
               srcnodata=-99, dstnodata=-99, dstfile=outname, layernames=['a'])
 
     with pytest.raises(RuntimeError):
-        stack(srcfiles=[name, name], resampling='near', targetres=30,
+        sp.stack(srcfiles=[name, name], resampling='near', targetres=30,
               srcnodata=-99, dstnodata=-99, dstfile=outname)
 
     with pytest.raises(IOError):
-        stack(srcfiles=[name], resampling='near', targetres=tr, overwrite=True,
+        sp.stack(srcfiles=[name], resampling='near', targetres=tr, overwrite=True,
               srcnodata=-99, dstnodata=-99, dstfile=outname)
 
     with pytest.raises(RuntimeError):
-        stack(srcfiles=[name, name], resampling='near', targetres=(30, 30, 30),
+        sp.stack(srcfiles=[name, name], resampling='near', targetres=(30, 30, 30),
               srcnodata=-99, dstnodata=-99, dstfile=outname)
 
     with pytest.raises(IOError):
-        stack(srcfiles=[name, name], resampling='foobar', targetres=tr,
+        sp.stack(srcfiles=[name, name], resampling='foobar', targetres=tr,
               srcnodata=-99, dstnodata=-99, dstfile=outname)
 
     with pytest.raises(OSError):
-        stack(srcfiles=[name, 'foobar'], resampling='near', targetres=tr,
+        sp.stack(srcfiles=[name, 'foobar'], resampling='near', targetres=tr,
               srcnodata=-99, dstnodata=-99, dstfile=outname)
 
-    stack(srcfiles=[name, name], resampling='near', targetres=tr, overwrite=True,
+    sp.stack(srcfiles=[name, name], resampling='near', targetres=tr, overwrite=True,
           srcnodata=-99, dstnodata=-99, dstfile=outname)
 
     outdir = os.path.join(str(tmpdir), 'subdir')
-    stack(srcfiles=[name, name], resampling='near', targetres=tr, overwrite=True, layernames=['test1', 'test2'],
+    sp.stack(srcfiles=[name, name], resampling='near', targetres=tr, overwrite=True, layernames=['test1', 'test2'],
           srcnodata=-99, dstnodata=-99, dstfile=outdir, separate=True, compress=True)
 
-    with Raster(outname) as ras:
+    with sp.Raster(outname) as ras:
         assert ras.bands == 2
         # Raster.rescale currently only supports one band
         with pytest.raises(ValueError):
@@ -205,34 +204,34 @@ def test_stack(tmpdir, testdata):
 
 def test_auxil(tmpdir, testdata):
     dir = str(tmpdir)
-    with Raster(testdata['tif']) as ras:
+    with sp.Raster(testdata['tif']) as ras:
         bbox = os.path.join(dir, 'bbox.shp')
         ras.bbox(bbox)
-        ogr2ogr(bbox, os.path.join(dir, 'bbox.gml'), {'format': 'GML'})
-        gdal_translate(ras.raster, os.path.join(dir, 'test'), {'format': 'ENVI'})
-    gdal_rasterize(bbox, os.path.join(dir, 'test2'), {'format': 'GTiff', 'xRes': 20, 'yRes': 20})
+        sp.ogr2ogr(bbox, os.path.join(dir, 'bbox.gml'), {'format': 'GML'})
+        sp.gdal_translate(ras.raster, os.path.join(dir, 'test'), {'format': 'ENVI'})
+    sp.gdal_rasterize(bbox, os.path.join(dir, 'test2'), {'format': 'GTiff', 'xRes': 20, 'yRes': 20})
 
 
 def test_rasterize(tmpdir, testdata):
     outname = os.path.join(str(tmpdir), 'test.shp')
-    with Raster(testdata['tif']) as ras:
+    with sp.Raster(testdata['tif']) as ras:
         vec = ras.bbox()
 
         # test length mismatch between burn_values and expressions
         with pytest.raises(RuntimeError):
-            rasterize(vec, outname, reference=ras, burn_values=[1], expressions=['foo', 'bar'])
+            sp.rasterize(vec, reference=ras, outname=outname, burn_values=[1], expressions=['foo', 'bar'])
 
         # test a faulty expression
         with pytest.raises(RuntimeError):
-            rasterize(vec, outname, reference=ras, burn_values=[1], expressions=['foo'])
+            sp.rasterize(vec, reference=ras, outname=outname, burn_values=[1], expressions=['foo'])
 
         # test default parametrization
-        rasterize(vec, outname, reference=ras)
+        sp.rasterize(vec, reference=ras, outname=outname)
         assert os.path.isfile(outname)
 
         # test appending to existing file with valid expression
-        rasterize(vec, outname, reference=ras, append=True, burn_values=[1], expressions=['id=1'])
+        sp.rasterize(vec, reference=ras, outname=outname, append=True, burn_values=[1], expressions=['id=1'])
 
         # test wrong input type for reference
         with pytest.raises(RuntimeError):
-            rasterize(vec, outname, reference='foobar')
+            sp.rasterize(vec, reference='foobar', outname=outname)
