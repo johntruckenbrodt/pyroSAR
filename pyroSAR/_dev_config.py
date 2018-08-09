@@ -174,54 +174,50 @@ class ConfigHandler(object):
 
     # ---- Define Global Variables ----
 
-    __KEYS = {
-        "etc": "etc",
-        "exe": "executable",
-        "aux": "auxdata",
-        "auxpath": "auxdatapath",
-        "pro": "properties",
-        "demPath": "demPath",
-        "DEM.aceDEMDataPath": "DEM.aceDEMDataPath",
-        "DEM.aceDEM_HTTP": "DEM.aceDEM_HTTP",
-        "DEM.aceDEM_HTTP": "DEM.aceDEM_HTTP",
-        "DEM.ace2_5MinDEMDataPath": "DEM.ace2_5MinDEMDataPath",
-        "DEM.ace2_5MinDEM_HTTP": "DEM.ace2_5MinDEM_HTTP",
-        "DEM.CDEM_HTTP": "DEM.CDEM_HTTP",
-        "DEM.gtopo30DEMDataPath": "DEM.gtopo30DEMDataPath",
-        "DEM.AsterDEMDataPath": "DEM.AsterDEMDataPath",
-        "DEM.Getasse30DEMDataPath": "DEM.Getasse30DEMDataPath",
-        "DEM.srtm3GeoTiffDEMDataPath": "DEM.srtm3GeoTiffDEMDataPath",
-        "DEM.srtm3GeoTiffDEM_FTP": "DEM.srtm3GeoTiffDEM_FTP",
-        "DEM.srtm3GeoTiffDEM_remotePath": "DEM.srtm3GeoTiffDEM_remotePath",
-        "DEM.srtm3GeoTiffDEM_HTTP": "DEM.srtm3GeoTiffDEM_HTTP",
-        "DEM.srtm1HgtDEM_HTTP": "DEM.srtm1HgtDEM_HTTP",
-        "DEM.srtm1GridDEMDataPath": "DEM.srtm1GridDEMDataPath",
-        "landCoverPath": "landCoverPath",
-        "LandCover.glc2000DataPath": "LandCover.glc2000DataPath",
-        "LandCover.globcoverDataPath": "LandCover.globcoverDataPath",
-        "OrbitFiles.dorisHTTP_vor_remotePath": "OrbitFiles.dorisHTTP_vor_remotePath",
-        "OrbitFiles.dorisVOROrbitPath": "OrbitFiles.dorisVOROrbitPath",
-        "OrbitFiles.dorisPOROrbitPath": "OrbitFiles.dorisPOROrbitPath",
-        "OrbitFiles.delftEnvisatOrbitPath": "OrbitFiles.delftEnvisatOrbitPath",
-        "OrbitFiles.delftERS1OrbitPath": "OrbitFiles.delftERS1OrbitPath",
-        "OrbitFiles.delftERS2OrbitPath": "OrbitFiles.delftERS2OrbitPath",
-        "OrbitFiles.delftFTP": "OrbitFiles.delftFTP",
-        "OrbitFiles.delftFTP_ENVISAT_precise_remotePath": "OrbitFiles.delftFTP_ENVISAT_precise_remotePath",
-        "OrbitFiles.delftFTP_ERS1_precise_remotePath": "OrbitFiles.delftFTP_ERS1_precise_remotePath",
-        "OrbitFiles.delftFTP_ERS2_precise_remotePath": "OrbitFiles.delftFTP_ERS2_precise_remotePath",
-        "OrbitFiles.prareHTTP_ERS1_remotePath": "OrbitFiles.prareHTTP_ERS1_remotePath",
-        "OrbitFiles.prareHTTP_ERS2_remotePath": "OrbitFiles.prareHTTP_ERS2_remotePath",
-        "OrbitFiles.prareERS1OrbitPath": "OrbitFiles.prareERS1OrbitPath",
-        "OrbitFiles.prareERS2OrbitPath": "OrbitFiles.prareERS2OrbitPath",
-        "OrbitFiles.sentinel1POEOrbitPath": "OrbitFiles.sentinel1POEOrbitPath",
-        "OrbitFiles.sentinel1RESOrbitPath": "OrbitFiles.sentinel1RESOrbitPath",
-        "OrbitFiles.sentinel1POEOrbit_remotePath": "OrbitFiles.sentinel1POEOrbit_remotePath",
-        "OrbitFiles.sentinel1RESOrbit_remotePath": "OrbitFiles.sentinel1RESOrbit_remotePath",
-        "AuxCal.Sentinel1.remotePath": "AuxCal.Sentinel1.remotePath",
-        "AuxCal.ENVISAT.remotePath": "AuxCal.ENVISAT.remotePath",
-        "AuxCal.ERS.remotePath": "AuxCal.ERS.remotePath",
-
-    }
+    __KEYS = ['DEM.AsterDEMDataPath',
+              'LandCover.globcoverDataPath',
+              'DEM.ace2_5MinDEMDataPath',
+              'OrbitFiles.delftFTP_ERS2_precise_remotePath',
+              'DEM.gtopo30DEMDataPath',
+              'DEM.srtm3GeoTiffDEM_HTTP',
+              'DEM.aceDEMDataPath',
+              'DEM.srtm3GeoTiffDEM_remotePath',
+              'AuxCal.ENVISAT.remotePath',
+              'auxdatapath',
+              'DEM.ace2_5MinDEM_HTTP',
+              'DEM.aceDEM_HTTP',
+              'OrbitFiles.prareHTTP_ERS1_remotePath',
+              'OrbitFiles.delftERS1OrbitPath',
+              'OrbitFiles.delftFTP_ERS1_precise_remotePath',
+              'OrbitFiles.sentinel1POEOrbit_remotePath',
+              'AuxCal.ERS.remotePath',
+              'DEM.CDEM_HTTP',
+              'OrbitFiles.sentinel1RESOrbitPath',
+              'properties',
+              'OrbitFiles.dorisHTTP_vor_remotePath',
+              'auxdata',
+              'OrbitFiles.dorisVOROrbitPath',
+              'OrbitFiles.sentinel1POEOrbitPath',
+              'AuxCal.Sentinel1.remotePath',
+              'OrbitFiles.delftFTP',
+              'OrbitFiles.delftEnvisatOrbitPath',
+              'OrbitFiles.delftERS2OrbitPath',
+              'DEM.srtm1GridDEMDataPath',
+              'DEM.srtm3GeoTiffDEMDataPath',
+              'OrbitFiles.delftFTP_ENVISAT_precise_remotePath',
+              'OrbitFiles.sentinel1RESOrbit_remotePath',
+              'DEM.srtm3GeoTiffDEM_FTP',
+              'LandCover.glc2000DataPath',
+              'OrbitFiles.prareHTTP_ERS2_remotePath',
+              'DEM.srtm1HgtDEM_HTTP',
+              'OrbitFiles.prareERS1OrbitPath',
+              'demPath',
+              'landCoverPath',
+              'executable',
+              'OrbitFiles.dorisPOROrbitPath',
+              'etc',
+              'OrbitFiles.prareERS2OrbitPath',
+              'DEM.Getasse30DEMDataPath']
 
     __SECTIONS = {
         "snap": "SNAP",
@@ -398,10 +394,10 @@ class ConfigHandler(object):
         if not self.parser.has_section(section):
             raise AttributeError("Section {0} does not exist.".format(str(section)))
 
-        elif key not in ConfigHandler.__KEYS.values():
+        elif key not in ConfigHandler.__KEYS:
             raise AttributeError(
                 "Your key is {0}. Only the following keys are allowed: {1}.".format(str(key),
-                                                                                    str(ConfigHandler.__KEYS.values())))
+                                                                                    str(ConfigHandler.__KEYS)))
 
         else:
             if key in self.parser.options(section):
