@@ -308,17 +308,6 @@ class ExamineSnap(object):
             else:
                 self.__get_properties()
 
-            if 'auxdatapath' in ConfigHandler.keys('SNAP'):
-                self.auxdatapath = ConfigHandler.get('SNAP', 'auxdatapath')
-
-                if not os.path.exists(self.auxdatapath):
-                    self.auxdatapath = os.path.join(expanduser('~'), '.snap\\auxdata')
-                    ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath, True)
-
-            else:
-                self.auxdatapath = os.path.join(expanduser('~'), '.snap\\auxdata')
-                ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath, True)
-
         else:
             ConfigHandler.add_section('SNAP')
             self.__get_etc()
@@ -327,24 +316,28 @@ class ExamineSnap(object):
             self.auxdatapath = os.path.join(expanduser('~'), '.snap\\auxdata')
             ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath, True)
 
-    def set_auxdatapath(self, path):
-        """
-        Set a new auxdata path.
+    @property
+    def auxdatapath(self):
+        if not hasattr(self, '__auxdatapath'):
+            path_default = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
+            if 'auxdatapath' in ConfigHandler.keys('SNAP'):
+                path_conf = ConfigHandler.get('SNAP', 'auxdatapath')
+                # if the path in config is a directory, set this path to the private
+                # __auxdatapath attribute; if not, use the auxdata setter to directly
+                # write the default directory to the config
+                if os.path.exists(path_conf):
+                    self.__auxdatapath = path_conf
+                else:
+                    self.auxdatapath = path_default
+            else:
+                self.auxdatapath = path_default
 
-        Parameters
-        ----------
-        path : str
-            Path to auxdata.
+        return self.__auxdatapath
 
-        Returns
-        -------
-        None
-
-        """
-        if not os.path.exists(path):
-            self.auxdatapath = path
-            ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath, True)
-            self.__set_properties_paths()
+    @auxdatapath.setter
+    def auxdatapath(self, path):
+        self.__auxdatapath = path
+        ConfigHandler.set('SNAP', 'auxdatapath', path, True)
 
     def __get_etc(self):
         """
