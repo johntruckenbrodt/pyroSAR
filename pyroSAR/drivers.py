@@ -1327,6 +1327,12 @@ class SAFE(ID):
         meta['coordinates'] = [tuple([float(y) for y in x.split(',')]) for x in
                                tree.find('.//gml:coordinates', namespaces).text.split()]
         meta['orbit'] = tree.find('.//s1:pass', namespaces).text[0]
+        
+        meta['orbitNumbers_abs_start'] = int(tree.find('.//safe:orbitNumber[@type="start"]', namespaces).text)
+        meta['orbitNumbers_abs_stop'] = int(tree.find('.//safe:orbitNumber[@type="stop"]', namespaces).text)
+        meta['orbitNumbers_rel_start'] = int(tree.find('.//safe:relativeOrbitNumber[@type="start"]', namespaces).text)
+        meta['orbitNumbers_rel_stop'] = int(tree.find('.//safe:relativeOrbitNumber[@type="stop"]', namespaces).text)
+
         meta['orbitNumbers_abs'] = dict(
             [(x, int(tree.find('.//safe:orbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in
              ['start', 'stop']])
