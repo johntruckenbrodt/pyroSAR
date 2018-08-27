@@ -137,6 +137,16 @@ class ID(object):
         self.locals = __LOCAL__
         for item in self.locals:
             setattr(self, item, metadict[item])
+    
+    def __str__(self):
+        lines = ['pyroSAR ID object of type {}'.format(self.__class__.__name__)]
+        for item in sorted(self.locals):
+            value = getattr(self, item)
+            if item == 'projection':
+                value = spatial.crsConvert(value, 'proj4')
+            line = '{0}: {1}'.format(item, value)
+            lines.append(line)
+        return '\n'.join(lines)
 
     def bbox(self, outname=None, overwrite=True):
         """
@@ -440,8 +450,7 @@ class ID(object):
         -------
 
         """
-        for item in sorted(self.locals):
-            print('{0}: {1}'.format(item, getattr(self, item)))
+        print(self.__str__())
 
     @abc.abstractmethod
     def scanMetadata(self):
