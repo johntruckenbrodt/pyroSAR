@@ -1465,6 +1465,10 @@ class Archive(object):
     ----------
     dbfile: str
         the database file. This file might either point to an existing database or will be created otherwise.
+    custom_fields: dict
+        a dictionary containing additional non-standard database column names and data types;
+        the names must be attributes of the SAR scenes to be inserted (i.e. id.attr) or keys in their meta attribute
+        (i.e. id.meta['attr'])
 
     Examples
     ----------
@@ -1498,7 +1502,7 @@ class Archive(object):
     >>>     print(archive.is_registered(scene))
     """
 
-    def __init__(self, dbfile):
+    def __init__(self, dbfile, custom_fields=None):
         self.dbfile = dbfile
         self.conn = spatial.sqlite_setup(dbfile, ['spatialite'])
 
@@ -1516,6 +1520,10 @@ class Archive(object):
                        'vv': 'INTEGER',
                        'hv': 'INTEGER',
                        'vh': 'INTEGER'}
+        
+        if custom_fields is not None:
+            self.lookup.update(custom_fields)
+        
         create_string = '''CREATE TABLE if not exists data ({})'''.format(
             ', '.join([' '.join(x) for x in self.lookup.items()]))
         cursor = self.conn.cursor()
@@ -1547,7 +1555,12 @@ class Archive(object):
             elif attribute in ['hh', 'vv', 'hv', 'vh']:
                 insertion.append(int(attribute in pols))
             else:
-                attr = getattr(id, attribute)
+                if hasattr(id, attribute):
+                    attr = getattr(id, attribute)
+                elif attribute in id.meta.keys():
+                    attr = id.meta[attribute]
+                else:
+                    raise AttributeError('could not find attribute {}'.format(attribute))
                 value = attr() if inspect.ismethod(attr) else attr
                 insertion.append(value)
         insert_string = '''INSERT INTO data({0}) VALUES({1})''' \
