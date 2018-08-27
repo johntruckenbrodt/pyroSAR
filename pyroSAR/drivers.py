@@ -1869,7 +1869,7 @@ class Archive(object):
                 arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
                 vals.append(site_geom)
             else:
-                print('WARNING: argument vectorobject is ignored, must be of type spatial.vector.Vector')
+                print('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
 
         query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
         if verbose:
@@ -1929,7 +1929,7 @@ class Archive(object):
         cursor = self.conn.cursor()
         r1 = cursor.execute('''SELECT Count(*) FROM data''').fetchone()[0]
         r2 = cursor.execute('''SELECT Count(*) FROM duplicates''').fetchone()[0]
-        return (r1, r2)
+        return r1, r2
 
     def __enter__(self):
         return self
