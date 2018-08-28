@@ -1054,25 +1054,10 @@ class ESA(ID):
 
         if re.search('IM__0', match.group('product_id')):
             raise IOError('product level 0 not supported (yet)')
-
-        self.meta = self.gdalinfo()
-
+        
+        self.meta = self.scanMetadata()
         self.meta['acquisition_mode'] = match2.group('image_mode')
-
-        self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
-
-        if self.meta['sensor'] == 'ASAR':
-            self.meta['polarizations'] = sorted([y.replace('/', '') for x, y in self.meta.items() if
-                                                 'TX_RX_POLAR' in x and len(y) == 3])
-        elif self.meta['sensor'] in ['ERS1', 'ERS2']:
-            self.meta['polarizations'] = ['VV']
-
-        self.meta['orbit'] = self.meta['SPH_PASS'][0]
-        self.meta['start'] = self.meta['MPH_SENSING_START']
-        self.meta['stop'] = self.meta['MPH_SENSING_STOP']
-        self.meta['spacing'] = (self.meta['SPH_RANGE_SPACING'], self.meta['SPH_AZIMUTH_SPACING'])
-        self.meta['looks'] = (self.meta['SPH_RANGE_LOOKS'], self.meta['SPH_AZIMUTH_LOOKS'])
-
+        
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
 
@@ -1080,7 +1065,30 @@ class ESA(ID):
         lon = [self.meta[x] for x in self.meta if re.search('LONG', x)]
         lat = [self.meta[x] for x in self.meta if re.search('LAT', x)]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-
+    
+    def scanMetadata(self):
+        meta = self.gdalinfo()
+    
+        meta['product'] = 'SLC' if meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
+    
+        if meta['sensor'] == 'ASAR':
+            meta['polarizations'] = sorted([y.replace('/', '') for x, y in meta.items() if
+                                                 'TX_RX_POLAR' in x and len(y) == 3])
+        elif meta['sensor'] in ['ERS1', 'ERS2']:
+            meta['polarizations'] = ['VV']
+    
+        meta['orbit'] = meta['SPH_PASS'][0]
+        meta['start'] = meta['MPH_SENSING_START']
+        meta['stop'] = meta['MPH_SENSING_STOP']
+        meta['spacing'] = (meta['SPH_RANGE_SPACING'], meta['SPH_AZIMUTH_SPACING'])
+        meta['looks'] = (meta['SPH_RANGE_LOOKS'], meta['SPH_AZIMUTH_LOOKS'])
+    
+        meta['orbitNumber_abs_start'] = meta['MPH_ABS_ORBIT']
+        meta['orbitNumber_abs_stop'] = meta['MPH_ABS_ORBIT']
+        meta['orbitNumber_rel_start'] = meta['MPH_REL_ORBIT']
+        meta['orbitNumber_rel_stop'] = meta['MPH_REL_ORBIT']
+        return meta
+    
     def unpack(self, directory, overwrite=False):
         base_file = os.path.basename(self.file).strip('\.zip|\.tar(?:\.gz|)')
         base_dir = os.path.basename(directory.strip('/'))
