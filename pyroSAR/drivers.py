@@ -935,6 +935,19 @@ class CEOS_PSR(ID):
         ################################################################################################################
         # read data set summary record
 
+        scene_id = dataSetSummary[20:52].decode('ascii')
+
+        pattern = r'(?P<sat_id>[A-Z0-9]{5})' \
+                  r'(?P<orbitNumber>[0-9]{5})' \
+                  r'(?P<frameNumber>[0-9]{4})-' \
+                  r'(?P<obs_day>[0-9]{6})[ ]{11}'
+        match = re.match(re.compile(pattern), scene_id)
+        
+        meta['orbitNumber_abs_start'] = int(match.group('orbitNumber'))
+        meta['orbitNumber_abs_stop'] = int(match.group('orbitNumber'))
+        meta['orbitNumber_rel_start'] = int(match.group('frameNumber'))
+        meta['orbitNumber_rel_stop'] = int(match.group('frameNumber'))
+        
         meta['lines'] = int(dataSetSummary[324:332]) * 2
         meta['samples'] = int(dataSetSummary[332:340]) * 2
         meta['incidence'] = float(dataSetSummary[484:492])
