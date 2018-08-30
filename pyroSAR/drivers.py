@@ -949,10 +949,12 @@ class CEOS_PSR(ID):
                   r'(?P<obs_day>[0-9]{6})[ ]{11}'
         match = re.match(re.compile(pattern), scene_id)
         
-        meta['orbitNumber_abs_start'] = int(match.group('orbitNumber'))
-        meta['orbitNumber_abs_stop'] = int(match.group('orbitNumber'))
-        meta['orbitNumber_rel_start'] = int(match.group('frameNumber'))
-        meta['orbitNumber_rel_stop'] = int(match.group('frameNumber'))
+        orbitsPerCycle = {'PSR1': 671, 'PSR2': 207}[meta['sensor']]
+        
+        meta['orbitNumber_abs'] = int(match.group('orbitNumber'))
+        meta['orbitNumber_rel'] = meta['orbitNumber_abs'] % orbitsPerCycle
+        meta['cycleNumber'] = meta['orbitNumber_abs'] // orbitsPerCycle + 1
+        meta['frameNumber'] = int(match.group('frameNumber'))
         
         meta['lines'] = int(dataSetSummary[324:332]) * 2
         meta['samples'] = int(dataSetSummary[332:340]) * 2
