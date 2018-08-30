@@ -1065,6 +1065,8 @@ class ESA(ID):
         
         self.meta = self.scanMetadata()
         self.meta['acquisition_mode'] = match2.group('image_mode')
+        self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
+        self.meta['frameNumber'] = int(match.group('counter'))
         
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
@@ -1088,11 +1090,10 @@ class ESA(ID):
         meta['stop'] = meta['MPH_SENSING_STOP']
         meta['spacing'] = (meta['SPH_RANGE_SPACING'], meta['SPH_AZIMUTH_SPACING'])
         meta['looks'] = (meta['SPH_RANGE_LOOKS'], meta['SPH_AZIMUTH_LOOKS'])
-    
-        meta['orbitNumber_abs_start'] = meta['MPH_ABS_ORBIT']
-        meta['orbitNumber_abs_stop'] = meta['MPH_ABS_ORBIT']
-        meta['orbitNumber_rel_start'] = meta['MPH_REL_ORBIT']
-        meta['orbitNumber_rel_stop'] = meta['MPH_REL_ORBIT']
+        
+        meta['orbitNumber_abs'] = meta['MPH_ABS_ORBIT']
+        meta['orbitNumber_rel'] = meta['MPH_REL_ORBIT']
+        meta['cycleNumber'] = meta['MPH_CYCLE']
         return meta
     
     def unpack(self, directory, overwrite=False):
