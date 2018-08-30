@@ -1356,11 +1356,11 @@ class SAFE(ID):
                                tree.find('.//gml:coordinates', namespaces).text.split()]
         meta['orbit'] = tree.find('.//s1:pass', namespaces).text[0]
         
-        meta['orbitNumbers_abs_start'] = int(tree.find('.//safe:orbitNumber[@type="start"]', namespaces).text)
-        meta['orbitNumbers_abs_stop'] = int(tree.find('.//safe:orbitNumber[@type="stop"]', namespaces).text)
-        meta['orbitNumbers_rel_start'] = int(tree.find('.//safe:relativeOrbitNumber[@type="start"]', namespaces).text)
-        meta['orbitNumbers_rel_stop'] = int(tree.find('.//safe:relativeOrbitNumber[@type="stop"]', namespaces).text)
-
+        meta['orbitNumber_abs'] = int(tree.find('.//safe:orbitNumber[@type="start"]', namespaces).text)
+        meta['orbitNumber_rel'] = int(tree.find('.//safe:relativeOrbitNumber[@type="start"]', namespaces).text)
+        meta['cycleNumber'] = int(tree.find('.//safe:cycleNumber', namespaces).text)
+        meta['frameNumber'] = int(tree.find('.//s1sarl1:missionDataTakeID', namespaces).text)
+        
         meta['orbitNumbers_abs'] = dict(
             [(x, int(tree.find('.//safe:orbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in
              ['start', 'stop']])
