@@ -1534,6 +1534,10 @@ class Archive(object):
         
         self.lookup = {'sensor': 'TEXT',
                        'orbit': 'TEXT',
+                       'orbitNumber_abs': 'INTEGER',
+                       'orbitNumber_rel': 'INTEGER',
+                       'cycleNumber': 'INTEGER',
+                       'frameNumber': 'INTEGER',
                        'acquisition_mode': 'TEXT',
                        'start': 'TEXT',
                        'stop': 'TEXT',
