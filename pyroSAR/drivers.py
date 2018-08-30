@@ -1463,10 +1463,10 @@ class TSX(ID):
         meta['polarizations'] = [x.text for x in
                                  tree.findall('.//acquisitionInfo/polarisationList/polLayer', namespaces)]
         
-        meta['orbitNumber_abs_start'] = int(tree.find('.//missionInfo/absOrbit', namespaces).text)
-        meta['orbitNumber_abs_stop'] = int(tree.find('.//missionInfo/absOrbit', namespaces).text)
-        meta['orbitNumber_rel_start'] = int(tree.find('.//missionInfo/relOrbit', namespaces).text)
-        meta['orbitNumber_rel_stop'] = int(tree.find('.//missionInfo/relOrbit', namespaces).text)
+        meta['orbitNumber_abs'] = int(tree.find('.//missionInfo/absOrbit', namespaces).text)
+        meta['orbitNumber_rel'] = int(tree.find('.//missionInfo/relOrbit', namespaces).text)
+        meta['cycleNumber'] = int(tree.find('.//missionInfo/orbitCycle', namespaces).text)
+        meta['frameNumber'] = int(tree.find('.//inputData/uniqueDataTakeID', namespaces).text)
         
         meta['acquisition_mode'] = tree.find('.//acquisitionInfo/imagingMode', namespaces).text
         meta['start'] = self.parse_date(tree.find('.//sceneInfo/start/timeUTC', namespaces).text)
