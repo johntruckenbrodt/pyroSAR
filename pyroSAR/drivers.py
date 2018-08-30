@@ -40,7 +40,7 @@ from .ancillary import finder, parse_literal
 from .xml_util import getNamespaces
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
-             'spacing', 'samples', 'lines']
+             'spacing', 'samples', 'lines', 'orbitNumber_abs', 'orbitNumber_rel', 'cycleNumber', 'frameNumber']
 
 
 def identify(scene):
