@@ -1,5 +1,6 @@
 import sys
 import warnings
+import pkg_resources
 
 if sys.version_info >= (3, 0):
     from io import StringIO
@@ -21,7 +22,7 @@ from xml.dom import minidom
 from os.path import expanduser
 
 import pyroSAR
-from pyroSAR import identify
+from pyroSAR import identify, ConfigHandler
 from pyroSAR.ancillary import dissolve, finder, which
 from pyroSAR.spatial import gdal_translate
 from .._dev_config import LOOKUP
@@ -274,22 +275,162 @@ class ExamineSnap(object):
                     'You can define a different one with ExamineSnap.set_path()'
                     ''.format(options='\n'.join(executables), select=self.path), UserWarning)
 
-            self.__get_etc()
             self.__read_config()
+            self.__read_snap_properties()
+            self.__set_properties_paths()
 
-        self.auxdatapath = os.path.join(expanduser('~'), '.snap/auxdata')
+    def __read_config(self):
+        """
+        This method reads the config.ini to examine the snap paths. If the snap paths are not in the config.ini or the
+        paths are wrong they will be automatically created.
+
+        Returns
+        -------
+        None
+
+        """
+        if 'SNAP' in ConfigHandler.sections:
+            if 'etc' in ConfigHandler.keys('SNAP'):
+                self.etc = ConfigHandler.get('SNAP', 'etc')
+
+                if not os.path.exists(self.etc):
+                    self.__get_etc()
+
+            else:
+                self.__get_etc()
+
+            if 'properties' in ConfigHandler.keys('SNAP'):
+                self.properties = ConfigHandler.get('SNAP', 'properties')
+
+                if not os.path.exists(self.properties):
+                    self.__get_properties()
+
+            else:
+                self.__get_properties()
+
+        else:
+            ConfigHandler.add_section('SNAP')
+            self.__get_etc()
+            self.__get_properties()
+
+            self.auxdatapath = os.path.join(expanduser('~'), '.snap\\auxdata')
+            ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath, True)
+
+    @property
+    def auxdatapath(self):
+        if not hasattr(self, '__auxdatapath'):
+            path_default = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
+            if 'auxdatapath' in ConfigHandler.keys('SNAP'):
+                path_conf = ConfigHandler.get('SNAP', 'auxdatapath')
+                # if the path in config is a directory, set this path to the private
+                # __auxdatapath attribute; if not, use the auxdata setter to directly
+                # write the default directory to the config
+                if os.path.exists(path_conf):
+                    self.__auxdatapath = path_conf
+                else:
+                    self.auxdatapath = path_default
+            else:
+                self.auxdatapath = path_default
+
+        return self.__auxdatapath
+
+    @auxdatapath.setter
+    def auxdatapath(self, path):
+        self.__auxdatapath = path
+        ConfigHandler.set('SNAP', 'auxdatapath', path, True)
 
     def __get_etc(self):
+        """
+        Try to locate the etc directory and write it to config.ini.
+
+        Returns
+        -------
+        None
+
+        """
         try:
             self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
             self.auxdata = os.listdir(self.etc)
-            self.config_path = os.path.join(self.etc, [s for s in self.auxdata if 'snap.auxdata.properties' in s][0])
+
+            ConfigHandler.set('SNAP', 'etc', self.etc, True)
+            ConfigHandler.set('SNAP', 'auxdata', self.auxdata)
 
         except OSError:
             raise AssertionError('ETC directory is not existent.')
 
-    def __read_config(self):
-        with open(self.config_path) as config:
-            self.config = []
+    def __get_properties(self):
+        """
+        Try to locate the properties file and write the path to config.ini.
+
+        Returns
+        -------
+        None
+
+        """
+
+        try:
+            self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
+            self.auxdata = os.listdir(self.etc)
+            self.properties = os.path.join(self.etc, [s for s in self.auxdata if 'snap.auxdata.properties' in s][0])
+
+            ConfigHandler.set('SNAP', 'etc', self.etc, True)
+            ConfigHandler.set('SNAP', 'auxdata', self.auxdata, True)
+            ConfigHandler.set('SNAP', 'properties', self.properties)
+
+        except OSError:
+            path = 'data/snap.auxdata.properties'
+            self.properties = pkg_resources.resource_filename(__name__, path)
+
+    def __read_snap_properties(self):
+        """
+        Read the properties file.
+
+        Returns
+        -------
+        None
+
+        """
+
+        with open(self.properties) as config:
+            self.snap_properties = []
             for line in config:
-                self.config.append(line)
+                if '#' not in line:
+                    self.snap_properties.append(line)
+                else:
+                    pass
+
+    def __set_properties_paths(self):
+        """
+        Write all DEM, ORBIT etc. paths to config.ini
+
+        Returns
+        -------
+        None
+
+        """
+        demPath = os.path.join(self.auxdatapath, 'dem')
+        landCoverPath = os.path.join(self.auxdatapath, 'LandCover')
+
+        ConfigHandler.add_section('OUTPUT')
+        ConfigHandler.add_section('URL')
+
+        for i in range(len(self.snap_properties)):
+            item = self.snap_properties[i]
+
+            if len(item.split()) <= 1:
+                pass
+            else:
+                if '${AuxDataPath}' in item:
+                    line = item.replace('${AuxDataPath}', self.auxdatapath)
+                    line = line.replace('\\', '/')
+
+                if '${demPath}' in item:
+                    line = item.replace('${demPath}', demPath)
+                    line = line.replace('\\', '/')
+
+                if '${landCoverPath}' in item:
+                    line = item.replace('${landCoverPath}', landCoverPath)
+                    line = line.replace('\\', '/')
+
+                item_list = line.split()
+                ConfigHandler.set('OUTPUT', key=item_list[0], value=item_list[-1])
