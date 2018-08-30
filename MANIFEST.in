@@ -1,2 +1,3 @@
 recursive-include pyroSAR/snap *.xml
 recursive-include examples *
+recursive-include pyroSAR/ERS/data *
