@@ -34,6 +34,7 @@ from osgeo import gdal, osr
 from osgeo.gdalconst import GA_ReadOnly, GA_Update
 
 from .S1 import OSV, linesimplify as ls
+from .ERS import passdb_query
 from . import spatial
 from .ancillary import finder, parse_literal
 from .xml_util import getNamespaces
@@ -58,7 +59,7 @@ def identify(scene):
     """
     if not os.path.exists(scene):
         raise OSError("No such file or directory: '{}'".format(scene))
-
+    
     for handler in ID.__subclasses__():
         try:
             return handler(scene)
@@ -125,7 +126,7 @@ class ID(object):
     """
     Abstract class for SAR meta data handlers
     """
-
+    
     def __init__(self, metadict):
         """
         to be called by the __init__methods of the format drivers
@@ -147,7 +148,7 @@ class ID(object):
             line = '{0}: {1}'.format(item, value)
             lines.append(line)
         return '\n'.join(lines)
-
+    
     def bbox(self, outname=None, overwrite=True):
         """
         get the bounding box of a scene either as a vector object or written to a shapefile
@@ -169,7 +170,7 @@ class ID(object):
         else:
             spatial.bbox(self.getCorners(), self.projection, outname=outname, format='ESRI Shapefile',
                          overwrite=overwrite)
-
+    
     @property
     def compression(self):
         """
@@ -188,7 +189,7 @@ class ID(object):
             return 'tar'
         else:
             return None
-
+    
     def export2dict(self):
         """
         Return the uuid and the metadata that is defined in self.locals as a dictionary
@@ -198,7 +199,7 @@ class ID(object):
         title = os.path.splitext(sq_file)[0]
         metadata['uuid'] = title
         return metadata
-
+    
     def export2sqlite(self, dbfile):
         """
         Export relevant metadata to a sqlite database
@@ -211,7 +212,7 @@ class ID(object):
         """
         with Archive(dbfile) as archive:
             archive.insert(self)
-
+    
     def examine(self, include_folders=False):
         """
         check whether any items in the SAR scene structure (i.e. files/folders) match the regular expression pattern
@@ -236,7 +237,7 @@ class ID(object):
             raise IOError('scene does not match {} naming convention'.format(type(self).__name__))
         else:
             raise IOError('file ambiguity detected:\n{}'.format('\n'.join(files)))
-
+    
     def findfiles(self, pattern, include_folders=False):
         """
         find files in the scene archive, which match a pattern; see :func:`~findfiles`
@@ -253,7 +254,7 @@ class ID(object):
             the matched file names
         """
         return findfiles(self.scene, pattern, include_folders)
-
+    
     def gdalinfo(self):
         """
         read metadata directly from the GDAL SAR image drivers
@@ -269,7 +270,7 @@ class ID(object):
             the metadata attributes
         """
         files = self.findfiles('(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)')
-
+        
         if len(files) == 1:
             prefix = {'zip': '/vsizip/', 'tar': '/vsitar/', None: ''}[self.compression]
             header = files[0]
@@ -277,34 +278,34 @@ class ID(object):
             raise IOError('file ambiguity detected')
         else:
             raise IOError('file type not supported')
-
+        
         meta = {}
-
+        
         ext_lookup = {'.N1': 'ASAR', '.E1': 'ERS1', '.E2': 'ERS2'}
         extension = os.path.splitext(header)[1]
         if extension in ext_lookup:
             meta['sensor'] = ext_lookup[extension]
-
+        
         img = gdal.Open(prefix + header, GA_ReadOnly)
         gdalmeta = img.GetMetadata()
         meta['samples'], meta['lines'], meta['bands'] = img.RasterXSize, img.RasterYSize, img.RasterCount
         meta['projection'] = img.GetGCPProjection()
         meta['gcps'] = [((x.GCPPixel, x.GCPLine), (x.GCPX, x.GCPY, x.GCPZ)) for x in img.GetGCPs()]
         img = None
-
+        
         for item in gdalmeta:
             entry = [item, parse_literal(gdalmeta[item].strip())]
-
+            
             try:
                 entry[1] = self.parse_date(str(entry[1]))
             except ValueError:
                 pass
-
+            
             if re.search('(?:LAT|LONG)', entry[0]):
                 entry[1] /= 1000000.
             meta[entry[0]] = entry[1]
         return meta
-
+    
     @abc.abstractmethod
     def getCorners(self):
         """
@@ -316,7 +317,7 @@ class ID(object):
             dictionary with keys `xmin`, `xmax`, `ymin` and `ymax`
         """
         raise NotImplementedError
-
+    
     def getFileObj(self, filename):
         """
         Load a file into a readable file object.
@@ -332,7 +333,7 @@ class ID(object):
             a file pointer object
         """
         return getFileObj(self.scene, filename)
-
+    
     def getGammaImages(self, directory=None):
         """
         list all files processed by GAMMA
@@ -359,7 +360,7 @@ class ID(object):
                     'directory missing; please provide directory to function or define object attribute "gammadir"')
         return [x for x in finder(directory, [self.outname_base()], regex=True) if
                 not re.search('\.(?:par|hdr|aux\.xml)$', x)]
-
+    
     def getHGT(self):
         """
         get the names of all SRTM HGT tiles overlapping with the SAR scene
@@ -369,23 +370,23 @@ class ID(object):
         list
             names of the SRTM HGT tiles
         """
-
+        
         corners = self.getCorners()
-
+        
         # generate sequence of integer coordinates marking the tie points of the overlapping hgt tiles
         lat = range(int(float(corners['ymin']) // 1), int(float(corners['ymax']) // 1) + 1)
         lon = range(int(float(corners['xmin']) // 1), int(float(corners['xmax']) // 1) + 1)
-
+        
         # convert coordinates to string with leading zeros and hemisphere identification letter
         lat = [str(x).zfill(2 + len(str(x)) - len(str(x).strip('-'))) for x in lat]
         lat = [x.replace('-', 'S') if '-' in x else 'N' + x for x in lat]
-
+        
         lon = [str(x).zfill(3 + len(str(x)) - len(str(x).strip('-'))) for x in lon]
         lon = [x.replace('-', 'W') if '-' in x else 'E' + x for x in lon]
-
+        
         # concatenate all formatted latitudes and longitudes with each other as final product
         return [x + y + '.hgt' for x in lat for y in lon]
-
+    
     def is_processed(self, outdir, recursive=False):
         """
         check whether a scene has already been processed and stored in the defined output directory
@@ -406,7 +407,7 @@ class ID(object):
             return len(finder(outdir, [self.outname_base()], regex=True, recursive=recursive)) != 0
         else:
             return False
-
+    
     def outname_base(self):
         """
         parse a string containing basic information about the scene in standardized format.
@@ -423,7 +424,7 @@ class ID(object):
                   self.orbit,
                   self.start)
         return '_'.join(fields)
-
+    
     @staticmethod
     def parse_date(x):
         """
@@ -441,7 +442,7 @@ class ID(object):
             the converted time stamp in format YYYYmmddTHHMMSS
         """
         return parse_date(x)
-
+    
     def summary(self):
         """
         print the set of standardized scene metadata attributes
@@ -451,7 +452,7 @@ class ID(object):
 
         """
         print(self.__str__())
-
+    
     @abc.abstractmethod
     def scanMetadata(self):
         """
@@ -467,7 +468,7 @@ class ID(object):
 
         """
         raise NotImplementedError
-
+    
     @abc.abstractmethod
     def unpack(self, directory, overwrite=False):
         """
@@ -485,7 +486,7 @@ class ID(object):
 
         """
         raise NotImplementedError
-
+    
     def _unpack(self, directory, offset=None, overwrite=False):
         """
         general function for unpacking scene archives; to be called by implementations of ID.unpack
@@ -500,14 +501,14 @@ class ID(object):
             else:
                 raise RuntimeError('target scene directory already exists: {}'.format(directory))
         os.makedirs(directory)
-
+        
         if tf.is_tarfile(self.scene):
             archive = tf.open(self.scene, 'r')
             names = archive.getnames()
             if offset is not None:
                 names = [x for x in names if x.startswith(offset)]
             header = os.path.commonprefix(names)
-
+            
             if header in names:
                 if archive.getmember(header).isdir():
                     for item in sorted(names):
@@ -520,7 +521,7 @@ class ID(object):
                 else:
                     archive.extractall(directory)
                     archive.close()
-
+        
         elif zf.is_zipfile(self.scene):
             archive = zf.ZipFile(self.scene, 'r')
             names = archive.namelist()
@@ -542,11 +543,11 @@ class ID(object):
             else:
                 archive.extractall(directory)
                 archive.close()
-
+        
         else:
             print('unpacking is only supported for TAR and ZIP archives')
             return
-
+        
         self.scene = directory
         main = os.path.join(self.scene, os.path.basename(self.file))
         self.file = main if os.path.isfile(main) else self.scene
@@ -560,7 +561,7 @@ class CEOS_ERS(ID):
         ER-IS-EPO-GS-5902-3: Annex C. ERS SAR.SLC/SLC-I. CCT and EXABYTE
         (`ESA 1998 <https://earth.esa.int/documents/10174/1597298/SAR05E.pdf>`_)
     """
-
+    
     def __init__(self, scene):
         self.pattern = r'(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_))_[012B][CP])' \
                        r'(?P<processing_stage_flag>[A-Z])' \
@@ -575,23 +576,23 @@ class CEOS_ERS(ID):
                        r'(?P<counter>[0-9]{4,})\.' \
                        r'(?P<satellite_ID>[EN][12])' \
                        r'(?P<extension>(?:\.zip|\.tar\.gz|\.PS|))$'
-
+        
         self.pattern_pid = r'(?P<sat_id>(?:SAR|ASA))_' \
                            r'(?P<image_mode>(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_)))_' \
                            r'(?P<processing_level>[012B][CP])'
-
+        
         self.scene = os.path.realpath(scene)
-
+        
         self.examine()
-
+        
         match = re.match(re.compile(self.pattern), os.path.basename(self.file))
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
-
+        
         if re.search('IM__0', match.group('product_id')):
             raise IOError('product level 0 not supported (yet)')
-
+        
         self.meta = self.gdalinfo()
-
+        
         self.meta['acquisition_mode'] = match2.group('image_mode')
         self.meta['polarizations'] = ['VV']
         self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
@@ -600,47 +601,52 @@ class CEOS_ERS(ID):
         self.meta['incidence_angle'] = self.meta['CEOS_INC_ANGLE']
         self.meta['k_db'] = -10 * math.log(float(self.meta['CEOS_CALIBRATION_CONSTANT_K']), 10)
         self.meta['sc_db'] = {'ERS1': 59.61, 'ERS2': 60}[self.meta['sensor']]
-
+        
         # acquire additional metadata from the file LEA_01.001
         self.meta.update(self.scanMetadata())
-
+        
         # register the standardized meta attributes as object attributes
         super(CEOS_ERS, self).__init__(self.meta)
-
+    
     def getCorners(self):
         lat = [x[1][1] for x in self.meta['gcps']]
         lon = [x[1][0] for x in self.meta['gcps']]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-
+    
     def unpack(self, directory, overwrite=False):
         if self.sensor in ['ERS1', 'ERS2']:
             base_file = re.sub('\.PS$', '', os.path.basename(self.file))
             base_dir = os.path.basename(directory.strip('/'))
-
+            
             outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
-
+            
             self._unpack(outdir, overwrite=overwrite)
         else:
             raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
-
+    
     def scanMetadata(self):
         lea_obj = self.getFileObj(self.findfiles('LEA_01.001')[0])
         lea = lea_obj.read()
         lea_obj.close()
         meta = dict()
         offset = 720
+        meta['sensor'] = lea[(offset + 396):(offset + 412)].strip()
+        meta['start'] = self.parse_date(str(lea[(offset + 1814):(offset + 1838)].decode('utf-8')))
+        meta['stop'] = self.parse_date(str(lea[(offset + 1862):(offset + 1886)].decode('utf-8')))
+        
         looks_range = float(lea[(offset + 1174):(offset + 1190)])
         looks_azimuth = float(lea[(offset + 1190):(offset + 1206)])
         meta['looks'] = (looks_range, looks_azimuth)
+        
         meta['heading'] = float(lea[(offset + 468):(offset + 476)])
         meta['orbit'] = 'D' if meta['heading'] > 180 else 'A'
         orbitNumber, frameNumber = map(int, re.findall('[0-9]+', lea[(offset + 36):(offset + 68)].decode('utf-8')))
-        meta['orbitNumber'] = orbitNumber
+        meta['orbitNumber_abs'] = orbitNumber
         meta['frameNumber'] = frameNumber
-        meta['start'] = self.parse_date(str(lea[(offset + 1814):(offset + 1838)].decode('utf-8')))
-        meta['stop'] = self.parse_date(str(lea[(offset + 1862):(offset + 1886)].decode('utf-8')))
+        orbitInfo = passdb_query(meta['sensor'], datetime.strptime(meta['start'], '%Y%m%dT%H%M%S'))
+        meta['cycleNumber'] = orbitInfo['cycleNumber']
+        meta['orbitNumber_rel'] = orbitInfo['orbitNumber_rel']
         # the following parameters are already read by gdalinfo
-        # meta['sensor'] = lea[(offset+396):(offset+412)].strip()
         # spacing_azimuth = float(lea[(offset+1686):(offset+1702)])
         # spacing_range = float(lea[(offset+1702):(offset+1718)])
         # meta['spacing'] = (spacing_range, spacing_azimuth)
@@ -652,7 +658,7 @@ class CEOS_ERS(ID):
         # meta['k_db'] = -10*math.log(float(text_subset[663:679].strip()), 10)
         # meta['antenna_flag'] = int(text_subset[659:663].strip())
         return meta
-
+        
         # def correctAntennaPattern(self):
         # the following section is only relevant for PRI products and can be considered future work
         # select antenna gain correction lookup file from extracted meta information
@@ -725,11 +731,11 @@ class CEOS_PSR(ID):
             * VBS: Scan SAR wide mode Single polarization
             * VBD: Scan SAR wide mode Dual polarization
     """
-
+    
     def __init__(self, scene):
-
+        
         self.scene = os.path.realpath(scene)
-
+        
         patterns = [r'^LED-ALPSR'
                     r'(?P<sub>P|S)'
                     r'(?P<orbit>[0-9]{5})'
@@ -749,7 +755,7 @@ class CEOS_PSR(ID):
                     r'(?P<proc>[GR_])'
                     r'(?P<proj>[UPML_])'
                     r'(?P<orbit_dir>A|D)$']
-
+        
         for i, pattern in enumerate(patterns):
             self.pattern = pattern
             try:
@@ -758,18 +764,18 @@ class CEOS_PSR(ID):
             except IOError as e:
                 if i + 1 == len(patterns):
                     raise e
-
+        
         self.meta = self.scanMetadata()
-
+        
         # register the standardized meta attributes as object attributes
         super(CEOS_PSR, self).__init__(self.meta)
-
+    
     def _getLeaderfileContent(self):
         led_obj = self.getFileObj(self.led_filename)
         led = led_obj.read()
         led_obj.close()
         return led
-
+    
     def _parseSummary(self):
         try:
             summary_file = self.getFileObj(self.findfiles('summary|workreport')[0])
@@ -781,24 +787,24 @@ class CEOS_PSR(ID):
         for x, y in summary.items():
             summary[x] = parse_literal(y)
         return summary
-
+    
     @property
     def led_filename(self):
         return self.findfiles(self.pattern)[0]
-
+    
     def scanMetadata(self):
         ################################################################################################################
         # read leader (LED) file
         led = self._getLeaderfileContent()
-
+        
         # read summary text file
         meta = self._parseSummary()
-
+        
         # read polarizations from image file names
         meta['polarizations'] = [re.search('[HV]{2}', os.path.basename(x)).group(0) for x in self.findfiles('^IMG-')]
         ################################################################################################################
         # read start and stop time
-
+        
         try:
             meta['start'] = self.parse_date(meta['Img_SceneStartDateTime'])
             meta['stop'] = self.parse_date(meta['Img_SceneEndDateTime'])
@@ -831,9 +837,9 @@ class CEOS_PSR(ID):
         meta['sensor'] = {'AL1': 'PSR1', 'AL2': 'PSR2'}[fileDescriptor[48:51].decode('utf-8')]
         ################################################################################################################
         # read leader file name information
-
+        
         match = re.match(re.compile(self.pattern), os.path.basename(self.led_filename))
-
+        
         if meta['sensor'] == 'PSR1':
             meta['acquisition_mode'] = match.group('sub') + match.group('mode')
         else:
@@ -844,30 +850,30 @@ class CEOS_PSR(ID):
         p0 = p1
         p1 += dss_l * dss_n
         dataSetSummary = led[p0:p1]
-
+        
         if mpd_n > 0:
             p0 = p1
             p1 += mpd_l * mpd_n
             mapProjectionData = led[p0:p1]
         else:
             mapProjectionData = None
-
+        
         p0 = p1
         p1 += ppd_l * ppd_n
         platformPositionData = led[p0:p1]
-
+        
         p0 = p1
         p1 += adr_l * adr_n
         attitudeData = led[p0:p1]
-
+        
         p0 = p1
         p1 += rdr_l * rdr_n
         radiometricData = led[p0:p1]
-
+        
         p0 = p1
         p1 += dqs_l * dqs_n
         dataQualitySummary = led[p0:p1]
-
+        
         facilityRelatedData = []
         while p1 < len(led):
             p0 = p1
@@ -876,7 +882,7 @@ class CEOS_PSR(ID):
             facilityRelatedData.append(led[p0:p1])
         ################################################################################################################
         # read map projection data record
-
+        
         if mapProjectionData is not None:
             lat = list(map(float, [mapProjectionData[1072:1088],
                                    mapProjectionData[1104:1120],
@@ -887,9 +893,9 @@ class CEOS_PSR(ID):
                                    mapProjectionData[1152:1168],
                                    mapProjectionData[1184:1200]]))
             meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-
+            
             # https://github.com/datalyze-solutions/LandsatProcessingPlugin/blob/master/src/metageta/formats/alos.py
-
+            
             src_srs = osr.SpatialReference()
             # src_srs.SetGeogCS('GRS 1980','GRS 1980','GRS 1980',6378137.00000,298.2572220972)
             src_srs.SetWellKnownGeogCS('WGS84')
@@ -923,7 +929,7 @@ class CEOS_PSR(ID):
                 dfStdP2 = float(mapProjectionData[784, 800])
                 src_srs.SetLCC(dfStdP1, dfStdP2, dfCenterLat, dfCenterLon, 0, 0)
             meta['projection'] = src_srs.ExportToWkt()
-
+        
         else:
             meta['projection'] = 'GEOGCS["WGS 84",' \
                                  'DATUM["WGS_1984",' \
@@ -934,9 +940,9 @@ class CEOS_PSR(ID):
                                  'AUTHORITY["EPSG","4326"]]'
         ################################################################################################################
         # read data set summary record
-
+        
         scene_id = dataSetSummary[20:52].decode('ascii')
-
+        
         pattern = r'(?P<sat_id>[A-Z0-9]{5})' \
                   r'(?P<orbitNumber>[0-9]{5})' \
                   r'(?P<frameNumber>[0-9]{4})-' \
@@ -955,23 +961,23 @@ class CEOS_PSR(ID):
         meta['proc_facility'] = dataSetSummary[1046:1062].strip()
         meta['proc_system'] = dataSetSummary[1062:1070].strip()
         meta['proc_version'] = dataSetSummary[1070:1078].strip()
-
+        
         azlks = float(dataSetSummary[1174:1190])
         rlks = float(dataSetSummary[1190:1206])
         meta['looks'] = (rlks, azlks)
-
+        
         meta['orbit'] = dataSetSummary[1534:1542].decode('utf-8').strip()[0]
-
+        
         spacing_azimuth = float(dataSetSummary[1686:1702])
         spacing_range = float(dataSetSummary[1702:1718])
         meta['spacing'] = (spacing_range, spacing_azimuth)
         ################################################################################################################
         # read radiometric data record
-
+        
         meta['k_dB'] = float(radiometricData[20:36])
         ################################################################################################################
         # additional notes
-
+        
         # the following can be used to read platform position time from the led file
         # this covers a larger time frame than the actual scene sensing time
         # y, m, d, nd, s = platformPositionData[144:182].split()
@@ -981,13 +987,13 @@ class CEOS_PSR(ID):
         # stop = start + timedelta(seconds=(npoints - 1) * interval)
         # parse_date(start)
         # parse_date(stop)
-
+        
         return meta
-
+    
     def unpack(self, directory, overwrite=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir, overwrite=overwrite)
-
+    
     def getCorners(self):
         if 'corners' not in self.meta.keys():
             lat = [y for x, y in self.meta.items() if 'Latitude' in x]
@@ -996,27 +1002,27 @@ class CEOS_PSR(ID):
                 img_filename = self.findfiles('IMG')[0]
                 img_obj = self.getFileObj(img_filename)
                 imageFileDescriptor = img_obj.read(720)
-
+                
                 lineRecordLength = int(imageFileDescriptor[186:192])  # bytes per line + 412
                 numberOfRecords = int(imageFileDescriptor[180:186])
-
+                
                 signalDataDescriptor1 = img_obj.read(412)
                 img_obj.seek(720 + lineRecordLength * (numberOfRecords - 1))
                 signalDataDescriptor2 = img_obj.read()
-
+                
                 img_obj.close()
-
+                
                 lat = [signalDataDescriptor1[192:196], signalDataDescriptor1[200:204],
                        signalDataDescriptor2[192:196], signalDataDescriptor2[200:204]]
-
+                
                 lon = [signalDataDescriptor1[204:208], signalDataDescriptor1[212:216],
                        signalDataDescriptor2[204:208], signalDataDescriptor2[212:216]]
-
+                
                 lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
                 lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
-
+            
             self.meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-
+        
         return self.meta['corners']
 
 
@@ -1024,9 +1030,9 @@ class ESA(ID):
     """
     Handler class for SAR data in ESA format (Envisat ASAR, ERS-1/2)
     """
-
+    
     def __init__(self, scene):
-
+        
         self.pattern = r'(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_))_[012B][CP])' \
                        r'(?P<processing_stage_flag>[A-Z])' \
                        r'(?P<originator_ID>[A-Z\-]{3})' \
@@ -1040,18 +1046,18 @@ class ESA(ID):
                        r'(?P<counter>[0-9]{4,})\.' \
                        r'(?P<satellite_ID>[EN][12])' \
                        r'(?P<extension>(?:\.zip|\.tar\.gz|))$'
-
+        
         self.pattern_pid = r'(?P<sat_id>(?:SAR|ASA))_' \
                            r'(?P<image_mode>(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_)))_' \
                            r'(?P<processing_level>[012B][CP])'
-
+        
         self.scene = os.path.realpath(scene)
-
+        
         self.examine()
-
+        
         match = re.match(re.compile(self.pattern), os.path.basename(self.file))
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
-
+        
         if re.search('IM__0', match.group('product_id')):
             raise IOError('product level 0 not supported (yet)')
         
@@ -1060,7 +1066,7 @@ class ESA(ID):
         
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
-
+    
     def getCorners(self):
         lon = [self.meta[x] for x in self.meta if re.search('LONG', x)]
         lat = [self.meta[x] for x in self.meta if re.search('LAT', x)]
@@ -1068,15 +1074,13 @@ class ESA(ID):
     
     def scanMetadata(self):
         meta = self.gdalinfo()
-    
-        meta['product'] = 'SLC' if meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
-    
+        
         if meta['sensor'] == 'ASAR':
             meta['polarizations'] = sorted([y.replace('/', '') for x, y in meta.items() if
-                                                 'TX_RX_POLAR' in x and len(y) == 3])
+                                            'TX_RX_POLAR' in x and len(y) == 3])
         elif meta['sensor'] in ['ERS1', 'ERS2']:
             meta['polarizations'] = ['VV']
-    
+        
         meta['orbit'] = meta['SPH_PASS'][0]
         meta['start'] = meta['MPH_SENSING_START']
         meta['stop'] = meta['MPH_SENSING_STOP']
@@ -1092,9 +1096,9 @@ class ESA(ID):
     def unpack(self, directory, overwrite=False):
         base_file = os.path.basename(self.file).strip('\.zip|\.tar(?:\.gz|)')
         base_dir = os.path.basename(directory.strip('/'))
-
+        
         outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
-
+        
         self._unpack(outdir, overwrite=overwrite)
 
 
@@ -1106,11 +1110,11 @@ class SAFE(ID):
         * S1-RS-MDA-52-7443 Sentinel-1 IPF Auxiliary Product Specification
         * MPC-0243 Masking "No-value" Pixels on GRD Products generated by the Sentinel-1 ESA IPF
     """
-
+    
     def __init__(self, scene):
-
+        
         self.scene = os.path.realpath(scene)
-
+        
         self.pattern = r'^(?P<sensor>S1[AB])_' \
                        r'(?P<beam>S1|S2|S3|S4|S5|S6|IW|EW|WV|EN|N1|N2|N3|N4|N5|N6|IM)_' \
                        r'(?P<product>SLC|GRD|OCN)(?:F|H|M|_)_' \
@@ -1123,7 +1127,7 @@ class SAFE(ID):
                        r'(?P<dataTakeID>[0-9A-F]{6})_' \
                        r'(?P<productIdentifier>[0-9A-F]{4})' \
                        r'\.SAFE$'
-
+        
         self.pattern_ds = r'^s1[ab]-' \
                           r'(?P<swath>s[1-6]|iw[1-3]?|ew[1-5]?|wv[1-2]|n[1-6])-' \
                           r'(?P<product>slc|grd|ocn)-' \
@@ -1133,12 +1137,12 @@ class SAFE(ID):
                           r'(?:[0-9]{6})-(?:[0-9a-f]{6})-' \
                           r'(?P<id>[0-9]{3})' \
                           r'\.xml$'
-
+        
         self.examine(include_folders=True)
-
+        
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
             raise IOError('folder does not match S1 scene naming convention')
-
+        
         # scan the manifest.safe file and add selected attributes to a meta dictionary
         self.meta = self.scanMetadata()
         self.meta['projection'] = 'GEOGCS["WGS 84",' \
@@ -1146,7 +1150,7 @@ class SAFE(ID):
                                   'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
                                   'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
                                   'AUTHORITY["EPSG","4326"]]'
-
+        
         annotations = self.findfiles(self.pattern_ds)
         ann_xml = self.getFileObj(annotations[0])
         ann_tree = ET.fromstring(ann_xml.read())
@@ -1155,12 +1159,12 @@ class SAFE(ID):
             [float(ann_tree.find('.//{}PixelSpacing'.format(dim)).text) for dim in ['range', 'azimuth']])
         self.meta['samples'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfSamples').text)
         self.meta['lines'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfLines').text)
-
+        
         # register the standardized meta attributes as object attributes
         super(SAFE, self).__init__(self.meta)
-
+        
         self.gammafiles = {'slc': [], 'pri': [], 'grd': []}
-
+    
     def removeGRDBorderNoise(self):
         """
         mask out Sentinel-1 image border noise
@@ -1171,9 +1175,9 @@ class SAFE(ID):
         """
         if self.compression is not None:
             raise RuntimeError('scene is not yet unpacked')
-
+        
         blocksize = 2000
-
+        
         # compute noise scaling factor
         if self.meta['IPF_version'] >= 2.9:
             print('border noise removal not necessary for IPF version {}'.format(self.meta['IPF_version']))
@@ -1190,30 +1194,30 @@ class SAFE(ID):
                 scalingFactor = knoise * adn * adn
         else:
             scalingFactor = 1
-
+        
         # read noise vectors from corresponding annotation xml
         noisefile = self.getFileObj(self.findfiles('noise-s1[ab]-[ie]w-grd-(?:hh|vv)')[0])
         noisetree = ET.fromstring(noisefile.read())
         noisefile.close()
         noiseVectors = noisetree.findall('.//noiseVector')
-
+        
         # define boundaries of image subsets to be masked (4x the first lines/samples of the image boundaries)
         subsets = [(0, 0, blocksize, self.lines),
                    (0, 0, self.samples, blocksize),
                    (self.samples - blocksize, 0, self.samples, self.lines),
                    (0, self.lines - blocksize, self.samples, self.lines)]
-
+        
         # extract column indices of noise vectors
         yi = np.array([int(x.find('line').text) for x in noiseVectors])
-
+        
         # create links to the tif files for a master co-polarization and all other polarizations as slaves
         master = self.findfiles('s1.*(?:vv|hh).*tiff')[0]
         ras_master = gdal.Open(master, GA_Update)
         ras_slaves = [gdal.Open(x, GA_Update) for x in self.findfiles('s1.*tiff') if x != master]
-
+        
         outband_master = ras_master.GetRasterBand(1)
         outband_slaves = [x.GetRasterBand(1) for x in ras_slaves]
-
+        
         # iterate over the four image subsets
         for subset in subsets:
             print(subset)
@@ -1234,21 +1238,21 @@ class SAFE(ID):
                 yi_t = yi[(ymin <= yi) & (yi <= ymax)] - ymin
                 # interpolate values along columns
                 noise_interp[:, i] = np.interp(range(0, ydiff), yi_t, noise_interp[:, i][yi_t])
-
+            
             # read subset of image to array and subtract interpolated noise (denoising)
             mat_master = outband_master.ReadAsArray(*[xmin, ymin, xdiff, ydiff])
             denoisedBlock = mat_master.astype(float) ** 2 - noise_interp * scalingFactor
             # mask out all pixels with a value below 0.5 in the denoised block or 30 in the original block
             denoisedBlock[(denoisedBlock < 0.5) | (mat_master < 30)] = 0
             denoisedBlock = np.sqrt(denoisedBlock)
-
+            
             # mask out negative values
             def helper1(x):
                 return len(x) - np.argmax(x > 0)
-
+            
             def helper2(x):
                 return len(x) - np.argmax(x[::-1] > 0)
-
+            
             if subset == (0, 0, blocksize, self.lines):
                 border = np.apply_along_axis(helper1, 1, denoisedBlock)
                 border = blocksize - np.array(ls.reduce(border))
@@ -1273,7 +1277,7 @@ class SAFE(ID):
                 for j in range(0, xdiff):
                     denoisedBlock[:border[j], j] = 0
                     denoisedBlock[border[j]:, j] = 1
-
+            
             mat_master[denoisedBlock == 0] = 0
             # write modified array back to original file
             outband_master.WriteArray(mat_master, xmin, ymin)
@@ -1291,13 +1295,13 @@ class SAFE(ID):
             outband = None
         for ras in ras_slaves:
             ras = None
-
+    
     def getCorners(self):
         coordinates = self.meta['coordinates']
         lat = [x[0] for x in coordinates]
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-
+    
     def getOSV(self, outdir, osvType='POE'):
         """
         download Orbit State Vector files for the scene
@@ -1317,11 +1321,11 @@ class SAFE(ID):
         :meth:`pyroSAR.S1.auxil.OSV`
         """
         date = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
-
+        
         # create a time span with one day before and one after the acquisition
         before = (date - timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
         after = (date + timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
-
+        
         # download the files
         if osvType in ['POE', 'RES']:
             with OSV(outdir) as osv:
@@ -1333,13 +1337,13 @@ class SAFE(ID):
                 if len(files) == 0:
                     files = osv.catch('RES', before, after)
                 osv.retrieve(files)
-
+    
     def scanMetadata(self):
         manifest = self.getFileObj(self.findfiles('manifest.safe')[0]).getvalue()
         namespaces = getNamespaces(manifest)
         tree = ET.fromstring(manifest)
         # manifest.close()
-
+        
         meta = dict()
         meta['acquisition_mode'] = tree.find('.//s1sarl1:mode', namespaces).text
         meta['acquisition_time'] = dict(
@@ -1368,9 +1372,9 @@ class SAFE(ID):
         meta['IPF_version'] = float(tree.find('.//safe:software', namespaces).attrib['version'])
         meta['sliceNumber'] = int(tree.find('.//s1sarl1:sliceNumber', namespaces).text)
         meta['totalSlices'] = int(tree.find('.//s1sarl1:totalSlices', namespaces).text)
-
+        
         return meta
-
+    
     def unpack(self, directory, overwrite=False):
         outdir = os.path.join(directory, os.path.basename(self.file))
         self._unpack(outdir, overwrite=overwrite)
@@ -1407,10 +1411,10 @@ class TSX(ID):
         * GEC: Geocoded Ellipsoid Corrected
         * EEC: Enhanced Ellipsoid Corrected
     """
-
+    
     def __init__(self, scene):
         self.scene = os.path.realpath(scene)
-
+        
         self.pattern = r'^(?P<sat>T[DS]X1)_SAR__' \
                        r'(?P<prod>SSC|MGD|GEC|EEC)_' \
                        r'(?P<var>____|SE__|RE__|MON1|MON2|BTX1|BRX2)_' \
@@ -1419,13 +1423,13 @@ class TSX(ID):
                        r'(?:SRA|DRA)_' \
                        r'(?P<start>[0-9]{8}T[0-9]{6})_' \
                        r'(?P<stop>[0-9]{8}T[0-9]{6})(?:\.xml|)$'
-
+        
         self.pattern_ds = r'^IMAGE_(?P<pol>HH|HV|VH|VV)_(?:SRA|FWD|AFT)_(?P<beam>[^\.]+)\.(cos|tif)$'
         self.examine(include_folders=False)
-
+        
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
             raise IOError('folder does not match TSX scene naming convention')
-
+        
         self.meta = self.scanMetadata()
         self.meta['projection'] = 'GEOGCS["WGS 84",' \
                                   'DATUM["WGS_1984",' \
@@ -1434,9 +1438,9 @@ class TSX(ID):
                                   'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
                                   'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
                                   'AUTHORITY["EPSG","4326"]]'
-
+        
         super(TSX, self).__init__(self.meta)
-
+    
     def getCorners(self):
         geocs = self.getFileObj(self.findfiles('GEOREF.xml')[0]).getvalue()
         tree = ET.fromstring(geocs)
@@ -1444,7 +1448,7 @@ class TSX(ID):
         lat = [float(x.find('lat').text) for x in pts]
         lon = [float(x.find('lon').text) for x in pts]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-
+    
     def scanMetadata(self):
         annotation = self.getFileObj(self.file).getvalue()
         namespaces = getNamespaces(annotation)
@@ -1474,7 +1478,7 @@ class TSX(ID):
         meta['looks'] = (rlks, azlks)
         meta['incidence'] = float(tree.find('.//sceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
         return meta
-
+    
     def unpack(self, directory, overwrite=False):
         match = self.findfiles(self.pattern, True)
         header = [x for x in match if not x.endswith('xml') and 'iif' not in x][0].replace(self.scene, '').strip('/')
@@ -1526,11 +1530,11 @@ class Archive(object):
     >>> with Archive('/path/to/dbfile.db') as archive:
     >>>     print(archive.is_registered(scene))
     """
-
+    
     def __init__(self, dbfile, custom_fields=None):
         self.dbfile = dbfile
         self.conn = spatial.sqlite_setup(dbfile, ['spatialite'])
-
+        
         self.lookup = {'sensor': 'TEXT',
                        'orbit': 'TEXT',
                        'acquisition_mode': 'TEXT',
@@ -1555,11 +1559,11 @@ class Archive(object):
         cursor.execute(create_string)
         if 'bbox' not in self.get_colnames():
             cursor.execute('SELECT AddGeometryColumn("data","bbox" , 4326, "POLYGON", "XY", 0)')
-
+        
         create_string = 'CREATE TABLE if not exists duplicates (outname_base TEXT, scene TEXT)'
         cursor.execute(create_string)
         self.conn.commit()
-
+    
     def __prepare_insertion(self, scene):
         """
         read scene metadata and parse a string for inserting it into the database
@@ -1592,7 +1596,7 @@ class Archive(object):
             .format(', '.join(colnames),
                     ', '.join(['GeomFromText(?, 4326)' if x == 'bbox' else '?' for x in colnames]))
         return insert_string, tuple(insertion)
-
+    
     def insert(self, scene_in, verbose=False, test=False):
         """
         Insert one or many scenes into the database
@@ -1614,7 +1618,7 @@ class Archive(object):
         if not isinstance(scene_in, list):
             raise RuntimeError('scene_in must either be a string pointing to a file, a pyroSAR.ID object '
                                'or a list containing several of either')
-
+        
         if verbose:
             print('filtering scenes by name...')
         scenes = self.filter_scenelist(scene_in)
@@ -1624,14 +1628,14 @@ class Archive(object):
         if verbose:
             print('identifying scenes and extracting metadata...')
         scenes = identify_many(scenes)
-
+        
         if len(scenes) > 0:
             if verbose:
                 print('...{0} scene{1} remaining'.format(len(scenes), 's' if len(scenes) > 1 else ''))
         else:
             print('all scenes are already registered')
             return
-
+        
         counter_regulars = 0
         counter_duplicates = 0
         pbar = None
@@ -1665,7 +1669,7 @@ class Archive(object):
             self.conn.rollback()
         print('{} scenes registered regularly'.format(counter_regulars))
         print('{} duplicates detected and registered'.format(counter_duplicates))
-
+    
     def is_registered(self, scene):
         """
         Simple check if a scene is already registered in the database.
@@ -1681,7 +1685,7 @@ class Archive(object):
             is the scene already registered?
         """
         return len(self.select(scene=scene)) != 0 or len(self.select_duplicates(scene=scene)) != 0
-
+    
     def export2shp(self, shp):
         """
         export the database to a shapefile
@@ -1695,7 +1699,7 @@ class Archive(object):
         -------
         """
         spatial.ogr2ogr(self.dbfile, shp, options={'format': 'ESRI Shapefile'})
-
+    
     def filter_scenelist(self, scenelist):
         """
         Filter a list of scenes by file names already registered in the database.
@@ -1719,12 +1723,12 @@ class Archive(object):
         registered = [os.path.basename(x[0].encode('ascii')) for x in cursor.fetchall()]
         cursor.execute('SELECT scene FROM duplicates')
         duplicates = [os.path.basename(x[0].encode('ascii')) for x in cursor.fetchall()]
-
+        
         names = [item.scene if isinstance(item, ID) else item for item in scenelist]
         filtered = [x for x, y in zip(scenelist, names) if os.path.basename(y) not in registered + duplicates]
-
+        
         return filtered
-
+    
     def get_colnames(self):
         """
         Return the names of the database table.
@@ -1737,7 +1741,7 @@ class Archive(object):
         cursor = self.conn.cursor()
         cursor.execute('PRAGMA table_info(data)')
         return sorted([str(x[1]) for x in cursor.fetchall()])
-
+    
     def get_tablenames(self):
         """
         Return the names of all tables in the database
@@ -1750,7 +1754,7 @@ class Archive(object):
         cursor = self.conn.cursor()
         cursor.execute('SELECT * FROM sqlite_master WHERE type="table"')
         return sorted([x[1].encode('ascii') for x in cursor.fetchall()])
-
+    
     def get_unique_directories(self):
         """
         Get a list of directories containing registered scenes
@@ -1764,7 +1768,7 @@ class Archive(object):
         cursor.execute('SELECT scene FROM data')
         registered = [os.path.dirname(x[0].encode('ascii')) for x in cursor.fetchall()]
         return list(set(registered))
-
+    
     def import_outdated(self, dbfile, verbose=False):
         """
         import an older data base in csv format
@@ -1789,7 +1793,7 @@ class Archive(object):
             for row in reader:
                 scenes.append(row['scene'])
             self.insert(scenes, verbose=verbose)
-
+    
     def move(self, scenelist, directory):
         """
         Move a list of files while keeping the database entries up to date.
@@ -1840,7 +1844,7 @@ class Archive(object):
             print('the following scenes could not be moved:\n{}'.format('\n'.join(failed)))
         if len(double) > 0:
             print('the following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
-
+    
     def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None,
                recursive=False, polarizations=None, verbose=False, **args):
         """
@@ -1872,7 +1876,7 @@ class Archive(object):
             the file names pointing to the selected scenes
 
         """
-
+        
         arg_valid = [x for x in args.keys() if x in self.get_colnames()]
         arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
@@ -1900,12 +1904,12 @@ class Archive(object):
                 vals.append(maxdate)
             else:
                 print('WARNING: argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
-
+        
         if polarizations:
             for pol in polarizations:
                 if pol in ['HH', 'VV', 'HV', 'VH']:
                     arg_format.append('{}=1'.format(pol.lower()))
-
+        
         if vectorobject:
             if isinstance(vectorobject, spatial.vector.Vector):
                 vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
@@ -1914,7 +1918,7 @@ class Archive(object):
                 vals.append(site_geom)
             else:
                 print('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
-
+        
         query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
         if verbose:
             print(query)
@@ -1926,7 +1930,7 @@ class Archive(object):
         else:
             scenes = cursor.fetchall()
         return [x[0].encode('ascii') for x in scenes]
-
+    
     def select_duplicates(self, outname_base=None, scene=None):
         """
         Select scenes from the duplicates table. In case both `outname_base` and `scene` are set to None all scenes in
@@ -1959,7 +1963,7 @@ class Archive(object):
             query = 'SELECT * from duplicates WHERE {}'.format(' AND '.join(cond))
             cursor.execute(query, tuple(arg))
         return cursor.fetchall()
-
+    
     @property
     def size(self):
         """
@@ -1974,16 +1978,16 @@ class Archive(object):
         r1 = cursor.execute('''SELECT Count(*) FROM data''').fetchone()[0]
         r2 = cursor.execute('''SELECT Count(*) FROM duplicates''').fetchone()[0]
         return r1, r2
-
+    
     def __enter__(self):
         return self
-
+    
     def close(self):
         """
         close the database connection
         """
         self.conn.close()
-
+    
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
@@ -2047,22 +2051,22 @@ def getFileObj(scene, filename):
         a file object
     """
     membername = filename.replace(scene, '').strip('\/')
-
+    
     if not os.path.exists(scene):
         raise RuntimeError('scene does not exist')
-
+    
     if os.path.isdir(scene):
         obj = BytesIO()
         with open(filename, 'rb') as infile:
             obj.write(infile.read())
         obj.seek(0)
-
+    
     elif zf.is_zipfile(scene):
         obj = BytesIO()
         with zf.ZipFile(scene, 'r') as zip:
             obj.write(zip.open(membername).read())
         obj.seek(0)
-
+    
     elif tf.is_tarfile(scene):
         obj = BytesIO()
         tar = tf.open(scene, 'r:gz')
