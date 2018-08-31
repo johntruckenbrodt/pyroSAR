@@ -192,7 +192,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # add subset node and add bounding box coordinates of defined shapefile
     if shapefile:
         shp = shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
-        bounds = bbox(shp.extent, shp.wkt)
+        bounds = bbox(shp.extent, shp.srs)
         bounds.reproject(id.projection)
         inter = intersect(id.bbox(), bounds)
         if not inter:
