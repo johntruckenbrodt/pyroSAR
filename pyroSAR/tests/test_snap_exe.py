@@ -1,9 +1,5 @@
 from contextlib import contextmanager
 
-import pytest
-
-from pyroSAR.snap.auxil import ExamineSnap
-
 
 @contextmanager
 def not_raises(ExpectedException):
@@ -21,10 +17,3 @@ def not_raises(ExpectedException):
         raise AssertionError(
             "An unexpected exception {0} raised.".format(repr(Exception))
         )
-
-
-class TestExamineSnap:
-    def test_not_exception(self):
-        with pytest.warns(None) as record:
-            ExamineSnap()
-        assert len(record) == 0
