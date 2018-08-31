@@ -408,22 +408,32 @@ class ID(object):
         else:
             return False
     
-    def outname_base(self):
+    def outname_base(self, extensions=None):
         """
         parse a string containing basic information about the scene in standardized format.
         Currently this id contains the sensor (4 digits), acquisition mode (4 digits), orbit (1 digit)
         and acquisition start time (15 digits)., e.g. `S1A__IW___A_20150523T122350`
-
+        
+        Parameters
+        ----------
+        extensions: list of str
+            the names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
         Returns
         -------
         str
             a standardized name unique to the scene
+            
         """
+        
         fields = ('{:_<4}'.format(self.sensor),
                   '{:_<4}'.format(self.acquisition_mode),
                   self.orbit,
                   self.start)
-        return '_'.join(fields)
+        out = '_'.join(fields)
+        if isinstance(extensions, list) and len(extensions) is not None:
+            ext = '_'.join([str(getattr(self, key)) for key in extensions])
+            out += '_' + ext
+        return out
     
     @staticmethod
     def parse_date(x):
