@@ -332,9 +332,9 @@ class ExamineSnap(object):
         if section in ConfigHandler.sections:
             if attr in ConfigHandler.keys(section):
                 val = ConfigHandler.get(section, attr)
-                if val in ['path', 'gpt']:
+                if attr in ['path', 'gpt']:
                     exist = os.path.isfile(val)
-                elif val == 'auxdata':
+                elif attr == 'auxdata':
                     exist = isinstance(val, list)
                 else:
                     exist = os.path.isdir(val)
