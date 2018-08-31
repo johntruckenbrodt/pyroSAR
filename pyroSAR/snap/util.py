@@ -5,8 +5,9 @@
 import os
 
 import pyroSAR
-from pyroSAR import spatial
 from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt
+
+from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
@@ -157,7 +158,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     tc.find('.//parameters/pixelSpacingInMeter').text = str(tr)
 
     try:
-        t_srs = spatial.crsConvert(t_srs, 'epsg')
+        t_srs = crsConvert(t_srs, 'epsg')
     except TypeError:
         raise RuntimeError("format of parameter 't_srs' not recognized")
 
@@ -190,11 +191,11 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     # add subset node and add bounding box coordinates of defined shapefile
     if shapefile:
-        shp = shapefile if isinstance(shapefile, spatial.vector.Vector) else spatial.vector.Vector(shapefile)
-        bounds = spatial.bbox(shp.extent, shp.wkt)
+        shp = shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
+        bounds = bbox(shp.extent, shp.wkt)
         bounds.reproject(id.projection)
-        intersect = spatial.intersect(id.bbox(), bounds)
-        if not intersect:
+        inter = intersect(id.bbox(), bounds)
+        if not inter:
             raise RuntimeError('no bounding box intersection between shapefile and scene')
         wkt = bounds.convert2wkt()[0]
 
@@ -240,7 +241,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if externalDEMFile is not None:
         if os.path.isfile(externalDEMFile):
             if externalDEMNoDataValue is None:
-                dem = spatial.raster.Raster(externalDEMFile)
+                dem = Raster(externalDEMFile)
                 if dem.nodata is not None:
                     externalDEMNoDataValue = dem.nodata
                 else:
