@@ -174,7 +174,14 @@ class ConfigHandler(object):
 
     # ---- Define Global Variables ----
 
-    __KEYS = ['DEM.AsterDEMDataPath',
+    __KEYS = ['auxdata',
+              'auxdatapath',
+              'demPath',
+              'etc',
+              'gpt',
+              'path',
+              'properties',
+              'DEM.AsterDEMDataPath',
               'LandCover.globcoverDataPath',
               'DEM.ace2_5MinDEMDataPath',
               'OrbitFiles.delftFTP_ERS2_precise_remotePath',
@@ -183,7 +190,6 @@ class ConfigHandler(object):
               'DEM.aceDEMDataPath',
               'DEM.srtm3GeoTiffDEM_remotePath',
               'AuxCal.ENVISAT.remotePath',
-              'auxdatapath',
               'DEM.ace2_5MinDEM_HTTP',
               'DEM.aceDEM_HTTP',
               'OrbitFiles.prareHTTP_ERS1_remotePath',
@@ -193,9 +199,7 @@ class ConfigHandler(object):
               'AuxCal.ERS.remotePath',
               'DEM.CDEM_HTTP',
               'OrbitFiles.sentinel1RESOrbitPath',
-              'properties',
               'OrbitFiles.dorisHTTP_vor_remotePath',
-              'auxdata',
               'OrbitFiles.dorisVOROrbitPath',
               'OrbitFiles.sentinel1POEOrbitPath',
               'AuxCal.Sentinel1.remotePath',
@@ -211,11 +215,9 @@ class ConfigHandler(object):
               'OrbitFiles.prareHTTP_ERS2_remotePath',
               'DEM.srtm1HgtDEM_HTTP',
               'OrbitFiles.prareERS1OrbitPath',
-              'demPath',
               'landCoverPath',
               'executable',
               'OrbitFiles.dorisPOROrbitPath',
-              'etc',
               'OrbitFiles.prareERS2OrbitPath',
               'DEM.Getasse30DEMDataPath']
 
