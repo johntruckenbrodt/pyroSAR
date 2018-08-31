@@ -187,7 +187,7 @@ def getAuxdata(datasets, scenes):
             print('not implemented yet')
 
 
-def gpt(xmlfile):
+def gpt(xmlfile, basename_extensions=None):
     """
     wrapper for ESA SNAP Graph Processing Tool GPT
     input is a readily formatted workflow xml file as created by function geocode in module snap.util
@@ -235,7 +235,7 @@ def gpt(xmlfile):
         suffix = parse_suffix(workflow)
         for item in finder(outname, ['*.img']):
             pol = re.search('[HV]{2}', item).group()
-            name_new = os.path.join(outdir, '{}_{}_{}.tif'.format(id.outname_base(), pol, suffix))
+            name_new = os.path.join(outdir, '{}_{}_{}.tif'.format(id.outname_base(basename_extensions), pol, suffix))
             translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'], 'format': 'GTiff'}
             gdal_translate(item, name_new, translateoptions)
         shutil.rmtree(outname)
