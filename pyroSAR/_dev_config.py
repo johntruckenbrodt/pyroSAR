@@ -252,6 +252,7 @@ class ConfigHandler(object):
         else:
             self.create_config()
             self.parser = ConfigParser.RawConfigParser()
+            self.parser.optionxform = str
             self.parser.read(self.__GLOBAL['config'])
 
     def make_dir(self):
