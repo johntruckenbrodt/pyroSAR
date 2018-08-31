@@ -289,26 +289,24 @@ class ExamineSnap(object):
                 path = os.path.realpath(path)
             etc = os.path.join(os.path.dirname(os.path.dirname(path)), 'etc')
             if not os.path.isdir(etc):
-                etc = None
+                continue
             auxdata = os.listdir(etc)
             if 'snap.auxdata.properties' not in auxdata:
-                auxdata_properties = None
+                continue
             else:
                 auxdata_properties = os.path.join(etc, 'snap.auxdata.properties')
             gpt_candidates = finder(os.path.dirname(path), ['gpt', 'gpt.exe'])
             if len(gpt_candidates) == 0:
-                gpt = None
-            else:
-                gpt = gpt_candidates[0]
-            if etc is None or gpt is None or auxdata_properties is None:
                 continue
             else:
-                self.path = path
-                self.etc = etc
-                self.gpt = gpt
-                self.auxdata = auxdata
-                self.properties = auxdata_properties
-                return
+                gpt = gpt_candidates[0]
+
+            self.path = path
+            self.etc = etc
+            self.gpt = gpt
+            self.auxdata = auxdata
+            self.properties = auxdata_properties
+            return
 
     def __read_config(self):
         """
