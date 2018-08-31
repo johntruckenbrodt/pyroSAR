@@ -11,7 +11,7 @@ from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BoderNoise=True, offset=None, externalDEMFile=None,
-            externalDEMNoDataValue=None, externalDEMApplyEGM=True, test=False):
+            externalDEMNoDataValue=None, externalDEMApplyEGM=True, basename_extensions=None, test=False):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -48,6 +48,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         specified external DEM.
     externalDEMApplyEGM: bool, optional
         Apply Earth Gravitational Model to external DEM? Default is True.
+    basename_extensions: list of str
+        names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     test: bool, optional
         If set to True the workflow xml file is only written and not executed. Default is False.
 
@@ -221,9 +223,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     suffix = parse_suffix(workflow)
 
     if format == 'ENVI':
-        outname = os.path.join(outdir, id.outname_base() + '_' + suffix)
+        outname = os.path.join(outdir, id.outname_base(basename_extensions) + '_' + suffix)
     else:
-        outname = os.path.join(outdir, '{}_{}_{}'.format(id.outname_base(), polarizations[0], suffix))
+        outname = os.path.join(outdir,
+                               '{}_{}_{}'.format(id.outname_base(basename_extensions),
+                                                         polarizations[0],
+                                                         suffix))
 
     write = workflow.find('.//node[@id="Write"]')
     write.find('.//parameters/file').text = outname
