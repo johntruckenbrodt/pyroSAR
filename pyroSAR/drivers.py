@@ -35,9 +35,10 @@ from osgeo.gdalconst import GA_ReadOnly, GA_Update
 
 from .S1 import OSV, linesimplify as ls
 from .ERS import passdb_query
-from . import spatial
 from .ancillary import finder, parse_literal
 from .xml_util import getNamespaces
+
+from spatialist import sqlite_setup, crsConvert, sqlite3, ogr2ogr, Vector, bbox
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines', 'orbitNumber_abs', 'orbitNumber_rel', 'cycleNumber', 'frameNumber']
@@ -144,7 +145,7 @@ class ID(object):
         for item in sorted(self.locals):
             value = getattr(self, item)
             if item == 'projection':
-                value = spatial.crsConvert(value, 'proj4')
+                value = crsConvert(value, 'proj4')
             line = '{0}: {1}'.format(item, value)
             lines.append(line)
         return '\n'.join(lines)
@@ -166,9 +167,9 @@ class ID(object):
             the vector object if `outname` is None, None otherwise
         """
         if outname is None:
-            return spatial.bbox(self.getCorners(), self.projection)
+            return bbox(self.getCorners(), self.projection)
         else:
-            spatial.bbox(self.getCorners(), self.projection, outname=outname, format='ESRI Shapefile',
+            bbox(self.getCorners(), self.projection, outname=outname, format='ESRI Shapefile',
                          overwrite=overwrite)
     
     @property
@@ -941,7 +942,7 @@ class CEOS_PSR(ID):
             meta['projection'] = src_srs.ExportToWkt()
         
         else:
-            meta['projection'] = spatial.crsConvert(4326, 'wkt')
+            meta['projection'] = crsConvert(4326, 'wkt')
         ################################################################################################################
         # read data set summary record
         
@@ -1540,7 +1541,7 @@ class Archive(object):
     
     def __init__(self, dbfile, custom_fields=None):
         self.dbfile = dbfile
-        self.conn = spatial.sqlite_setup(dbfile, ['spatialite'])
+        self.conn = sqlite_setup(dbfile, ['spatialite'])
         
         self.lookup = {'sensor': 'TEXT',
                        'orbit': 'TEXT',
@@ -1659,7 +1660,7 @@ class Archive(object):
             try:
                 cursor.execute(insert_string, insertion)
                 counter_regulars += 1
-            except spatial.sqlite3.IntegrityError as e:
+            except sqlite3.IntegrityError as e:
                 if str(e) == 'UNIQUE constraint failed: data.outname_base':
                     cursor.execute('INSERT INTO duplicates(outname_base, scene) VALUES(?, ?)',
                                    (id.outname_base(), id.scene))
@@ -1709,7 +1710,7 @@ class Archive(object):
         Returns
         -------
         """
-        spatial.ogr2ogr(self.dbfile, shp, options={'format': 'ESRI Shapefile'})
+        ogr2ogr(self.dbfile, shp, options={'format': 'ESRI Shapefile'})
     
     def filter_scenelist(self, scenelist):
         """
@@ -1922,7 +1923,7 @@ class Archive(object):
                     arg_format.append('{}=1'.format(pol.lower()))
         
         if vectorobject:
-            if isinstance(vectorobject, spatial.vector.Vector):
+            if isinstance(vectorobject, Vector):
                 vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
                 site_geom = vectorobject.convert2wkt(set3D=False)[0]
                 arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
