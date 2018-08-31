@@ -193,10 +193,9 @@ def gpt(xmlfile):
     input is a readily formatted workflow xml file as created by function geocode in module snap.util
     """
     try:
-        snap_exec = ExamineSnap().path
+        gpt_exec = ExamineSnap().gpt
     except AttributeError:
-        raise RuntimeError('could not find SNAP executable')
-    gpt_exec = os.path.join(os.path.dirname(snap_exec), 'gpt')
+        raise RuntimeError('could not find SNAP GPT executable')
 
     with open(xmlfile, 'r') as infile:
         workflow = ET.fromstring(infile.read())
@@ -250,136 +249,122 @@ class ExamineSnap(object):
     """
 
     def __init__(self):
+        
+        self.identifiers = ['path', 'gpt', 'etc', 'auxdata']
+        
+        self.__read_config()
+        
+        if not self.__is_identified():
+            self.__identify_snap()
 
-        candidates = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
-        executables = list(filter(None, [which(x) for x in candidates]))
+        self.__read_config_attr('auxdatapath', 'SNAP')
+        if not hasattr(self, 'auxdatapath'):
+            self.auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
 
-        if len(executables) == 0:
+        self.__read_config_attr('properties', 'SNAP')
+        if not hasattr(self, 'properties'):
+            path = 'data/snap.auxdata.properties'
+            self.properties = pkg_resources.resource_filename(__name__, path)
 
-            self.path = None
-
-            warnings.warn(
-                'Cannot find SNAP installation. You can download it from '
-                'http://step.esa.int/main/download/ or you can specify a path with '
-                'snap_config.set_path(path_to_snap)', UserWarning)
-        else:
-            self.path = executables[0]
-
-            if os.path.islink(self.path):
-                self.path = os.path.realpath(self.path)
-
-            if len(executables) > 1:
-                raise warnings.warn(
-                    'There are more than one instances of SNAP installed:\n{options}\n'
-                    'Using the first option:\n{select}\n'
-                    'You can define a different one with ExamineSnap.set_path()'
-                    ''.format(options='\n'.join(executables), select=self.path), UserWarning)
-
-            self.__read_config()
+        if not hasattr(self, 'snap_properties'):
             self.__read_snap_properties()
-            self.__set_properties_paths()
+        
+        self.__update_config()
+    
+    def __is_identified(self):
+        return len(list(filter(None, self.identifiers))) == 0
+    
+    def __identify_snap(self):
+        defaults = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
+        if not hasattr(self, 'path') or not os.path.isfile(self.path):
+            executables = list(filter(None, [which(x) for x in defaults]))
+        else:
+            executables = [self.path] + defaults
+        for path in executables:
+            if os.path.islink(path):
+                path = os.path.realpath(path)
+            etc = os.path.join(os.path.dirname(os.path.dirname(path)), 'etc')
+            if not os.path.isdir(etc):
+                etc = None
+            auxdata = os.listdir(etc)
+            if 'snap.auxdata.properties' not in auxdata:
+                auxdata_properties = None
+            else:
+                auxdata_properties = os.path.join(etc, 'snap.auxdata.properties')
+            gpt_candidates = finder(os.path.dirname(path), ['gpt', 'gpt.exe'])
+            if len(gpt_candidates) == 0:
+                gpt = None
+            else:
+                gpt = gpt_candidates[0]
+            if etc is None or gpt is None or auxdata_properties is None:
+                continue
+            else:
+                self.path = path
+                self.etc = etc
+                self.gpt = gpt
+                self.auxdata = auxdata
+                self.properties = auxdata_properties
+                return
 
     def __read_config(self):
         """
-        This method reads the config.ini to examine the snap paths. If the snap paths are not in the config.ini or the
-        paths are wrong they will be automatically created.
+        This method reads the config.ini to examine the snap paths.
+        If the snap paths are not in the config.ini or the paths are wrong they will be automatically created.
 
         Returns
         -------
         None
 
         """
-        if 'SNAP' in ConfigHandler.sections:
-            if 'etc' in ConfigHandler.keys('SNAP'):
-                self.etc = ConfigHandler.get('SNAP', 'etc')
+        for attr in self.identifiers:
+            self.__read_config_attr(attr, 'SNAP')
 
-                if not os.path.exists(self.etc):
-                    self.__get_etc()
-
-            else:
-                self.__get_etc()
-
-            if 'properties' in ConfigHandler.keys('SNAP'):
-                self.properties = ConfigHandler.get('SNAP', 'properties')
-
-                if not os.path.exists(self.properties):
-                    self.__get_properties()
-
-            else:
-                self.__get_properties()
-
-        else:
-            ConfigHandler.add_section('SNAP')
-            self.__get_etc()
-            self.__get_properties()
-
-            self.auxdatapath = os.path.join(expanduser('~'), '.snap\\auxdata')
-            ConfigHandler.set('SNAP', 'auxdatapath', self.auxdatapath, True)
-
-    @property
-    def auxdatapath(self):
-        if not hasattr(self, '__auxdatapath'):
-            path_default = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
-            if 'auxdatapath' in ConfigHandler.keys('SNAP'):
-                path_conf = ConfigHandler.get('SNAP', 'auxdatapath')
-                # if the path in config is a directory, set this path to the private
-                # __auxdatapath attribute; if not, use the auxdata setter to directly
-                # write the default directory to the config
-                if os.path.exists(path_conf):
-                    self.__auxdatapath = path_conf
+        snap_properties = {}
+        if 'OUTPUT' in ConfigHandler.sections:
+            for key in ConfigHandler.keys('OUTPUT'):
+                snap_properties[key] = ConfigHandler.get('OUTPUT', key)
+        if len(snap_properties.keys()) > 0:
+            setattr(self, 'snap_properties', snap_properties)
+    
+    def __read_config_attr(self, attr, section):
+        if section in ConfigHandler.sections:
+            if attr in ConfigHandler.keys(section):
+                val = ConfigHandler.get(section, attr)
+                if val in ['path', 'gpt']:
+                    exist = os.path.isfile(val)
+                elif val == 'auxdata':
+                    exist = isinstance(val, list)
                 else:
-                    self.auxdatapath = path_default
+                    exist = os.path.isdir(val)
+                if exist:
+                    setattr(self, attr, val)
+    
+    def __update_config(self):
+        for section in ['SNAP', 'OUTPUT', 'URL']:
+            if section not in ConfigHandler.sections:
+                ConfigHandler.add_section(section)
+        
+        for key in self.identifiers + ['auxdatapath', 'properties']:
+            ConfigHandler.set('SNAP', key, getattr(self, key), True)
+        
+        demPath = os.path.join(self.auxdatapath, 'dem')
+        landCoverPath = os.path.join(self.auxdatapath, 'LandCover')
+        
+        for key, val in self.snap_properties.items():
+            if val is None:
+                value = None
+            elif '${AuxDataPath}' in val:
+                value = val.replace('${AuxDataPath}', self.auxdatapath)
+            elif '${demPath}' in val:
+                value = val.replace('${demPath}', demPath)
+            elif '${landCoverPath}' in val:
+                value = val.replace('${landCoverPath}', landCoverPath)
             else:
-                self.auxdatapath = path_default
+                continue
 
-        return self.__auxdatapath
-
-    @auxdatapath.setter
-    def auxdatapath(self, path):
-        self.__auxdatapath = path
-        ConfigHandler.set('SNAP', 'auxdatapath', path, True)
-
-    def __get_etc(self):
-        """
-        Try to locate the etc directory and write it to config.ini.
-
-        Returns
-        -------
-        None
-
-        """
-        try:
-            self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
-            self.auxdata = os.listdir(self.etc)
-
-            ConfigHandler.set('SNAP', 'etc', self.etc, True)
-            ConfigHandler.set('SNAP', 'auxdata', self.auxdata)
-
-        except OSError:
-            raise AssertionError('ETC directory is not existent.')
-
-    def __get_properties(self):
-        """
-        Try to locate the properties file and write the path to config.ini.
-
-        Returns
-        -------
-        None
-
-        """
-
-        try:
-            self.etc = os.path.join(os.path.dirname(os.path.dirname(self.path)), 'etc')
-            self.auxdata = os.listdir(self.etc)
-            self.properties = os.path.join(self.etc, [s for s in self.auxdata if 'snap.auxdata.properties' in s][0])
-
-            ConfigHandler.set('SNAP', 'etc', self.etc, True)
-            ConfigHandler.set('SNAP', 'auxdata', self.auxdata, True)
-            ConfigHandler.set('SNAP', 'properties', self.properties)
-
-        except OSError:
-            path = 'data/snap.auxdata.properties'
-            self.properties = pkg_resources.resource_filename(__name__, path)
+            if value is not None:
+                value = value.replace('\\', '/')
+            ConfigHandler.set('OUTPUT', key=key, value=value)
 
     def __read_snap_properties(self):
         """
@@ -392,45 +377,19 @@ class ExamineSnap(object):
         """
 
         with open(self.properties) as config:
-            self.snap_properties = []
-            for line in config:
-                if '#' not in line:
-                    self.snap_properties.append(line)
+            lines = config.read().split('\n')
+            self.snap_properties = {}
+            for line in lines:
+                if not line.startswith('#') and len(line) > 0:
+                    try:
+                        key, val = line.split(' = ')
+                    except ValueError:
+                        if '=' in line:
+                            line = line.strip(' =')
+                            key = line
+                            val = None
+                        else:
+                            continue
+                    self.snap_properties[key] = val
                 else:
                     pass
-
-    def __set_properties_paths(self):
-        """
-        Write all DEM, ORBIT etc. paths to config.ini
-
-        Returns
-        -------
-        None
-
-        """
-        demPath = os.path.join(self.auxdatapath, 'dem')
-        landCoverPath = os.path.join(self.auxdatapath, 'LandCover')
-
-        ConfigHandler.add_section('OUTPUT')
-        ConfigHandler.add_section('URL')
-
-        for i in range(len(self.snap_properties)):
-            item = self.snap_properties[i]
-
-            if len(item.split()) <= 1:
-                pass
-            else:
-                if '${AuxDataPath}' in item:
-                    line = item.replace('${AuxDataPath}', self.auxdatapath)
-                    line = line.replace('\\', '/')
-
-                if '${demPath}' in item:
-                    line = item.replace('${demPath}', demPath)
-                    line = line.replace('\\', '/')
-
-                if '${landCoverPath}' in item:
-                    line = item.replace('${landCoverPath}', landCoverPath)
-                    line = line.replace('\\', '/')
-
-                item_list = line.split()
-                ConfigHandler.set('OUTPUT', key=item_list[0], value=item_list[-1])
