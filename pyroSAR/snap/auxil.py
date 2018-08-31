@@ -276,10 +276,14 @@ class ExamineSnap(object):
     
     def __identify_snap(self):
         defaults = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
+        paths = os.environ['PATH'].split(os.path.pathsep)
+        options = [os.path.join(path, option) for path in paths for option in defaults]
+        options = [x for x in options if os.path.isfile(x)]
+        
         if not hasattr(self, 'path') or not os.path.isfile(self.path):
-            executables = list(filter(None, [which(x) for x in defaults]))
+            executables = options
         else:
-            executables = [self.path] + defaults
+            executables = [self.path] + options
         for path in executables:
             if os.path.islink(path):
                 path = os.path.realpath(path)
