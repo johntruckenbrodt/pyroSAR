@@ -38,7 +38,7 @@ def calibrate(id, directory, replace=False):
                 process(
                     ['radcal_SLC', image, image + '.par', image + '_cal', image + '_cal.par',
                      '-', '-', '-', '-', '-', '-', id.meta['k_dB']])
-                envi.hdr(image + '_cal.par')
+                envi.hdr(image + '_cal.par', image + '_cal.hdr')
 
     elif isinstance(id, ESA):
         k_db = {'ASAR': 55., 'ERS1': 58.24, 'ERS2': 59.75}[id.sensor]
@@ -47,7 +47,7 @@ def calibrate(id, directory, replace=False):
         for image in candidates:
             out = image.replace('pri', 'grd')
             process(['radcal_PRI', image, image + '.par', out, out + '.par', k_db, inc_ref])
-            envi.hdr(out + '.par')
+            envi.hdr(out + '.par', out + '.hdr')
             if replace:
                 for item in [image, image + '.par', image + '.hdr']:
                     if os.path.isfile(item):
@@ -120,7 +120,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                 outname = os.path.join(directory, outname_base)
                 process(
                     ['par_EORC_PALSAR_geo', id.file, outname + '.par', outname + '_dem.par', image, outname])
-            envi.hdr(outname + '.par')
+            envi.hdr(outname + '.par', outname + '.hdr')
 
     elif isinstance(id, ESA):
         """
@@ -140,7 +140,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                 newname = os.path.join(directory, base + ext)
                 os.rename(item, newname)
                 if newname.endswith('.par'):
-                    envi.hdr(newname)
+                    envi.hdr(newname, newname.replace('.par', '.hdr'))
         else:
             raise IOError('scene already processed')
 
@@ -181,7 +181,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                 cmd = ['par_S1_GRD', tiff, xml_ann, xml_cal, xml_noise, name + '.par', name]
 
             process(cmd)
-            envi.hdr(name + '.par')
+            envi.hdr(name + '.par', name + '.hdr')
 
     elif isinstance(id, TSX):
         images = id.findfiles(id.pattern_ds)
@@ -198,7 +198,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
             else:
                 outname += '_mli_geo'
                 process(['par_TX_geo', id.file, image, outname + '.par', outname + '_dem.par', outname, pol])
-            envi.hdr(outname + '.par')
+            envi.hdr(outname + '.par', outname + '.hdr')
 
     else:
         raise NotImplementedError('conversion for class {} is not implemented yet'.format(type(id).__name__))
@@ -550,7 +550,7 @@ def multilook(infile, outfile, targetres):
     else:
         # multilooking for MLI images
         process(['multi_look_MLI', infile, infile + '.par', outfile, outfile + '.par', rlks, azlks])
-    envi.hdr(outfile + '.par')
+    envi.hdr(outfile + '.par', outfile + '.hdr')
 
 
 def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False, path_log=None):
