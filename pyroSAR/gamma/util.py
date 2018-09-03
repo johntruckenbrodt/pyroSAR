@@ -6,9 +6,11 @@
 
 """
 This module is intended as a set of generalized processing routines for modularized GAMMA work flows.
-The function parametrization is intended to be applicable to any kind of situation and input data set. Thus, instead of choosing a specific parametrization for the data at hand,
+The function parametrization is intended to be applicable to any kind of situation and input data set.
+Thus, instead of choosing a specific parametrization for the data at hand,
 core parameters are iterated over a set of values in order to find the one best suited for the task.
-The approach of the single routines is likely to still have drawbacks and might fail in certain situations. Testing and suggestions on improvements are very welcome.
+The approach of the single routines is likely to still have drawbacks and might fail in certain situations.
+Testing and suggestions on improvements are very welcome.
 """
 import sys
 
@@ -19,11 +21,10 @@ else:
 
 from osgeo import ogr
 
-from ..spatial import envi
-from ..drivers import *
-from ..spatial import haversine
+from spatialist import envi, haversine
+from spatialist.ancillary import union, finder
 
-from ..ancillary import union, finder
+from ..drivers import *
 from . import ISPPar, Namespace, process
 
 ogr.UseExceptions()

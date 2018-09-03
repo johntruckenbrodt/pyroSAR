@@ -7,7 +7,7 @@ import os
 import re
 import subprocess as sp
 
-from ..ancillary import parse_literal, run, union
+from spatialist.ancillary import parse_literal, run, union
 from .error import gammaErrorHandler
 
 

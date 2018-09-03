@@ -28,8 +28,8 @@ import re
 import shutil
 import zipfile as zf
 
-from ..spatial.envi import HDRobject, hdr
-from ..spatial import raster
+from spatialist.envi import HDRobject, hdr
+from spatialist import raster
 from . import ISPPar, process, UTM, slc_corners
 
 import pyroSAR
