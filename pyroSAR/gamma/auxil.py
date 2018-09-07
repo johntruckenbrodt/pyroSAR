@@ -90,9 +90,13 @@ class ISPPar(object):
         out['samples'] = getattr(self, union(['width', 'range_samples', 'samples'], self.keys)[0])
         out['lines'] = getattr(self, union(['nlines', 'azimuth_lines', 'lines'], self.keys)[0])
         
-        # 2x16 bit complex data (SCOMPLEX) is not supported by ENVI, thus float (1x32 bit) is written to the header file
-        dtypes = {'FCOMPLEX': 6, 'SCOMPLEX': 4, 'FLOAT': 4, 'REAL*4': 4, 'INTEGER*2': 2, 'SHORT': 12}
-        out['data_type'] = dtypes[getattr(self, union(['data_format', 'image_format'], self.keys)[0])]
+        dtypes_lookup = {'FCOMPLEX': 6, 'FLOAT': 4, 'REAL*4': 4, 'INTEGER*2': 2, 'SHORT': 12}
+        dtype = getattr(self, union(['data_format', 'image_format'], self.keys)[0])
+        
+        if dtype == 'SCOMPLEX':
+            raise TypeError('unsupported data type: SCOMPLEX (2x16 bit complex)')
+        
+        out['data_type'] = dtypes_lookup[dtype]
         
         if out['data_type'] == 6:
             out['complex_function'] = 'Power'
