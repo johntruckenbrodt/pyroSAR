@@ -1,6 +1,6 @@
 ##############################################################
 # general GAMMA utilities
-# John Truckenbrodt 2014-2018
+# Stefan Engelhardt, John Truckenbrodt 2014-2018
 ##############################################################
 import math
 import os
@@ -14,19 +14,19 @@ from .error import gammaErrorHandler
 class ISPPar(object):
     """Reader for ISP parameter files of the GAMMA software package.
 
-    This class allows to read all information from files in GAMMA's parameter file format. Each key-value pair is parsed
-    and added as attribute. For instance if the parameter file contains the pair 'sensor:    TSX-1' an attribute named
-    'sensor' with the value 'TSX-1' will be available.
+    This class allows to read all information from files in GAMMA's parameter file format.
+    Each key-value pair is parsed and added as attribute. For instance if the parameter file
+    contains the pair 'sensor:    TSX-1' an attribute named 'sensor' with the value 'TSX-1' will be available.
 
-    The values are converted to native Python types, while unit identifiers like 'dB' or 'Hz' are removed. Please see
-    the GAMMA reference manual for further information on the actual file format.
+    The values are converted to native Python types, while unit identifiers like 'dB' or 'Hz' are removed.
+    Please see the GAMMA reference manual for further information on the actual file format.
     """
-
+    
     _re_kv_pair = re.compile(r'^(\w+):\s*(.+)\s*')
     _re_float_literal = re.compile(r'^[+-]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[Ee][+-]?\d+)?')
-
+    
     def __init__(self, filename):
-        """Parses a ISP parameter file from disk.
+        """Parses an ISP parameter file from disk.
 
         Args:
             filename: The filename or file object representing the ISP parameter file.
@@ -35,9 +35,9 @@ class ISPPar(object):
             par_file = open(filename, 'r')
         else:
             par_file = filename
-
+        
         self.keys = []
-
+        
         try:
             par_file.readline()  # Skip header line
             for line in par_file:
@@ -71,13 +71,13 @@ class ISPPar(object):
                 setattr(self, key, value)
         finally:
             par_file.close()
-
+    
     def __str__(self):
         maxlen = len(max(self.keys, key=len)) + 1
         return '\n'.join(['{key}:{sep}{value}'.format(key=key,
                                                       sep=(maxlen - len(key)) * ' ',
                                                       value=getattr(self, key)) for key in self.keys])
-
+    
     def envidict(self):
         out = dict(bands=1,
                    header_offset=0,
@@ -86,14 +86,14 @@ class ISPPar(object):
                    sensor_type='Unknown',
                    byte_order=1,
                    wavelength_units='Unknown')
-
+        
         out['samples'] = getattr(self, union(['width', 'range_samples', 'samples'], self.keys)[0])
         out['lines'] = getattr(self, union(['nlines', 'azimuth_lines', 'lines'], self.keys)[0])
-
+        
         # 2x16 bit complex data (SCOMPLEX) is not supported by ENVI, thus float (1x32 bit) is written to the header file
         dtypes = {'FCOMPLEX': 6, 'SCOMPLEX': 4, 'FLOAT': 4, 'REAL*4': 4, 'INTEGER*2': 2, 'SHORT': 12}
         out['data_type'] = dtypes[getattr(self, union(['data_format', 'image_format'], self.keys)[0])]
-
+        
         if out['data_type'] == 6:
             out['complex_function'] = 'Power'
         # projections = ['AEAC', 'EQA', 'LCC', 'LCC2', 'OMCH', 'PC', 'PS', 'SCH', 'TM', 'UTM']
@@ -118,25 +118,25 @@ class UTM(object):
     """
     convert a gamma parameter file corner coordinate from EQA to UTM
     """
-
+    
     def __init__(self, parfile):
         par = ISPPar(parfile)
-        inlist = [str(x) for x in ["WGS84", 1, "EQA", par.corner_lon, par.corner_lat, "", "WGS84", 1, "UTM", ""]]
-        proc = sp.Popen(["coord_trans"], stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True,
-                        shell=False).communicate("".join([x + "\n" for x in inlist]))
-        proc = [x for x in filter(None, proc[0].split("\n")) if ":" in x]
+        inlist = [str(x) for x in ['WGS84', 1, 'EQA', par.corner_lon, par.corner_lat, '', 'WGS84', 1, 'UTM', '']]
+        proc = sp.Popen(['coord_trans'], stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True,
+                        shell=False).communicate(''.join([x + '\n' for x in inlist]))
+        proc = [x for x in filter(None, proc[0].split('\n')) if ':' in x]
         self.index = []
         for item in proc:
-            entry = item.split(": ")
-            entry = [entry[0].replace(" ", "_"), entry[1].split()]
+            entry = item.split(': ')
+            entry = [entry[0].replace(' ', '_'), entry[1].split()]
             if len(entry[1]) > 1:
                 setattr(self, entry[0], entry[1])
             else:
                 setattr(self, entry[0], entry[1][0])
             self.index.append(entry[0])
-            if "UTM" in entry[0]:
+            if 'UTM' in entry[0]:
                 self.zone, self.northing, self.easting = entry[1]
-                self.index = list(set(self.index + ["zone", "northing", "easting"]))
+                self.index = list(set(self.index + ['zone', 'northing', 'easting']))
 
 
 def process(cmd, outdir=None, logpath=None, inlist=None, void=True):
@@ -148,7 +148,7 @@ def process(cmd, outdir=None, logpath=None, inlist=None, void=True):
 
 
 class Spacing(object):
-    def __init__(self, par, targetres="automatic"):
+    def __init__(self, par, targetres='automatic'):
         """
         compute ground multilooking factors and pixel spacings from an ISPPar object for a defined target resolution
         """
@@ -156,7 +156,7 @@ class Spacing(object):
         par = par if isinstance(par, ISPPar) else ISPPar(par)
         self.groundRangePS = par.range_pixel_spacing / (math.sin(math.radians(par.incidence_angle)))
         # compute initial multilooking factors
-        if targetres == "automatic":
+        if targetres == 'automatic':
             if self.groundRangePS > par.azimuth_pixel_spacing:
                 ratio = self.groundRangePS / par.azimuth_pixel_spacing
                 self.rlks = 1
@@ -175,44 +175,54 @@ class Namespace(object):
         self.__base = basename
         self.__outdir = directory
         self.__reg = []
-
+    
     def appreciate(self, keys):
         for key in keys:
             setattr(self, key.replace('.', '_'), os.path.join(self.__outdir, self.__base + '_' + key))
             if key not in self.__reg:
                 self.__reg.append(key.replace('.', '_'))
-
+    
     def depreciate(self, keys):
         for key in keys:
             setattr(self, key.replace('.', '_'), '-')
             if key not in self.__reg:
                 self.__reg.append(key.replace('.', '_'))
-
+    
     def getall(self):
         out = {}
         for key in self.__reg:
             out[key] = getattr(self, key)
         return out
-
+    
     def select(self, selection):
         return [getattr(self, key) for key in selection]
-
+    
     def isregistered(self, key):
         return key in self.__reg
-
+    
     def isappreciated(self, key):
         if self.isregistered(key):
             if self.get(key) != '-':
                 return True
         return False
-
+    
     def get(self, key):
         return getattr(self, key)
 
 
 def slc_corners(parfile):
     """
-    extract the corner soordinates of a SAR scene
+    extract the corner coordinates of a SAR scene
+    
+    Parameters
+    ----------
+    parfile: str
+        the GAMMA parameter file to read coordinates from
+
+    Returns
+    -------
+    dict of float
+        a dictionary with keys xmin, xmax, ymin, ymax
     """
     out, err = process(['SLC_corners', parfile], void=False)
     pts = {}
