@@ -1,11 +1,6 @@
 Drivers
 =======
 
-This is the core module of package pyroSAR. It contains the drivers for the different SAR image formats and offers
-functionality for retrieving metadata, unpacking images, downloading ancillary files like DEMs and
-Orbit State Vector files as well as archiving scenes in a database. The ID class and its subclasses allow easy and
-standardized access to the metadata of images from different SAR sensors.
-
 .. automodule:: pyroSAR.drivers
 
     .. rubric:: classes
@@ -59,5 +54,13 @@ Sentinel-1 Tools
 
 .. automodule:: pyroSAR.S1.auxil
     :members: OSV
+    :undoc-members:
+    :show-inheritance:
+
+Ancillary Functions
+===================
+
+.. automodule:: pyroSAR.ancillary
+    :members:
     :undoc-members:
     :show-inheritance:
