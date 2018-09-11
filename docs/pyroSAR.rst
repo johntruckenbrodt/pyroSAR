@@ -2,6 +2,9 @@ Drivers
 =======
 
 .. automodule:: pyroSAR.drivers
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
     .. rubric:: classes
 
@@ -27,11 +30,6 @@ Drivers
         findfiles
         getFileObj
         parse_date
-
-.. automodule:: pyroSAR.drivers
-    :members:
-    :undoc-members:
-    :show-inheritance:
 
 SNAP Processing
 ===============
