@@ -4,10 +4,12 @@
 ##############################################################
 
 """
-This is the core module of package pyroSAR. It contains the drivers for the different SAR image formats and offers
+This is the core module of package pyroSAR.
+It contains the drivers for the different SAR image formats and offers
 functionality for retrieving metadata, unpacking images, downloading ancillary files like DEMs and
-Orbit State Vector files as well as archiving scenes in a database. The ID class and its subclasses allow easy and
-standardized access to the metadata of images from different SAR sensors.
+Orbit State Vector files as well as archiving scenes in a database.
+The :class:`ID` class and its subclasses allow easy and standardized access to the metadata of
+images from different SAR sensors.
 """
 
 from __future__ import print_function
