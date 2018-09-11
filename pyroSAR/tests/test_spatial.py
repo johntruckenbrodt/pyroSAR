@@ -151,9 +151,9 @@ def test_Raster_extract(testdata):
 
 
 def test_dtypes():
-    assert sp.dtypes('Float32') == 6
+    assert sp.raster.Dtype('Float32').gdalint == 6
     with pytest.raises(ValueError):
-        sp.dtypes('foobar')
+        sp.raster.Dtype('foobar')
 
 
 def test_stack(tmpdir, testdata):
