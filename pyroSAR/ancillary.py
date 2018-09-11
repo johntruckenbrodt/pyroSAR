@@ -1,10 +1,9 @@
 ##############################################################
-# core routines for software pyroSAR
+# ancillary routines for software pyroSAR
 # John Truckenbrodt 2014-2018
 ##############################################################
 """
-This script gathers central functions and object instances for general applications
-Please refer to the descriptions of the individual functions/instances for details
+This script gathers central functions and classes for general pyroSAR applications.
 """
 import re
 from datetime import datetime
@@ -27,7 +26,7 @@ def groupbyTime(images, function, time):
     images: list of str
         a list of image names
     function: function
-        a function to derive the time from the image names
+        a function to derive the time from the image names; see e.g. :func:`seconds`
     time: int or float
         a time difference in seconds by which to group the images
 
@@ -71,3 +70,49 @@ def seconds(filename):
     # return mktime(strptime(re.findall('[0-9T]{15}', filename)[0], '%Y%m%dT%H%M%S'))
     td = datetime.strptime(re.findall('[0-9T]{15}', filename)[0], '%Y%m%dT%H%M%S') - datetime(1900, 1, 1)
     return td.total_seconds()
+
+
+def parse_productname(name, parse_date=False):
+    """
+    Parse the name of a pyroSAR processing product and extract its metadata components as dictionary
+    
+    Parameters
+    ----------
+    name: str
+        the name of the file to be parsed
+    parse_date: bool
+        parse the start date to a :class:`~datetime.datetime` object or just return the string?
+
+    Returns
+    -------
+    dict
+        the metadata attributes
+    
+    Examples
+    --------
+    >>> meta = parse_productname('S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
+    >>> print(list(meta.keys()))
+    ['sensor', 'acquisition_mode', 'orbit', 'start', 'extensions', 'polarization', 'proc_steps']
+    """
+    pattern = r'.*[/\\]' \
+              r'(?P<sensor>[A-Z0-9]{1,4})_+' \
+              r'(?P<acquisition_mode>[A-Z0-9]{1,4})_+' \
+              r'(?P<orbit>[AZ])_' \
+              r'(?P<start>[0-9T]{15})_' \
+              r'(?P<extensions>[A-Z0-9_]*_|)' \
+              r'(?P<polarization>[HV]{2})_' \
+              r'(?P<proc_steps>[a-zA-Z0-9_]*).tif'
+              
+    match = re.match(re.compile(pattern), name)
+    if not match:
+        return
+    out = match.groupdict()
+    if out['extensions'] == '':
+        out['extensions'] = None
+    if len(out['proc_steps']) > 0:
+        out['proc_steps'] = out['proc_steps'].split('_')
+    else:
+        out['proc_steps'] = None
+    if parse_date:
+        out['start'] = datetime.strptime(out['start'], '%Y%m%dT%H%M%S')
+    return out
