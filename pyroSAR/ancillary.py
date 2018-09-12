@@ -7,7 +7,7 @@ This script gathers central functions and classes for general pyroSAR applicatio
 """
 import re
 from datetime import datetime
-from._dev_config import product_pattern
+from ._dev_config import product_pattern
 
 try:
     import pathos.multiprocessing as mp
@@ -38,10 +38,10 @@ def groupbyTime(images, function, time):
     """
     # sort images by time stamp
     srcfiles = sorted(images, key=function)
-
+    
     groups = [[srcfiles[0]]]
     group = groups[0]
-
+    
     for i in range(1, len(srcfiles)):
         item = srcfiles[i]
         if 0 < abs(function(item) - function(group[-1])) <= time:
@@ -73,7 +73,7 @@ def seconds(filename):
     return td.total_seconds()
 
 
-def parse_productname(name, parse_date=False):
+def parse_datasetname(name, parse_date=False):
     """
     Parse the name of a pyroSAR processing product and extract its metadata components as dictionary
     
@@ -83,7 +83,7 @@ def parse_productname(name, parse_date=False):
         the name of the file to be parsed
     parse_date: bool
         parse the start date to a :class:`~datetime.datetime` object or just return the string?
-
+    
     Returns
     -------
     dict
@@ -91,11 +91,11 @@ def parse_productname(name, parse_date=False):
     
     Examples
     --------
-    >>> meta = parse_productname('S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
+    >>> meta = parse_datasetname('S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
     >>> print(list(meta.keys()))
     ['sensor', 'acquisition_mode', 'orbit', 'start', 'extensions', 'polarization', 'proc_steps']
     """
-              
+    
     match = re.match(re.compile(product_pattern), name)
     if not match:
         return
@@ -124,7 +124,7 @@ def find_products(directory, **kwargs):
         Any types other than tuples require an exact match, e.g. `proc_steps=['grd', 'mli', 'geo', 'norm', 'db']`
         will be matched if only these processing steps are contained in the product name in this exact order.
         See function :func:`parse_productname` for options.
-
+    
     Returns
     -------
     list of str
@@ -137,7 +137,7 @@ def find_products(directory, **kwargs):
     files = finder(directory, [product_pattern], regex=True)
     selection = []
     for file in files:
-        meta = parse_productname(file)
+        meta = parse_datasetname(file)
         match = True
         for key, val in kwargs.items():
             if isinstance(val, tuple):
