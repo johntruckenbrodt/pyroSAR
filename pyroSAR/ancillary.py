@@ -109,3 +109,41 @@ def parse_productname(name, parse_date=False):
     if parse_date:
         out['start'] = datetime.strptime(out['start'], '%Y%m%dT%H%M%S')
     return out
+
+
+def find_products(directory, **kwargs):
+    """
+    
+    Parameters
+    ----------
+    directory: str
+        the name of the directory to be searched
+    kwargs:
+        Metadata attributes for filtering the scene list supplied as `key=value`. e.g. `sensor='S1A'`.
+        Multiple allowed options can be provided in tuples, e.g. `sensor=('S1A', 'S1B')`.
+        Any types other than tuples require an exact match, e.g. `proc_steps=['grd', 'mli', 'geo', 'norm', 'db']`
+        will be matched if only these processing steps are contained in the product name in this exact order.
+        See function :func:`parse_productname` for options.
+
+    Returns
+    -------
+    list of str
+        the file names found in the directory and filtered by metadata attributes
+    
+    Examples
+    --------
+    >>> selection = find_products('path/to/files', sensor=('S1A', 'S1B'), polarization='VV')
+    """
+    files = finder(directory, [product_pattern], regex=True)
+    selection = []
+    for file in files:
+        meta = parse_productname(file)
+        match = True
+        for key, val in kwargs.items():
+            if isinstance(val, tuple):
+                match = meta[key] in val
+            else:
+                match = meta[key] == val
+        if match:
+            selection.append(file)
+    return selection
