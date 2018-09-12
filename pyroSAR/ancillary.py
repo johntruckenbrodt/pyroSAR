@@ -111,7 +111,7 @@ def parse_datasetname(name, parse_date=False):
     return out
 
 
-def find_products(directory, **kwargs):
+def find_datasets(directory, **kwargs):
     """
     
     Parameters
@@ -132,7 +132,7 @@ def find_products(directory, **kwargs):
     
     Examples
     --------
-    >>> selection = find_products('path/to/files', sensor=('S1A', 'S1B'), polarization='VV')
+    >>> selection = find_datasets('path/to/files', sensor=('S1A', 'S1B'), polarization='VV')
     """
     files = finder(directory, [product_pattern], regex=True)
     selection = []
