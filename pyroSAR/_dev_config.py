@@ -15,15 +15,15 @@ from os.path import expanduser
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode',
              'start', 'stop', 'product', 'spacing', 'samples', 'lines']
 
-# a pattern to search for pyroSAR processing products
+# a pattern to search for pyroSAR processing products and extract metadata attributes from the file name
 product_pattern = r'(?:.*[/\\]|)' \
                   r'(?P<sensor>[A-Z0-9]{1,4})_+' \
                   r'(?P<acquisition_mode>[A-Z0-9]{1,4})_+' \
-                  r'(?P<orbit>[AZ])_' \
+                  r'(?P<orbit>[AD])_' \
                   r'(?P<start>[0-9T]{15})_' \
-                  r'(?P<extensions>[A-Z0-9_]*_|)' \
+                  r'(?P<extensions>\w*_|)' \
                   r'(?P<polarization>[HV]{2})_' \
-                  r'(?P<proc_steps>[a-zA-Z0-9_]*).tif$'
+                  r'(?P<proc_steps>\w*).tif$'
 
 
 class Storage(dict):
