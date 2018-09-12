@@ -7,6 +7,7 @@ This script gathers central functions and classes for general pyroSAR applicatio
 """
 import re
 from datetime import datetime
+from._dev_config import product_pattern
 
 try:
     import pathos.multiprocessing as mp
@@ -94,16 +95,8 @@ def parse_productname(name, parse_date=False):
     >>> print(list(meta.keys()))
     ['sensor', 'acquisition_mode', 'orbit', 'start', 'extensions', 'polarization', 'proc_steps']
     """
-    pattern = r'.*[/\\]' \
-              r'(?P<sensor>[A-Z0-9]{1,4})_+' \
-              r'(?P<acquisition_mode>[A-Z0-9]{1,4})_+' \
-              r'(?P<orbit>[AZ])_' \
-              r'(?P<start>[0-9T]{15})_' \
-              r'(?P<extensions>[A-Z0-9_]*_|)' \
-              r'(?P<polarization>[HV]{2})_' \
-              r'(?P<proc_steps>[a-zA-Z0-9_]*).tif'
               
-    match = re.match(re.compile(pattern), name)
+    match = re.match(re.compile(product_pattern), name)
     if not match:
         return
     out = match.groupdict()
