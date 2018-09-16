@@ -174,14 +174,10 @@ class Dataset(object):
             self.xres, self.yres = ras.res
             self.crs = 'EPSG:{}'.format(ras.epsg)
             self.is_projected = ras.projcs is not None
-            self.extent = {'ll': {'x': ras.geo['xmin'],
-                                  'y': ras.geo['ymin']},
-                           'lr': {'x': ras.geo['xmax'],
-                                  'y': ras.geo['ymin']},
-                           'ul': {'x': ras.geo['xmin'],
-                                  'y': ras.geo['ymax']},
-                           'ur': {'x': ras.geo['xmax'],
-                                  'y': ras.geo['ymax']}}
+            self.extent = self.__extent_convert(ras.geo, 'x', 'y')
+            with ras.bbox() as bbox:
+                bbox.reproject(4236)
+                self.extent_4326 = self.__extent_convert(bbox.extent, 'lon', 'lat')
         
         # create dictionary for resolution metadata depending on CRS characteristics
         resolution_keys = ('x', 'y') if self.is_projected else ('longitude', 'latitude')
