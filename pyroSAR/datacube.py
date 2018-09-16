@@ -192,6 +192,17 @@ class Dataset(object):
         if not re.search(pattern, self.dtype):
             raise ValueError('unsupported data type {}'.format(self.dtype))
     
+    @staticmethod
+    def __extent_convert(extent, xkey, ykey):
+        return {'ll': {xkey: extent['xmin'],
+                       ykey: extent['ymin']},
+                'lr': {xkey: extent['xmax'],
+                       ykey: extent['ymin']},
+                'ul': {xkey: extent['xmin'],
+                       ykey: extent['ymax']},
+                'ur': {xkey: extent['xmax'],
+                       ykey: extent['ymax']}}
+    
     def __enter__(self):
         return self
     
