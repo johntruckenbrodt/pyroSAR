@@ -342,6 +342,7 @@ class Product(object):
         out = {'id': str(uuid.uuid4()),
                'image': {'bands': {}},
                'grid_spatial': {'projection': {}},
+               'extent': {'coord': {}},
                'lineage': {'source_datasets': {}}}
         
         out['image']['bands'][dataset.measurement] = {'path': dataset.filename}
@@ -351,6 +352,8 @@ class Product(object):
         
         out['grid_spatial']['projection']['geo_ref_points'] = dataset.extent
         out['grid_spatial']['projection']['spatial_reference'] = dataset.crs
+        
+        out['extent']['coord'] = dataset.extent_4326
         
         out['product_type'] = self.meta['metadata']['product_type']
         
