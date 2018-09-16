@@ -264,17 +264,6 @@ class Product(object):
     def __check_dict_keys(keys, reference):
         return len(union(keys, reference)) == len(keys)
     
-    def __check_validity(self):
-        try:
-            assert isinstance(self.meta, dict)
-            assert self.__check_dict_keys(self.__fixture_fields, self.meta.keys())
-            assert 'product_type' in self.meta['metadata'].keys()
-            for measurement in self.meta['measurements']:
-                assert self.__check_dict_keys(self.__fixture_measurement, measurement.keys())
-        except AssertionError as e:
-            print(e)
-            raise RuntimeError('product invalid')
-    
     @property
     def __fixture_fields(self):
         return ['description', 'measurements', 'metadata', 'metadata_type', 'name', 'storage']
@@ -290,6 +279,17 @@ class Product(object):
     @property
     def __fixture_storage(self):
         return ['crs', 'resolution']
+    
+    def __validate(self):
+        try:
+            assert isinstance(self.meta, dict)
+            assert self.__check_dict_keys(self.__fixture_fields, self.meta.keys())
+            assert 'product_type' in self.meta['metadata'].keys()
+            for measurement in self.meta['measurements']:
+                assert self.__check_dict_keys(self.__fixture_measurement, measurement.keys())
+        except AssertionError as e:
+            print(e)
+            raise RuntimeError('product invalid')
     
     def add(self, dataset):
         if not isinstance(dataset, Dataset):
