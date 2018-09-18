@@ -128,7 +128,9 @@ def parse_datasetname(name, parse_date=False):
     ['sensor', 'acquisition_mode', 'orbit', 'start', 'extensions', 'polarization', 'proc_steps']
     """
     
-    match = re.match(re.compile(product_pattern), name)
+    filename = os.path.realpath(name)
+    
+    match = re.match(re.compile(product_pattern), filename)
     if not match:
         return
     out = match.groupdict()
@@ -140,6 +142,7 @@ def parse_datasetname(name, parse_date=False):
         out['proc_steps'] = None
     if parse_date:
         out['start'] = datetime.strptime(out['start'], '%Y%m%dT%H%M%S')
+    out['filename'] = filename
     return out
 
 
