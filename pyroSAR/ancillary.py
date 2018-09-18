@@ -5,6 +5,7 @@
 """
 This script gathers central functions and classes for general pyroSAR applications.
 """
+import os
 import re
 from datetime import datetime
 from ._dev_config import product_pattern
@@ -16,6 +17,37 @@ except ImportError:
 
 from spatialist.ancillary import dissolve, finder, multicore, parse_literal, rescale, run, union, \
     urlQueryParser, which
+
+
+def groupby(images, attribute):
+    """
+    group a list of images by a metadata attribute
+    
+    Parameters
+    ----------
+    images: list of str
+        the names of the images to be sorted
+    attribute: str
+        the name of the attribute used for sorting;
+        see :func:`parse_datasetname` for options
+    
+    Returns
+    -------
+    list of lists
+        a list containing a list with image names ofr each group
+    """
+    images_sort = sorted(images, key=lambda x: re.search(product_pattern, x).group(attribute))
+    out_meta = [[parse_datasetname(images_sort.pop(0))]]
+    while len(images_sort) > 0:
+        filename = images_sort.pop(0)
+        meta = parse_datasetname(filename)
+
+        if out_meta[-1][0][attribute] == meta[attribute]:
+            out_meta[-1].append(meta)
+        else:
+            out_meta.append([meta])
+    out = [[x['filename'] for x in y] for y in out_meta]
+    return out
 
 
 def groupbyTime(images, function, time):
