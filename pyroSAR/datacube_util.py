@@ -299,7 +299,8 @@ class Product(object):
             out['image']['bands'][measurement] = {'path': content['filename']}
         
         for attr in self.__fixture_metadata:
-            out[attr] = {'name': getattr(dataset, attr)}
+            subkey = 'code' if attr == 'platform' else 'name'
+            out[attr] = {subkey: getattr(dataset, attr)}
         
         out['grid_spatial']['projection']['geo_ref_points'] = dataset.extent
         out['grid_spatial']['projection']['spatial_reference'] = dataset.crs
