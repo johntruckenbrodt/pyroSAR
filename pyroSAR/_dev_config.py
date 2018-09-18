@@ -17,11 +17,13 @@ __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode
 
 # a pattern to search for pyroSAR processing products and extract metadata attributes from the file name
 product_pattern = r'(?:.*[/\\]|)' \
+                  r'(?P<outname_base>' \
                   r'(?P<sensor>[A-Z0-9]{1,4})_+' \
                   r'(?P<acquisition_mode>[A-Z0-9]{1,4})_+' \
                   r'(?P<orbit>[AD])_' \
-                  r'(?P<start>[0-9T]{15})_' \
-                  r'(?P<extensions>\w*_|)' \
+                  r'(?P<start>[0-9T]{15})' \
+                  r'(?:_(?P<extensions>\w*)_|)' \
+                  r')_' \
                   r'(?P<polarization>[HV]{2})_' \
                   r'(?P<proc_steps>\w*).tif$'
 
