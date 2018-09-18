@@ -154,8 +154,7 @@ class Dataset(object):
 
 class Product(object):
     def __init__(self, definition=None, name=None, product_type=None,
-                 description=None, measurement_units=None):
-        self.measurement_units = measurement_units if measurement_units is not None else {}
+                 description=None):
         
         missing_message = "when initializing from {}, parameters " \
                           "'name', 'product_type' and 'description' must be defined"
@@ -192,14 +191,12 @@ class Product(object):
     def close(self):
         return
     
-    def __add_measurement(self, name, dtype, nodata):
-        if name not in self.measurement_units.keys():
-            self.measurement_units[name] = 'DN'
+    def __add_measurement(self, name, dtype, nodata, units):
         if name in self.measurements.keys():
             raise IndexError('measurement {} already exists'.format(name))
         self.meta['measurements'].append({'name': name,
                                           'dtype': dtype,
-                                          'units': self.measurement_units[name],
+                                          'units': units,
                                           'nodata': nodata})
     
     def __initialize(self, name, product_type, description):
@@ -220,7 +217,7 @@ class Product(object):
     
     @property
     def __fixture_measurement(self):
-        return ['dtype', 'nodata']
+        return ['dtype', 'nodata', 'units']
     
     @property
     def __fixture_metadata(self):
@@ -245,14 +242,17 @@ class Product(object):
         if not isinstance(dataset, Dataset):
             raise TypeError('input must be of type pyroSAR.datacube.Dataset')
         self.check_integrity(dataset, allow_new_measurements=True)
+        
         for attr in self.__fixture_metadata:
-            self.meta['metadata'][attr] = {'name': getattr(dataset, attr)}
+            key = 'code' if attr == 'platform' else 'name'
+            self.meta['metadata'][attr] = {key: getattr(dataset, attr)}
         
         for attr in self.__fixture_storage:
             self.meta['storage'][attr] = getattr(dataset, attr)
         
-        if dataset.measurement not in self.measurements.keys():
-            self.__add_measurement(dataset.measurement, dataset.dtype, dataset.nodata)
+        for measurement, content in dataset.measurements.items():
+            if measurement not in self.measurements.keys():
+                self.__add_measurement(content['name'], content['dtype'], content['nodata'], content['units'])
     
     def check_integrity(self, dataset, allow_new_measurements=False):
         
@@ -262,7 +262,8 @@ class Product(object):
         # check metadata field
         for attr in self.__fixture_metadata:
             if attr in self.meta['metadata'].keys():
-                if getattr(dataset, attr) != self.meta['metadata'][attr]['name']:
+                subkey = 'code' if attr == 'platform' else 'name'
+                if getattr(dataset, attr) != self.meta['metadata'][attr][subkey]:
                     raise ValueError('mismatch of attribute {}'.format(attr))
         
         # check storage field
@@ -271,16 +272,22 @@ class Product(object):
                 if getattr(dataset, attr) != self.meta['storage'][attr]:
                     raise ValueError('mismatch of attribute {}'.format(attr))
         
-        if dataset.measurement not in self.measurements.keys():
-            if not allow_new_measurements:
-                raise ValueError('measurement mismatch')
-        else:
-            match = self.measurements[dataset.measurement]
-            for attr in self.__fixture_measurement:
-                if match[attr] != getattr(dataset, attr):
-                    raise ValueError('mismatch of attribute {}'.format(attr))
+        # check measurement fields
+        for measurement, content in dataset.measurements.items():
+            if measurement not in self.measurements.keys():
+                if not allow_new_measurements:
+                    raise ValueError('measurement mismatch')
+            else:
+                match = self.measurements[measurement]
+                for attr in self.__fixture_measurement:
+                    if match[attr] != content[attr]:
+                        raise ValueError("mismatch of attribute '{0}': "
+                                         "{1}, {2}".format(attr, match[attr], content[attr]))
     
-    def export_ingestion_yml(self, dataset):
+    def export_ingestion_yml(self, dataset, outdir):
+        if not os.path.isdir(outdir):
+            os.makedirs(outdir)
+        
         self.check_integrity(dataset)
         out = {'id': str(uuid.uuid4()),
                'image': {'bands': {}},
@@ -288,7 +295,8 @@ class Product(object):
                'extent': {'coord': {}},
                'lineage': {'source_datasets': {}}}
         
-        out['image']['bands'][dataset.measurement] = {'path': dataset.filename}
+        for measurement, content in dataset.measurements.items():
+            out['image']['bands'][measurement] = {'path': content['filename']}
         
         for attr in self.__fixture_metadata:
             out[attr] = {'name': getattr(dataset, attr)}
@@ -300,7 +308,10 @@ class Product(object):
         
         out['product_type'] = self.meta['metadata']['product_type']
         
-        print(yaml.dump(out, default_flow_style=False))
+        outname = os.path.join(outdir, dataset.identifier+'.yml')
+        
+        with open(outname, 'w') as yml:
+            yaml.dump(out, yml, default_flow_style=False)
     
     @property
     def measurements(self):
