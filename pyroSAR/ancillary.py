@@ -146,13 +146,16 @@ def parse_datasetname(name, parse_date=False):
     return out
 
 
-def find_datasets(directory, **kwargs):
+def find_datasets(directory, recursive=False, **kwargs):
     """
+    find pyroSAR datasets in a directory based on their metadata
     
     Parameters
     ----------
     directory: str
         the name of the directory to be searched
+    recursive: bool
+        search the directory recursively into subdirectories?
     kwargs:
         Metadata attributes for filtering the scene list supplied as `key=value`. e.g. `sensor='S1A'`.
         Multiple allowed options can be provided in tuples, e.g. `sensor=('S1A', 'S1B')`.
@@ -169,7 +172,7 @@ def find_datasets(directory, **kwargs):
     --------
     >>> selection = find_datasets('path/to/files', sensor=('S1A', 'S1B'), polarization='VV')
     """
-    files = finder(directory, [product_pattern], regex=True)
+    files = finder(directory, [product_pattern], regex=True, recursive=recursive)
     selection = []
     for file in files:
         meta = parse_datasetname(file)
