@@ -306,6 +306,8 @@ class Product(object):
         elif item in self.__fixture_metadata:
             subkey = 'code' if item == 'platform' else 'name'
             return self.meta['metadata'][item][subkey]
+        elif item == 'product_type':
+            return self.meta['metadata']['product_type']
         else:
             return object.__getattribute__(self, item)
     
@@ -315,6 +317,8 @@ class Product(object):
         elif key in self.__fixture_metadata:
             subkey = 'code' if key == 'platform' else 'name'
             self.meta['metadata'][key][subkey] = value
+        elif key == 'product_type':
+            self.meta['metadata']['product_type'] = value
         else:
             super(Product, self).__setattr__(key, value)
     
@@ -605,7 +609,7 @@ class Product(object):
                'storage': self.meta['storage'],
                'measurements': self.meta['measurements'],
                'global_attributes': global_attributes}
-        print(yaml.dump(out, default_flow_style=False))
+        
         with open(outname, 'w') as yml:
             yaml.dump(out, yml, default_flow_style=False)
     
@@ -633,6 +637,9 @@ class Product(object):
         -------
         
         """
+        if os.path.isfile(ymlfile):
+            raise RuntimeError('ingestion YML already exists: \n   {}'.format(ymlfile))
+        
         self.__validate()
         with open(ymlfile, 'w') as yml:
             yaml.dump(self.meta, yml, default_flow_style=False)
