@@ -100,7 +100,7 @@ class Dataset(object):
     def __add__(self, dataset):
         """
         override the + operator. This is intended to easily combine two Dataset objects, which were
-        created from different files belonging to the same measurement, i.e. two GeoTiffs with one polarization
+        created from different files belonging to the same measurement, e.g. two GeoTiffs with one polarization
         each.
         
         Parameters
@@ -274,7 +274,7 @@ class Product(object):
                     except yaml.YAMLError:
                         raise RuntimeError('the provided file does not seem to be a YAML file')
             else:
-                raise OSError('definition file does not exist')
+                raise RuntimeError('definition file does not exist')
         
         elif isinstance(definition, list):
             if None in [name, product_type, description]:
@@ -447,7 +447,7 @@ class Product(object):
     def add(self, dataset):
         """
         Add a dataset to the abstracted product description. This first performs a check
-        whether the dataset iscompatible with the product and its already existing measurements.
+        whether the dataset is compatible with the product and its already existing measurements.
         If a measurement in the dataset does not yet exist in the product description it is added.
         
         Parameters
@@ -516,13 +516,13 @@ class Product(object):
                                            format(measurement, attr, match[attr], content[attr]))
     
     def export_indexing_yml(self, dataset, outdir):
-    
+        
         self.__validate()
         
         outname = os.path.join(outdir, dataset.identifier + '_dcindex.yml')
         
         if os.path.isfile(outname):
-            raise OSError('indexing YML already exists')
+            raise RuntimeError('indexing YML already exists: \n   {}'.format(outname))
         
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
