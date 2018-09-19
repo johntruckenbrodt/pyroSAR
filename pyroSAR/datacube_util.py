@@ -502,8 +502,10 @@ class Product(object):
         """
         # check general metadata and storage fields
         for attr in self.__fixture_metadata + self.__fixture_storage:
-            if getattr(dataset, attr) != getattr(self, attr):
-                raise RuntimeError('mismatch of attribute {}'.format(attr))
+            val_ds = getattr(dataset, attr)
+            val_prod = getattr(self, attr)
+            if val_prod is not None and val_ds != val_prod:
+                raise RuntimeError("mismatch of attribute '{0}': {1}, {2}".format(attr, val_ds, val_prod))
         
         # check measurement fields
         for measurement, content in dataset.measurements.items():
