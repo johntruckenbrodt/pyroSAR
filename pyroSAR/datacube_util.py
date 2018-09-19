@@ -511,10 +511,14 @@ class Product(object):
                 match = self.measurements[measurement]
                 for attr in self.__fixture_measurement:
                     if match[attr] != content[attr]:
-                        raise ValueError("mismatch of attribute '{0}': "
-                                         "{1}, {2}".format(attr, match[attr], content[attr]))
+                        raise RuntimeError("mismatch of measurement '{0}', "
+                                           "attribute '{1}': {2}, {3}".
+                                           format(measurement, attr, match[attr], content[attr]))
     
-    def export_ingestion_yml(self, dataset, outdir):
+    def export_indexing_yml(self, dataset, outdir):
+        
+        outname = os.path.join(outdir, dataset.identifier + '_dcindex.yml')
+        
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
         
@@ -538,8 +542,6 @@ class Product(object):
         out['extent']['coord'] = dataset.extent_4326
         
         out['product_type'] = self.meta['metadata']['product_type']
-        
-        outname = os.path.join(outdir, dataset.identifier+'.yml')
         
         with open(outname, 'w') as yml:
             yaml.dump(out, yml, default_flow_style=False)
