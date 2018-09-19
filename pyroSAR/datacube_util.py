@@ -263,28 +263,33 @@ class Product(object):
     def __init__(self, definition=None, name=None, product_type=None,
                  description=None):
         
-        missing_message = "when initializing from {}, parameters " \
+        missing_message = "when initializing {}, parameters " \
                           "'name', 'product_type' and 'description' must be defined"
         
-        if isinstance(definition, str) and os.path.isfile(definition):
-            with open(definition, 'r') as yml:
-                try:
-                    self.meta = yaml.load(yml)
-                except yaml.YAMLError:
-                    raise RuntimeError('the provided file does not seem to be a YAML file')
+        if isinstance(definition, str):
+            if os.path.isfile(definition):
+                with open(definition, 'r') as yml:
+                    try:
+                        self.meta = yaml.load(yml)
+                    except yaml.YAMLError:
+                        raise RuntimeError('the provided file does not seem to be a YAML file')
+            else:
+                raise OSError('definition file does not exist')
         
         elif isinstance(definition, list):
             if None in [name, product_type, description]:
-                raise ValueError(missing_message.format('list'))
+                raise ValueError(missing_message.format(' a product from list'))
             self.__initialize(name, product_type, description)
             for dataset in definition:
                 with Dataset(dataset) as DS:
                     self.add(DS)
         
         elif definition is None:
+            if None in [name, product_type, description]:
+                raise ValueError(missing_message.format('a blank product'))
             self.__initialize(name, product_type, description)
         else:
-            raise TypeError('tpye of parameter definition must be either str, list or None')
+            raise TypeError('type of parameter definition must be either str, list or None')
     
     def __enter__(self):
         return self
@@ -295,10 +300,46 @@ class Product(object):
     def __str__(self):
         return yaml.dump(self.meta, default_flow_style=False)
     
+    def __getattr__(self, item):
+        if item in self.__fixture_storage:
+            return self.meta['storage'][item]
+        elif item in self.__fixture_metadata:
+            subkey = 'code' if item == 'platform' else 'name'
+            return self.meta['metadata'][item][subkey]
+        else:
+            return object.__getattribute__(self, item)
+    
+    def __setattr__(self, key, value):
+        if key in self.__fixture_storage:
+            self.meta['storage'][key] = value
+        elif key in self.__fixture_metadata:
+            subkey = 'code' if key == 'platform' else 'name'
+            self.meta['metadata'][key][subkey] = value
+        else:
+            super(Product, self).__setattr__(key, value)
+    
     def close(self):
         return
     
     def __add_measurement(self, name, dtype, nodata, units):
+        """
+        create a new measurement entry
+        
+        Parameters
+        ----------
+        name: str
+            the measurement name
+        dtype: str
+            the data type, e.g. float32
+        nodata: int or float
+            the nodata value of the data
+        units: str
+            the measurement units
+
+        Returns
+        -------
+
+        """
         if name in self.measurements.keys():
             raise IndexError('measurement {} already exists'.format(name))
         self.meta['measurements'].append({'name': name,
@@ -307,12 +348,32 @@ class Product(object):
                                           'nodata': nodata})
     
     def __initialize(self, name, product_type, description):
+        """
+        create a new blank product
+        
+        Parameters
+        ----------
+        name: str
+            the name of the product
+        product_type: str
+            the product type, e.g. `gamma0`
+        description: str
+            a description of the product content/purpose
+
+        Returns
+        -------
+
+        """
         self.meta = {'description': description,
                      'measurements': [],
-                     'metadata': {'product_type': product_type},
+                     'metadata': {'platform': {'code': None},
+                                  'instrument': {'name': None},
+                                  'format': {'name': None},
+                                  'product_type': product_type},
                      'metadata_type': 'eo',
                      'name': name,
-                     'storage': {}}
+                     'storage': {'crs': None,
+                                 'resolution': None}}
     
     @staticmethod
     def __check_dict_keys(keys, reference):
@@ -320,21 +381,59 @@ class Product(object):
     
     @property
     def __fixture_fields(self):
+        """
+        
+        Returns
+        -------
+        list
+            the names of the top-level metadata fields, which must be defined
+        """
         return ['description', 'measurements', 'metadata', 'metadata_type', 'name', 'storage']
     
     @property
     def __fixture_measurement(self):
+        """
+        
+        Returns
+        -------
+        list
+            the names of the metadata fields, which must be defined for all measurements
+        """
         return ['dtype', 'nodata', 'units']
     
     @property
     def __fixture_metadata(self):
+        """
+        
+        Returns
+        -------
+        list
+            the names of the metadata fields, which must be defined in the general metadata section
+        """
         return ['format', 'instrument', 'platform']
     
     @property
     def __fixture_storage(self):
+        """
+        
+        Returns
+        -------
+        list
+            the names of the metadata fields, which must be defined for the storage section
+        """
         return ['crs', 'resolution']
     
     def __validate(self):
+        """
+        assert whether the Product is valid
+        
+        Returns
+        -------
+        
+        Raises
+        ------
+        RuntimeError
+        """
         try:
             assert isinstance(self.meta, dict)
             assert self.__check_dict_keys(self.__fixture_fields, self.meta.keys())
@@ -346,44 +445,68 @@ class Product(object):
             raise RuntimeError('product invalid')
     
     def add(self, dataset):
+        """
+        Add a dataset to the abstracted product description. This first performs a check
+        whether the dataset iscompatible with the product and its already existing measurements.
+        If a measurement in the dataset does not yet exist in the product description it is added.
+        
+        Parameters
+        ----------
+        dataset: Dataset
+            the dataset whose description is to be added
+
+        Returns
+        -------
+
+        """
         if not isinstance(dataset, Dataset):
             raise TypeError('input must be of type pyroSAR.datacube.Dataset')
         self.check_integrity(dataset, allow_new_measurements=True)
         
-        for attr in self.__fixture_metadata:
-            key = 'code' if attr == 'platform' else 'name'
-            self.meta['metadata'][attr] = {key: getattr(dataset, attr)}
+        # set the general product definition attributes if they are None
+        for attr in self.__fixture_metadata + self.__fixture_storage:
+            if getattr(self, attr) is None:
+                setattr(self, attr, getattr(dataset, attr))
         
-        for attr in self.__fixture_storage:
-            self.meta['storage'][attr] = getattr(dataset, attr)
-        
+        # if it is not yet present, add the dataset measurement definition to that of the product
         for measurement, content in dataset.measurements.items():
             if measurement not in self.measurements.keys():
-                self.__add_measurement(content['name'], content['dtype'], content['nodata'], content['units'])
+                self.__add_measurement(dtype=content['dtype'],
+                                       name=content['name'],
+                                       nodata=content['nodata'],
+                                       units=content['units'])
     
     def check_integrity(self, dataset, allow_new_measurements=False):
+        """
+        check if a dataset is compatible with the product definition.
         
-        # define parameters, which are to be consistent across an individual measurement
-        # fixtures_measurement = ['acquisition_mode', 'proc_steps', 'dtype', 'nodata']
+        Parameters
+        ----------
+        dataset: Dataset
+            the dataset to be checked
+        allow_new_measurements: bool
+            allow new measurements to be added to the product definition?
+            If not and the dataset contains measurements,
+            which are not defined in the product, an error is raised.
+
+        Returns
+        -------
         
-        # check metadata field
-        for attr in self.__fixture_metadata:
-            if attr in self.meta['metadata'].keys():
-                subkey = 'code' if attr == 'platform' else 'name'
-                if getattr(dataset, attr) != self.meta['metadata'][attr][subkey]:
-                    raise ValueError('mismatch of attribute {}'.format(attr))
-        
-        # check storage field
-        for attr in self.__fixture_storage:
-            if attr in self.meta['storage'].keys():
-                if getattr(dataset, attr) != self.meta['storage'][attr]:
-                    raise ValueError('mismatch of attribute {}'.format(attr))
+        Raises
+        ------
+        RuntimeError
+        """
+        # check general metadata and storage fields
+        for attr in self.__fixture_metadata + self.__fixture_storage:
+            if getattr(dataset, attr) != getattr(self, attr):
+                raise RuntimeError('mismatch of attribute {}'.format(attr))
         
         # check measurement fields
         for measurement, content in dataset.measurements.items():
             if measurement not in self.measurements.keys():
                 if not allow_new_measurements:
-                    raise ValueError('measurement mismatch')
+                    raise RuntimeError("measurement '{}' is not present in the product definition "
+                                       "and allow_new_measurements is set to False".format(measurement))
             else:
                 match = self.measurements[measurement]
                 for attr in self.__fixture_measurement:
@@ -423,8 +546,27 @@ class Product(object):
     
     @property
     def measurements(self):
+        """
+        
+        Returns
+        -------
+        dict of dict
+            a dictionary with measurement names as keys
+        """
         return dict([(x['name'], x) for x in self.meta['measurements']])
     
     def write(self, ymlfile):
+        """
+        write the product definition to a YML file
+        
+        Parameters
+        ----------
+        ymlfile: str
+            the file to write to
+        
+        Returns
+        -------
+        
+        """
         with open(ymlfile, 'w') as yml:
             yaml.dump(self.meta, yml, default_flow_style=False)
