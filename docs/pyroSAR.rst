@@ -55,6 +55,13 @@ Sentinel-1 Tools
     :undoc-members:
     :show-inheritance:
 
+Datacube Tools
+==============
+.. automodule:: pyroSAR.datacube_util
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Ancillary Functions
 ===================
 
