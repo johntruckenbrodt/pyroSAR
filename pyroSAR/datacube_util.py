@@ -559,22 +559,24 @@ class Product(object):
         with open(outname, 'w') as yml:
             yaml.dump(out, yml, default_flow_style=False)
     
-    def export_ingestion_yml(self, outdir, name, location):
-    
+    def export_ingestion_yml(self, outname, product_name, ingest_location):
+        
+        if os.path.isfile(outname):
+            raise RuntimeError('product definition YML already exists: \n   {}'.format(outname))
+        
         self.__validate()
         
-        outname = os.path.join(outdir, self.meta['name'] + '_dcingest.yml')
-        
-        if name == self.meta['name']:
+        if product_name == self.meta['name']:
             raise ValueError('source and target product names must be different')
-        
+
+        outdir = os.path.dirname(outname)
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
         
         file_path_template = '{0}/{1}_{2}_{3}_{4}_' \
                              '{{tile_index[0]}}_' \
                              '{{tile_index[1]}}_' \
-                             '{{start_time}}.nc'.format(name,
+                             '{{start_time}}.nc'.format(product_name,
                                                         self.platform,
                                                         self.instrument,
                                                         self.product_type,
@@ -604,9 +606,9 @@ class Product(object):
             measurement['src_varname'] = measurement['name']
         
         out = {'source_type': self.meta['name'],
-               'output_type': name,
+               'output_type': product_name,
                'description': self.meta['description'],
-               'location': location,
+               'location': ingest_location,
                'file_path_template': file_path_template,
                'storage': self.meta['storage'],
                'measurements': self.meta['measurements'],
