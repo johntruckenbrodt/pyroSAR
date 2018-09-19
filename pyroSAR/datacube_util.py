@@ -551,6 +551,59 @@ class Product(object):
         with open(outname, 'w') as yml:
             yaml.dump(out, yml, default_flow_style=False)
     
+    def export_ingestion_yml(self, outdir, name, location):
+        outname = os.path.join(outdir, self.meta['name'] + '_dcingest.yml')
+        
+        if name == self.meta['name']:
+            raise ValueError('source and target product names must be different')
+        
+        if not os.path.isdir(outdir):
+            os.makedirs(outdir)
+        
+        file_path_template = '{0}/{1}_{2}_{3}_{4}_' \
+                             '{{tile_index[0]}}_' \
+                             '{{tile_index[1]}}_' \
+                             '{{start_time}}.nc'.format(name,
+                                                        self.platform,
+                                                        self.instrument,
+                                                        self.product_type,
+                                                        self.crs.replace('EPSG:', ''))
+        
+        global_attributes = {'instrument': self.instrument,
+                             'platform': self.platform,
+                             'institution': 'ESA',
+                             'achknowledgment': 'Sentinel-1 data is provided by the European Space Agency '
+                                                'on behalf of the European Commission via download.'}
+        
+        storage = self.meta['storage']
+        storage['driver'] = 'NetCDF CF'
+        storage['tile_size'] = {}
+        for key in storage['resolution']:
+            storage['tile_size'][key] = storage['resolution'][key] * 500
+            storage['tile_size'][key] = storage['resolution'][key] * 500
+        storage['chunking'] = {'time': 1}
+        for key in storage['resolution']:
+            storage['chunking'][key] = 500
+            storage['chunking'][key] = 500
+        storage['dimension_order'] = ['time', 'y', 'x']
+        
+        measurements = self.meta['measurements']
+        for measurement in measurements:
+            measurement['resampling_method'] = 'nearest'
+            measurement['src_varname'] = measurement['name']
+        
+        out = {'source_type': self.meta['name'],
+               'output_type': name,
+               'description': self.meta['description'],
+               'location': location,
+               'file_path_template': file_path_template,
+               'storage': self.meta['storage'],
+               'measurements': self.meta['measurements'],
+               'global_attributes': global_attributes}
+        print(yaml.dump(out, default_flow_style=False))
+        with open(outname, 'w') as yml:
+            yaml.dump(out, yml, default_flow_style=False)
+    
     @property
     def measurements(self):
         """
