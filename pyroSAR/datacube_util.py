@@ -516,6 +516,8 @@ class Product(object):
                                            format(measurement, attr, match[attr], content[attr]))
     
     def export_indexing_yml(self, dataset, outdir):
+    
+        self.__validate()
         
         outname = os.path.join(outdir, dataset.identifier + '_dcindex.yml')
         
@@ -552,6 +554,9 @@ class Product(object):
             yaml.dump(out, yml, default_flow_style=False)
     
     def export_ingestion_yml(self, outdir, name, location):
+    
+        self.__validate()
+        
         outname = os.path.join(outdir, self.meta['name'] + '_dcingest.yml')
         
         if name == self.meta['name']:
@@ -628,5 +633,6 @@ class Product(object):
         -------
         
         """
+        self.__validate()
         with open(ymlfile, 'w') as yml:
             yaml.dump(self.meta, yml, default_flow_style=False)
