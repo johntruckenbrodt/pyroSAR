@@ -2,6 +2,7 @@ import os
 import re
 import yaml
 import uuid
+from time import strftime, strptime
 from spatialist.raster import Raster, Dtype
 from spatialist.ancillary import union
 from .ancillary import parse_datasetname
@@ -19,6 +20,7 @@ class Dataset(object):
                 setattr(self, attr, value)
         
         elif isinstance(filename, str):
+            # map pyroSAR sensor identifiers to platform and instrument codes
             sensor_lookup = {'ASAR': ('ENVISAT', 'ASAR'),
                              'ERS1': ('ERS-1', 'SAR'),
                              'ERS2': ('ERS-2', 'SAR'),
@@ -29,6 +31,7 @@ class Dataset(object):
                              'TSX1': ('TERRASAR-X_1', 'SAR'),
                              'TDX1': ('TANDEM-X_1', 'SAR')}
             
+            # extract basic metadata attributes from the filename and register them to the object
             meta = parse_datasetname(filename)
             
             if meta is None:
@@ -37,11 +40,20 @@ class Dataset(object):
             for key, val in meta.items():
                 setattr(self, key, val)
             
+            # define acquisition start and end time; Currently both are set to the acquisition start time,
+            # which is contained in the filename
+            # Time will only be correct if the full scene was processed, start and end time of s subset will
+            # differ. Thus, accurately setting both is not seen as too relevant.
+            self.from_dt = strftime('%Y-%m-%dT%H:%M:%S', strptime(self.start, '%Y%m%dT%H%M%S'))
+            self.to_dt = strftime('%Y-%m-%dT%H:%M:%S', strptime(self.start, '%Y%m%dT%H%M%S'))
+            
+            # match the sensor ID from the filename to a platform and instrument
             if self.sensor not in sensor_lookup.keys():
                 raise ValueError('unknown sensor: {}'.format(self.sensor))
             
             self.platform, self.instrument = sensor_lookup[self.sensor]
             
+            # extract general geo metadata from the GTiff information
             with Raster(filename) as ras:
                 self.dtype = Dtype(ras.dtype).numpystr
                 self.nodata = ras.nodata
@@ -50,6 +62,7 @@ class Dataset(object):
                 self.crs = 'EPSG:{}'.format(ras.epsg)
                 self.is_projected = ras.projcs is not None
                 self.extent = self.__extent_convert(ras.geo, 'x', 'y')
+                # reproject the raster bounding box to EPSG 4326 and store its extent
                 with ras.bbox() as bbox:
                     bbox.reproject(4326)
                     self.extent_4326 = self.__extent_convert(bbox.extent, 'lon', 'lat')
@@ -74,7 +87,8 @@ class Dataset(object):
             else:
                 raise TypeError("parameter 'units' must be of type str or dict")
             
-            # create the measurement entry from collected metadata; this is intended for easy access by class Product
+            # create the measurement entry from collected metadata;
+            # this is intended for easy access by class Product
             self.measurements = {self.polarization: {'dtype': self.dtype,
                                                      'name': self.polarization,
                                                      'nodata': self.nodata,
@@ -84,6 +98,21 @@ class Dataset(object):
             raise TypeError('filename must be of type str, list or Dataset')
     
     def __add__(self, dataset):
+        """
+        override the + operator. This is intended to easily combine two Dataset objects, which were
+        created from different files belonging to the same measurement, i.e. two GeoTiffs with one polarization
+        each.
+        
+        Parameters
+        ----------
+        dataset: Dataset
+            the dataset to add to the current one
+
+        Returns
+        -------
+        Dataset
+            the combination of the two
+        """
         for attr in ['extent', 'crs', 'sensor', 'acquisition_mode', 'proc_steps', 'outname_base']:
             if getattr(self, attr) != getattr(dataset, attr):
                 raise ValueError('value mismatch: {}'.format(attr))
@@ -95,6 +124,19 @@ class Dataset(object):
         return self
     
     def __radd__(self, dataset):
+        """
+        similar to Dataset.__add__ but for function sum, e.g. sum([Dataset1, Dataset2])
+        
+        Parameters
+        ----------
+        dataset: Dataset
+            the dataset to add to the current one
+
+        Returns
+        -------
+        Dataset
+            the combination of the two
+        """
         if dataset == 0:
             return self
         else:
@@ -102,6 +144,24 @@ class Dataset(object):
     
     @staticmethod
     def __extent_convert(extent, xkey, ykey):
+        """
+        convert the extent of a :class:`~spatialist.raster.Raster` object to a
+        datacube-compliant dictionary.
+        
+        Parameters
+        ----------
+        extent: dict
+            the extent as returned by a :class:`~spatialist.raster.Raster` object
+        xkey: {'longitude', 'x'}
+            the key of the x dimension
+        ykey: {'latitude', 'y'}
+            the key of the y dimension
+
+        Returns
+        -------
+        dict
+            a dictionary with keys `ll`, `lr`, `ul` and ``ur
+        """
         return {'ll': {xkey: extent['xmin'],
                        ykey: extent['ymin']},
                 'lr': {xkey: extent['xmax'],
@@ -118,22 +178,69 @@ class Dataset(object):
         self.close()
     
     def __get_measurement_attr(self, attr):
+        """
+        get a certain measurement attribute from all measurements
+        
+        Parameters
+        ----------
+        attr: str
+            the attribute to get
+
+        Returns
+        -------
+        dict
+            a dictionary with the measurement names as keys and the respective attribute as value
+        """
         return dict([(key, self.measurements[key][attr]) for key in self.measurements.keys()])
     
     @property
     def filenames(self):
+        """
+        
+        Returns
+        -------
+        dict
+            all file names registered in the dataset
+        """
         return self.__get_measurement_attr('filename')
     
     @property
     def identifier(self):
+        """
+        
+        Returns
+        -------
+        str
+            a unique dataset identifier
+        """
         return '{}_{}'.format(self.outname_base, '_'.join(self.proc_steps))
     
     @property
     def units(self):
+        """
+        
+        Returns
+        -------
+        dict
+            all measurement unit names registered in the dataset
+        """
         return self.__get_measurement_attr('units')
     
     @units.setter
     def units(self, value):
+        """
+        (re)set the units of all measurements
+        
+        Parameters
+        ----------
+        value: str or dict
+            the unit(s) to be set; if multiple measurements are present,
+            a dictionary with measurement names as keys needs to be defined
+
+        Returns
+        -------
+
+        """
         keys = list(self.measurements.keys())
         if isinstance(value, str):
             if len(keys) == 1:
