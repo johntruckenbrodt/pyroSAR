@@ -519,6 +519,9 @@ class Product(object):
         
         outname = os.path.join(outdir, dataset.identifier + '_dcindex.yml')
         
+        if os.path.isfile(outname):
+            raise OSError('indexing YML already exists')
+        
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
         
@@ -540,6 +543,8 @@ class Product(object):
         out['grid_spatial']['projection']['spatial_reference'] = dataset.crs
         
         out['extent']['coord'] = dataset.extent_4326
+        out['extent']['from_dt'] = dataset.from_dt
+        out['extent']['to_dt'] = dataset.to_dt
         
         out['product_type'] = self.meta['metadata']['product_type']
         
