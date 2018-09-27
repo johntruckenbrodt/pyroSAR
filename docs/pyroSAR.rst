@@ -42,8 +42,8 @@ SNAP Processing
 GAMMA Processing
 ================
 
-.. automodule:: pyroSAR.gamma.util
-    :members: geocode, convert2gamma
+.. automodule:: pyroSAR.gamma
+    :members: geocode, convert2gamma, ISPPar, process, ovs, S1_deburst, correctOSV
     :undoc-members:
     :show-inheritance:
 
