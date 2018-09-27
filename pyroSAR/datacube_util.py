@@ -1,3 +1,8 @@
+"""
+This (still experimental) module is intended to easily prepare SAR scenes processed
+by pyroSAR for ingestion into an Open Data Cube.
+"""
+
 import os
 import re
 import yaml
