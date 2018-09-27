@@ -79,6 +79,13 @@ class ISPPar(object):
                                                       value=getattr(self, key)) for key in self.keys])
     
     def envidict(self):
+        """
+        export relevant metadata to a ENVI HDR file compliant format
+        
+        Returns
+        -------
+        dict
+        """
         out = dict(bands=1,
                    header_offset=0,
                    file_type='ENVI Standard',
@@ -144,6 +151,27 @@ class UTM(object):
 
 
 def process(cmd, outdir=None, logpath=None, inlist=None, void=True):
+    """
+    wrapper function to execute GAMMA commands via module :mod:`subprocess`
+    
+    Parameters
+    ----------
+    cmd: list
+        the command line arguments
+    outdir: str
+        the directory to execute the command in
+    logpath: str
+        a directory to write logfiles to; the file will be named {GAMMA command}.log, e.g. gc_map.log
+    inlist: list
+        a list of values, which is passed as interactive inputs via stdin
+    void: bool
+        return the stdout and stderr messages?
+    
+    Returns
+    -------
+    tuple of str or None
+        the stdout and stderr messages if void is False, otherwise None
+    """
     log = os.path.join(logpath, cmd[0] + '.log') if logpath else None
     out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False, errorpass=True)
     gammaErrorHandler(out, err)
