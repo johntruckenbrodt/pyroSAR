@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+import json
 import warnings
 
 # Python 3 comparability
@@ -343,20 +344,15 @@ class ConfigHandler(object):
             raise AttributeError('Your key is {0}. '
                                  'Only the following keys are allowed: {1}.'
                                  .format(str(key), str(ConfigHandler.__KEYS)))
+
+        if isinstance(value, list):
+            value = json.dumps(value)
         
-        if key in self.parser.options(section):
-            
-            if overwrite:
-                self.parser.set(section, key, value)
-                self.write()
-            
-            else:
-                pass
-                # warnings.warn('Value already exists.')
+        if key in self.parser.options(section) and not overwrite:
+            raise RuntimeError('Value already exists.')
         
-        else:
-            self.parser.set(section, key, value)
-            self.write()
+        self.parser.set(section, key, value)
+        self.write()
     
     def remove_option(self, section, key):
         """
