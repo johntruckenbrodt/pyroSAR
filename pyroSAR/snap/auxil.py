@@ -245,36 +245,51 @@ def gpt(xmlfile, basename_extensions=None):
 
 class ExamineSnap(object):
     """
-    Class to check if snap is installed. This will be called with snap.__init__
-    as snap_config. If you are running multiple snap versions or the package can
-    not find the snap executable, you can set an path via: snap_config.set_path("path")
+    Class to check if ESA SNAP is installed.
+    Upon initialization, this class searches for relevant binaries and the accompanying
+    relative directory structure, which uniquely identify an ESA SNAP installation on a system.
+    First, all relevant file and folder names are read from the pyroSAR config file if it exists
+    and their existence is verified.
+    If this fails, a system check is performed to find relevant binaries in the system PATH variable and
+    additional files and folders relative to them.
+    Furthermore, a snap.auxdata.properties file is scanned for auxiliary data URLs and local storage location.
+    This is used by SNAP to manage data from e.g. the SRTM mission. In case SNAP is not installed, the respective
+    information is read from a default file delivered with pyroSAR. This has the advantage of using the SNAP download
+    URLs and local directory structure without having SNAP installed such that it can be adapted by other SAR software.
     """
     
     def __init__(self):
         
+        # define some attributes which identify SNAP
         self.identifiers = ['path', 'gpt', 'etc', 'auxdata']
         
+        # try reading all necessary attributes from the config file
         # print('reading config..')
         self.__read_config()
         
+        # if SNAP could not be identified from the config attributes, do a system search for it
         if not self.__is_identified():
             # print('identifying SNAP..')
             self.__identify_snap()
         
-        self.__read_config_attr('auxdatapath', 'SNAP')
+        # if the auxdatapath attribute was not yet set, create a default directory
         if not hasattr(self, 'auxdatapath'):
             self.auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
+            if not os.path.isdir(self.auxdatapath):
+                os.makedirs(self.auxdatapath)
         
-        self.__read_config_attr('properties', 'SNAP')
+        # if the SNAP auxdata properties attribute was not yet identified,
+        # point it to the default file delivered with pyroSAR
         if not hasattr(self, 'properties'):
-            # print('reading default properties file..')
+            # print('using default properties file..')
             template = 'data/snap.auxdata.properties'
             self.properties = pkg_resources.resource_filename(__name__, template)
         
-        if not hasattr(self, 'snap_properties'):
-            # print('reading SNAP properties from external file..')
-            self.__read_snap_properties()
+        # update the snap properties; this reads the 'properties' file and looks for any changes,
+        # which are then updated for the object
+        self.__update_snap_properties()
         
+        # update the config file: this scans for config changes and re-writes the config file if any are found
         self.__update_config()
     
     def __is_identified(self):
@@ -294,7 +309,8 @@ class ExamineSnap(object):
         
         Returns
         -------
-
+        bool
+            has the SNAP properties file been changed?
         """
         # create a list of possible SNAP executables
         defaults = ['snap64.exe', 'snap32.exe', 'snap.exe', 'snap']
@@ -338,7 +354,7 @@ class ExamineSnap(object):
             self.auxdata = auxdata
             self.properties = auxdata_properties
             return
-    
+        
         warnings.warn('SNAP could not be identified')
     
     def __read_config(self):
@@ -350,13 +366,12 @@ class ExamineSnap(object):
         -------
 
         """
-        for attr in self.identifiers:
+        for attr in self.identifiers + ['auxdatapath', 'properties']:
             self.__read_config_attr(attr, 'SNAP')
         
         snap_properties = {}
         if 'OUTPUT' in ConfigHandler.sections:
-            for key in ConfigHandler['OUTPUT'].keys():
-                snap_properties[key] = ConfigHandler['OUTPUT'][key]
+            snap_properties = ConfigHandler['OUTPUT']
         if len(snap_properties.keys()) > 0:
             setattr(self, 'snap_properties', snap_properties)
     
@@ -396,7 +411,8 @@ class ExamineSnap(object):
                 ConfigHandler.add_section(section)
         
         for key in self.identifiers + ['auxdatapath', 'properties']:
-            self.__update_config_attr(key, getattr(self, key), 'SNAP')
+            if hasattr(self, key):
+                self.__update_config_attr(key, getattr(self, key), 'SNAP')
         
         for key, value in self.snap_properties.items():
             self.__update_config_attr(key, value, 'OUTPUT')
@@ -405,12 +421,13 @@ class ExamineSnap(object):
     def __update_config_attr(attr, value, section):
         if isinstance(value, list):
             value = json.dumps(value)
+        
         if attr not in ConfigHandler[section].keys() or ConfigHandler[section][attr] != value:
             # print('updating attribute {0}:{1}..'.format(section, attr))
             # print('  {0} -> {1}'.format(repr(ConfigHandler[section][attr]), repr(value)))
             ConfigHandler.set(section, key=attr, value=value, overwrite=True)
     
-    def __read_snap_properties(self):
+    def __update_snap_properties(self):
         """
         Read the snap.auxdata.properties file entries to object attributes
 
@@ -420,7 +437,8 @@ class ExamineSnap(object):
         """
         pattern = r'^(?P<key>[\w\.]*)\s*=\s*(?P<value>.*)\n'
         
-        self.snap_properties = {}
+        if not hasattr(self, 'snap_properties'):
+            self.snap_properties = {}
         
         demPath = os.path.join(self.auxdatapath, 'dem')
         landCoverPath = os.path.join(self.auxdatapath, 'LandCover')
@@ -429,9 +447,10 @@ class ExamineSnap(object):
             for line in prop:
                 if re.search(pattern, line):
                     key, value = re.match(re.compile(pattern), line).groups()
-                    value = value\
+                    value = value \
                         .replace('${AuxDataPath}', self.auxdatapath) \
                         .replace('${demPath}', demPath) \
                         .replace('${landCoverPath}', landCoverPath) \
                         .replace('\\', '/')
-                    self.snap_properties[key] = value
+                    if not key in self.snap_properties.keys() or self.snap_properties[key] != value:
+                        self.snap_properties[key] = value
