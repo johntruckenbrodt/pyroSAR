@@ -94,8 +94,7 @@ class TestConfigHandler:
             conf.remove_option('SNApP', 'etc')
 
         conf.remove_option('SNAP', 'etc')
-        conf['SNAP'].keys()
-        assert conf.keys('SNAP') == []
+        assert list(conf['SNAP'].keys()) == []
 
     def test_delete_unit_data(self):
         conf = ConfigHandler(config_fname='unit_test_config.ini')
