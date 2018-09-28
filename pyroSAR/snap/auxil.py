@@ -381,6 +381,7 @@ class ExamineSnap(object):
                 if attr in ['path', 'gpt', 'properties']:
                     exist = os.path.isfile(val)
                 elif attr == 'auxdata':
+                    val = ast.literal_eval(val)
                     exist = isinstance(val, list)
                 else:
                     exist = os.path.isdir(val)
@@ -402,6 +403,8 @@ class ExamineSnap(object):
     
     @staticmethod
     def __update_config_attr(attr, value, section):
+        if isinstance(value, list):
+            value = json.dumps(value)
         if attr not in ConfigHandler[section].keys() or ConfigHandler[section][attr] != value:
             # print('updating attribute {0}:{1}..'.format(section, attr))
             # print('  {0} -> {1}'.format(repr(ConfigHandler[section][attr]), repr(value)))
