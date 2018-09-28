@@ -346,8 +346,8 @@ class ExamineSnap(object):
         
         snap_properties = {}
         if 'OUTPUT' in ConfigHandler.sections:
-            for key in ConfigHandler.keys('OUTPUT'):
-                snap_properties[key] = ConfigHandler.get('OUTPUT', key)
+            for key in ConfigHandler['OUTPUT'].keys():
+                snap_properties[key] = ConfigHandler['OUTPUT'][key]
         if len(snap_properties.keys()) > 0:
             setattr(self, 'snap_properties', snap_properties)
     
@@ -367,8 +367,8 @@ class ExamineSnap(object):
         
         """
         if section in ConfigHandler.sections:
-            if attr in ConfigHandler.keys(section):
-                val = ConfigHandler.get(section, attr)
+            if attr in ConfigHandler[section].keys():
+                val = ConfigHandler[section][attr]
                 if attr in ['path', 'gpt']:
                     exist = os.path.isfile(val)
                 elif attr == 'auxdata':
@@ -391,7 +391,7 @@ class ExamineSnap(object):
     
     @staticmethod
     def __update_config_attr(attr, value, section):
-        if attr not in ConfigHandler.keys(section) or ConfigHandler.get(section, attr) != value:
+        if attr not in ConfigHandler[section].keys() or ConfigHandler[section][attr] != value:
             ConfigHandler.set(section, key=attr, value=value, overwrite=True)
     
     def __read_snap_properties(self):
