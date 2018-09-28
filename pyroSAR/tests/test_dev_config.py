@@ -69,20 +69,18 @@ class TestConfigHandler:
         with pytest.raises(AttributeError) as excinfo:
             conf.set('SNAPp', 'etc', 'temp/dir')
 
-        assert conf.SNAP['etc'] == 'temp/dir'
-        assert conf.get('SNAP')['etc'] == 'temp/dir'
-        assert conf.get('SNAP') == {'etc': 'temp/dir'}
-        assert conf.keys('SNAP') == ['etc']
+        assert conf['SNAP']['etc'] == 'temp/dir'
+        assert conf['SNAP'] == {'etc': 'temp/dir'}
         assert conf.sections == ['SNAP']
 
     def test_overwrite(self):
         conf = ConfigHandler(config_fname='unit_test_config.ini')
         conf.add_section('SNAP')
         conf.set('SNAP', 'etc', 'temp/dir')
-        assert conf.SNAP['etc'] == 'temp/dir'
+        assert conf['SNAP']['etc'] == 'temp/dir'
 
         conf.set('SNAP', 'etc', 'temp/dir2', True)
-        assert conf.SNAP['etc'] == 'temp/dir2'
+        assert conf['SNAP']['etc'] == 'temp/dir2'
 
     def test_remove(self):
         conf = ConfigHandler(config_fname='unit_test_config.ini')
@@ -96,7 +94,7 @@ class TestConfigHandler:
             conf.remove_option('SNApP', 'etc')
 
         conf.remove_option('SNAP', 'etc')
-        conf.keys('SNAP')
+        conf['SNAP'].keys()
         assert conf.keys('SNAP') == []
 
     def test_delete_unit_data(self):
