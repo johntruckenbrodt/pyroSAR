@@ -229,9 +229,6 @@ class ConfigHandler(object):
         'landCoverPath': '${AuxDataPath}/LandCover',
     }
     
-    # Define __setter to control changeable keys (optional)
-    # __setter = ['etc', 'auxdata']
-    
     def __init__(self, path=None, config_fname='config.ini'):
         
         path = os.path.expanduser('~') if path is None else os.path.realpath(path)
@@ -243,19 +240,16 @@ class ConfigHandler(object):
             'config': os.path.join(path, config_fname),
         }
         
-        if os.path.isfile(self.__GLOBAL['config']):
-            self.parser = ConfigParser.RawConfigParser(allow_no_value=True)
-            self.parser.read(self.__GLOBAL['config'])
+        if not os.path.isfile(self.__GLOBAL['config']):
+            self.__create_config()
         
-        else:
-            self.create_config()
-            self.parser = ConfigParser.RawConfigParser()
-            self.parser.optionxform = str
-            self.parser.read(self.__GLOBAL['config'])
+        self.parser = ConfigParser.RawConfigParser(allow_no_value=True)
+        self.parser.optionxform = str
+        self.parser.read(self.__GLOBAL['config'])
     
-    def make_dir(self):
+    def __create_config(self):
         """
-        Create a .pyrosar directory in home directory.
+        Create a config.ini file in .pyrosar directory.
 
         Returns
         -------
@@ -265,24 +259,7 @@ class ConfigHandler(object):
         if not os.path.exists(self.__GLOBAL['path']):
             os.makedirs(self.__GLOBAL['path'])
         
-        else:
-            pass
-    
-    def create_config(self):
-        """
-        Create a config.ini file in .pyrosar directory.
-
-        Returns
-        -------
-        None
-        """
-        
-        self.make_dir()
-        
-        if not os.path.isfile(self.__GLOBAL['config']):
-            with open(self.__GLOBAL['config'], 'w'):
-                pass
-        else:
+        with open(self.__GLOBAL['config'], 'w'):
             pass
     
     def __str__(self):
@@ -314,35 +291,6 @@ class ConfigHandler(object):
     @property
     def sections(self):
         return self.parser.sections()
-    
-    def keys(self, section):
-        """
-        Get all keys (options) of a section.
-
-        Parameters
-        ----------
-        section : str
-            Section name.
-
-        Returns
-        -------
-        list
-            options (keys) of a section.
-
-        """
-        return self.parser.options(section)
-    
-    def open(self):
-        """
-        Open the config.ini file. This method will open the config.ini file in a external standard app (text editor).
-
-        Returns
-        -------
-        os.startfile
-
-        """
-        
-        os.startfile(self.__GLOBAL['config'])
     
     def add_section(self, section='SNAP'):
         """
