@@ -1,4 +1,7 @@
 import sys
+import ast
+import json
+import warnings
 import pkg_resources
 
 if sys.version_info >= (3, 0):
@@ -251,9 +254,11 @@ class ExamineSnap(object):
         
         self.identifiers = ['path', 'gpt', 'etc', 'auxdata']
         
+        # print('reading config..')
         self.__read_config()
         
         if not self.__is_identified():
+            # print('identifying SNAP..')
             self.__identify_snap()
         
         self.__read_config_attr('auxdatapath', 'SNAP')
@@ -262,10 +267,12 @@ class ExamineSnap(object):
         
         self.__read_config_attr('properties', 'SNAP')
         if not hasattr(self, 'properties'):
+            # print('reading default properties file..')
             template = 'data/snap.auxdata.properties'
             self.properties = pkg_resources.resource_filename(__name__, template)
         
         if not hasattr(self, 'snap_properties'):
+            # print('reading SNAP properties from external file..')
             self.__read_snap_properties()
         
         self.__update_config()
@@ -332,6 +339,8 @@ class ExamineSnap(object):
             self.properties = auxdata_properties
             return
     
+        warnings.warn('SNAP could not be identified')
+    
     def __read_config(self):
         """
         This method reads the config.ini to examine the snap paths.
@@ -376,11 +385,13 @@ class ExamineSnap(object):
                 else:
                     exist = os.path.isdir(val)
                 if exist:
+                    # print('setting attribute {}'.format(attr))
                     setattr(self, attr, val)
     
     def __update_config(self):
         for section in ['SNAP', 'OUTPUT', 'URL']:
             if section not in ConfigHandler.sections:
+                # print('creating section {}..'.format(section))
                 ConfigHandler.add_section(section)
         
         for key in self.identifiers + ['auxdatapath', 'properties']:
@@ -392,6 +403,8 @@ class ExamineSnap(object):
     @staticmethod
     def __update_config_attr(attr, value, section):
         if attr not in ConfigHandler[section].keys() or ConfigHandler[section][attr] != value:
+            # print('updating attribute {0}:{1}..'.format(section, attr))
+            # print('  {0} -> {1}'.format(repr(ConfigHandler[section][attr]), repr(value)))
             ConfigHandler.set(section, key=attr, value=value, overwrite=True)
     
     def __read_snap_properties(self):
