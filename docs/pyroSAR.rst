@@ -1,12 +1,10 @@
 Drivers
 =======
 
-This is the core module of package pyroSAR. It contains the drivers for the different SAR image formats and offers
-functionality for retrieving metadata, unpacking images, downloading ancillary files like DEMs and
-Orbit State Vector files as well as archiving scenes in a database. The ID class and its subclasses allow easy and
-standardized access to the metadata of images from different SAR sensors.
-
 .. automodule:: pyroSAR.drivers
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
     .. rubric:: classes
 
@@ -33,11 +31,6 @@ standardized access to the metadata of images from different SAR sensors.
         getFileObj
         parse_date
 
-.. automodule:: pyroSAR.drivers
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 SNAP Processing
 ===============
 
@@ -49,8 +42,8 @@ SNAP Processing
 GAMMA Processing
 ================
 
-.. automodule:: pyroSAR.gamma.util
-    :members: geocode, convert2gamma
+.. automodule:: pyroSAR.gamma
+    :members: geocode, convert2gamma, ISPPar, process, ovs, S1_deburst, correctOSV
     :undoc-members:
     :show-inheritance:
 
@@ -59,5 +52,20 @@ Sentinel-1 Tools
 
 .. automodule:: pyroSAR.S1.auxil
     :members: OSV
+    :undoc-members:
+    :show-inheritance:
+
+Datacube Tools
+==============
+.. automodule:: pyroSAR.datacube_util
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Ancillary Functions
+===================
+
+.. automodule:: pyroSAR.ancillary
+    :members:
     :undoc-members:
     :show-inheritance:

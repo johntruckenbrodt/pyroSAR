@@ -13,6 +13,18 @@ else:
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode',
              'start', 'stop', 'product', 'spacing', 'samples', 'lines']
 
+# a pattern to search for pyroSAR processing products and extract metadata attributes from the file name
+product_pattern = r'(?:.*[/\\]|)' \
+                  r'(?P<outname_base>' \
+                  r'(?P<sensor>[A-Z0-9]{1,4})_+' \
+                  r'(?P<acquisition_mode>[A-Z0-9]{1,4})_+' \
+                  r'(?P<orbit>[AD])_' \
+                  r'(?P<start>[0-9T]{15})' \
+                  r'(?:_(?P<extensions>\w*)_|)' \
+                  r')_' \
+                  r'(?P<polarization>[HV]{2})_' \
+                  r'(?P<proc_steps>\w*).tif$'
+
 
 class Storage(dict):
     """
@@ -230,10 +242,15 @@ class ConfigHandler(object):
         'landCoverPath': '${AuxDataPath}/LandCover',
     }
     
+
+    # Define __setter to control changeable keys (optional)
+    # __setter = ["etc", "auxdata"]
+    
     def __init__(self, path=None, config_fname='config.ini'):
         
         path = os.path.expanduser('~') if path is None else os.path.realpath(path)
         path = os.path.join(path, '.pyrosar')
+
         
         self.__GLOBAL = {
             'path': path,
@@ -241,6 +258,7 @@ class ConfigHandler(object):
             'config': os.path.join(path, config_fname),
         }
         
+
         if not os.path.isfile(self.__GLOBAL['config']):
             self.__create_config()
         
@@ -264,7 +282,6 @@ class ConfigHandler(object):
             pass
     
     def __str__(self):
-        
         items = []
         for section in self.parser.sections():
             items.append('  Section: {0}\n'.format(section))
@@ -293,6 +310,35 @@ class ConfigHandler(object):
     def sections(self):
         return self.parser.sections()
     
+
+    def keys(self, section):
+        """
+        Get all keys (options) of a section.
+
+        Parameters
+        ----------
+        section : str
+            Section name.
+
+        Returns
+        -------
+        list : options (keys) of a section.
+
+        """
+        return self.parser.options(section)
+    
+    def open(self):
+        """
+        Open the config.ini file. This method will open the config.ini file in a external standard app (text editor).
+
+        Returns
+        -------
+        os.startfile
+
+        """
+        
+        os.startfile(self.__GLOBAL['config'])
+
     def add_section(self, section='SNAP'):
         """
         Create a new section in the configuration.
@@ -317,7 +363,7 @@ class ConfigHandler(object):
         else:
             self.parser.add_section(section)
             self.write()
-    
+
     def set(self, section, key, value, overwrite=False):
         """
         Set an option.

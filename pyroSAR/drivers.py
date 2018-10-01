@@ -3,6 +3,15 @@
 # John Truckenbrodt, Felix Cremer 2016-2018
 ##############################################################
 
+"""
+This is the core module of package pyroSAR.
+It contains the drivers for the different SAR image formats and offers
+functionality for retrieving metadata, unpacking images, downloading ancillary files like DEMs and
+Orbit State Vector files as well as archiving scenes in a database.
+The :class:`ID` class and its subclasses allow easy and standardized access to the metadata of
+images from different SAR sensors.
+"""
+
 from __future__ import print_function
 import sys
 
@@ -568,6 +577,10 @@ class CEOS_ERS(ID):
     """
     Handler class for ERS data in CEOS format
     
+    Sensors:
+        * ERS1
+        * ERS2
+    
     Reference:
         ER-IS-EPO-GS-5902-3: Annex C. ERS SAR.SLC/SLC-I. CCT and EXABYTE
         (`ESA 1998 <https://earth.esa.int/documents/10174/1597298/SAR05E.pdf>`_)
@@ -696,6 +709,10 @@ class CEOS_ERS(ID):
 class CEOS_PSR(ID):
     """
     Handler class for ALOS-PALSAR data in CEOS format
+    
+    Sensors:
+        * PSR1
+        * PSR2
 
     PALSAR-1:
         Reference:
@@ -1036,6 +1053,11 @@ class CEOS_PSR(ID):
 class ESA(ID):
     """
     Handler class for SAR data in ESA format (Envisat ASAR, ERS-1/2)
+    
+    Sensors:
+        * ASAR
+        * ERS1
+        * ERS2
     """
     
     def __init__(self, scene):
@@ -1113,6 +1135,10 @@ class ESA(ID):
 class SAFE(ID):
     """
     Handler class for Sentinel-1 data
+    
+    Sensors:
+        * S1A
+        * S1B
 
     References:
         * S1-RS-MDA-52-7443 Sentinel-1 IPF Auxiliary Product Specification
@@ -1391,6 +1417,10 @@ class SAFE(ID):
 class TSX(ID):
     """
     Handler class for TerraSAR-X and TanDEM-X data
+    
+    Sensors:
+        * TSX1
+        * TDX1
 
     References:
         * TX-GS-DD-3302  TerraSAR-X Basic Product Specification Document
