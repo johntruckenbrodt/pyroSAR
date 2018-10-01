@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
+import os
 import sys
+import json
+import warnings
 
 # Python 3 comparability
 if sys.version_info >= (3, 0):
     import configparser as ConfigParser
 else:
     import ConfigParser
-
-import os
-import warnings
-
-from os.path import expanduser
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode',
              'start', 'stop', 'product', 'spacing', 'samples', 'lines']
@@ -80,7 +78,7 @@ class Storage(dict):
             return '\n'.join([k.rjust(m) + ': ' + repr(v)
                               for k, v in sorted(self.items())])
         else:
-            return self.__class__.__name__ + "()"
+            return self.__class__.__name__ + '()'
     
     def __dir__(self):
         return list(self.keys())
@@ -153,7 +151,7 @@ STORAGE = Storage(URL=URL,
 
 class ConfigHandler(object):
     """
-    ConfigHandler is a configuration handler for pyroSAR. It is intended to be called by a class's "__init__" and 
+    ConfigHandler is a configuration handler for pyroSAR. It is intended to be called by a class's '__init__' and
     set or get the configuration parameters throughout an entire package.
     The primary goal with ConfigHandler is to load a single, consistent configuration environment to be passed 
     amongst ALL objects within a package.
@@ -234,42 +232,43 @@ class ConfigHandler(object):
               'DEM.Getasse30DEMDataPath']
     
     __SECTIONS = {
-        "snap": "SNAP",
-        "outputpaths": "OUTPUT",
-        "url": "URL"
+        'snap': 'SNAP',
+        'outputpaths': 'OUTPUT',
+        'url': 'URL'
     }
     
     ___AUXDATANAMES = {
-        "demPath": "${AuxDataPath}/dem",
-        "landCoverPath": "${AuxDataPath}/LandCover",
+        'demPath': '${AuxDataPath}/dem',
+        'landCoverPath': '${AuxDataPath}/LandCover',
     }
     
+
     # Define __setter to control changeable keys (optional)
     # __setter = ["etc", "auxdata"]
     
     def __init__(self, path=None, config_fname='config.ini'):
         
-        path = os.path.join(expanduser("~"), '.pyrosar') if path is None else os.path.join(path, '.pyrosar')
+        path = os.path.expanduser('~') if path is None else os.path.realpath(path)
+        path = os.path.join(path, '.pyrosar')
+
         
         self.__GLOBAL = {
-            "path": path,
-            "config_fname": config_fname,
-            "config": os.path.join(os.path.join(path, config_fname)),
+            'path': path,
+            'config_fname': config_fname,
+            'config': os.path.join(path, config_fname),
         }
         
-        if os.path.isfile(self.__GLOBAL['config']):
-            self.parser = ConfigParser.RawConfigParser(allow_no_value=True)
-            self.parser.read(self.__GLOBAL['config'])
+
+        if not os.path.isfile(self.__GLOBAL['config']):
+            self.__create_config()
         
-        else:
-            self.create_config()
-            self.parser = ConfigParser.RawConfigParser()
-            self.parser.optionxform = str
-            self.parser.read(self.__GLOBAL['config'])
+        self.parser = ConfigParser.RawConfigParser(allow_no_value=True)
+        self.parser.optionxform = str
+        self.parser.read(self.__GLOBAL['config'])
     
-    def make_dir(self):
+    def __create_config(self):
         """
-        Create a .pyrosar directory in home directory.
+        Create a config.ini file in .pyrosar directory.
 
         Returns
         -------
@@ -279,53 +278,39 @@ class ConfigHandler(object):
         if not os.path.exists(self.__GLOBAL['path']):
             os.makedirs(self.__GLOBAL['path'])
         
-        else:
-            pass
-    
-    def create_config(self):
-        """
-        Create a config.ini file in .pyrosar directory.
-
-        Returns
-        -------
-        None
-        """
-        
-        self.make_dir()
-        
-        if not os.path.isfile(self.__GLOBAL['config']):
-            with open(self.__GLOBAL['config'], 'w'):
-                pass
-        else:
+        with open(self.__GLOBAL['config'], 'w'):
             pass
     
     def __str__(self):
-        
-        string_literal = 'Class    : Config\n' \
-                         'Path     : {0}\n' \
-                         'Sections : {1}\n'.format(self.__GLOBAL['config'], len(self.parser.sections()))
-        
-        print(string_literal)
-        print("Contents:")
-        
+        items = []
         for section in self.parser.sections():
-            print("\n Section: {0}".format(section))
+            items.append('  Section: {0}\n'.format(section))
             
             for options in self.parser.options(section):
-                print("\t x {0} :: {1} :: {2}".format(options, self.parser.get(section, options), str(type(options))))
+                items.append('    x {0} :: {1} :: {2}\n'
+                             .format(options,
+                                     self.parser.get(section, options),
+                                     str(type(options))))
+        out = 'Class    : Config\n' \
+              'Path     : {0}\n' \
+              'Sections : {1}\n' \
+              'Contents : \n{2}' \
+            .format(self.__GLOBAL['config'],
+                    len(self.parser.sections()),
+                    ''.join(items))
         
-        return ''
+        return out
     
-    def __getattr__(self, section):
-        try:
-            return dict(self.parser.items(section))
-        except ConfigParser.NoSectionError:
-            raise AttributeError
+    def __getitem__(self, section):
+        if not self.parser.has_section(section):
+            raise AttributeError('Section {0} does not exist.'.format(str(section)))
+        return dict(self.parser.items(section))
     
     @property
     def sections(self):
         return self.parser.sections()
     
+
     def keys(self, section):
         """
         Get all keys (options) of a section.
@@ -353,7 +338,7 @@ class ConfigHandler(object):
         """
         
         os.startfile(self.__GLOBAL['config'])
-    
+
     def add_section(self, section='SNAP'):
         """
         Create a new section in the configuration.
@@ -373,20 +358,12 @@ class ConfigHandler(object):
         
         elif section not in ConfigHandler.__SECTIONS.values():
             raise AttributeError(
-                "Only the following sections are allowed: {0}.".format(str(ConfigHandler.__SECTIONS.values())))
+                'Only the following sections are allowed: {0}.'.format(str(ConfigHandler.__SECTIONS.values())))
         
         else:
             self.parser.add_section(section)
-            if sys.version_info >= (3, 0):
-                with open(self.__GLOBAL['config'], 'w', encoding='utf8') as item:
-                    self.parser.write(item)
-            else:
-                with open(self.__GLOBAL['config'], 'w') as item:
-                    self.parser.write(item)
-            
-            # with open(self.__GLOBAL['config'], 'wb') as item:
-            #     self.parser.write(item)
-    
+            self.write()
+
     def set(self, section, key, value, overwrite=False):
         """
         Set an option.
@@ -396,48 +373,32 @@ class ConfigHandler(object):
         section : str
             Section name.
         key : str
-            Key value.
+            the attribute name
         value :
-            Value of the key.
+            the attribute value
         overwrite : bool
             If True and the defined key exists the value will be overwritten.
 
         Returns
         -------
-        None
+
         """
         if not self.parser.has_section(section):
-            raise AttributeError("Section {0} does not exist.".format(str(section)))
+            raise AttributeError('Section {0} does not exist.'.format(str(section)))
         
-        elif key not in ConfigHandler.__KEYS:
-            raise AttributeError(
-                "Your key is {0}. Only the following keys are allowed: {1}.".format(str(key),
-                                                                                    str(ConfigHandler.__KEYS)))
+        if key not in ConfigHandler.__KEYS:
+            raise AttributeError('Your key is {0}. '
+                                 'Only the following keys are allowed: {1}.'
+                                 .format(str(key), str(ConfigHandler.__KEYS)))
+
+        if isinstance(value, list):
+            value = json.dumps(value)
         
-        else:
-            if key in self.parser.options(section):
-                
-                if overwrite:
-                    self.parser.set(section, key, value)
-                    if sys.version_info >= (3, 0):
-                        with open(self.__GLOBAL['config'], 'w', encoding='utf8') as item:
-                            self.parser.write(item)
-                    else:
-                        with open(self.__GLOBAL['config'], 'w') as item:
-                            self.parser.write(item)
-                
-                else:
-                    pass
-                    # warnings.warn("Value already exists.")
-            
-            else:
-                self.parser.set(section, key, value)
-                if sys.version_info >= (3, 0):
-                    with open(self.__GLOBAL['config'], 'w', encoding='utf8') as item:
-                        self.parser.write(item)
-                else:
-                    with open(self.__GLOBAL['config'], 'w') as item:
-                        self.parser.write(item)
+        if key in self.parser.options(section) and not overwrite:
+            raise RuntimeError('Value already exists.')
+        
+        self.parser.set(section, key, value)
+        self.write()
     
     def remove_option(self, section, key):
         """
@@ -449,52 +410,24 @@ class ConfigHandler(object):
             Section name.
         key : str
             Key value.
-
+        
         Returns
         -------
-        None
+        
         """
         if not self.parser.has_section(section):
-            raise AttributeError("Section {0} does not exist.".format(str(section)))
+            raise AttributeError('Section {0} does not exist.'.format(str(section)))
         
-        elif key not in self.parser.options(section):
-            raise AttributeError("Key {0} does not exist.".format(str(key)))
+        if key not in self.parser.options(section):
+            raise AttributeError('Key {0} does not exist.'.format(str(key)))
         
-        else:
-            self.parser.remove_option(section, key)
-            
-            # write changes back to the config file
-            if sys.version_info >= (3, 0):
-                with open(self.__GLOBAL['config'], 'w', encoding='utf8') as item:
-                    self.parser.write(item)
-            else:
-                with open(self.__GLOBAL['config'], 'w') as item:
-                    self.parser.write(item)
+        self.parser.remove_option(section, key)
+        self.write()
     
-    def get(self, section, key=None):
-        """
-        Get all options (keys) and values of a section.
-
-        Parameters
-        ----------
-        section : str
-            Section name.
-
-        key : str or None
-            If not None it returns the specific value of the desired key. Else (default) it will return all
-            keys and values.
-
-        Returns
-        -------
-        dict : keys and values of a section.
-
-        """
-        if not self.parser.has_section(section):
-            raise AttributeError("Section {0} does not exist.".format(str(section)))
+    def write(self):
+        if sys.version_info >= (3, 0):
+            with open(self.__GLOBAL['config'], 'w', encoding='utf8') as out:
+                self.parser.write(out)
         else:
-            if key is None:
-                return dict(self.parser.items(section))
-            
-            else:
-                items = dict(self.parser.items(section))
-                return items[key]
+            with open(self.__GLOBAL['config'], 'w') as out:
+                self.parser.write(out)

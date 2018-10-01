@@ -42,64 +42,68 @@ class TestSTORAGE:
 
 class TestConfigHandler:
 
-    def test_make_dir_and_config(self):
-        conf = ConfigHandler(config_fname='unit_test_config.ini')
+    def test_make_dir_and_config(self, tmpdir):
+        config = os.path.join(str(tmpdir), 'unit_test_config.ini')
+        conf = ConfigHandler(config_fname=config)
 
         path_pyrosar = os.path.exists(conf._ConfigHandler__GLOBAL['path'])
         path_config = os.path.isfile(conf._ConfigHandler__GLOBAL['config'])
 
-        assert path_pyrosar == True
-        assert path_config == True
+        assert path_pyrosar is True
+        assert path_config is True
 
-    def test_add_section(self):
-        conf = ConfigHandler(config_fname='unit_test_config.ini')
+    def test_add_section(self, tmpdir):
+        config = os.path.join(str(tmpdir), 'unit_test_config.ini')
+        conf = ConfigHandler(config_fname=config)
         conf.add_section('SNAP')
 
         assert conf.sections[0] == 'SNAP'
 
-        with pytest.raises(AttributeError) as excinfo:
+        with pytest.raises(AttributeError):
             conf.add_section('SNAPP')
-        # assert "['SNAP']" in str(excinfo)
 
-    def test_options(self):
-        conf = ConfigHandler(config_fname='unit_test_config.ini')
+    def test_options(self, tmpdir):
+        config = os.path.join(str(tmpdir), 'unit_test_config.ini')
+        conf = ConfigHandler(config_fname=config)
         conf.add_section('SNAP')
         conf.set('SNAP', 'etc', 'temp/dir')
 
-        with pytest.raises(AttributeError) as excinfo:
+        with pytest.raises(AttributeError):
             conf.set('SNAPp', 'etc', 'temp/dir')
 
-        assert conf.SNAP['etc'] == 'temp/dir'
-        assert conf.get('SNAP')['etc'] == 'temp/dir'
-        assert conf.get('SNAP') == {'etc': 'temp/dir'}
-        assert conf.keys('SNAP') == ['etc']
+        assert conf['SNAP']['etc'] == 'temp/dir'
+        assert conf['SNAP'] == {'etc': 'temp/dir'}
         assert conf.sections == ['SNAP']
 
-    def test_overwrite(self):
-        conf = ConfigHandler(config_fname='unit_test_config.ini')
+    def test_overwrite(self, tmpdir):
+        config = os.path.join(str(tmpdir), 'unit_test_config.ini')
+        conf = ConfigHandler(config_fname=config)
         conf.add_section('SNAP')
         conf.set('SNAP', 'etc', 'temp/dir')
-        assert conf.SNAP['etc'] == 'temp/dir'
+        
+        with pytest.raises(RuntimeError):
+            conf.set('SNAP', 'etc', 'temp/dir2')
 
         conf.set('SNAP', 'etc', 'temp/dir2', True)
-        assert conf.SNAP['etc'] == 'temp/dir2'
+        assert conf['SNAP']['etc'] == 'temp/dir2'
 
-    def test_remove(self):
-        conf = ConfigHandler(config_fname='unit_test_config.ini')
+    def test_remove(self, tmpdir):
+        config = os.path.join(str(tmpdir), 'unit_test_config.ini')
+        conf = ConfigHandler(config_fname=config)
         conf.add_section('SNAP')
         conf.set('SNAP', 'etc', 'temp/dir')
 
-        with pytest.raises(AttributeError) as excinfo:
+        with pytest.raises(AttributeError):
             conf.remove_option('SNAP', 'kex')
 
-        with pytest.raises(AttributeError) as excinfo:
+        with pytest.raises(AttributeError):
             conf.remove_option('SNApP', 'etc')
 
         conf.remove_option('SNAP', 'etc')
-        conf.keys('SNAP')
-        assert conf.keys('SNAP') == []
+        assert list(conf['SNAP'].keys()) == []
 
-    def test_delete_unit_data(self):
-        conf = ConfigHandler(config_fname='unit_test_config.ini')
+    def test_delete_unit_data(self, tmpdir):
+        config = os.path.join(str(tmpdir), 'unit_test_config.ini')
+        conf = ConfigHandler(config_fname=config)
 
         os.remove(conf._ConfigHandler__GLOBAL['config'])
