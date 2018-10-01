@@ -47,6 +47,24 @@ GAMMA Processing
     :undoc-members:
     :show-inheritance:
 
+GAMMA Command API
+-----------------
+
+Parser Documentation
+********************
+
+.. automodule:: pyroSAR.gamma.parser
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+API Demo
+********
+.. automodule:: pyroSAR.gamma.parser_demo
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Sentinel-1 Tools
 ================
 
