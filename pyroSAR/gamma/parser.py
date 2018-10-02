@@ -56,6 +56,7 @@ def parse_command(command):
     argstr_function = re.sub(r'([^\'])-([^\'])', r'\1_\2', ', '.join(arg_req + [x + "='-'" for x in arg_opt])) \
         .replace(', def=', ', drm=')
     
+    # create the process call arguement string
     argstr_process = ', '.join(arg_req + arg_opt) \
         .replace('-', '_') \
         .replace(', def,', ', drm,')
@@ -69,10 +70,13 @@ def parse_command(command):
     
     # parse the parameter documentation to a Python docstring format
     
-    tabspace = ' ' * 4
+    # define the number of space to indent
+    indent = ' ' * 4
     
     docstring_elements = ['Parameters\n----------']
     
+    # gather the indices, which mark the documentation start of the respective parameters within 
+    # the raw documentation text
     starts = []
     for x in arg_req + arg_opt:
         try:
@@ -80,26 +84,38 @@ def parse_command(command):
         except AttributeError:
             raise RuntimeError('cannot find parameter {}'.format(x))
     starts += [len(out)]
-    # starts = [re.search(r'\n[ ]*{0}.*'.format(x), out).start() for x in arg_req + arg_opt] + [len(out)]
 
-    pattern = r'\n[ ]*(?P<command>{0})[ ]+(?P<doc>.*)'.format('|'.join(arg_req + arg_opt))
+    # define a pattern for parsing individual parameter documentations
+    pattern = r'\n[ ]*(?P<par>{0})[ ]+(?P<doc>.*)'.format('|'.join(arg_req + arg_opt))
     # print(pattern)
     
     for i in range(0, len(starts) - 1):
+        # draw a subset from the Gamma docstring containing only the doc of a single parameter
         doc_raw = out[starts[i]:starts[i + 1]]
         # print(repr(doc_raw))
+        
+        # parse the docstring
         match = re.match(pattern, doc_raw, flags=re.DOTALL)
         if not match:
             continue
-        cmd = match.group('command')
+            
+        # retrieve the parameter name and the documentation lines
+        par = match.group('par')
         doc_items = re.split('\n+\s*', match.group('doc').strip('\n'))
+        
+        # escape * characters (which are treated as special characters for bulleted lists by sphinx)
         doc_items = [x.replace('*', '\*') for x in doc_items]
+        
+        # convert all lines starting with an integer number of 'NOTE' to bullet list items
         latest = None
         for i in range(len(doc_items)):
             item = doc_items[i]
             if re.search('^(?:(?:-|)[-0-9]+|NOTE):', item):
                 latest = i
+                # prepend '* ' and replace 'x:x' with 'x: x'
                 doc_items[i] = '* ' + re.sub(r'((?:-|)[-0-9]+:)(\w+)', r'\1 \2', item)
+        
+        # format documentation lines coming after the last bullet list item
         if latest:
             # case if there are still lines coming after the last bullet item, prepend an extra two spaces to these
             # lines so that they are properly aligned with the text of the bullet item
@@ -112,10 +128,16 @@ def parse_command(command):
             else:
                 doc_items[-1] = doc_items[-1] + '\n'
         
-        description = '\n{0}{0}'.join(doc_items).format(tabspace)
-        doc = '{1}:\n{0}{2}'.format(tabspace, cmd, description)
+        # parse the final documentation string for the current parameter
+        description = '\n{0}{0}'.join(doc_items).format(indent)
+        doc = '{0}:\n{1}{2}'.format(par, indent, description)
         docstring_elements.append(doc)
     
+    # create docstring for parameter logpath
+    doc = 'logpath: str or None\n{0}a directory to write command logfiles to'.format(indent)
+    docstring_elements.append(doc)
+    
+    # create the complete docstring containing all parameter documentation strings
     docstring = '\n'.join(docstring_elements)
     
     # combine the elements to the final Python function string
@@ -126,7 +148,7 @@ def parse_command(command):
                 doc=docstring,
                 command=command,
                 args_cmd=argstr_process) \
-        .replace('\n', '\n    ')
+        .replace('\n', '\n{}'.format(indent))
     return fun + '\n'
 
 

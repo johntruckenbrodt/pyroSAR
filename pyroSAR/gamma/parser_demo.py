@@ -26,6 +26,8 @@ def adapt_filt(int, sm, width, low_SNR_thr='-', filt_width='-', xmin='-', xmax='
         offset to starting azimuth row (default = 0)
     ymax:
         offset to last azimuth row (default = nlines-1)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/adapt_filt', int, sm, width, low_SNR_thr, filt_width, xmin, xmax, ymin, ymax], logpath=logpath)
 
@@ -59,6 +61,8 @@ def adf(interf, sm, cc, width, alpha='-', nfft='-', cc_win='-', step='-', loff='
         number of lines to process (enter - for default: to end of file)
     wfrac:
         minimum fraction of points required to be non-zero in the filter window (enter - for default: 0.200)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/adf', interf, sm, cc, width, alpha, nfft, cc_win, step, loff, nlines, wfrac], logpath=logpath)
 
@@ -102,6 +106,8 @@ def af_SLC(SLC_par, SLC, rwin='-', azwin='-', dr='-', daz='-', thres='-', a1_flg
         range offset for single patch center
     azoff:
         azimuth offset for single patch center
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/af_SLC', SLC_par, SLC, rwin, azwin, dr, daz, thres, a1_flg, b0_flg, offsets, n_ovr, roff, azoff], logpath=logpath)
 
@@ -121,6 +127,8 @@ def ASAR_LO_phase_drift(SLC1_par, SLC2_par, OFF_par, ph_drift, logpath=None):
         (input) ISP offset/interferogram parameter file 
     ph_drift:
         (output) interferometric phase correction due to drift of the ASAR LO (radians)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/ASAR_LO_phase_drift', SLC1_par, SLC2_par, OFF_par, ph_drift], logpath=logpath)
 
@@ -141,6 +149,8 @@ def ASAR_XCA(ASA_XCA, antenna, swath='-', pol='-', logpath=None):
         ASAR swath (IS1,IS2,...IS7;SS1,SS2,...SS5)
     pol:
         polarization (HH,VV,HV,VH)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/ASAR_XCA', ASA_XCA, antenna, swath, pol], logpath=logpath)
 
@@ -173,6 +183,8 @@ def ave_image(im_list, width, ave, start='-', nlines='-', pixav_x='-', pixav_y='
     
     nmin:
         minimum number of images required to calculate the average if zflag = 0 (default: 3/4\*nfiles)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/ave_image', im_list, width, ave, start, nlines, pixav_x, pixav_y, zflag, nmin], logpath=logpath)
 
@@ -199,6 +211,8 @@ def az_integrate(data, width, azi, cflg, scale='-', lz='-', logpath=None):
         scale factor to apply to the data (enter - for default, default: 1.0)
     lz:
         line offset where the azimuth integral is set to 0.0 (cflg = 0, enter - for default, default: 0)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/az_integrate', data, width, azi, cflg, scale, lz], logpath=logpath)
 
@@ -225,6 +239,8 @@ def az_spec_SLC(SLC, SLC_par, spectrum, roff='-', namb='-', pltflg='-', logpath=
             * 0: none (default)
             * 1: output plot in PNG format
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/az_spec_SLC', SLC, SLC_par, spectrum, roff, namb, pltflg], logpath=logpath)
 
@@ -246,6 +262,8 @@ def base_copy(SLC1_par, baseline_1, SLC2_par, baseline_2, time_rev='-', logpath=
         (output) baseline file derived using the geometry and timing of the SLC subsection
     time_rev:
         SLC image normal=1,  time-reversed = -1 (default=1)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/base_copy', SLC1_par, baseline_1, SLC2_par, baseline_2, time_rev], logpath=logpath)
 
@@ -271,6 +289,8 @@ def base_est_fft(interf, SLC1_par, OFF_par, baseline, nazfft='-', r_samp='-', az
         range pixel offset to center of the FFT window (default: center)
     az_line:
         line offset from start of the interf. for the  FFT window (default=center)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/base_est_fft', interf, SLC1_par, OFF_par, baseline, nazfft, r_samp, az_line], logpath=logpath)
 
@@ -304,6 +324,8 @@ def base_ls(SLC_par, OFF_par, gcp_ph, baseline, ph_flag='-', bc_flag='-', bn_fla
         minimum perpendicular baseline required for L.S estimation (m, default=  10.0)
     SLC2R_par:
         (input) parameter file of resampled SLC, required if SLC-2 frequency differs from SLC-1
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/base_ls', SLC_par, OFF_par, gcp_ph, baseline, ph_flag, bc_flag, bn_flag, bcdot_flag, bndot_flag, bperp_min, SLC2R_par], logpath=logpath)
 
@@ -321,6 +343,8 @@ def base_orbit(SLC1_par, SLC2_par, baseline, logpath=None):
         (input) SLC-2 ISP image parameter file
     baseline:
         (output) baseline file (text format, enter - for none)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/base_orbit', SLC1_par, SLC2_par, baseline], logpath=logpath)
 
@@ -340,6 +364,8 @@ def base_perp(baseline, SLC1_par, OFF_par, time_rev='-', logpath=None):
         (input) ISP interferogram/offset parameter file
     time_rev:
         SLC image normal=1 (default), image time-reversed = -1
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/base_perp', baseline, SLC1_par, OFF_par, time_rev], logpath=logpath)
 
@@ -382,6 +408,8 @@ def bpf(data_in, data_out, width, fc_x, bw_x, fc_y, bw_y, roff='-', azoff='-', n
         Kaiser window beta parameter (default - :    1.000)
     fir_len:
         finite impulse reponse filter length (default - : 128)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/bpf', data_in, data_out, width, fc_x, bw_x, fc_y, bw_y, roff, azoff, nr, naz, data_type, f_mode, beta, fir_len], logpath=logpath)
 
@@ -411,6 +439,8 @@ def bridge(int, flag, unw, bridge, width, xmin='-', xmax='-', ymin='-', ymax='-'
         starting azimuth row offset to unwrap, relative to start (default = 0)
     ymax:
         last azimuth row offset to unwrap, relative to start (default = nlines-1)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/bridge', int, flag, unw, bridge, width, xmin, xmax, ymin, ymax], logpath=logpath)
 
@@ -453,6 +483,8 @@ def cc_wave(interf, pwr1, pwr2, corr, width, bx, by, wflg, xmin, xmax, ymin, yma
         last azimuth row offset, relative to start (default = nlines-1)
             * NOTE: omitting pwr1 and pwr2 or setting wflg = 3 selects a coherence estimate algorithm that only
               uses the complex interferogram values. In the case of wflg = 3, only the interferogram phase is used.
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/cc_wave', interf, pwr1, pwr2, corr, width, bx, by, wflg, xmin, xmax, ymin, ymax], logpath=logpath)
 
@@ -480,6 +512,8 @@ def clear_flag(flag, width, flag_bits, xmin, xmax, ymin, ymax, logpath=None):
         starting azimuth row offset, relative to start (default = 0)
     ymax:
         last azimuth row offset, relative to start (default = nlines-1)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/clear_flag', flag, width, flag_bits, xmin, xmax, ymin, ymax], logpath=logpath)
 
@@ -509,6 +543,8 @@ def corr_flag(corr, flag, width, corr_thr, xmin='-', xmax='-', ymin='-', ymax='-
         last azimuth row offset, relative to start (default = nlines-1)
     border:
         effective range of low coherence pixels to set low coherence flag (default=2)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/corr_flag', corr, flag, width, corr_thr, xmin, xmax, ymin, ymax, border], logpath=logpath)
 
@@ -540,6 +576,8 @@ def create_offset(SLC1_par, SLC2_par, OFF_par, algorithm='-', rlks='-', azlks='-
             * 0: non-interactive
             * 1: interactive (default)
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/create_offset', SLC1_par, SLC2_par, OFF_par, algorithm, rlks, azlks, iflg], logpath=logpath)
 
@@ -561,6 +599,8 @@ def dcomp_sirc(infile, outfile, samples, loff='-', nlines='-', logpath=None):
         offset to starting line (default: 0)
     nlines:
         number of lines to copy(default: entire file, 0 = entire file)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/dcomp_sirc', infile, outfile, samples, loff, nlines], logpath=logpath)
 
@@ -597,6 +637,8 @@ def dcomp_sirc_quad(infile, outfile, samples, parameter, loff='-', nlines='-', l
         offset to starting line (default: 0)
     nlines:
         number of lines to copy(default: entire file, 0 = entire file)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/dcomp_sirc_quad', infile, outfile, samples, parameter, loff, nlines], logpath=logpath)
 
@@ -620,6 +662,8 @@ def DELFT_vec2(SLC_par, DELFT_dir, nstate='-', interval='-', ODR='-', logpath=No
         time interval between state vectors in the ISP image parameter file (s) (default: 10.0)
     ODR:
         ODR file to use (include path) rather than ODR file determined from the Delft orbit arclist
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/DELFT_vec2', SLC_par, DELFT_dir, nstate, interval, ODR], logpath=logpath)
 
@@ -637,6 +681,8 @@ def DORIS_vec(SLC_PAR, DOR, nstate='-', logpath=None):
         (input) ASAR DORIS data file (DOR_VOR_AXVF)
     nstate:
         number of state vectors to extract (enter - for default: 11)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/DORIS_vec', SLC_PAR, DOR, nstate], logpath=logpath)
 
@@ -672,6 +718,8 @@ def fspf(data_in, data_out, width, dtype='-', r_max='-', spf_type='-', MLI_par='
     
     MLI_par:
         MLI or SLC parameter file with the same number of looks as the input image, required for GPRI data
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/fspf', data_in, data_out, width, dtype, r_max, spf_type, MLI_par], logpath=logpath)
 
@@ -693,6 +741,8 @@ def gcp_phase(unw, OFF_par, gcp, gcp_ph, win_sz='-', logpath=None):
         (output) ground control point data + extracted unwrapped phase (text)
     win_sz:
         window size for averaging phase for each gcp, must be odd (default: 1)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/gcp_phase', unw, OFF_par, gcp, gcp_ph, win_sz], logpath=logpath)
 
@@ -726,6 +776,8 @@ def grasses(int, flag, unw, width, xmin='-', xmax='-', ymin='-', ymax='-', xinit
         starting row to unwrap (default = height/2)
     init_ph:
         flag to set phase at starting point to 0.0 (default 0: not set to 0.0, 1: set to 0.0)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/grasses', int, flag, unw, width, xmin, xmax, ymin, ymax, xinit, yinit, init_ph], logpath=logpath)
 
@@ -757,6 +809,8 @@ def hgt_map(unw, SLC_par, OFF_par, baseline, hgt, gr, ph_flag='-', loff='-', nli
         number of lines to calculate (enter - for default: to end of file)
     SLC2R_par:
         (input) parameter file of resampled SLC, required if SLC-2 frequency differs from SLC-1
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/hgt_map', unw, SLC_par, OFF_par, baseline, hgt, gr, ph_flag, loff, nlines, SLC2R_par], logpath=logpath)
 
@@ -783,6 +837,8 @@ def image_stat(image, width, roff, loff, nr, nl, report, logpath=None):
     report:
         output text file (keyword:value format)
             keywords: file, mean, stdev, total_samples, non_zero_samples, fraction_valid)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/image_stat', image, width, roff, loff, nr, nl, report], logpath=logpath)
 
@@ -827,6 +883,8 @@ def init_offset(SLC_1, SLC_2, SLC1_par, SLC2_par, OFF_par, rlks='-', azlks='-', 
             * 0: do not copy
             * 1: copy constant range and azimuth offset (default)
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/init_offset', SLC_1, SLC_2, SLC1_par, SLC2_par, OFF_par, rlks, azlks, rpos, azpos, offr, offaz, thres, rwin, azwin, cflag], logpath=logpath)
 
@@ -853,6 +911,8 @@ def init_offset_orbit(SLC1_par, SLC2_par, OFF_par, rpos='-', azpos='-', cflag='-
             * 0: do not copy
             * 1: copy constant range and azimuth offset (default)
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/init_offset_orbit', SLC1_par, SLC2_par, OFF_par, rpos, azpos, cflag], logpath=logpath)
 
@@ -896,6 +956,8 @@ def interp_ad(data_in, data_out, width, r_max='-', np_min='-', np_max='-', w_mod
             * 0: do not copy input data values to output
             * 1: copy input data values to output (default)
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/interp_ad', data_in, data_out, width, r_max, np_min, np_max, w_mode, type, cp_data], logpath=logpath)
 
@@ -923,6 +985,8 @@ def mask_data(data_in, width, data_out, mask, format_flag='-', logpath=None):
             * 0: FLOAT (default)
             * 1: FCOMPLEX
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/mask_data', data_in, width, data_out, mask, format_flag], logpath=logpath)
 
@@ -972,6 +1036,8 @@ def mcf(interf, wgt, mask, unw, width, tri_mode='-', roff='-', loff='-', nr='-',
             * 0: use initial point phase value (default)
             * 1: set phase to 0.0 at initial point
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/mcf', interf, wgt, mask, unw, width, tri_mode, roff, loff, nr, nlines, npat_r, npat_az, ovrlap, r_init, az_init, init_flag], logpath=logpath)
 
@@ -995,6 +1061,8 @@ def MLI_cat(MLI_1, MLI_2, MLI1_par, MLI2_par, MLI_3, MLI3_par, logpath=None):
         (output) concatenated MLI image
     MLI3_par:
         (output) ISP image parameter file for concatenated image
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/MLI_cat', MLI_1, MLI_2, MLI1_par, MLI2_par, MLI_3, MLI3_par], logpath=logpath)
 
@@ -1022,6 +1090,8 @@ def MLI_copy(MLI_in, MLI_in_par, MLI_out, MLI_out_par, roff='-', nr='-', loff='-
         offset to starting line (enter - for default: 0)
     nl:
         number of lines to copy (enter - for default: to end of file)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/MLI_copy', MLI_in, MLI_in_par, MLI_out, MLI_out_par, roff, nr, loff, nl], logpath=logpath)
 
@@ -1050,6 +1120,8 @@ def mosaic_WB(data_tab, dtype, data_out, data_par_out, sc_flg='-', logpath=None)
             * 0: do not scale different beam data values
             * 1: use overlap regions to scale beam intensities (default)
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/mosaic_WB', data_tab, dtype, data_out, data_par_out, sc_flg], logpath=logpath)
 
@@ -1081,6 +1153,8 @@ def multi_cpx(data_in, OFF_par_in, data_out, OFF_par_out, rlks='-', azlks='-', l
         offset to starting range sample (default:0)
     nsamp:
         number of range samples to extract (default: 0, to end of line)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/multi_cpx', data_in, OFF_par_in, data_out, OFF_par_out, rlks, azlks, loff, nlines, roff, nsamp], logpath=logpath)
 
@@ -1112,6 +1186,8 @@ def multi_look(SLC, SLC_par, MLI, MLI_par, rlks, azlks, loff='-', nlines='-', sc
         scale factor for output MLI (default: 1.0)
     exp:
         exponent for the output MLI (default: 1.0)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/multi_look', SLC, SLC_par, MLI, MLI_par, rlks, azlks, loff, nlines, scale, exp], logpath=logpath)
 
@@ -1143,6 +1219,8 @@ def multi_real(data_in, OFF_par_in, data_out, OFF_par_out, rlks='-', azlks='-', 
         offset to starting range sample (default:0)
     nsamp:
         number of range samples to extract (default:0, to end of line)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/multi_real', data_in, OFF_par_in, data_out, OFF_par_out, rlks, azlks, loff, nlines, roff, nsamp], logpath=logpath)
 
@@ -1173,6 +1251,8 @@ def multi_S1_TOPS(SLC_tab, MLI, MLI_par, rlks, azlks, wflg='-', SLCR_tab='-', lo
         (input) SLC_tab of the reference scene, 3 column list of SLC, SLC_par, TOPS_par sorted in the order IW1, IW2, IW3
             * NOTE: When generating an MLI mosaic of a resampled SLC, the SLC_tab of the reference scene is required
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/multi_S1_TOPS', SLC_tab, MLI, MLI_par, rlks, azlks, wflg, SLCR_tab], logpath=logpath)
 
@@ -1192,6 +1272,8 @@ def multi_SLC_WSS(SLC, SLC_par, MLI, MLI_par, logpath=None):
         (output) multi-look intensity image
     MLI_par:
         (output) MLI image parameter file
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/multi_SLC_WSS', SLC, SLC_par, MLI, MLI_par], logpath=logpath)
 
@@ -1215,6 +1297,8 @@ def neutron(intensity, flag, width, n_thres, ymin='-', ymax='-', logpath=None):
         offset to starting azimuth row (default = 0)
     ymax:
         offset to last azimuth row (default = nlines-1)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/neutron', intensity, flag, width, n_thres, ymin, ymax], logpath=logpath)
 
@@ -1233,6 +1317,8 @@ def offset_add(OFF_par1, OFF_par2, OFF_par3, logpath=None):
     OFF_par3:
         (output) ISP offset/interferogram parameter file with sums of the
             range and azimuth offset polynomials in OFF_par1 and OFF_par2
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/offset_add', OFF_par1, OFF_par2, OFF_par3], logpath=logpath)
 
@@ -1288,6 +1374,8 @@ def offset_pwr(SLC1, SLC2, SLC1_par, SLC2_par, OFF_par, offs, ccp, rwin='-', azw
     
     ccs:
         (output) cross-correlation standard deviation of each patch (float)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/offset_pwr', SLC1, SLC2, SLC1_par, SLC2_par, OFF_par, offs, ccp, rwin, azwin, offsets, n_ovr, nr, naz, thres, c_ovr, pflag, pltflg, ccs], logpath=logpath)
 
@@ -1351,6 +1439,8 @@ def offset_pwr_tracking(SLC1, SLC2, SLC1_par, SLC2_par, OFF_par, offs, ccp, rwin
     
     ccs:
         (output) cross-correlation standard deviation of each patch (float)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/offset_pwr_tracking', SLC1, SLC2, SLC1_par, SLC2_par, OFF_par, offs, ccp, rwin, azwin, offsets, n_ovr, thres, rstep, azstep, rstart, rstop, azstart, azstop, c_ovr, pflag, pltflg, ccs], logpath=logpath)
 
@@ -1418,6 +1508,8 @@ def offset_pwr_tracking2(SLC1, SLC2, SLC1_par, SLC2_par, OFF_par, offs, ccp, OFF
     
     ccs:
         (output) cross-correlation standard deviation of each patch (float)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/offset_pwr_tracking2', SLC1, SLC2, SLC1_par, SLC2_par, OFF_par, offs, ccp, OFF_par2, offs2, rwin, azwin, offsets, n_ovr, thres, rstep, azstep, rstart, rstop, azstart, azstop, c_ovr, pflag, pltflg, ccs], logpath=logpath)
 
@@ -1461,6 +1553,8 @@ def offset_SLC(SLC_1, SLC_2, SLC1_par, SLC2_par, OFF_par, offs, snr, rwin='-', a
         search chip interferogram size (in non-oversampled pixels, default=16)
     pflag:
         print flag (0:print offset summary  default=1:print all offset data)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/offset_SLC', SLC_1, SLC_2, SLC1_par, SLC2_par, OFF_par, offs, snr, rwin, azwin, offsets, n_ovr, nr, naz, thres, ISZ, pflag], logpath=logpath)
 
@@ -1515,6 +1609,8 @@ def offset_SLC_tracking(SLC_1, SLC_2, SLC1_par, SLC2_par, OFF_par, offs, snr, rs
             * 0: print offset summary  (default)
             * 1: print all offset data
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/offset_SLC_tracking', SLC_1, SLC_2, SLC1_par, SLC2_par, OFF_par, offs, snr, rsw, azsw, offsets, n_ovr, thres, rstep, azstep, rstart, rstop, azstart, azstop, ISZ, pflag], logpath=logpath)
 
@@ -1551,6 +1647,8 @@ def offset_tracking(offs, ccp, SLC_par, OFF_par, disp_map, disp_val='-', mode='-
             * 0: do not subtract polynomial trend from offset data
             * 1: subtract polynomial trend from offset data (default)
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/offset_tracking', offs, ccp, SLC_par, OFF_par, disp_map, disp_val, mode, thres, poly_flag], logpath=logpath)
 
@@ -1576,6 +1674,8 @@ def ORB_prop_SLC(SLC_par, nstate='-', interval='-', extra='-', mode='-', logpath
             * 1: integration of the equations of motion (default, if less than 3 state vectors available)
             * 2: interpolate between state vectors, minimum of 3 state vectors;
               interpolation of the equations of motion outside of the time span of the existing state vectors
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/ORB_prop_SLC', SLC_par, nstate, interval, extra, mode], logpath=logpath)
 
@@ -1593,6 +1693,8 @@ def ORRM_vec(SLC_par, ORRM, nstate='-', logpath=None):
         (input) ORRM state vector file
     nstate:
         number of state vectors (default=5, maximum=64)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/ORRM_vec', SLC_par, ORRM, nstate], logpath=logpath)
 
@@ -1608,6 +1710,8 @@ def par_ACS_ERS(CEOS_SAR_leader, SLC_par, logpath=None):
         (input) ERS CEOS SAR leader file
     SLC_par:
         (output) ISP SLC parameter file (example <orbit>.slc.par)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_ACS_ERS', CEOS_SAR_leader, SLC_par], logpath=logpath)
 
@@ -1628,6 +1732,8 @@ def par_ASAR(ASAR_file, output_name, K_dB='-', logpath=None):
             * NOTE: Use - for the calibration coefficient provided in the header of the ASAR_file
             * NOTE: In the case that a calibration factor is provided, PRI images are converted
               to radiometrically calibrated ground-range intensity images in float format
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_ASAR', ASAR_file, output_name, K_dB], logpath=logpath)
 
@@ -1645,6 +1751,8 @@ def par_ASF_91(CEOS_leader, CEOS_trailer, SLC_par, logpath=None):
         (input) ASF CEOS trailer file
     SLC_par:
         (output) ISP SLC image parameter file
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_ASF_91', CEOS_leader, CEOS_trailer, SLC_par], logpath=logpath)
 
@@ -1660,6 +1768,8 @@ def par_ASF_96(CEOS_SAR_leader, SLC_par, logpath=None):
         (input) CEOS SAR leader file
     SLC_par:
         (output) ISP SLC parameter file (example <orbit>.slc.par)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_ASF_96', CEOS_SAR_leader, SLC_par], logpath=logpath)
 
@@ -1681,6 +1791,8 @@ def par_ASF_PRI(CEOS_leader, CEOS_data, GRD_par, GRD, logpath=None):
         (output) ISP ground range image (enter -  for none, float intensity)
             * NOTE: The input data converted to intensity using the expression:  (dn/1000.)\*\*2
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_ASF_PRI', CEOS_leader, CEOS_data, GRD_par, GRD], logpath=logpath)
 
@@ -1700,6 +1812,8 @@ def par_ASF_RSAT_SS(CEOS_leader, CEOS_data, GRD_par, GRD, logpath=None):
         (output) ISP image parameter file (example <orbit>.mli.par)
     GRD:
         (output) ISP image (example <orbit>.mli) (enter -  for none, short integer)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_ASF_RSAT_SS', CEOS_leader, CEOS_data, GRD_par, GRD], logpath=logpath)
 
@@ -1717,6 +1831,8 @@ def par_ATLSCI_ERS(CEOS_SAR_leader, CEOS_Image, SLC_par, logpath=None):
         (input) CEOS image data segment (DAT_01.001)
     SLC_par:
         (output) ISP SLC parameter file (example <orbit>.slc.par)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_ATLSCI_ERS', CEOS_SAR_leader, CEOS_Image, SLC_par], logpath=logpath)
 
@@ -1733,6 +1849,8 @@ def par_CS_SLC(HDF5, trunk, logpath=None):
     trunk:
         (output) output file name trunk used for output filenames 
             (example: yyyymmdd -> yyyymmdd_pol_beamid.slc yyyymmdd_pol_beamid.slc.par)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_CS_SLC', HDF5, trunk], logpath=logpath)
 
@@ -1751,6 +1869,8 @@ def par_CS_SLC_TIF(GeoTIFF, XML, trunk, logpath=None):
     trunk:
         (output) output file name trunk used for output filenames 
             (example: yyyymmdd -> yyyymmdd_pol_beamid.slc yyyymmdd_pol_beamid.slc.par)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_CS_SLC_TIF', GeoTIFF, XML, trunk], logpath=logpath)
 
@@ -1770,6 +1890,8 @@ def par_EORC_PALSAR(CEOS_leader, SLC_par, CEOS_data, SLC='-', logpath=None):
         (input)  PALSAR CEOS format Level 1.1 SLC (IMG...)
     SLC:
         (output) reformatted PALSAR SLC (example: yyyymmdd.SLC, enter - for none)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_EORC_PALSAR', CEOS_leader, SLC_par, CEOS_data, SLC], logpath=logpath)
 
@@ -1789,6 +1911,8 @@ def par_ESA_ERS(CEOS_SAR_leader, SLC_par, CEOS_DAT='-', SLC='-', logpath=None):
         (input) CEOS data file (example: DAT_01.001)
     SLC:
         (output) SLC data with file and line headers removed (example: <date>.SLC)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_ESA_ERS', CEOS_SAR_leader, SLC_par, CEOS_DAT, SLC], logpath=logpath)
 
@@ -1820,6 +1944,8 @@ def par_KC_PALSAR_slr(facter_m, CEOS_leader, SLC_par, pol, pls_mode, KC_data, pw
         (output) PALSAR intensity (float, GAMMA Software endianness)
     fdtab:
         (output)table of output polynomials, one polynomial/block used as input to gc_map_fd
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_KC_PALSAR_slr', facter_m, CEOS_leader, SLC_par, pol, pls_mode, KC_data, pwr, fdtab], logpath=logpath)
 
@@ -1836,6 +1962,8 @@ def par_KS_DGM(HDF5, trunk, logpath=None):
     trunk:
         (output) output file name trunk used for output filenames 
             (example: yyyymmdd -> yyyymmdd_pol_beamid.slc yyyymmdd_pol_beamid.pri.par)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_KS_DGM', HDF5, trunk], logpath=logpath)
 
@@ -1852,6 +1980,8 @@ def par_KS_SLC(HDF5, trunk, logpath=None):
     trunk:
         (output) output file name trunk used for output filenames 
             (example: yyyymmdd -> yyyymmdd_pol_beamid.slc yyyymmdd_pol_beamid.slc.par)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_KS_SLC', HDF5, trunk], logpath=logpath)
 
@@ -1871,6 +2001,8 @@ def par_PRI(CEOS_SAR_leader, PRI_par, CEOS_DAT, PRI, logpath=None):
         (input) CEOS data file (example: DAT_01.001)
     PRI:
         (output) PRI data with file and line headers removed (example: <yyyymmdd>.PRI)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_PRI', CEOS_SAR_leader, PRI_par, CEOS_DAT, PRI], logpath=logpath)
 
@@ -1890,6 +2022,8 @@ def par_PRI_ESRIN_JERS(CEOS_SAR_leader, PRI_par, CEOS_DAT, PRI, logpath=None):
         (input) CEOS data file (example: DAT_01.001)
     PRI:
         (output) PRI data with file and line headers removed (example: <yyyymmdd>.PRI)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_PRI_ESRIN_JERS', CEOS_SAR_leader, PRI_par, CEOS_DAT, PRI], logpath=logpath)
 
@@ -1905,6 +2039,8 @@ def par_PulSAR(CEOS_SAR_leader, SLC_par, logpath=None):
         (input) ERS CEOS SAR leader file
     SLC_par:
         (output) ISP SLC parameter file (example <orbit>.slc.par)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_PulSAR', CEOS_SAR_leader, SLC_par], logpath=logpath)
 
@@ -1945,6 +2081,8 @@ def par_RISAT_GRD(CEOS_leader, BAND_META, GRD_par, CEOS_image, GRD='-', line_dir
     
     KdB:
         calibration constant (dB) (enter - to use value in the CEOS leader)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_RISAT_GRD', CEOS_leader, BAND_META, GRD_par, CEOS_image, GRD, line_dir, pix_dir, cal_flg, KdB], logpath=logpath)
 
@@ -1985,6 +2123,8 @@ def par_RISAT_SLC(CEOS_leader, BAND_META, SLC_par, CEOS_image, SLC='-', line_dir
     
     KdB:
         calibration constant (dB) (enter - to use value in the CEOS leader)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_RISAT_SLC', CEOS_leader, BAND_META, SLC_par, CEOS_image, SLC, line_dir, pix_dir, cal_flg, KdB], logpath=logpath)
 
@@ -2008,6 +2148,8 @@ def par_RSAT2_SG(product_XML, lut_XML, GeoTIFF, polarization, GRD_par, GRD, logp
         (output) ISP GRD parameter file (example: yyyymmdd_PP.GRD.par)
     GRD:
         (output) float GRD data file (example: yyyymmdd_pp.GRD)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_RSAT2_SG', product_XML, lut_XML, GeoTIFF, polarization, GRD_par, GRD], logpath=logpath)
 
@@ -2031,6 +2173,8 @@ def par_RSAT2_SLC(product_XML, lut_XML, GeoTIFF, polarization, SLC_par, SLC, log
         (output) ISP SLC parameter file (example: yyyymmdd_pp.SLC.par)
     SLC:
         (output) SLC data file (example: yyyymmdd_pp.SLC)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_RSAT2_SLC', product_XML, lut_XML, GeoTIFF, polarization, SLC_par, SLC], logpath=logpath)
 
@@ -2056,6 +2200,8 @@ def par_RSAT_SCW(CEOS_leader, CEOS_trailer, CEOS_data, GRD_par, GRD, sc_dB='-', 
         intensity scale factor in dB (enter - for default:   0.00)
     dt:
         azimuth image time offset (s) (enter - for default = 0.0)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_RSAT_SCW', CEOS_leader, CEOS_trailer, CEOS_data, GRD_par, GRD, sc_dB, dt], logpath=logpath)
 
@@ -2079,6 +2225,8 @@ def par_RSAT_SGF(CEOS_leader, CEOS_data, GRD_par, GRD, sc_dB='-', dt='-', logpat
         intensity scale factor in dB (enter - for default:   0.00)
     dt:
         azimuth image time offset (s) (enter - for default = 0.0)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_RSAT_SGF', CEOS_leader, CEOS_data, GRD_par, GRD, sc_dB, dt], logpath=logpath)
 
@@ -2102,6 +2250,8 @@ def par_RSAT_SLC(CEOS_leader, SLC_par, CEOS_data, SLC='-', sc_dB='-', dt='-', lo
         intensity scale factor in dB (enter - for default:  60.00)
     dt:
         azimuth image time offset (s) (enter - for default = 0.0)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_RSAT_SLC', CEOS_leader, SLC_par, CEOS_data, SLC, sc_dB, dt], logpath=logpath)
 
@@ -2117,6 +2267,8 @@ def par_RSI_ERS(CEOS_SAR_leader, SLC_par, logpath=None):
         (input) ERS CEOS SAR leader file
     SLC_par:
         (output) ISP SLC parameter file (example <orbit>.slc.par)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_RSI_ERS', CEOS_SAR_leader, SLC_par], logpath=logpath)
 
@@ -2158,6 +2310,8 @@ def par_S1_GRD(GeoTIFF, annotation_XML, calibration_XML, noise_XML, MLI_par, MLI
         noise intensity for each MLI sample in slant range using data from noise_XML
             * NOTE:  when the noise_pwr file is specified, noise power correction will NOT be applied to the MLI data values
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_S1_GRD', GeoTIFF, annotation_XML, calibration_XML, noise_XML, MLI_par, MLI, GRD_par, GRD, eflg, rps, noise_pwr], logpath=logpath)
 
@@ -2194,6 +2348,8 @@ def par_S1_SLC(GeoTIFF, annotation_XML, calibration_XML, noise_XML, SLC_par, SLC
         noise intensity for each SLC sample in slant range using data from noise_XML
             * NOTE:  when the noise_pwr file is specified, noise power will NOT be subtracted from the image data values
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_S1_SLC', GeoTIFF, annotation_XML, calibration_XML, noise_XML, SLC_par, SLC, TOPS_par, dtype, sc_dB, noise_pwr], logpath=logpath)
 
@@ -2215,6 +2371,8 @@ def par_TX_SLC(annotation_XML, COSAR, SLC_par, SLC, pol='-', logpath=None):
         (output) SLC data file, example: yyyymmdd.SLC (enter - for none, SLC output will not be produced)
     pol:
         polarisation HH, HV, VH, VV (default: first polarisation found in the annotation_XML)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/par_TX_SLC', annotation_XML, COSAR, SLC_par, SLC, pol], logpath=logpath)
 
@@ -2240,6 +2398,8 @@ def ph_slope_base(int_in, SLC_par, OFF_par, base, int_out, int_type='-', inverse
         interferogram type: 0=unwrapped phase, 1=complex interf. (default=1)
     inverse:
         subtract/add inversion flag (0=subtract phase ramp, 1=add phase ramp (default=0)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/ph_slope_base', int_in, SLC_par, OFF_par, base, int_out, int_type, inverse], logpath=logpath)
 
@@ -2269,6 +2429,8 @@ def phase_slope(interf, slopes, width, win_sz='-', thres='-', xmin='-', xmax='-'
         starting azimuth row offset (default = 0)
     ymax:
         last azimuth row offset (default = nlines-1)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/phase_slope', interf, slopes, width, win_sz, thres, xmin, xmax, ymin, ymax], logpath=logpath)
 
@@ -2286,6 +2448,8 @@ def PRC_vec(SLC_par, PRC, nstate='-', logpath=None):
         (input) PRC state vector file
     nstate:
         number of state vectors (default=5, maximum=64)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/PRC_vec', SLC_par, PRC, nstate], logpath=logpath)
 
@@ -2336,6 +2500,8 @@ def ptarg_cal_MLI(MLI_par, MLI, r_samp, az_samp, psigma, c_r_samp, c_az_samp, pt
         clutter region size (samples) (enter - for default: 16)
     theta_inc:
         incidence angle required for calibration of terrain corrrected RISAT-1 images
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/ptarg_cal_MLI', MLI_par, MLI, r_samp, az_samp, psigma, c_r_samp, c_az_samp, ptr_image, r_plot, az_plot, pcal, osf, win, pltflg, psz, csz, theta_inc], logpath=logpath)
 
@@ -2386,6 +2552,8 @@ def ptarg_cal_SLC(SLC_par, SLC, r_samp, az_samp, psigma, c_r_samp, c_az_samp, pt
         clutter region size (samples) (enter - for default: 16)
     c_image:
         (output) clutter region image (FCOMPLEX format)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/ptarg_cal_SLC', SLC_par, SLC, r_samp, az_samp, psigma, c_r_samp, c_az_samp, ptr_image, r_plot, az_plot, pcal, osf, win, pltflg, psz, csz, c_image], logpath=logpath)
 
@@ -2424,6 +2592,8 @@ def ptarg_SLC(SLC_par, SLC, r_samp, az_samp, ptr_image, r_plot, az_plot, ptr_par
             * 2: screen output
             * 3: output plots in PDF format
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/ptarg_SLC', SLC_par, SLC, r_samp, az_samp, ptr_image, r_plot, az_plot, ptr_par, osf, win, pltflg], logpath=logpath)
 
@@ -2475,6 +2645,8 @@ def radcal_MLI(MLI, MLI_PAR, OFF_par, CMLI, antenna='-', rloss_flag='-', ant_fla
         (output) ellipsoid-based ground range sigma0 or gamma0 pixel reference area (float)
             refarea_flag 1 or -1: sigma0 ref. area
             refarea_flag 2 or -2: gamma0 ref. area
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/radcal_MLI', MLI, MLI_PAR, OFF_par, CMLI, antenna, rloss_flag, ant_flag, refarea_flag, sc_dB, K_dB, pix_area], logpath=logpath)
 
@@ -2510,6 +2682,8 @@ def radcal_PRI(PRI, PRI_PAR, GRD, GRD_PAR, K_dB='-', inc_ref='-', roff='-', nr='
         offset to starting line (default: 0, 1 header line in the input file is assumed for ERS)
     nl:
         number of lines to copy (default: 0, to end of file)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/radcal_PRI', PRI, PRI_PAR, GRD, GRD_PAR, K_dB, inc_ref, roff, nr, loff, nl], logpath=logpath)
 
@@ -2541,6 +2715,8 @@ def radcal_pwr_stat(SLC_tab, SLC_tab_cal, plist, MSR_cal, PWR_cal, roff='-', lof
         number of azimuth lines to analyze (default -: to end of file)
     plist_out:
         point list of points used to determine calibration using MSR_cal and PWR_cal thresholds
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/radcal_pwr_stat', SLC_tab, SLC_tab_cal, plist, MSR_cal, PWR_cal, roff, loff, nr, nl, plist_out], logpath=logpath)
 
@@ -2599,6 +2775,8 @@ def radcal_SLC(SLC, SLC_PAR, CSLC, CSLC_PAR, fcase='-', antenna='-', rloss_flag=
         (output) ellipsoid-based ground range sigma0 or gamma0 pixel reference area (float)
             refarea_flag 1 or -1: sigma0 ref. area
             refarea_flag 2 or -2: gamma0 ref. area
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/radcal_SLC', SLC, SLC_PAR, CSLC, CSLC_PAR, fcase, antenna, rloss_flag, ant_flag, refarea_flag, sc_dB, K_dB, pix_area], logpath=logpath)
 
@@ -2645,6 +2823,8 @@ def rascc_mask(cc, pwr, width, start_cc='-', start_pwr='-', nlines='-', pixavr='
             \*.bmp BMP format
             \*.ras Sun raster format
             \*.tif TIFF format
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/rascc_mask', cc, pwr, width, start_cc, start_pwr, nlines, pixavr, pixavaz, cc_thres, pwr_thres, cc_min, cc_max, scale, exp, LR, rasf], logpath=logpath)
 
@@ -2671,6 +2851,8 @@ def rascc_mask_thinning(ras_in, in_file, width, ras_out, nmax='-', thresh_1='-',
             ...          further thresholds
     thresh_nmax:
         threshold nmax (used for largest scale sampling reduction)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/rascc_mask_thinning', ras_in, in_file, width, ras_out, nmax, thresh_1, thresh_nmax], logpath=logpath)
 
@@ -2696,6 +2878,8 @@ def residue(int, flag, width, xmin='-', xmax='-', ymin='-', ymax='-', logpath=No
         offset to starting azimuth row (default = 0)
     ymax:
         offset to last azimuth row (default = nlines-1)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/residue', int, flag, width, xmin, xmax, ymin, ymax], logpath=logpath)
 
@@ -2721,6 +2905,8 @@ def residue_cc(int, flag, width, xmin='-', xmax='-', ymin='-', ymax='-', logpath
         offset to starting azimuth row (default = 0)
     ymax:
         offset to last azimuth row (default = nlines-1)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/residue_cc', int, flag, width, xmin, xmax, ymin, ymax], logpath=logpath)
 
@@ -2738,6 +2924,8 @@ def RSAT2_vec(SLC_par, RSAT2_orb, nstate='-', logpath=None):
         Radarsat-2 definitive orbit data file available from MDA. (orbit_number_def.orb)
     nstate:
         number of state vectors to extract (enter - for default: 9)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/RSAT2_vec', SLC_par, RSAT2_orb, nstate], logpath=logpath)
 
@@ -2751,6 +2939,8 @@ def S1_burstloc(annotation_XML, logpath=None):
     ----------
     annotation_XML:
         (input) Sentinel-1 L1 XML annotation file
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/S1_burstloc', annotation_XML], logpath=logpath)
 
@@ -2769,6 +2959,8 @@ def S1_OPOD_vec(SLC_PAR, OPOD, nstate='-', logpath=None):
             https://qc.sentinel1.eo.esa.int/aux_resorb/
     nstate:
         number of state vectors to extract (default: include 60 sec extention at the start and end of the SLC data)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/S1_OPOD_vec', SLC_PAR, OPOD, nstate], logpath=logpath)
 
@@ -2802,6 +2994,8 @@ def sbi_filt(SLC_1, SLC1_par, SLC2R_par, SLCf, SLCf_par, SLCb, SLCb_par, norm_sq
             * 0: no compensation for azimuth spectrum weighting
             * 1: compensate for the azimuth spectrum weighting (default)
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/sbi_filt', SLC_1, SLC1_par, SLC2R_par, SLCf, SLCf_par, SLCb, SLCb_par, norm_sq, iwflg], logpath=logpath)
 
@@ -2823,6 +3017,8 @@ def sbi_offset(sbi_unw, SLCf_par, SLCb_par, OFF_par, az_offset, logpath=None):
         (input) offset parameter file
     az_offset:
         (output) azimuth offsets (m)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/sbi_offset', sbi_unw, SLCf_par, SLCb_par, OFF_par, az_offset], logpath=logpath)
 
@@ -2838,6 +3034,8 @@ def slant_range(SLC_par, slr, logpath=None):
         (input) SLC or MLI image parameter file
     slr:
         (output) slant range for every sample in the image (float)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/slant_range', SLC_par, slr], logpath=logpath)
 
@@ -2868,6 +3066,8 @@ def SLC_burst_copy(SLC, SLC_par, TOPS_par, SLC_out, SLC_out_par, burst_num, drfl
     
     SLC_par2:
         (output) SLC parameter file for the single burst SLC with deramped phase (drflg: 1)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_burst_copy', SLC, SLC_par, TOPS_par, SLC_out, SLC_out_par, burst_num, drflg, SLC_par2], logpath=logpath)
 
@@ -2883,6 +3083,8 @@ def SLC_burst_corners(SLC_par, TOPS_par, logpath=None):
         (input) SLC parameter file for the TOPS burst SLC
     TOPS_par:
         (input) TOPS parameter file for the TOPS burst SLC
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_burst_corners', SLC_par, TOPS_par], logpath=logpath)
 
@@ -2923,6 +3125,8 @@ def SLC_cat(SLC_1, SLC_2, SLC1_par, SLC2_par, OFF_par, SLC_3, SLC3_par, dopflg='
             * 0: no phase offset correction for SLC-2
             * 1: apply phase offset correction to SLC-2 (default)
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_cat', SLC_1, SLC_2, SLC1_par, SLC2_par, OFF_par, SLC_3, SLC3_par, dopflg, iflg, phflg], logpath=logpath)
 
@@ -2941,6 +3145,8 @@ def SLC_cat_S1_TOPS(SLC_tab1, SLC_tab2, SLC_tab3, logpath=None):
         (input) 3 column list of TOPS SLC-2 swaths in the same order as the SLC_tab1 IW1, IW2, IW3... (later time)
     SLC_tab3:
         (input) 3 column list of the output concatenated TOPS swaths in the order IW1, IW2, IW3...
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_cat_S1_TOPS', SLC_tab1, SLC_tab2, SLC_tab3], logpath=logpath)
 
@@ -2988,6 +3194,8 @@ def SLC_copy(SLC_in, SLC_par_in, SLC_out, SLC_par_out, fcase='-', sc='-', roff='
             * NOTE: CEOS format SLC data have 1 header line
             * NOTE: file offset pointer size (bytes): 8
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_copy', SLC_in, SLC_par_in, SLC_out, SLC_par_out, fcase, sc, roff, nr, loff, nl, swap, header_lines], logpath=logpath)
 
@@ -3014,6 +3222,8 @@ def SLC_copy_S1_TOPS(SLC1_tab, SLC2_tab, BURST_tab, dtype='-', logpath=None):
             * 0: FCOMPLEX
             * 1: SCOMPLEX
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_copy_S1_TOPS', SLC1_tab, SLC2_tab, BURST_tab, dtype], logpath=logpath)
 
@@ -3029,6 +3239,8 @@ def SLC_corners(SLC_par, terra_alt='-', logpath=None):
         (input) ISP SLC/MLI image parameter file
     terra_alt:
         (input) average terrain altitude (default: 300.000 meters)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_corners', SLC_par, terra_alt], logpath=logpath)
 
@@ -3056,6 +3268,8 @@ def SLC_deramp(SLC_1, SLC_par1, SLC_2, SLC_par2, mode, dop_ph='-', logpath=None)
     dop_ph:
         (output) Doppler phase (FLOAT)
             Note: SLC_par1 contains the Doppler polynomial that is used to calculate the Doppler phase ramp
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_deramp', SLC_1, SLC_par1, SLC_2, SLC_par2, mode, dop_ph], logpath=logpath)
 
@@ -3082,6 +3296,8 @@ def SLC_deramp_S1_TOPS(SLC1_tab, SLC2_tab, mode, phflg, logpath=None):
             * 0: do not save TOPS Doppler phase (default)
             * 1: save TOPS Doppler phase, output filename is the same as the deramped SLC with extension .dph
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_deramp_S1_TOPS', SLC1_tab, SLC2_tab, mode, phflg], logpath=logpath)
 
@@ -3109,6 +3325,8 @@ def SLC_interp(SLC_2, SLC1_par, SLC2_par, OFF_par, SLC_2R, SLC2R_par, loff='-', 
         offset to first valid output line (in SLC-1 lines) (default: 0)
     nlines:
         number of valid output lines (default: 0, to end of file)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_interp', SLC_2, SLC1_par, SLC2_par, OFF_par, SLC_2R, SLC2R_par, loff, nlines], logpath=logpath)
 
@@ -3137,6 +3355,8 @@ def SLC_interp_S1_TOPS(SLC2_tab, SLC2_par, SLC1_tab, SLC1_par, OFF_par, SLC2R_ta
         (output) resampled mosaic generated from the swaths listed in SLC2R_tab, coregisted to the TOPS SLC-1 mosaic (enter - for none)
     SLC2R_par:
         (output) SLC parameter file associated with the resampled TOPS SLC-2R mosaic
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_interp_S1_TOPS', SLC2_tab, SLC2_par, SLC1_tab, SLC1_par, OFF_par, SLC2R_tab, SLC_2R, SLC2R_par], logpath=logpath)
 
@@ -3167,6 +3387,8 @@ def SLC_mosaic_S1_TOPS(SLC_tab, SLC, SLC_par, rlks, azlks, wflg='-', SLCR_tab='-
         (input) SLC_tab of the reference scene, 3 column list of SLC, SLC_par, TOPS_par sorted sorted in the order IW1, IW2, IW3
             * NOTE: When generating a mosaic of a resampled SLC, the SLC_tab of the reference scene is required
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_mosaic_S1_TOPS', SLC_tab, SLC, SLC_par, rlks, azlks, wflg, SLCR_tab], logpath=logpath)
 
@@ -3190,6 +3412,8 @@ def SLC_ovr(SLC, SLC_par, SLC_ovr, SLC_ovr_par, r_ovr, logpath=None):
     r_ovr:
         integer range oversampling factor (2 --> 16)
             if r_ovr < 0, the SLC will be subsampled, integer range subsampling factor (-2 --> -16)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_ovr', SLC, SLC_par, SLC_ovr, SLC_ovr_par, r_ovr], logpath=logpath)
 
@@ -3215,6 +3439,8 @@ def SLC_phase_shift(SLC_1, SLC_par1, SLC_2, SLC_par2, ph_shift, logpath=None):
               from swath IW1 acquired up to 10-Mar-2015.
               Used to apply a constant phase shift of -3.83 radians to Sentinel-1 TOPS SLC data with
               H-POL on receive (e.g. VH) acquired up to 10-Mar-2015.
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SLC_phase_shift', SLC_1, SLC_par1, SLC_2, SLC_par2, ph_shift], logpath=logpath)
 
@@ -3238,6 +3464,8 @@ def split_WB(data_in, data_par_in, data_tab, dtype, logpath=None):
             * 0: FLOAT
             * 1: FCOMPLEX
     
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/split_WB', data_in, data_par_in, data_tab, dtype], logpath=logpath)
 
@@ -3273,6 +3501,8 @@ def SR_to_GRD(MLI_par, OFF_par, GRD_par, in_file, out_file, rlks='-', azlks='-',
         output image ground range sample spacing (m) (default = (input image azimuth spacing) \* azlks)
     grd_azsp:
         output image azimuth sample spacing (m) (default = (input image azimuth spacing) \* azlks)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/SR_to_GRD', MLI_par, OFF_par, GRD_par, in_file, out_file, rlks, azlks, interp_mode, grd_rsp, grd_azsp], logpath=logpath)
 
@@ -3295,6 +3525,8 @@ def subtract_phase(interf_in, phase_file, interf_out, width, factor='-', logpath
         number of samples/line
     factor:
         constant scale factor for input phase data [default=1.0]
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/subtract_phase', interf_in, phase_file, interf_out, width, factor], logpath=logpath)
 
@@ -3320,6 +3552,8 @@ def tree_cc(flag, width, mbl='-', xmin='-', xmax='-', ymin='-', ymax='-', logpat
         starting azimuth row, relative to start (default = 0)
     ymax:
         last azimuth row, relative to start (default = nlines-1)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/tree_cc', flag, width, mbl, xmin, xmax, ymin, ymax], logpath=logpath)
 
@@ -3345,6 +3579,8 @@ def tree_gzw(flag, width, mbl='-', xmin='-', xmax='-', ymin='-', ymax='-', logpa
         starting azimuth row, relative to start (default = 0)
     ymax:
         last azimuth row, relative to start (default = nlines-1)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/tree_gzw', flag, width, mbl, xmin, xmax, ymin, ymax], logpath=logpath)
 
@@ -3372,6 +3608,8 @@ def unw_model(interf, unw_model, unw, width, xinit='-', yinit='-', ref_ph='-', w
         reference point phase (radians) (enter - for phase at the reference point )
     width_model:
         number of samples/row of the unwrapped phase model (default: interferogram width)
+    logpath: str or None
+        a directory to write command logfiles to
     """
     process(['/cluster/GAMMA_SOFTWARE-20161207/ISP/bin/unw_model', interf, unw_model, unw, width, xinit, yinit, ref_ph, width_model], logpath=logpath)
 
