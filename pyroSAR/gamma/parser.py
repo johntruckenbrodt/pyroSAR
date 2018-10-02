@@ -32,10 +32,12 @@ def parse_command(command):
     header = '| ' + header.replace('\n', '\n| ')
     usage = re.search('usage:.*(?=\n)', out).group()
     
-    # filter required and optional arguements from usage description text
+    # filter required and optional arguments from usage description text
     arg_req = [re.sub('[^\w.-]*', '', x) for x in re.findall('[^<]*<([^>]*)>', usage)]
     arg_opt = [re.sub('[^\w.-]*', '', x) for x in re.findall('[^[]*\[([^]]*)\]', usage)]
     
+    # fix inconsistencies in parameter naming related to case differences,
+    # e.g. ISP_PAR in the usage text vs. ISP_Par in the parameter description
     for arg in arg_req + arg_opt:
         for item in re.findall(arg, out, re.IGNORECASE):
             if item != arg:
@@ -56,7 +58,10 @@ def parse_command(command):
     argstr_function = re.sub(r'([^\'])-([^\'])', r'\1_\2', ', '.join(arg_req + [x + "='-'" for x in arg_opt])) \
         .replace(', def=', ', drm=')
     
-    # create the process call arguement string
+    # create the process call argument string
+    # a '-' in the parameter name is replaced with '_'
+    # e.g. 'arg1, arg2, arg3'
+    # if a parameter is named 'def' (not allowed in Python) it is renamed to 'drm'
     argstr_process = ', '.join(arg_req + arg_opt) \
         .replace('-', '_') \
         .replace(', def,', ', drm,')
@@ -70,7 +75,7 @@ def parse_command(command):
     
     # parse the parameter documentation to a Python docstring format
     
-    # define the number of space to indent
+    # define the number of spaces to indent
     indent = ' ' * 4
     
     docstring_elements = ['Parameters\n----------']
@@ -84,7 +89,7 @@ def parse_command(command):
         except AttributeError:
             raise RuntimeError('cannot find parameter {}'.format(x))
     starts += [len(out)]
-
+    
     # define a pattern for parsing individual parameter documentations
     pattern = r'\n[ ]*(?P<par>{0})[ ]+(?P<doc>.*)'.format('|'.join(arg_req + arg_opt))
     # print(pattern)
@@ -98,33 +103,36 @@ def parse_command(command):
         match = re.match(pattern, doc_raw, flags=re.DOTALL)
         if not match:
             continue
-            
+        
         # retrieve the parameter name and the documentation lines
         par = match.group('par')
         doc_items = re.split('\n+\s*', match.group('doc').strip('\n'))
         
-        # escape * characters (which are treated as special characters for bulleted lists by sphinx)
+        # escape * characters (which are treated as special characters for bullet lists by sphinx)
         doc_items = [x.replace('*', '\*') for x in doc_items]
         
-        # convert all lines starting with an integer number of 'NOTE' to bullet list items
+        # convert all lines starting with an integer number or 'NOTE' to bullet list items
         latest = None
         for i in range(len(doc_items)):
             item = doc_items[i]
             if re.search('^(?:(?:-|)[-0-9]+|NOTE):', item):
                 latest = i
-                # prepend '* ' and replace 'x:x' with 'x: x'
+                # prepend '* ' and replace missing spaces after a colon: 'x:x' -> 'x: x'
                 doc_items[i] = '* ' + re.sub(r'((?:-|)[-0-9]+:)(\w+)', r'\1 \2', item)
         
         # format documentation lines coming after the last bullet list item
+        # sphinx expects lines after the last bullet item to be indented by two spaces if
+        # they belong to the bullet item or otherwise a blank line to mark the end of the bullet list
         if latest:
-            # case if there are still lines coming after the last bullet item, prepend an extra two spaces to these
-            # lines so that they are properly aligned with the text of the bullet item
+            # case if there are still lines coming after the last bullet item,
+            # prepend an extra two spaces to these lines so that they are properly
+            # aligned with the text of the bullet item
             if latest + 2 <= len(doc_items):
                 i = 1
                 while latest + i + 1 <= len(doc_items):
                     doc_items[latest + i] = '  ' + doc_items[latest + i]
                     i += 1
-            # if not, the insert an extra blank line
+            # if not, then insert an extra blank line
             else:
                 doc_items[-1] = doc_items[-1] + '\n'
         
@@ -137,19 +145,28 @@ def parse_command(command):
     doc = 'logpath: str or None\n{0}a directory to write command logfiles to'.format(indent)
     docstring_elements.append(doc)
     
-    # create the complete docstring containing all parameter documentation strings
-    docstring = '\n'.join(docstring_elements)
-    
-    # combine the elements to the final Python function string
-    fun = '''def {name}({args_fun}, logpath=None):\n"""\n{header}\n\n{doc}\n"""\nprocess(['{command}', {args_cmd}], logpath=logpath)''' \
+    # create the function definition string
+    fun_def = 'def {name}({args_fun}, logpath=None):' \
         .format(name=os.path.basename(command).replace('-', '_'),
-                args_fun=argstr_function,
-                header=header,
-                doc=docstring,
-                command=command,
-                args_cmd=argstr_process) \
-        .replace('\n', '\n{}'.format(indent))
-    return fun + '\n'
+                args_fun=argstr_function)
+    
+    # create the complete docstring
+    fun_doc = '\n{header}\n\n{doc}\n' \
+        .format(header=header,
+                doc='\n'.join(docstring_elements))
+    
+    # create the process call string
+    fun_proc = "process(['{command}', {args_cmd}], logpath=logpath)" \
+        .format(command=command,
+                args_cmd=argstr_process)
+    
+    # combine the elements to a complete Python function string
+    fun = '''{defn}\n"""{doc}"""\n{proc}'''.format(defn=fun_def, doc=fun_doc, proc=fun_proc)
+    
+    # indent all lines and add an extra empty line at the end
+    fun = fun.replace('\n', '\n{}'.format(indent)) + '\n'
+    
+    return fun
 
 
 def parse_module(bindir, outfile):
