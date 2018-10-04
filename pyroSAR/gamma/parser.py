@@ -1,7 +1,7 @@
 import os
 import re
 import subprocess as sp
-# from collections import Counter
+from collections import Counter
 from spatialist.ancillary import finder, which
 
 
@@ -43,7 +43,9 @@ def parse_command(command):
             if item != arg:
                 out = out.replace(item, arg)
     
-    # double = [k for k, v in Counter(arg_req + arg_opt).items() if v > 1]
+    double = [k for k, v in Counter(arg_req + arg_opt).items() if v > 1]
+    if len(double) > 0:
+        raise RuntimeError('double parameter{0}: {1}'.format('s' if len(double)> 1 else '', ', '.join(double)))
     
     # print('header_raw: \n{}\n'.format(header))
     # print('usage_raw: \n{}\n'.format(usage))
