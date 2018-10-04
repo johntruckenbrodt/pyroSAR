@@ -5,9 +5,12 @@
 import math
 import os
 import re
+import json
 import subprocess as sp
 
 from spatialist.ancillary import parse_literal, run, union
+
+from pyroSAR import ConfigHandler
 from .error import gammaErrorHandler
 
 
@@ -266,3 +269,34 @@ def slc_corners(parfile):
             pts['xmin'], pts['xmax'] = [float(x) for x in
                                         re.findall('[0-9]+\.[0-9]+', line)]
     return pts
+
+
+class ExamineGamma(object):
+    def __init__(self):
+        if 'GAMMA' in ConfigHandler.sections:
+            attr = ConfigHandler['GAMMA']
+            for key, value in attr.items():
+                setattr(self, key, value)
+        if not hasattr(self, 'home'):
+            try:
+                setattr(self, 'home', os.environ['GAMMA_HOME'])
+            except KeyError:
+                raise RuntimeError('could not read Gamma installation directory')
+        self.version = re.search('GAMMA_SOFTWARE-(?P<version>[0-9]{8})',
+                                 getattr(self, 'home')).group('version')
+        self.__update_config()
+    
+    def __update_config(self):
+        if 'GAMMA' not in ConfigHandler.sections:
+            ConfigHandler.add_section('GAMMA')
+    
+        for attr in ['home', 'version']:
+            self.__update_config_attr(attr, getattr(self, attr), 'GAMMA')
+
+    @staticmethod
+    def __update_config_attr(attr, value, section):
+        if isinstance(value, list):
+            value = json.dumps(value)
+    
+        if attr not in ConfigHandler[section].keys() or ConfigHandler[section][attr] != value:
+            ConfigHandler.set(section, key=attr, value=value, overwrite=True)
