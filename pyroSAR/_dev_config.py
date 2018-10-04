@@ -181,67 +181,6 @@ class ConfigHandler(object):
     The syntax is the same as in ConfigParser. Here, keys are called options.
 
     """
-    
-    # ---- Define Global Variables ----
-    
-    __KEYS = ['auxdata',
-              'auxdatapath',
-              'demPath',
-              'etc',
-              'gpt',
-              'path',
-              'properties',
-              'DEM.AsterDEMDataPath',
-              'LandCover.globcoverDataPath',
-              'DEM.ace2_5MinDEMDataPath',
-              'OrbitFiles.delftFTP_ERS2_precise_remotePath',
-              'DEM.gtopo30DEMDataPath',
-              'DEM.srtm3GeoTiffDEM_HTTP',
-              'DEM.aceDEMDataPath',
-              'DEM.srtm3GeoTiffDEM_remotePath',
-              'AuxCal.ENVISAT.remotePath',
-              'DEM.ace2_5MinDEM_HTTP',
-              'DEM.aceDEM_HTTP',
-              'OrbitFiles.prareHTTP_ERS1_remotePath',
-              'OrbitFiles.delftERS1OrbitPath',
-              'OrbitFiles.delftFTP_ERS1_precise_remotePath',
-              'OrbitFiles.sentinel1POEOrbit_remotePath',
-              'AuxCal.ERS.remotePath',
-              'DEM.CDEM_HTTP',
-              'OrbitFiles.sentinel1RESOrbitPath',
-              'OrbitFiles.dorisHTTP_vor_remotePath',
-              'OrbitFiles.dorisVOROrbitPath',
-              'OrbitFiles.sentinel1POEOrbitPath',
-              'AuxCal.Sentinel1.remotePath',
-              'OrbitFiles.delftFTP',
-              'OrbitFiles.delftEnvisatOrbitPath',
-              'OrbitFiles.delftERS2OrbitPath',
-              'DEM.srtm1GridDEMDataPath',
-              'DEM.srtm3GeoTiffDEMDataPath',
-              'OrbitFiles.delftFTP_ENVISAT_precise_remotePath',
-              'OrbitFiles.sentinel1RESOrbit_remotePath',
-              'DEM.srtm3GeoTiffDEM_FTP',
-              'LandCover.glc2000DataPath',
-              'OrbitFiles.prareHTTP_ERS2_remotePath',
-              'DEM.srtm1HgtDEM_HTTP',
-              'OrbitFiles.prareERS1OrbitPath',
-              'landCoverPath',
-              'executable',
-              'OrbitFiles.dorisPOROrbitPath',
-              'OrbitFiles.prareERS2OrbitPath',
-              'DEM.Getasse30DEMDataPath']
-    
-    __SECTIONS = {
-        'snap': 'SNAP',
-        'outputpaths': 'OUTPUT',
-        'url': 'URL'
-    }
-    
-    ___AUXDATANAMES = {
-        'demPath': '${AuxDataPath}/dem',
-        'landCoverPath': '${AuxDataPath}/LandCover',
-    }
-    
 
     # Define __setter to control changeable keys (optional)
     # __setter = ["etc", "auxdata"]
@@ -353,14 +292,7 @@ class ConfigHandler(object):
         None
 
         """
-        if self.parser.has_section(section):
-            pass
-        
-        elif section not in ConfigHandler.__SECTIONS.values():
-            raise AttributeError(
-                'Only the following sections are allowed: {0}.'.format(str(ConfigHandler.__SECTIONS.values())))
-        
-        else:
+        if not self.parser.has_section(section):
             self.parser.add_section(section)
             self.write()
 
@@ -385,11 +317,6 @@ class ConfigHandler(object):
         """
         if not self.parser.has_section(section):
             raise AttributeError('Section {0} does not exist.'.format(str(section)))
-        
-        if key not in ConfigHandler.__KEYS:
-            raise AttributeError('Your key is {0}. '
-                                 'Only the following keys are allowed: {1}.'
-                                 .format(str(key), str(ConfigHandler.__KEYS)))
 
         if isinstance(value, list):
             value = json.dumps(value)
