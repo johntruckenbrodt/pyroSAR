@@ -4,6 +4,8 @@ import subprocess as sp
 from collections import Counter
 from spatialist.ancillary import finder, which
 
+from .auxil import ExamineGamma
+
 
 def parse_command(command):
     """
@@ -209,3 +211,37 @@ def parse_module(bindir, outfile):
         out.write(outstring)
     if len(failed) > 0:
         print('the following functions could not be parsed:\n{0}\n({1} total)'.format('\n'.join(failed), len(failed)))
+
+
+def autoparse():
+    """
+    automatic parsing of Gamma commands.
+    This function will detect the Gamma installation via environment variable `GAMMA_HOME`, detect all available
+    modules (e.g. ISP, DIFF) and parse all of the module's commands via function :func:`parse_module`.
+    A new Python module will be created called `gammaparse`, which is stored under `$HOME/.pyrosar`.
+    Upon importing the `pyroSAR.gamma` submodule, this function is run automatically and module `gammaparse`
+    is imported as `api`.
+    
+    Returns
+    -------
+
+    Examples
+    --------
+    >>> from pyroSAR.gamma.api import diff
+    >>> print('create_dem_par' in dir(diff))
+    True
+    """
+    home = ExamineGamma().home
+    target = os.path.join(os.path.expanduser('~'), '.pyrosar', 'gammaparse')
+    if not os.path.isdir(target):
+        os.makedirs(target)
+    for module in finder(home, ['[A-Z]*'], foldermode=2):
+        outfile = os.path.join(target, os.path.basename(module).lower() + '.py')
+        if not os.path.isfile(outfile):
+            print('parsing module {}'.format(os.path.basename(module)))
+            parse_module(os.path.join(module, 'bin'), outfile)
+            print('=' * 20)
+    modules = [re.sub('\.py', '', os.path.basename(x)) for x in finder(target, ['[a-z]+\.py$'], regex=True)]
+    if len(modules) > 0:
+        with open(os.path.join(target, '__init__.py'), 'w') as init:
+            init.write('from . import {}'.format(', '.join(modules)))
