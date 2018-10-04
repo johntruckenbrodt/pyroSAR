@@ -1,7 +1,7 @@
-##############################################################
+####################################################################
 # Convenience functions for SAR image batch processing with ESA SNAP
 # John Truckenbrodt, 2016-2018
-##############################################################
+####################################################################
 import os
 
 import pyroSAR
@@ -68,16 +68,16 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     :class:`spatialist.vector.Vector`,
     :func:`spatialist.auxil.crsConvert()`
     """
-
+    
     id = infile if isinstance(infile, pyroSAR.ID) else pyroSAR.identify(infile)
-
+    
     if id.is_processed(outdir):
         print('scene {} already processed'.format(id.outname_base()))
         return
-
+    
     ############################################
     # general setup
-
+    
     if id.sensor in ['ASAR', 'ERS1', 'ERS2']:
         formatName = 'ENVISAT'
     elif id.sensor in ['S1A', 'S1B']:
@@ -86,82 +86,98 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         formatName = 'SENTINEL-1'
     else:
         raise RuntimeError('sensor not supported (yet)')
-
-    if polarizations == 'all':
-        polarizations = id.polarizations
-    else:
+    ######################
+    if isinstance(polarizations, str):
+        if polarizations == 'all':
+            polarizations = id.polarizations
+        else:
+            if polarizations in id.polarizations:
+                polarizations = [polarizations]
+            else:
+                raise RuntimeError('polarization {} does not exists in the source product'.format(polarizations))
+    elif isinstance(polarizations, list):
         polarizations = [x for x in polarizations if x in id.polarizations]
+    else:
+        raise RuntimeError('polarizations must be of type str or list')
     print("Polarizations:", polarizations)
     format = 'GeoTiff-BigTIFF' if len(polarizations) == 1 else 'ENVI'
-
+    
+    bands_int = ','.join(['Intensity_' + x for x in polarizations])
+    bands_beta = ','.join(['Beta0_' + x for x in polarizations])
+    bands_gamma = ','.join(['Gamma0_' + x for x in polarizations])
+    ############################################
     ############################################
     # parse base workflow
-
+    
     workflow = parse_recipe('geocode')
-
     ############################################
     # Read node configuration
-
+    
     read = workflow.find('.//node[@id="Read"]')
     read.find('.//parameters/file').text = id.scene
     read.find('.//parameters/formatName').text = formatName
     ############################################
     # Remove-GRD-Border-Noise node configuration
-
+    
     if id.sensor in ['S1A', 'S1B'] and removeS1BoderNoise:
         insert_node(workflow, 'Read', parse_node('Remove-GRD-Border-Noise'))
         bn = workflow.find('.//node[@id="Remove-GRD-Border-Noise"]')
         bn.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
     ############################################
     # orbit file application node configuration
-
+    
     orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
                     'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
     orbitType = orbit_lookup[formatName]
     if formatName == 'ENVISAT' and id.acquisition_mode == 'WSM':
         orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
-
+    
     orb = workflow.find('.//node[@id="Apply-Orbit-File"]')
     orb.find('.//parameters/orbitType').text = orbitType
     ############################################
     # calibration node configuration
-
+    
     cal = workflow.find('.//node[@id="Calibration"]')
-
+    
     cal.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
-    cal.find('.//parameters/sourceBands').text = ','.join(['Intensity_' + x for x in polarizations])
+    cal.find('.//parameters/sourceBands').text = bands_int
     ############################################
     # terrain flattening node configuration
-
+    
     tf = workflow.find('.//node[@id="Terrain-Flattening"]')
     if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
         tf.find('.//parameters/sourceBands').text = 'Beta0'
     else:
-        tf.find('.//parameters/sourceBands').text = ','.join(['Beta0_' + x for x in polarizations])
+        tf.find('.//parameters/sourceBands').text = bands_beta
     ############################################
     # configuration of node sequence for specific geocoding approaches
-
+    
     if geocoding_type == 'Range-Doppler':
         insert_node(workflow, 'Terrain-Flattening', parse_node('Terrain-Correction'))
         tc = workflow.find('.//node[@id="Terrain-Correction"]')
-        tc.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
+        tc.find('.//parameters/sourceBands').text = bands_gamma
     elif geocoding_type == 'SAR simulation cross correlation':
         insert_node(workflow, 'Terrain-Flattening', parse_node('SAR-Simulation'))
         insert_node(workflow, 'SAR-Simulation', parse_node('Cross-Correlation'))
         insert_node(workflow, 'Cross-Correlation', parse_node('SARSim-Terrain-Correction'))
         tc = workflow.find('.//node[@id="SARSim-Terrain-Correction"]')
-
+        
         sarsim = workflow.find('.//node[@id="SAR-Simulation"]')
-        sarsim.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
+        sarsim.find('.//parameters/sourceBands').text = bands_gamma
     else:
         raise RuntimeError('geocode_type not recognized')
+    
+    ############################################
+    # specify spatial resolution and coordinate reference system of the output dataset
     tc.find('.//parameters/pixelSpacingInMeter').text = str(tr)
-
+    
     try:
         t_srs = crsConvert(t_srs, 'epsg')
     except TypeError:
         raise RuntimeError("format of parameter 't_srs' not recognized")
-
+    
+    # the EPSG code 4326 is not supported by SNAP and thus the WKT string has to be defined;
+    # in all other cases defining EPSG:{code} will do
     if t_srs == 4326:
         t_srs = 'GEOGCS["WGS84(DD)",' \
                 'DATUM["WGS84",' \
@@ -172,24 +188,24 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 'AXIS["Geodetic latitude", NORTH]]'
     else:
         t_srs = 'EPSG:{}'.format(t_srs)
-
+    
     tc.find('.//parameters/mapProjection').text = t_srs
     ############################################
-    # add node for conversion from linear to db scaling
-
+    # (optionally) add node for conversion from linear to db scaling
+    
     if scaling not in ['dB', 'db', 'linear']:
         raise RuntimeError('scaling must be  a string of either "dB", "db" or "linear"')
-
+    
     if scaling in ['dB', 'db']:
         lin2db = parse_node('lin2db')
         sourceNode = 'Terrain-Correction' if geocoding_type == 'Range-Doppler' else 'SARSim-Terrain-Correction'
         insert_node(workflow, sourceNode, lin2db)
-
+        
         lin2db = workflow.find('.//node[@id="LinearToFromdB"]')
-        lin2db.find('.//parameters/sourceBands').text = ','.join(['Gamma0_' + x for x in polarizations])
-
+        lin2db.find('.//parameters/sourceBands').text = bands_gamma
+    
     ############################################
-    # add subset node and add bounding box coordinates of defined shapefile
+    # (optionally) add subset node and add bounding box coordinates of defined shapefile
     if shapefile:
         shp = shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
         bounds = bbox(shp.extent, shp.srs)
@@ -198,46 +214,43 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         if not inter:
             raise RuntimeError('no bounding box intersection between shapefile and scene')
         wkt = bounds.convert2wkt()[0]
-
+        
         subset = parse_node('Subset')
         insert_node(workflow, 'Read', subset)
-
+        
         subset = workflow.find('.//node[@id="Subset"]')
         subset.find('.//parameters/region').text = ','.join(map(str, [0, 0, id.samples, id.lines]))
         subset.find('.//parameters/geoRegion').text = wkt
     ############################################
-    # configure subset node for pixel offsets
+    # (optionally) configure subset node for pixel offsets
     if offset and not shapefile:
         subset = parse_node('Subset')
         insert_node(workflow, 'Read', subset)
-
+        
         # left, right, top and bottom offset in pixels
         l, r, t, b = offset
-
+        
         subset = workflow.find('.//node[@id="Subset"]')
-        subset.find('.//parameters/region').text = ','.join(map(str, [l, t, id.samples - l - r, id.lines - t - b]))
+        subset_values = ','.join(map(str, [l, t, id.samples - l - r, id.lines - t - b]))
+        subset.find('.//parameters/region').text = subset_values
         subset.find('.//parameters/geoRegion').text = ''
     ############################################
     # parametrize write node
-
+    
     # create a suffix for the output file to identify processing steps performed in the workflow
     suffix = parse_suffix(workflow)
-
-    if format == 'ENVI':
-        outname = os.path.join(outdir, id.outname_base(basename_extensions) + '_' + suffix)
-    else:
-        outname = os.path.join(outdir,
-                               '{}_{}_{}'.format(id.outname_base(basename_extensions),
-                                                         polarizations[0],
-                                                         suffix))
-
+    
+    basename = os.path.join(outdir, id.outname_base(basename_extensions))
+    extension = suffix if format == 'ENVI' else polarizations[0] + '_' + suffix
+    outname = basename + '_' + extension
+    
     write = workflow.find('.//node[@id="Write"]')
     write.find('.//parameters/file').text = outname
     write.find('.//parameters/formatName').text = format
     ############################################
     ############################################
     # select DEM type
-
+    
     if externalDEMFile is not None:
         if os.path.isfile(externalDEMFile):
             if externalDEMNoDataValue is None:
@@ -245,7 +258,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 if dem.nodata is not None:
                     externalDEMNoDataValue = dem.nodata
                 else:
-                    raise RuntimeError('Cannot read NoData value from DEM file. Please specify externalDEMNoDataValue')
+                    raise RuntimeError('Cannot read NoData value from DEM file. '
+                                       'Please specify externalDEMNoDataValue')
         else:
             raise RuntimeError('specified externalDEMFile does not exist')
         demname = 'External DEM'
@@ -258,7 +272,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             demname = 'SRTM 1Sec HGT'
         externalDEMFile = None
         externalDEMNoDataValue = 0
-
+    
     for demName in workflow.findall('.//parameters/demName'):
         demName.text = demname
     for externalDEM in workflow.findall('.//parameters/externalDEMFile'):
@@ -269,12 +283,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         egm.text = str(externalDEMApplyEGM).lower()
     ############################################
     ############################################
-    # write workflow to file
+    # write workflow to file and optionally execute it
     write_recipe(workflow, outname + '_proc')
-
+    
     # execute the newly written workflow
     if not test:
         try:
-            gpt(outname + '_proc.xml', basename_extensions=basename_extensions)
+            gpt(outname + '_proc.xml')
         except RuntimeError:
             os.remove(outname + '_proc.xml')
