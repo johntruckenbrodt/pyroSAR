@@ -189,7 +189,7 @@ def getAuxdata(datasets, scenes):
             print('not implemented yet')
 
 
-def gpt(xmlfile, basename_extensions=None):
+def gpt(xmlfile):
     """
     wrapper for ESA SNAP Graph Processing Tool GPT
     input is a readily formatted workflow xml file as created by function geocode in module snap.util
@@ -221,6 +221,8 @@ def gpt(xmlfile, basename_extensions=None):
     
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     out, err = proc.communicate()
+    out = out.decode('utf-8') if isinstance(out, bytes) else out
+    err = err.decode('utf-8') if isinstance(err, bytes) else err
     if proc.returncode != 0:
         if os.path.isfile(outname + '.tif'):
             os.remove(outname + '.tif')
@@ -233,12 +235,12 @@ def gpt(xmlfile, basename_extensions=None):
         raise RuntimeError(errmessage)
     
     if format == 'ENVI':
-        id = pyroSAR.identify(infile)
         suffix = parse_suffix(workflow)
         for item in finder(outname, ['*.img']):
             pol = re.search('[HV]{2}', item).group()
-            name_new = os.path.join(outdir, '{}_{}_{}.tif'.format(id.outname_base(basename_extensions), pol, suffix))
-            translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'], 'format': 'GTiff'}
+            name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
+            translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
+                                'format': 'GTiff'}
             gdal_translate(item, name_new, translateoptions)
         shutil.rmtree(outname)
 
