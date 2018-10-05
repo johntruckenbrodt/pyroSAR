@@ -369,7 +369,7 @@ class ID(object):
                 raise IOError(
                     'directory missing; please provide directory to function or define object attribute "gammadir"')
         return [x for x in finder(directory, [self.outname_base()], regex=True) if
-                not re.search('\.(?:par|hdr|aux\.xml)$', x)]
+                not re.search('\.(?:par|hdr|aux\.xml|swp)$', x)]
     
     def getHGT(self):
         """
