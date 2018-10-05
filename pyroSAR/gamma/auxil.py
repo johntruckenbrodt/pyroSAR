@@ -9,6 +9,7 @@ import json
 import subprocess as sp
 
 from spatialist.ancillary import parse_literal, run, union
+from spatialist.envi import hdr
 
 from pyroSAR import ConfigHandler
 from .error import gammaErrorHandler
@@ -126,6 +127,25 @@ class ISPPar(object):
             else:
                 raise RuntimeError('unsupported projection')
         return out
+
+
+def par2hdr(parfile, hdrfile):
+    """
+    Create an ENVI HDR file from a Gamma PAR file
+    
+    Parameters
+    ----------
+    parfile: str
+        the Gamma parfile
+    hdrfile: str
+        the ENVI HDR file
+
+    Returns
+    -------
+
+    """
+    with ISPPar(parfile) as par:
+        hdr(par.envidict(), hdrfile)
 
 
 class UTM(object):
