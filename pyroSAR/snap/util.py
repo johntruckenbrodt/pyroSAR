@@ -209,13 +209,24 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     # (optionally) add subset node and add bounding box coordinates of defined shapefile
     if shapefile:
-        shp = shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
-        bounds = bbox(shp.extent, shp.srs)
-        bounds.reproject(id.projection)
-        inter = intersect(id.bbox(), bounds)
-        if not inter:
-            raise RuntimeError('no bounding box intersection between shapefile and scene')
-        wkt = bounds.convert2wkt()[0]
+        with shapefile if isinstance(shapefile, Vector) else Vector(shapefile) as shp:
+            # reproject the geometry to WGS 84 latlon
+            shp.reproject(4326)
+            ext = shp.extent
+            
+            # add an extra buffer of 0.01 degrees
+            buffer = 0.01
+            ext['xmin'] -= buffer
+            ext['ymin'] -= buffer
+            ext['xmax'] += buffer
+            ext['ymax'] += buffer
+            
+            with bbox(ext, shp.srs) as bounds:
+                inter = intersect(id.bbox(), bounds)
+                if not inter:
+                    raise RuntimeError('no bounding box intersection between shapefile and scene')
+                inter.close()
+                wkt = bounds.convert2wkt()[0]
         
         subset = parse_node('Subset')
         insert_node(workflow, subset, before='Read')
