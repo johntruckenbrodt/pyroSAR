@@ -52,13 +52,31 @@ def parse_suffix(workflow):
     return suffix
 
 
-def insert_node(workflow, predecessor_id, node):
-    predecessor = workflow.find('.//node[@id="{}"]'.format(predecessor_id))
-    position = list(workflow).index(predecessor) + 1
-    workflow.insert(position, node)
-    newnode = workflow[position]
-    newnode.find('.//sources/sourceProduct').attrib['refid'] = predecessor.attrib['id']
-    workflow[position + 1].find('.//sources/sourceProduct').attrib['refid'] = newnode.attrib['id']
+def insert_node(workflow, node, before=None, after=None):
+    if before and not after:
+        predecessor = workflow.find('.//node[@id="{}"]'.format(before))
+        position = list(workflow).index(predecessor) + 1
+        workflow.insert(position, node)
+        newnode = workflow[position]
+        # set the source product for the new node
+        newnode.find('.//sources/sourceProduct').attrib['refid'] = predecessor.attrib['id']
+        # set the source product for the node after the new node
+        successor = workflow[position + 1]
+        if successor.tag == 'node':
+            successor.find('.//sources/sourceProduct').attrib['refid'] = newnode.attrib['id']
+    elif after and not before:
+        successor = workflow.find('.//node[@id="{}"]'.format(after))
+        position = list(workflow).index(successor)
+        workflow.insert(position, node)
+        newnode = workflow[position]
+        # set the source product for the new node
+        predecessor = workflow[position - 1]
+        source_id = predecessor.attrib['id'] if predecessor.tag == 'node' else None
+        newnode.find('.//sources/sourceProduct').attrib['refid'] = source_id
+        # set the source product for the node after the new node
+        successor.find('.//sources/sourceProduct').attrib['refid'] = newnode.attrib['id']
+    else:
+        raise RuntimeError('cannot insert node if both before and after are set')
 
 
 def write_recipe(recipe, outfile):
