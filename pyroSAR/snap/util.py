@@ -122,7 +122,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # Remove-GRD-Border-Noise node configuration
     
     if id.sensor in ['S1A', 'S1B'] and removeS1BoderNoise:
-        insert_node(workflow, 'Read', parse_node('Remove-GRD-Border-Noise'))
+        insert_node(workflow, parse_node('Remove-GRD-Border-Noise'), before='Read')
         bn = workflow.find('.//node[@id="Remove-GRD-Border-Noise"]')
         bn.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
     ############################################
@@ -155,13 +155,13 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # configuration of node sequence for specific geocoding approaches
     
     if geocoding_type == 'Range-Doppler':
-        insert_node(workflow, 'Terrain-Flattening', parse_node('Terrain-Correction'))
+        insert_node(workflow, parse_node('Terrain-Correction'), before='Terrain-Flattening')
         tc = workflow.find('.//node[@id="Terrain-Correction"]')
         tc.find('.//parameters/sourceBands').text = bands_gamma
     elif geocoding_type == 'SAR simulation cross correlation':
-        insert_node(workflow, 'Terrain-Flattening', parse_node('SAR-Simulation'))
-        insert_node(workflow, 'SAR-Simulation', parse_node('Cross-Correlation'))
-        insert_node(workflow, 'Cross-Correlation', parse_node('SARSim-Terrain-Correction'))
+        insert_node(workflow, parse_node('SAR-Simulation'), before='Terrain-Flattening')
+        insert_node(workflow, parse_node('Cross-Correlation'), before='SAR-Simulation')
+        insert_node(workflow, parse_node('SARSim-Terrain-Correction'), before='Cross-Correlation')
         tc = workflow.find('.//node[@id="SARSim-Terrain-Correction"]')
         
         sarsim = workflow.find('.//node[@id="SAR-Simulation"]')
@@ -201,7 +201,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if scaling in ['dB', 'db']:
         lin2db = parse_node('lin2db')
         sourceNode = 'Terrain-Correction' if geocoding_type == 'Range-Doppler' else 'SARSim-Terrain-Correction'
-        insert_node(workflow, sourceNode, lin2db)
+        insert_node(workflow, lin2db, before=sourceNode)
         
         lin2db = workflow.find('.//node[@id="LinearToFromdB"]')
         lin2db.find('.//parameters/sourceBands').text = bands_gamma
@@ -218,7 +218,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         wkt = bounds.convert2wkt()[0]
         
         subset = parse_node('Subset')
-        insert_node(workflow, 'Read', subset)
+        insert_node(workflow, subset, before='Read')
         
         subset = workflow.find('.//node[@id="Subset"]')
         subset.find('.//parameters/region').text = ','.join(map(str, [0, 0, id.samples, id.lines]))
@@ -227,7 +227,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # (optionally) configure subset node for pixel offsets
     if offset and not shapefile:
         subset = parse_node('Subset')
-        insert_node(workflow, 'Read', subset)
+        insert_node(workflow, subset, before='Read')
         
         # left, right, top and bottom offset in pixels
         l, r, t, b = offset
