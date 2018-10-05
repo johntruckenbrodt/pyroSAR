@@ -26,12 +26,12 @@ else:
 
 from osgeo import ogr
 
-from spatialist import envi, haversine
+from spatialist import haversine
 from spatialist.ancillary import union, finder
 
 from ..S1 import OSV
 from ..drivers import ID, CEOS_ERS, CEOS_PSR, ESA, SAFE, TSX, identify
-from . import ISPPar, Namespace, process
+from . import ISPPar, Namespace, process, par2hdr
 
 ogr.UseExceptions()
 
@@ -43,7 +43,7 @@ def calibrate(id, directory, replace=False):
                 process(
                     ['radcal_SLC', image, image + '.par', image + '_cal', image + '_cal.par',
                      '-', '-', '-', '-', '-', '-', id.meta['k_dB']])
-                envi.hdr(image + '_cal.par', image + '_cal.hdr')
+                par2hdr(image + '_cal.par', image + '_cal.hdr')
     
     elif isinstance(id, ESA):
         k_db = {'ASAR': 55., 'ERS1': 58.24, 'ERS2': 59.75}[id.sensor]
@@ -52,7 +52,7 @@ def calibrate(id, directory, replace=False):
         for image in candidates:
             out = image.replace('pri', 'grd')
             process(['radcal_PRI', image, image + '.par', out, out + '.par', k_db, inc_ref])
-            envi.hdr(out + '.par', out + '.hdr')
+            par2hdr(out + '.par', out + '.hdr')
             if replace:
                 for item in [image, image + '.par', image + '.hdr']:
                     if os.path.isfile(item):
@@ -125,7 +125,8 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                 outname = os.path.join(directory, outname_base)
                 process(
                     ['par_EORC_PALSAR_geo', id.file, outname + '.par', outname + '_dem.par', image, outname])
-            envi.hdr(outname + '.par', outname + '.hdr')
+
+            par2hdr(outname + '.par', outname + '.hdr')
     
     elif isinstance(id, ESA):
         """
@@ -145,7 +146,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                 newname = os.path.join(directory, base + ext)
                 os.rename(item, newname)
                 if newname.endswith('.par'):
-                    envi.hdr(newname, newname.replace('.par', '.hdr'))
+                    par2hdr(newname, newname.replace('.par', '.hdr'))
         else:
             raise IOError('scene already processed')
     
@@ -186,7 +187,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                 cmd = ['par_S1_GRD', tiff, xml_ann, xml_cal, xml_noise, name + '.par', name]
             
             process(cmd)
-            envi.hdr(name + '.par', name + '.hdr')
+            par2hdr(name + '.par', name + '.hdr')
     
     elif isinstance(id, TSX):
         images = id.findfiles(id.pattern_ds)
@@ -203,7 +204,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
             else:
                 outname += '_mli_geo'
                 process(['par_TX_geo', id.file, image, outname + '.par', outname + '_dem.par', outname, pol])
-            envi.hdr(outname + '.par', outname + '.hdr')
+            par2hdr(outname + '.par', outname + '.hdr')
     
     else:
         raise NotImplementedError('conversion for class {} is not implemented yet'.format(type(id).__name__))
@@ -407,7 +408,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     # create output names for files to be written
     # appreciated files will be written
-    # depreciated files will be set to '-' in the GAMMA funtion call and are thus not written
+    # depreciated files will be set to '-' in the GAMMA function call and are thus not written
     n = Namespace(scene.scene, scene.outname_base())
     n.appreciate(['dem_seg', 'lut_coarse', 'lut_fine', 'pix', 'ccp', 'inc', 'ls_map'])
     n.depreciate(['sim_map', 'u', 'v', 'psi'])
@@ -435,7 +436,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     for item in ['dem_seg', 'sim_map', 'u', 'v', 'psi', 'pix', 'inc']:
         if n.isappreciated(item):
-            envi.hdr(n.dem_seg + '.par', n.get(item) + '.hdr')
+            par2hdr(n.dem_seg + '.par', n.get(item) + '.hdr')
     
     sim_width = ISPPar(n.dem_seg + '.par').width
     
@@ -456,7 +457,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         process(['lin_comb', 1, image + '_geo_pan', 0, math.cos(math.radians(master_par.incidence_angle)),
                  image + '_geo_pan_flat', sim_width], logpath=path_log)
         process(['sigma2gamma', image + '_geo_pan_flat', n.inc, image + '_geo_norm', sim_width], logpath=path_log)
-        envi.hdr(n.dem_seg + '.par', image + '_geo_norm.hdr')
+        par2hdr(n.dem_seg + '.par', image + '_geo_norm.hdr')
     ######################################################################
     # normalization and backward geocoding approach 2 ####################
     ######################################################################
@@ -469,7 +470,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     #     process(['geocode_back', image+'_pan', master_par.range_samples, lut_fine, image+'_pan_geo', sim_width, 0, func_geoback], logpath=path_log)
     #     process(['lin_comb', 1, image+'_pan_geo', 0, math.cos(math.radians(master_par.incidence_angle)), image+'_pan_geo_flat', sim_width], logpath=path_log)
     #     process(['sigma2gamma', image+'_pan_geo_flat', inc, image+'_geo_norm', sim_width], logpath=path_log)
-    #     envi.hdr(dem_seg+'.par', image+'_geo_norm.hdr')
+    #     par2hdr(dem_seg+'.par', image+'_geo_norm.hdr')
     ######################################################################
     print('conversion to (dB and) geotiff..')
     for image in images:
@@ -477,7 +478,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
             if scale == 'db':
                 process(['linear_to_dB', image + '_geo_norm', image + '_geo_norm_db', sim_width, 0, -99],
                         logpath=path_log)
-                envi.hdr(n.dem_seg + '.par', image + '_geo_norm_db.hdr')
+                par2hdr(n.dem_seg + '.par', image + '_geo_norm_db.hdr')
                 nodata_out = nodata[1]
             else:
                 nodata_out = nodata[0]
@@ -576,7 +577,7 @@ def multilook(infile, outfile, targetres):
     else:
         # multilooking for MLI images
         process(['multi_look_MLI', infile, infile + '.par', outfile, outfile + '.par', rlks, azlks])
-    envi.hdr(outfile + '.par', outfile + '.hdr')
+    par2hdr(outfile + '.par', outfile + '.hdr')
 
 
 def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False, path_log=None):
