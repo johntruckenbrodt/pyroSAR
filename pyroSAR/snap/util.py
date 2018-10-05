@@ -75,6 +75,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         print('scene {} already processed'.format(id.outname_base()))
         return
     
+    if not os.path.isdir(outdir):
+        os.makedirs(outdir)
     ############################################
     # general setup
     
@@ -254,10 +256,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if externalDEMFile is not None:
         if os.path.isfile(externalDEMFile):
             if externalDEMNoDataValue is None:
-                dem = Raster(externalDEMFile)
-                if dem.nodata is not None:
+                with Raster(externalDEMFile) as dem:
                     externalDEMNoDataValue = dem.nodata
-                else:
+                if externalDEMNoDataValue is None:
                     raise RuntimeError('Cannot read NoData value from DEM file. '
                                        'Please specify externalDEMNoDataValue')
         else:
