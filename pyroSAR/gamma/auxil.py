@@ -35,7 +35,7 @@ class ISPPar(object):
         Args:
             filename: The filename or file object representing the ISP parameter file.
         """
-        if isinstance(filename, (str, unicode)):
+        if isinstance(filename, str):
             par_file = open(filename, 'r')
         else:
             par_file = filename
@@ -75,6 +75,12 @@ class ISPPar(object):
                 setattr(self, key, value)
         finally:
             par_file.close()
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return
     
     def __str__(self):
         maxlen = len(max(self.keys, key=len)) + 1
