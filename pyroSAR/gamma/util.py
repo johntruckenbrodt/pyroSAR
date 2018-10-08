@@ -249,21 +249,20 @@ def correctOSV(id, osvdir=None, logpath=None, osvType='POE'):
     
     images = id.getGammaImages(id.scene)
     # read parameter file entries int object
-    par = ISPPar(images[0] + '.par')
-    # extract acquisition time stamp
-    timestamp = datetime(*map(int, par.date)).strftime('%Y%m%dT%H%M%S')
+    with ISPPar(images[0] + '.par') as par:
+        # extract acquisition time stamp
+        timestamp = datetime(*map(int, par.date)).strftime('%Y%m%dT%H%M%S')
+    
     # find an OSV file matching the time stamp and defined OSV type(s)
     with OSV(osvdir) as osv:
         osvfile = osv.match(timestamp, osvType)
     if not osvfile:
         raise RuntimeError('no Orbit State Vector file found')
+    
     # update the GAMMA parameter file with the selected orbit state vectors
     print('correcting state vectors with file {}'.format(osvfile))
-    
     for image in images:
         process(['S1_OPOD_vec', image + '.par', osvfile], logpath=logpath)
-    # else:
-    #     raise NotImplementedError('OSV refinement for class {} is not implemented yet'.format(type(id).__name__))
 
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=2,
@@ -476,10 +475,10 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     for image in images:
         for scale in scaling:
             if scale == 'db':
-                process(['linear_to_dB', image + '_geo_norm', image + '_geo_norm_db', sim_width, 0, -99],
+                nodata_out = nodata[1]
+                process(['linear_to_dB', image + '_geo_norm', image + '_geo_norm_db', sim_width, 0, nodata_out],
                         logpath=path_log)
                 par2hdr(n.dem_seg + '.par', image + '_geo_norm_db.hdr')
-                nodata_out = nodata[1]
             else:
                 nodata_out = nodata[0]
             suffix = {'linear': '', 'db': '_db'}[scale]
