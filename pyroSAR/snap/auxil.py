@@ -23,6 +23,9 @@ from time import strftime, gmtime
 from xml.dom import minidom
 from os.path import expanduser
 
+from osgeo import gdal
+from osgeo.gdalconst import GA_Update
+
 import pyroSAR
 from pyroSAR import identify, ConfigHandler
 from pyroSAR.ancillary import dissolve, finder
@@ -254,13 +257,19 @@ def gpt(xmlfile):
     
     if format == 'ENVI':
         suffix = parse_suffix(workflow)
+        translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
+                            'format': 'GTiff',
+                            'noData': 0}
         for item in finder(outname, ['*.img']):
             pol = re.search('[HV]{2}', item).group()
             name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
-            translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
-                                'format': 'GTiff'}
             gdal_translate(item, name_new, translateoptions)
         shutil.rmtree(outname)
+    elif format == 'GeoTiff-BigTIFF':
+        ras = gdal.Open(outname + '.tif', GA_Update)
+        for i in range(1, ras.RasterCount + 1):
+            ras.GetRasterBand(i).SetNoDataValue(0)
+        ras = None
 
 
 class ExamineSnap(object):
