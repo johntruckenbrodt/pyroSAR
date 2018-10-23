@@ -16,7 +16,8 @@ from .error import gammaErrorHandler
 
 
 class ISPPar(object):
-    """Reader for ISP parameter files of the GAMMA software package.
+    """
+    Reader for ISP parameter files of the GAMMA software package.
 
     This class allows to read all information from files in GAMMA's parameter file format.
     Each key-value pair is parsed and added as attribute. For instance if the parameter file
@@ -24,6 +25,19 @@ class ISPPar(object):
 
     The values are converted to native Python types, while unit identifiers like 'dB' or 'Hz' are removed.
     Please see the GAMMA reference manual for further information on the actual file format.
+    
+    Parameters
+    ----------
+    filename: str
+        the Gamma parameter file
+    
+    Examples
+    --------
+    >>> from pyroSAR.gamma import ISPPar
+    >>> with ISPPar('S1A__IW___A_20141115T181801_VH_grd.par') as par:
+    ...     print(par) # print an overview of all available metadata
+    ...     for key, value in par.envidict().items():
+    ...         print('{0}: {1}'.format(key, value)) # print the ENVI HDR compliant metadata
     """
     
     _re_kv_pair = re.compile(r'^(\w+):\s*(.+)\s*')
