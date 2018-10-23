@@ -36,8 +36,14 @@ class ISPPar(object):
     >>> from pyroSAR.gamma import ISPPar
     >>> with ISPPar('S1A__IW___A_20141115T181801_VH_grd.par') as par:
     ...     print(par) # print an overview of all available metadata
+    ...     print(par.keys) # print all parameter names
     ...     for key, value in par.envidict().items():
     ...         print('{0}: {1}'.format(key, value)) # print the ENVI HDR compliant metadata
+    
+    Attributes
+    ----------
+    keys : list
+        the names of all parameters
     """
     
     _re_kv_pair = re.compile(r'^(\w+):\s*(.+)\s*')
