@@ -6,12 +6,11 @@
 
 <p align="center">
   <a href="#description">Description</a> •
-  <a href="#installation of pyroSAR">Installation</a> •
+  <a href="#installation">Installation</a> •
   <a href="#dependencies">Dependencies</a> •
   <a href="#example">Example</a> •
-  <a href="#authors">Author</a> •
-  <a href="#A Word on File Naming">File Naming</a> •
-  <a href="#long description">Long Description</a>
+  <a href="#notes">Notes</a> •
+  <a href="#authors">Authors</a>
 </p>
 
 <p align="center">
@@ -36,7 +35,7 @@ The pyroSAR package aims at providing a complete solution for the scalable organ
 This software used to run on a local server and is currently being restructured into a Python package.
 Not everything is working properly, stay tuned...
 
-### Installation of pyroSAR
+# Installation
 For the installation we need the Python tool pip and the version control system git. On Windows pip is 
 installed together with Anaconda, git can be downloaded from [here](https://git-scm.com/downloads).
 On Linux you can easily install both via command line:
@@ -178,7 +177,8 @@ SNAP is most conveniently used with workflow XMLs. The function geocode parses a
 parametrizes it depending on the scene type and selected processing parameters and writes it to the output directory.  
 It then calls the command `gpt`, which is SNAP's command line interface, on the workflow to execute the processing steps. 
 
-# A Word on File Naming
+# Notes
+### A Word on File Naming
 pyroSAR internally uses a fixed naming scheme to keep track of processed results. For each scene an identifier is created,
 which contains the sensor, acquisition mode, orbit (ascending or dsescending) and the time stamp of the acquisition start.
 For the example above it is `S1A__IW___A_20150222T170750`, which can be created by calling `scene.outname_base()`. For each
@@ -191,12 +191,7 @@ Processing functions like `geocode` add suffixes to this identifier to further k
 steps performed on the dataset.  
 This core concept is used by many pyroSAR functions internally to keep track of which scenes have been processed before.
 
-# Authors
-* **John Truckenbrodt** (john.truckenbrodt@uni-jena.de)
-* **Felix Cremer** (felix.cremer@uni-jena.de)
-* **Ismail Baris** (i.baris@outlook.de)
-
-# Long Description
+### Long Description
 
 The launch of recent satellite missions, the Sentinel fleet of ESA’s Copernicus programme in particular, has led to a
 tremendous increase in available earth observation data provided at no cost. The increase in data availability opens up
@@ -231,3 +226,8 @@ This software is currently being developed within EU Horizon-2020 project ‘Sat
 (SWOS)’. In an effort to better monitor wetlands from space with both optical and radar data, the dense time series of
 the Sentinel-1 satellites is exploited in order to derive high temporal resolution surface water dynamics maps. This is
 realized by applying clustering techniques in the temporal image domain of all available datasets.
+
+# Authors
+* **John Truckenbrodt** (john.truckenbrodt@uni-jena.de)
+* **Felix Cremer** (felix.cremer@uni-jena.de)
+* **Ismail Baris** (i.baris@outlook.de)
