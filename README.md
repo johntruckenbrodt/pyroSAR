@@ -10,7 +10,7 @@
   <a href="#dependencies">Dependencies</a> •
   <a href="#example">Example</a> •
   <a href="#authors">Author</a> •
-  <a href="#a word on file naming">File Naming</a> •
+  <a href="#a%20word%20on%20file%20naming">File Naming</a> •
   <a href="#long description">Long Description</a>
 </p>
 
