@@ -2,18 +2,7 @@
   <br>
   <a>pyroSAR</a>
 </h1>
-<h4 align="center">A Python Framework for Large-Scale SAR Satellite Data Processing</h4>
-
-<p align="center">
-  <a href="http://forthebadge.com">
-    <img src="http://forthebadge.com/images/badges/made-with-python.svg"
-         alt="Gitter">
-  </a>
-  <a href="http://forthebadge.com"><img src="http://forthebadge.com/images/badges/built-with-love.svg"></a>
-  <a href="http://forthebadge.com">
-      <img src="http://forthebadge.com/images/badges/built-with-science.svg">
-  </a>
-</p>
+<h3 align="center">A Python Framework for Large-Scale SAR Satellite Data Processing</h3>
 
 <p align="center">
   <a href="#description">Description</a> •
