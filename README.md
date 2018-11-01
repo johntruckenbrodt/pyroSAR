@@ -1,18 +1,51 @@
-# pyroSAR
-[![Linux Build Status][1]][2] [![Windows Build Status][3]][4] [![Coverage Status][5]][6] [![Documentation Status][7]][8] [![PyPI version][9]][10]
+<h1 align="center">
+  <br>
+  <a>pyroSAR</a>
+</h1>
+<h4 align="center">A Python Framework for Large-Scale SAR Satellite Data Processing</h4>
 
-[1]: https://www.travis-ci.org/johntruckenbrodt/pyroSAR.svg?branch=master
-[2]: https://www.travis-ci.org/johntruckenbrodt/pyroSAR
-[3]: https://ci.appveyor.com/api/projects/status/won0layps8mkss9h?svg=true
-[4]: https://ci.appveyor.com/project/johntruckenbrodt/pyrosar
-[5]: https://coveralls.io/repos/github/johntruckenbrodt/pyroSAR/badge.svg?branch=master
-[6]: https://coveralls.io/github/johntruckenbrodt/pyroSAR?branch=master
-[7]: https://readthedocs.org/projects/pyrosar/badge/?version=latest
-[8]: http://pyrosar.readthedocs.io/en/latest/?badge=latest
-[9]: https://badge.fury.io/py/pyroSAR.svg
-[10]: https://badge.fury.io/py/pyroSAR
+<p align="center">
+  <a href="http://forthebadge.com">
+    <img src="http://forthebadge.com/images/badges/made-with-python.svg"
+         alt="Gitter">
+  </a>
+  <a href="http://forthebadge.com"><img src="http://forthebadge.com/images/badges/built-with-love.svg"></a>
+  <a href="http://forthebadge.com">
+      <img src="http://forthebadge.com/images/badges/built-with-science.svg">
+  </a>
+</p>
 
-### a Python framework for large-scale SAR satellite data processing
+<p align="center">
+  <a href="#description">Description</a> •
+  <a href="#installation of pyroSAR">Installation</a> •
+  <a href="#dependencies">Dependencies</a> •
+  <a href="#example">Example</a> •
+  <a href="#authors">Author</a> •
+  <a href="#a word on file naming">File Naming</a> •
+  <a href="#long description">Long Description</a>
+</p>
+
+<p align="center">
+  <a href="https://www.travis-ci.org/johntruckenbrodt/pyroSAR"><img src="https://www.travis-ci.org/johntruckenbrodt/pyroSAR.svg?branch=master", alt="Travis Status">
+  </a>
+    
+  <a href='https://ci.appveyor.com/project/johntruckenbrodt/pyrosar'><img src='https://ci.appveyor.com/api/projects/status/won0layps8mkss9h?svg=true' alt='Appveyor Status' />
+  </a>
+  
+  <a href='https://coveralls.io/github/johntruckenbrodt/pyroSAR?branch=master'>
+    <img src='https://coveralls.io/repos/github/johntruckenbrodt/pyroSAR/badge.svg?branch=master' alt='Coveralls Status' />   </a>
+   
+   <a href='http://pyrosar.readthedocs.io/en/latest/?badge=latest'>
+    <img src='https://readthedocs.org/projects/pyrosar/badge/?version=latest' alt='Documentation Status' />    
+   </a>
+    
+   <a href='https://badge.fury.io/py/pyroSAR'>
+    <img src='https://badge.fury.io/py/pyroSAR.svg' alt='PIP Status' />    
+   </a>
+   
+</p>
+
+# Description
 
 The pyroSAR package aims at providing a complete solution for the scalable organization and processing of SAR satellite data:
 * Reading of data from various past and present satellite missions
@@ -23,16 +56,29 @@ The pyroSAR package aims at providing a complete solution for the scalable organ
 This software used to run on a local server and is currently being restructured into a Python package.
 Not everything is working properly, stay tuned...
 
+### Installation of pyroSAR
+For the installation we need the Python tool pip and the version control system git. On Windows pip is 
+installed together with Anaconda, git can be downloaded from [here](https://git-scm.com/downloads).
+On Linux you can easily install both via command line:
+```sh
+sudo apt-get install python-pip
+sudo apt-get install git
+```
+Once everything is set up, pyroSAR is ready to be installed:
+```sh
+sudo pip install git+https://github.com/johntruckenbrodt/pyroSAR.git
+```
+On Windows you need to use the Anaconda Prompt and leave out `sudo` in the above command.
 
-### Installation of dependencies
+# Dependencies
 If you are using Windows, the easiest way to work with pyroSAR and Python in general is by using 
 [Anaconda](https://www.anaconda.com/download/). It comes with all basic requirements of pyroSAR.
 The more specific instructions below are intended for Linux users.
-##### GDAL
+### GDAL
 pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as the GDAL Python binding. 
 Alternatively, one can use <a href="https://github.com/nextgis/pygdal">pygdal</a>, 
 a virtualenv and setuptools friendly version of standard GDAL python bindings.
-###### Ubuntu
+### Ubuntu
 Starting with release Yakkety (16.10), Ubuntu comes with GDAL >2.1. 
 See <a href="https://launchpad.net/ubuntu/yakkety/amd64/gdal-bin">here</a>. 
 You can install it like this:
@@ -49,13 +95,13 @@ You can check the version by typing:
 ```sh
 gdalinfo --version
 ```
-###### Debian
+### Debian
 Starting with Debian 9 (Stretch) GDAL is available in version >2.1 in the official repository.
-###### Building from source
+### Building from source
 Alternatively, you can build GDAL and the dependencies from source. The script `pyroSAR/install/install_deps.sh` 
 gives specific instructions on how to do it. It is not yet intended to run this script via shell, but rather to 
 follow the instructions step by step.
-##### SQLite + SpatiaLite
+### SQLite + SpatiaLite
 While sqlite3 and its Python binding are usually already installed, the spatialite extension needs to be 
 added. Two packages exist, libspatialite and mod_spatialite. Both can be used by pyroSAR.
 mod_spatialite has been found to be easier to setup with sqlite and can be installed via apt:
@@ -84,21 +130,9 @@ from pysqlite2 import dbapi2 as sqlite3
 ```
 Installing this package is likely to cause problems with the sqlite3 library installed on the system. 
 Thus, it is safer to build a static sqlite3 library for it (see installation script).
-### Installation of pyroSAR
-For the installation we need the Python tool pip and the version control system git. On Windows pip is 
-installed together with Anaconda, git can be downloaded from [here](https://git-scm.com/downloads).
-On Linux you can easily install both via command line:
-```sh
-sudo apt-get install python-pip
-sudo apt-get install git
-```
-Once everything is set up, pyroSAR is ready to be installed:
-```sh
-sudo pip install git+https://github.com/johntruckenbrodt/pyroSAR.git
-```
-On Windows you need to use the Anaconda Prompt and leave out `sudo` in the above command.
 
-### A small example
+
+#  Example
 Now that everything is installed, we can start working with our satellite data.
 Let's assume you have a Sentinel-1 scene in a local directory. 
 At first we load the scene into pyroSAR for analysis of the metadata:
@@ -164,7 +198,7 @@ SNAP is most conveniently used with workflow XMLs. The function geocode parses a
 parametrizes it depending on the scene type and selected processing parameters and writes it to the output directory.  
 It then calls the command `gpt`, which is SNAP's command line interface, on the workflow to execute the processing steps. 
 
-##### a word on file naming
+# A Word on File Naming
 pyroSAR internally uses a fixed naming scheme to keep track of processed results. For each scene an identifier is created,
 which contains the sensor, acquisition mode, orbit (ascending or dsescending) and the time stamp of the acquisition start.
 For the example above it is `S1A__IW___A_20150222T170750`, which can be created by calling `scene.outname_base()`. For each
@@ -176,7 +210,13 @@ Thus, `S1A_` is the sensor slot. In the same way, `IW__` is the acquisition mode
 Processing functions like `geocode` add suffixes to this identifier to further keep track of individual processing
 steps performed on the dataset.  
 This core concept is used by many pyroSAR functions internally to keep track of which scenes have been processed before.
-### Long Description
+
+# Authors
+* **John Truckenbrodt** (john.truckenbrodt@uni-jena.de)
+* **Felix Cremer** (felix.cremer@uni-jena.de)
+* **Ismail Baris** (i.baris@outlook.de)
+
+# Long Description
 
 The launch of recent satellite missions, the Sentinel fleet of ESA’s Copernicus programme in particular, has led to a
 tremendous increase in available earth observation data provided at no cost. The increase in data availability opens up
