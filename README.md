@@ -57,7 +57,7 @@ The more specific instructions below are intended for Linux users.
 pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as the GDAL Python binding. 
 Alternatively, one can use <a href="https://github.com/nextgis/pygdal">pygdal</a>, 
 a virtualenv and setuptools friendly version of standard GDAL python bindings.
-### Ubuntu
+#### Ubuntu
 Starting with release Yakkety (16.10), Ubuntu comes with GDAL >2.1. 
 See <a href="https://launchpad.net/ubuntu/yakkety/amd64/gdal-bin">here</a>. 
 You can install it like this:
@@ -74,9 +74,9 @@ You can check the version by typing:
 ```sh
 gdalinfo --version
 ```
-### Debian
+#### Debian
 Starting with Debian 9 (Stretch) GDAL is available in version >2.1 in the official repository.
-### Building from source
+#### Building from source
 Alternatively, you can build GDAL and the dependencies from source. The script `pyroSAR/install/install_deps.sh` 
 gives specific instructions on how to do it. It is not yet intended to run this script via shell, but rather to 
 follow the instructions step by step.
