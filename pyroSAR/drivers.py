@@ -94,7 +94,7 @@ def identify_many(scenes):
         a list of pyroSAR metadata handlers
     """
     idlist = []
-    pbar = pb.ProgressBar(maxval=len(scenes)).start()
+    pbar = pb.ProgressBar(max_value=len(scenes)).start()
     for i, scene in enumerate(scenes):
         if isinstance(scene, ID):
             idlist.append(scene)
@@ -1856,7 +1856,7 @@ class Archive(object):
             raise RuntimeError('directory cannot be written to')
         failed = []
         double = []
-        pbar = pb.ProgressBar(maxval=len(scenelist)).start()
+        pbar = pb.ProgressBar(max_value=len(scenelist)).start()
         cursor = self.conn.cursor()
         for i, scene in enumerate(scenelist):
             new = os.path.join(directory, os.path.basename(scene))
