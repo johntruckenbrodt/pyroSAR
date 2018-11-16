@@ -219,7 +219,7 @@ def makeSRTM(scenes, srtmdir, outname):
     Create a DEM from SRTM tiles
     Input is a list of pyroSAR.ID objects from which coordinates are read to determine the required DEM extent
     Mosaics SRTM DEM tiles, converts them to Gamma format and subtracts offset to WGS84 ellipsoid
-    for DEMs downloaded from USGS http://gdex.cr.usgs.gov or CGIAR http://srtm.csi.cgiar.org
+    for DEMs downloaded from USGS https://gdex.cr.usgs.gov/gdex/ or CGIAR http://srtm.csi.cgiar.org
     """
 
     tempdir = outname+'___temp'
@@ -282,7 +282,7 @@ def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
             remotes = ['http://e4ftl01.cr.usgs.gov/SRTM/SRTMGL1.003/2000.02.11/']
             remotepattern = pattern+'.SRTMGL1.hgt.zip'
         elif arcsec == 3:
-            server = 'http://dds.cr.usgs.gov/srtm/version2_1/SRTM3/'
+            server = 'https://dds.cr.usgs.gov/srtm/version2_1/SRTM3/'
             remotes = [os.path.join(server, x) for x in ['Africa', 'Australia', 'Eurasia', 'Islands', 'North_America', 'South_America']]
             remotepattern = pattern+'[.]hgt.zip'
         else:

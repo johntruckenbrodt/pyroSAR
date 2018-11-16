@@ -122,21 +122,21 @@ LOOKUP = Storage(snap=snap,
 # ==============================================================================
 # URL
 # ==============================================================================
-dem = Storage(ace2='http://step.esa.int/auxdata/dem/ACE2/5M/',
-              ace='http://step.esa.int/auxdata/dem/ACE30/',
+dem = Storage(ace2='https://step.esa.int/auxdata/dem/ACE2/5M/',
+              ace='https://step.esa.int/auxdata/dem/ACE30/',
               srtm3_FTP='xftp.jrc.it',
               srtm3='http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/SRTM_Data_GeoTiff/',
-              srtm1Hgt='http://step.esa.int/auxdata/dem/SRTMGL1/', )
+              srtm1Hgt='https://step.esa.int/auxdata/dem/SRTMGL1/', )
 
-orbit = Storage(doris='http://step.esa.int/auxdata/orbits/Doris/vor',
-                ers1='http://step.esa.int/auxdata/orbits/ers_precise_orb/ERS1',
-                ers2='http://step.esa.int/auxdata/orbits/ers_precise_orb/ERS2',
-                s1_poe='http://step.esa.int/auxdata/orbits/Sentinel-1/POEORB/',
-                s1_res='http://step.esa.int/auxdata/orbits/Sentinel-1/RESORB/')
+orbit = Storage(doris='https://step.esa.int/auxdata/orbits/Doris/vor',
+                ers1='https://step.esa.int/auxdata/orbits/ers_precise_orb/ERS1',
+                ers2='https://step.esa.int/auxdata/orbits/ers_precise_orb/ERS2',
+                s1_poe='https://step.esa.int/auxdata/orbits/Sentinel-1/POEORB/',
+                s1_res='https://step.esa.int/auxdata/orbits/Sentinel-1/RESORB/')
 
-auxcal = Storage(s1='http://step.esa.int/auxdata/auxcal/S1/',
-                 envisat='http://step.esa.int/auxdata/auxcal/ENVISAT/',
-                 ers='http://step.esa.int/auxdata/auxcal/ERS/')
+auxcal = Storage(s1='https://step.esa.int/auxdata/auxcal/S1/',
+                 envisat='https://step.esa.int/auxdata/auxcal/ENVISAT/',
+                 ers='https://step.esa.int/auxdata/auxcal/ERS/')
 
 URL = Storage(dem=dem,
               orbit=orbit,

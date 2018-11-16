@@ -125,7 +125,7 @@ def getAuxdata(datasets, scenes):
             files = [x.replace('hgt', 'SRTMGL1.hgt.zip') for x in
                      list(set(dissolve([scene.getHGT() for scene in scenes])))]
             for file in files:
-                infile = os.path.join('http://step.esa.int/auxdata/dem/SRTMGL1', file)
+                infile = os.path.join('https://step.esa.int/auxdata/dem/SRTMGL1', file)
                 outfile = os.path.join(auxDataPath, 'dem/SRTM 1Sec HGT', file)
                 if not os.path.isfile(outfile):
                     print(infile)
@@ -145,7 +145,7 @@ def getAuxdata(datasets, scenes):
                     years = list(set([x[0] for x in dates]))
                     
                     remote_contentVersion = urlopen(
-                        'http://step.esa.int/auxdata/orbits/Sentinel-1/POEORB/remote_contentVersion.txt')
+                        'https://step.esa.int/auxdata/orbits/Sentinel-1/POEORB/remote_contentVersion.txt')
                     versions_remote = getOrbitContentVersions(remote_contentVersion)
                     
                     for year in years:
@@ -175,7 +175,7 @@ def getAuxdata(datasets, scenes):
                             
                             for orb_id in orb_ids:
                                 orb_remote = urlopen(
-                                    'http://step.esa.int/auxdata/orbits/Sentinel-1/POEORB/{}'.format(orb_id))
+                                    'https://step.esa.int/auxdata/orbits/Sentinel-1/POEORB/{}'.format(orb_id))
                                 orb_remote_stream = zf.ZipFile(StringIO(orb_remote.read()), 'r')
                                 orb_remote.close()
                                 
