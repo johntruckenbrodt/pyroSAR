@@ -23,6 +23,8 @@ setup(name='pyroSAR',
       description='a framework for large-scale SAR satellite data processing',
       classifiers=[
           'License :: OSI Approved :: MIT License',
+          'Operating System :: Microsoft :: Windows',
+          'Operating System :: POSIX :: Linux',
           'Programming Language :: Python',
       ],
       install_requires=['progressbar2',
