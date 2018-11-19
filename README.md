@@ -18,7 +18,7 @@
   <a href='https://ci.appveyor.com/project/johntruckenbrodt/pyrosar'><img src='https://ci.appveyor.com/api/projects/status/won0layps8mkss9h?svg=true' alt='Appveyor Status' /></a>
   <a href='https://coveralls.io/github/johntruckenbrodt/pyroSAR?branch=master'>
     <img src='https://coveralls.io/repos/github/johntruckenbrodt/pyroSAR/badge.svg?branch=master' alt='Coveralls Status' />   </a>
-  <a href='http://pyrosar.readthedocs.io/en/latest/?badge=latest'>
+  <a href='https://pyrosar.readthedocs.io/en/latest/?badge=latest'>
     <img src='https://readthedocs.org/projects/pyrosar/badge/?version=latest' alt='Documentation Status' /></a>
   <a href='https://badge.fury.io/py/pyroSAR'>
     <img src='https://badge.fury.io/py/pyroSAR.svg' alt='PIP Status' /></a>

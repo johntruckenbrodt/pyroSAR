@@ -47,9 +47,9 @@ done
 # download GDAL and its dependencies
 
 declare -a remotes=(
-                "http://download.osgeo.org/gdal/$GDALVERSION/gdal-$GDALVERSION.tar.gz"
-                "http://download.osgeo.org/geos/geos-$geos_version.tar.bz2"
-                "http://download.osgeo.org/proj/proj-$proj_version.tar.gz"
+                "https://download.osgeo.org/gdal/$GDALVERSION/gdal-$GDALVERSION.tar.gz"
+                "https://download.osgeo.org/geos/geos-$geos_version.tar.bz2"
+                "https://download.osgeo.org/proj/proj-$proj_version.tar.gz"
                 )
 
 for package in "${remotes[@]}"; do
@@ -112,7 +112,7 @@ cd $packagedir
 git clone https://github.com/ghaering/pysqlite.git
 cd pysqlite
 
-wget sqlite.org/2017/sqlite-amalgamation-3190300.zip
+wget https://sqlite.org/2017/sqlite-amalgamation-3190300.zip
 
 unzip sqlite-amalgamation-3190300.zip
 cp sqlite-amalgamation-3190300/* .
@@ -122,7 +122,7 @@ sudo python setup.py build_static install --prefix=$installdir
 ########################################################################################################################
 # install spatialite
 
-wget www.gaia-gis.it/gaia-sins/libspatialite-sources/libspatialite-amalgamation-2.4.0.tar.gz -P $downloaddir
+wget https://www.gaia-gis.it/gaia-sins/libspatialite-sources/libspatialite-amalgamation-2.4.0.tar.gz -P $downloaddir
 
 cd $downloaddir
 tar xfvz libspatialite-amalgamation-2.4.0.tar.gz -C $packagedir

@@ -717,7 +717,7 @@ class CEOS_PSR(ID):
     PALSAR-1:
         Reference:
             NEB-070062B: ALOS/PALSAR Level 1.1/1.5 product Format description
-            (`JAXA 2009 <http://www.eorc.jaxa.jp/ALOS/en/doc/fdata/PALSAR_x_Format_EL.pdf>`_)
+            (`JAXA 2009 <https://www.eorc.jaxa.jp/ALOS/en/doc/fdata/PALSAR_x_Format_EL.pdf>`_)
         Products / processing levels:
             * 1.0
             * 1.1
@@ -737,7 +737,7 @@ class CEOS_PSR(ID):
     PALSAR-2:
         Reference:
             ALOS-2/PALSAR-2 Level 1.1/1.5/2.1/3.1 CEOS SAR Product Format Description
-            (`JAXA 2014 <http://www.eorc.jaxa.jp/ALOS-2/en/doc/fdata/PALSAR-2_xx_Format_CEOS_E_r.pdf>`_).
+            (`JAXA 2014 <https://www.eorc.jaxa.jp/ALOS-2/en/doc/fdata/PALSAR-2_xx_Format_CEOS_E_r.pdf>`_).
         Products / processing levels:
             * 1.0
             * 1.1
