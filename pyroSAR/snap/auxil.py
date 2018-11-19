@@ -239,7 +239,7 @@ def gpt(xmlfile):
                xmlfile]
     else:
         cmd = [gpt_exec, xmlfile]
-    
+    # print('- processing workflow {}'.format(os.path.basename(xmlfile)))
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     out, err = proc.communicate()
     out = out.decode('utf-8') if isinstance(out, bytes) else out
@@ -254,8 +254,8 @@ def gpt(xmlfile):
         err_match = re.search('Error: (.*)\n', out + err)
         errmessage = err_match.group(1) if err_match else err
         raise RuntimeError(errmessage)
-    
     if format == 'ENVI':
+        # print('- converting to GTiff')
         suffix = parse_suffix(workflow)
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff',

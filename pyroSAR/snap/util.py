@@ -74,7 +74,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if id.is_processed(outdir):
         print('scene {} already processed'.format(id.outname_base()))
         return
-    
+    # print(os.path.basename(id.scene))
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
     ############################################
@@ -89,6 +89,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     else:
         raise RuntimeError('sensor not supported (yet)')
     ######################
+    # print('- assessing polarization selection')
     if isinstance(polarizations, str):
         if polarizations == 'all':
             polarizations = id.polarizations
@@ -101,8 +102,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         polarizations = [x for x in polarizations if x in id.polarizations]
     else:
         raise RuntimeError('polarizations must be of type str or list')
-    print("Polarizations:", polarizations)
+    
     format = 'GeoTiff-BigTIFF' if len(polarizations) == 1 else 'ENVI'
+    # print(polarizations)
+    # print(format)
     
     bands_int = ','.join(['Intensity_' + x for x in polarizations])
     bands_beta = ','.join(['Beta0_' + x for x in polarizations])
@@ -110,24 +113,24 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     ############################################
     # parse base workflow
-    
+    # print('- parsing base workflow')
     workflow = parse_recipe('geocode')
     ############################################
     # Read node configuration
-    
+    # print('-- configuring Read Node')
     read = workflow.find('.//node[@id="Read"]')
     read.find('.//parameters/file').text = id.scene
     read.find('.//parameters/formatName').text = formatName
     ############################################
     # Remove-GRD-Border-Noise node configuration
-    
+    # print('-- configuring Remove-GRD-Border-Noise Node')
     if id.sensor in ['S1A', 'S1B'] and removeS1BoderNoise:
         insert_node(workflow, parse_node('Remove-GRD-Border-Noise'), before='Read')
         bn = workflow.find('.//node[@id="Remove-GRD-Border-Noise"]')
         bn.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
     ############################################
     # orbit file application node configuration
-    
+    # print('-- configuring Apply-Orbit-File Node')
     orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
                     'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
     orbitType = orbit_lookup[formatName]
@@ -138,14 +141,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     orb.find('.//parameters/orbitType').text = orbitType
     ############################################
     # calibration node configuration
-    
+    # print('-- configuring Calibration Node')
     cal = workflow.find('.//node[@id="Calibration"]')
     
     cal.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
     cal.find('.//parameters/sourceBands').text = bands_int
     ############################################
     # terrain flattening node configuration
-    
+    # print('-- configuring Terrain-Flattening Node')
     tf = workflow.find('.//node[@id="Terrain-Flattening"]')
     if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
         tf.find('.//parameters/sourceBands').text = 'Beta0'
@@ -153,7 +156,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         tf.find('.//parameters/sourceBands').text = bands_beta
     ############################################
     # configuration of node sequence for specific geocoding approaches
-    
+    # print('-- configuring geocoding approach Nodes')
     if geocoding_type == 'Range-Doppler':
         insert_node(workflow, parse_node('Terrain-Correction'), before='Terrain-Flattening')
         tc = workflow.find('.//node[@id="Terrain-Correction"]')
@@ -171,6 +174,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     ############################################
     # specify spatial resolution and coordinate reference system of the output dataset
+    # print('-- configuring CRS')
     tc.find('.//parameters/pixelSpacingInMeter').text = str(tr)
     
     try:
@@ -194,7 +198,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     tc.find('.//parameters/mapProjection').text = t_srs
     ############################################
     # (optionally) add node for conversion from linear to db scaling
-    
+    # print('-- configuring LinearToFromdB Node')
     if scaling not in ['dB', 'db', 'linear']:
         raise RuntimeError('scaling must be  a string of either "dB", "db" or "linear"')
     
@@ -208,9 +212,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     ############################################
     # (optionally) add subset node and add bounding box coordinates of defined shapefile
+    # print('-- configuring Subset Node')
     if shapefile:
+        # print('--- read')
         with shapefile if isinstance(shapefile, Vector) else Vector(shapefile) as shp:
             # reproject the geometry to WGS 84 latlon
+            # print('--- reproject')
             shp.reproject(4326)
             ext = shp.extent
             
@@ -220,15 +227,19 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             ext['ymin'] -= buffer
             ext['xmax'] += buffer
             ext['ymax'] += buffer
-            
+            # print('--- create bbox')
             with bbox(ext, shp.srs) as bounds:
+                # print('--- intersect')
                 inter = intersect(id.bbox(), bounds)
                 if not inter:
                     raise RuntimeError('no bounding box intersection between shapefile and scene')
+                # print('--- close intersect')
                 inter.close()
+                # print('--- get wkt')
                 wkt = bounds.convert2wkt()[0]
-        
+        # print('--- parse XML node')
         subset = parse_node('Subset')
+        # print('--- insert node')
         insert_node(workflow, subset, before='Read')
         
         subset = workflow.find('.//node[@id="Subset"]')
@@ -249,7 +260,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         subset.find('.//parameters/geoRegion').text = ''
     ############################################
     # parametrize write node
-    
+    # print('-- configuring Write Node')
     # create a suffix for the output file to identify processing steps performed in the workflow
     suffix = parse_suffix(workflow)
     
@@ -263,7 +274,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     ############################################
     # select DEM type
-    
+    # print('-- configuring DEM')
     if externalDEMFile is not None:
         if os.path.isfile(externalDEMFile):
             if externalDEMNoDataValue is None:
@@ -296,6 +307,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     ############################################
     # write workflow to file and optionally execute it
+    # print('- writing workflow to file')
+    
     write_recipe(workflow, outname + '_proc')
     
     # execute the newly written workflow
