@@ -36,7 +36,7 @@ before_install:
   - export PATH=$PATH:/opt/snap/bin
 
 install:
-  - pip install -r requirements.txt
+  - pip install -r requirements-dev.txt
   - pip install coveralls coverage
   - python setup.py install
 
