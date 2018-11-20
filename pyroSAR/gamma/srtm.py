@@ -6,15 +6,7 @@
 ##############################################################
 
 """
-The following tasks are performed by executing this script:
--reading of a parameter file dem.par
---see object par for necessary values; file is automatically created by starting the script via the GUI
--if necessary, creation of output and logfile directories
--generation of a DEM parameter file for each .hgt (SRTM) file in the working directory or its subdirectories
---the corresponding GAMMA command is create_dem_par, which is interactive. the list variables dempar and dempar2 are piped to the command line for automation
--if multiple files are found, mosaicing is performed
--replacement and interpolation of missing values
--transformation from equiangular (EQA) to UTM projection using a SLC parameter file
+A collection of functions to handle digital elevation models in Gamma
 """
 import sys
 
@@ -309,7 +301,3 @@ def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
                 os.remove(localname+'.zip')
                 targets.append(localname)
     return targets
-
-
-if __name__ == '__main__':
-    main()
