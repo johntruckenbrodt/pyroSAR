@@ -30,9 +30,9 @@ sys.path.insert(0, os.path.abspath('..') + os.sep)
 # built documents.
 #
 # The short X.Y version.
-version = '0.5.1'
+version = '0.6'
 # The full version, including alpha/beta/rc tags.
-release = '0.5.1'
+release = '0.6'
 
 autodoc_mock_imports = ['osgeo', 'spatialist', 'pyroSAR.spatial']
 

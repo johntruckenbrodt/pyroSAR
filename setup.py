@@ -19,7 +19,7 @@ else:
 setup(name='pyroSAR',
       packages=find_packages(),
       include_package_data=True,
-      version='0.5.1',
+      version='0.6',
       description='a framework for large-scale SAR satellite data processing',
       classifiers=[
           'License :: OSI Approved :: MIT License',
