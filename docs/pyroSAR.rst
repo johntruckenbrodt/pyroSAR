@@ -131,10 +131,3 @@ Ancillary Functions
     :members:
     :undoc-members:
     :show-inheritance:
-
-Changelog
-=========
-
-.. toctree::
-
-   changelog

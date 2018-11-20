@@ -9,6 +9,7 @@ Welcome to pyroSAR's documentation!
 .. toctree::
 
    pyroSAR
+   changelog
 
 
 Indices and tables
