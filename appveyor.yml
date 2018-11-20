@@ -43,7 +43,8 @@ install:
     # Configure the VM.
     - conda install -n root --quiet --yes gdal swig
     - python -m pip install --upgrade pip
-    - python -m pip install -r requirements-dev.txt coveralls coverage
+    - python -m pip install -r requirements-dev.txt
+    - python -m pip install coveralls coverage
     - python setup.py install
 
 # Skip .NET project specific build phase.
