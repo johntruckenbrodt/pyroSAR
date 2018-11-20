@@ -17,7 +17,7 @@ import os
 import datetime
 
 project = 'pyroSAR'
-authors = 'John Truckenbrodt, Felix Cremer, Ismail Baris'
+authors = 'John Truckenbrodt, Felix Cremer, Ismail Baris, Rhys Kidd'
 year = datetime.datetime.now().year
 
 # If extensions (or modules to document with autodoc) are in another directory,
