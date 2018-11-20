@@ -72,9 +72,10 @@ one can wrap it in a Python script:
                   'coffs': os.path.join(workdir, 'coffs'),
                   'thres': 0.15,
                   'npoly': 3,
-                  'interact_flag': 0}
+                  'interact_flag': 0,
+                  'logpath': workdir}
 
-    isp.offset_fit(**parameters, logpath=workdir)
+    isp.offset_fit(**parameters)
 
 A file `offset_fit.log` containing the output of the command is written in both cases. Any parameters, which should
 not be written and need to be set to - in the shell can be omitted in the Python call since all optional parameters
@@ -130,3 +131,10 @@ Ancillary Functions
     :members:
     :undoc-members:
     :show-inheritance:
+
+Changelog
+=========
+
+.. toctree::
+
+   changelog
