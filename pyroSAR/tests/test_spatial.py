@@ -83,7 +83,7 @@ def test_dissolve(tmpdir, travis, testdata):
 
 
 def test_Raster(tmpdir, testdata):
-    with pytest.raises(OSError):
+    with pytest.raises(RuntimeError):
         ras = sp.Raster('foobar')
     with sp.Raster(testdata['tif']) as ras:
         print(ras)
@@ -185,7 +185,7 @@ def test_stack(tmpdir, testdata):
         sp.stack(srcfiles=[name, name], resampling='foobar', targetres=tr,
               srcnodata=-99, dstnodata=-99, dstfile=outname)
 
-    with pytest.raises(OSError):
+    with pytest.raises(RuntimeError):
         sp.stack(srcfiles=[name, 'foobar'], resampling='near', targetres=tr,
               srcnodata=-99, dstnodata=-99, dstfile=outname)
 
