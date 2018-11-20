@@ -1,10 +1,10 @@
 import pyroSAR
-from pyroSAR import spatial
 import pytest
 import platform
 import tarfile as tf
 import os
 from datetime import datetime
+from spatialist import Vector
 
 
 @pytest.fixture()
@@ -168,7 +168,7 @@ def test_archive(tmpdir, testdata, appveyor):
             assert db.size == (1, 0)
             shp = os.path.join(str(tmpdir), 'db.shp')
             db.export2shp(shp)
-        assert spatial.Vector(shp).nfeatures == 1
+        assert Vector(shp).nfeatures == 1
         os.remove(dbfile)
         with pytest.raises(OSError):
             with pyroSAR.Archive(dbfile) as db:

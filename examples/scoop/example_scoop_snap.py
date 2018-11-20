@@ -3,10 +3,10 @@ import socket
 from scoop import futures
 
 from pyroSAR.snap import geocode
-from pyroSAR.spatial import vector
-
 from pyroSAR import Archive
-from pyroSAR.ancillary import finder
+
+from spatialist import vector
+from spatialist.ancillary import finder
 
 """
 This script is an example usage for processing Sentinel-1 scenes with SNAP

@@ -1,7 +1,8 @@
 import os
 import pytest
 import subprocess as sp
-import pyroSAR.ancillary as anc
+import spatialist.ancillary as anc
+from pyroSAR.ancillary import seconds, groupbyTime, groupby
 
 
 def test_dissolve_with_lists():
@@ -22,7 +23,7 @@ def test_parse_literal():
 
 
 def test_seconds():
-    assert anc.seconds('test_20151212T234411') == 3658952651.0
+    assert seconds('test_20151212T234411') == 3658952651.0
 
 
 def test_run(tmpdir, testdata):
@@ -91,7 +92,7 @@ def test_groupby():
     filenames = ['S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif',
                  'S1A__IW___A_20150309T173017_HH_grd_mli_geo_norm_db.tif',
                  'S2A__IW___A_20180309T173017_HH_grd_mli_geo_norm_db.tif']
-    sensor_groups = anc.groupby(filenames, 'sensor')
+    sensor_groups = groupby(filenames, 'sensor')
     print(sensor_groups)
     assert len(sensor_groups) == 2
     assert isinstance(sensor_groups[0], list)
@@ -99,7 +100,7 @@ def test_groupby():
 
     filenames += ['S2A__IW___A_20180309T173017_VV_grd_mli_geo_norm_db.tif']
 
-    polarization_groups = anc.groupby(filenames, 'polarization')
+    polarization_groups = groupby(filenames, 'polarization')
     print(polarization_groups)
     assert len(polarization_groups) == 2
     assert isinstance(polarization_groups[0], list)
@@ -109,7 +110,7 @@ def test_groupby():
 
     filenames += ['S2A__IW___A_20180309T173017_HV_grd_mli_geo_norm_db.tif']
 
-    polarization_groups = anc.groupby(filenames, 'polarization')
+    polarization_groups = groupby(filenames, 'polarization')
     print(polarization_groups)
     assert len(polarization_groups) == 3
     assert isinstance(polarization_groups[0], list)
@@ -124,7 +125,7 @@ def test_groupbyTime():
     filenames = ['S1__IW___A_20151212T120000',
                  'S1__IW___A_20151212T120100',
                  'S1__IW___A_20151212T120300']
-    groups = anc.groupbyTime(filenames, anc.seconds, 60)
+    groups = groupbyTime(filenames, seconds, 60)
     print(groups)
     assert len(groups) == 2
     assert isinstance(groups[0], list)
@@ -133,6 +134,6 @@ def test_groupbyTime():
     filenames = ['S1__IW___A_20151212T120000',
                  'S1__IW___A_20151212T120100',
                  'S1__IW___A_20151212T120200']
-    groups = anc.groupbyTime(filenames, anc.seconds, 60)
+    groups = groupbyTime(filenames, seconds, 60)
     print(groups)
     assert len(groups[0]) == 3

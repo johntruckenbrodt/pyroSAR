@@ -15,8 +15,7 @@ try:
 except ImportError:
     pass
 
-from spatialist.ancillary import dissolve, finder, multicore, parse_literal, rescale, run, union, \
-    urlQueryParser, which
+from spatialist.ancillary import finder
 
 
 def groupby(images, attribute):

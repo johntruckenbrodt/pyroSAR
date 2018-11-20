@@ -8,8 +8,8 @@ import shutil
 
 from pyroSAR import gamma
 from pyroSAR.gamma import srtm
-from pyroSAR.spatial.envi import hdr
-from pyroSAR.spatial import vector
+from spatialist.envi import hdr
+from spatialist import vector
 
 from pyroSAR.ancillary import run
 

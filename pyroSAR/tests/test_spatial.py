@@ -4,7 +4,8 @@ import numpy as np
 from osgeo import ogr
 import platform
 from pyroSAR import identify
-import pyroSAR.spatial as sp
+
+import spatialist as sp
 
 
 def test_crsConvert():

@@ -26,11 +26,11 @@ from os.path import expanduser
 from osgeo import gdal
 from osgeo.gdalconst import GA_Update
 
-import pyroSAR
 from pyroSAR import identify, ConfigHandler
-from pyroSAR.ancillary import dissolve, finder
-from pyroSAR.spatial import gdal_translate
 from .._dev_config import LOOKUP
+
+from spatialist.auxil import gdal_translate
+from spatialist.ancillary import dissolve, finder
 
 
 def parse_recipe(name):

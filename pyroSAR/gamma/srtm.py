@@ -28,12 +28,11 @@ import re
 import shutil
 import zipfile as zf
 
-from spatialist.envi import HDRobject, hdr
 from spatialist import raster
-from . import ISPPar, process, UTM, slc_corners
+from spatialist.ancillary import finder, run
+from spatialist.envi import HDRobject, hdr
 
-import pyroSAR
-from pyroSAR.ancillary import finder, run
+from . import ISPPar, process, UTM, slc_corners
 
 
 def fill(dem, dem_out, logpath=None, replace=False):

@@ -44,10 +44,10 @@ from osgeo.gdalconst import GA_ReadOnly, GA_Update
 
 from .S1 import OSV, linesimplify as ls
 from .ERS import passdb_query
-from .ancillary import finder, parse_literal
 from .xml_util import getNamespaces
 
 from spatialist import sqlite_setup, crsConvert, sqlite3, ogr2ogr, Vector, bbox
+from spatialist.ancillary import parse_literal, finder
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines', 'orbitNumber_abs', 'orbitNumber_rel', 'cycleNumber', 'frameNumber']

@@ -4,10 +4,10 @@ from scoop import futures
 
 from pyroSAR.S1 import OSV
 from pyroSAR.gamma import geocode
-from pyroSAR.spatial import vector
-
 from pyroSAR import Archive
-from pyroSAR.ancillary import finder, multicore
+
+from spatialist import vector
+from spatialist.ancillary import finder, multicore
 
 """
 This script is an example usage for processing Sentinel-1 scenes with GAMMA

@@ -5,7 +5,7 @@
 
 from osgeo import ogr
 import numpy as np
-from pyroSAR.ancillary import rescale
+from spatialist.ancillary import rescale
 from .polysimplify import VWSimplifier
 # import matplotlib.pyplot as plt
 

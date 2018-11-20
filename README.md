@@ -143,7 +143,7 @@ Furthermore, we are only interested in scenes acquired in Ground Range Detected 
 Swath mode (IW), which contain a VV band.
 
 ```python
-from pyroSAR.spatial import Vector
+from spatialist import Vector
 archive = Archive('scenes.db')
 site = Vector('site.shp')
 outdir = '/path/to/processed/results'

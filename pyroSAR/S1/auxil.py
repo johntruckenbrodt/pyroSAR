@@ -15,7 +15,7 @@ import ssl
 import time
 from datetime import datetime
 
-from ..ancillary import finder, urlQueryParser
+from spatialist.ancillary import finder, urlQueryParser
 
 try:
     import argparse
