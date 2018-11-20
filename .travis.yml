@@ -47,7 +47,7 @@ script:
   - coverage run --source pyroSAR/ -m pytest
 
 after_success:
-- coveralls
+  - coveralls
 
 notifications:
   slack: pyrosar:bs03zodEkRSYr8MN5HrgfSeB
