@@ -215,29 +215,31 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # print('-- configuring Subset Node')
     if shapefile:
         # print('--- read')
-        with shapefile if isinstance(shapefile, Vector) else Vector(shapefile) as shp:
-            # reproject the geometry to WGS 84 latlon
-            # print('--- reproject')
-            shp.reproject(4326)
-            ext = shp.extent
-            
-            # add an extra buffer of 0.01 degrees
-            buffer = 0.01
-            ext['xmin'] -= buffer
-            ext['ymin'] -= buffer
-            ext['xmax'] += buffer
-            ext['ymax'] += buffer
-            # print('--- create bbox')
-            with bbox(ext, shp.srs) as bounds:
-                # print('--- intersect')
-                inter = intersect(id.bbox(), bounds)
-                if not inter:
-                    raise RuntimeError('no bounding box intersection between shapefile and scene')
-                # print('--- close intersect')
-                inter.close()
-                # print('--- get wkt')
-                wkt = bounds.convert2wkt()[0]
-        # print('--- parse XML node')
+        shp =  shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
+        # reproject the geometry to WGS 84 latlon
+        # print('--- reproject')
+        shp.reproject(4326)
+        ext = shp.extent
+        # add an extra buffer of 0.01 degrees
+        buffer = 0.01
+        ext['xmin'] -= buffer
+        ext['ymin'] -= buffer
+        ext['xmax'] += buffer
+        ext['ymax'] += buffer
+        #print('--- create bbox')
+        with bbox(ext, shp.srs) as bounds:
+            # print('--- intersect')
+            print(shapefile.srs)
+            inter = intersect(id.bbox(), bounds)
+            if not inter:
+                raise RuntimeError('no bounding box intersection between shapefile and scene')
+            # print('--- close intersect')
+            inter.close()
+            # print('--- get wkt')
+            wkt = bounds.convert2wkt()[0]
+        if isinstance(shapefile, str):
+            shp.close()
+        # print('--- parse XML node') 
         subset = parse_node('Subset')
         # print('--- insert node')
         insert_node(workflow, subset, before='Read')
