@@ -215,7 +215,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # print('-- configuring Subset Node')
     if shapefile:
         # print('--- read')
-        shp =  shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
+        shp = shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
         # reproject the geometry to WGS 84 latlon
         # print('--- reproject')
         shp.reproject(4326)
@@ -239,7 +239,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             wkt = bounds.convert2wkt()[0]
         if isinstance(shapefile, str):
             shp.close()
-        # print('--- parse XML node') 
+        # print('--- parse XML node')
         subset = parse_node('Subset')
         # print('--- insert node')
         insert_node(workflow, subset, before='Read')
