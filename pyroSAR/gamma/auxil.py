@@ -17,7 +17,7 @@ from .error import gammaErrorHandler
 
 class ISPPar(object):
     """
-    Reader for ISP parameter files of the GAMMA software package.
+    Reader for ISP parameter files of the GAMMA software package
 
     This class allows to read all information from files in GAMMA's parameter file format.
     Each key-value pair is parsed and added as attribute. For instance if the parameter file

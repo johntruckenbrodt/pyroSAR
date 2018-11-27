@@ -45,7 +45,7 @@ SNAP API
 improved SNAP processing workflow node linking: it is now possible to add a node also before an existing one, instead
 of just after it
 
-changes related to Python package integrity
-*******************************************
+Python package integrity
+************************
 - add trove classifiers for supported operating systems and MIT license for easier online search
 - exchange http with https for all URLs that support it

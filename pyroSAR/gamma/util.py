@@ -545,11 +545,16 @@ def multilook(infile, outfile, targetres):
     the looks in range and azimuth are chosen to approximate the target resolution by rounding the ratio between
     target resolution and ground range/azimuth pixel spacing to the nearest integer
 
-    an ENVI HDR parameter file is automatically written for better handling on other software
+    an ENVI HDR parameter file is automatically written for better handling in other software
 
-    :param infile a SAR image in GAMMA format with a parameter file of name <infile>.par
-    :param outfile the name of the output GAMMA file
-    :param targetres: the target resolution in ground range
+    Parameters
+    ----------
+    infile: str
+        a SAR image in GAMMA format with a parameter file of name <infile>.par
+    outfile: str
+        the name of the output GAMMA file
+    targetres: int
+        the target resolution in ground range
 
 
     """
@@ -581,7 +586,8 @@ def multilook(infile, outfile, targetres):
 
 def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False, path_log=None):
     """
-    Debursting of Sentinel-1 SLC imagery in GAMMA.
+    Debursting of Sentinel-1 SLC imagery in GAMMA
+    
     The procedure consists of two steps. First antenna pattern deramping and
     then mosaicing of the single deramped bursts.
     For mosaicing, the burst boundaries are calculated from the number of looks in range (`rlks`)
