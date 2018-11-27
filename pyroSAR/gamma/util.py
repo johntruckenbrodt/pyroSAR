@@ -266,7 +266,8 @@ def correctOSV(id, osvdir=None, logpath=None, osvType='POE'):
 
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=2,
-            func_interp=0, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False, cleanup=True):
+            func_interp=0, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
+            cleanup=True, geocode_method=1):
     """
     general function for geocoding SAR images with GAMMA
     
@@ -313,6 +314,10 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         Otherwise the function will raise an error if no POE file exists
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
+    geocode_method: int
+        this is still experimental and gives the option to decide between two different back-geocoding approaches
+         * 1: first geocoding, then terrain flattening
+         * 2: first terrain flattening, then geocoding
     
     Returns
     -------
@@ -448,28 +453,33 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     # normalization and backward geocoding approach 1 ####################
     ######################################################################
     print('geocoding and normalization..')
-    for image in images:
-        process(
-            ['geocode_back', image, master_par.range_samples, lut_final, image + '_geo', sim_width, '-', func_geoback],
-            logpath=path_log)
-        process(['product', image + '_geo', n.pix, image + '_geo_pan', sim_width, 1, 1, 0], logpath=path_log)
-        process(['lin_comb', 1, image + '_geo_pan', 0, math.cos(math.radians(master_par.incidence_angle)),
-                 image + '_geo_pan_flat', sim_width], logpath=path_log)
-        process(['sigma2gamma', image + '_geo_pan_flat', n.inc, image + '_geo_norm', sim_width], logpath=path_log)
-        par2hdr(n.dem_seg + '.par', image + '_geo_norm.hdr')
+    if geocode_method == 1:
+        for image in images:
+            process(
+                ['geocode_back', image, master_par.range_samples, lut_final, image + '_geo', sim_width, '-', func_geoback],
+                logpath=path_log)
+            process(['product', image + '_geo', n.pix, image + '_geo_pan', sim_width, 1, 1, 0], logpath=path_log)
+            process(['lin_comb', 1, image + '_geo_pan', 0, math.cos(math.radians(master_par.incidence_angle)),
+                     image + '_geo_pan_flat', sim_width], logpath=path_log)
+            process(['sigma2gamma', image + '_geo_pan_flat', n.inc, image + '_geo_norm', sim_width], logpath=path_log)
+            par2hdr(n.dem_seg + '.par', image + '_geo_norm.hdr')
     ######################################################################
     # normalization and backward geocoding approach 2 ####################
     ######################################################################
-    # process(['pixel_area', master+'.par', dem_seg+'.par', dem_seg, lut_fine, ls_map, inc, pixel_area_fine], logpath=path_log)
-    # process(['radcal_MLI', master, master+'.par', '-', master+'_cal', '-', 0, 0, 1, 0.0, '-', ellipse_pixel_area], logpath=path_log)
-    # process(['ratio', ellipse_pixel_area, pixel_area_fine, ratio_sigma0, master_par.range_samples, 1, 1], logpath=path_log)
-    #
-    # for image in images:
-    #     process(['product', image, ratio_sigma0, image+'_pan', master_par.range_samples, 1, 1], logpath=path_log)
-    #     process(['geocode_back', image+'_pan', master_par.range_samples, lut_fine, image+'_pan_geo', sim_width, 0, func_geoback], logpath=path_log)
-    #     process(['lin_comb', 1, image+'_pan_geo', 0, math.cos(math.radians(master_par.incidence_angle)), image+'_pan_geo_flat', sim_width], logpath=path_log)
-    #     process(['sigma2gamma', image+'_pan_geo_flat', inc, image+'_geo_norm', sim_width], logpath=path_log)
-    #     par2hdr(dem_seg+'.par', image+'_geo_norm.hdr')
+    elif geocode_method == 2:
+        n.appreciate(['pixel_area_fine', 'ellipse_pixel_area', 'ratio_sigma0'])
+        process(['pixel_area', master+'.par', n.dem_seg+'.par', n.dem_seg, lut_final, n.ls_map, n.inc, n.pixel_area_fine], logpath=path_log)
+        process(['radcal_MLI', master, master+'.par', '-', master+'_cal', '-', 0, 0, 1, 0.0, '-', n.ellipse_pixel_area], logpath=path_log)
+        process(['ratio', n.ellipse_pixel_area, n.pixel_area_fine, n.ratio_sigma0, master_par.range_samples, 1, 1], logpath=path_log)
+    
+        for image in images:
+            process(['product', image, n.ratio_sigma0, image+'_pan', master_par.range_samples, 1, 1], logpath=path_log)
+            process(['geocode_back', image+'_pan', master_par.range_samples, lut_final, image+'_pan_geo', sim_width, 0, func_geoback], logpath=path_log)
+            process(['lin_comb', 1, image+'_pan_geo', 0, math.cos(math.radians(master_par.incidence_angle)), image+'_pan_geo_flat', sim_width], logpath=path_log)
+            process(['sigma2gamma', image+'_pan_geo_flat', n.inc, image+'_geo_norm', sim_width], logpath=path_log)
+            par2hdr(n.dem_seg+'.par', image+'_geo_norm.hdr')
+    else:
+        raise RuntimeError('unknown geocode_method option')
     ######################################################################
     print('conversion to (dB and) geotiff..')
     for image in images:
