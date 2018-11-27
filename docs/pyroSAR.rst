@@ -43,9 +43,21 @@ GAMMA Processing
 ================
 
 .. automodule:: pyroSAR.gamma
-    :members: geocode, convert2gamma, ISPPar, process, ovs, S1_deburst, correctOSV
+    :members: geocode, convert2gamma, ISPPar, process, ovs, S1_deburst, correctOSV, multilook
     :undoc-members:
     :show-inheritance:
+
+    .. autosummary::
+        :nosignatures:
+
+        convert2gamma
+        correctOSV
+        geocode
+        ISPPar
+        multilook
+        ovs
+        process
+        S1_deburst
 
 GAMMA Command API
 -----------------
@@ -131,3 +143,12 @@ Ancillary Functions
     :members:
     :undoc-members:
     :show-inheritance:
+
+    .. autosummary::
+        :nosignatures:
+
+        find_datasets
+        groupby
+        groupbyTime
+        parse_datasetname
+        seconds
