@@ -7,6 +7,7 @@ import os
 import re
 import json
 import subprocess as sp
+from datetime import datetime
 
 from spatialist.ancillary import parse_literal, run, union
 from spatialist.envi import hdr
@@ -199,7 +200,7 @@ class UTM(object):
                 self.index = list(set(self.index + ['zone', 'northing', 'easting']))
 
 
-def process(cmd, outdir=None, logpath=None, inlist=None, void=True):
+def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True, shellscript=None):
     """
     wrapper function to execute GAMMA commands via module :mod:`subprocess`
     
@@ -209,19 +210,40 @@ def process(cmd, outdir=None, logpath=None, inlist=None, void=True):
         the command line arguments
     outdir: str
         the directory to execute the command in
+    logfile: str
+        a file to write the command log to; overrides parameter logpath
     logpath: str
-        a directory to write logfiles to; the file will be named {GAMMA command}.log, e.g. gc_map.log
+        a directory to write logfiles to; the file will be named {GAMMA command}.log, e.g. gc_map.log;
+        is overridden by parameter logfile
     inlist: list
         a list of values, which is passed as interactive inputs via stdin
     void: bool
         return the stdout and stderr messages?
+    shellscript: str
+        a file to write the Gamma commands to in shell format
     
     Returns
     -------
     tuple of str or None
         the stdout and stderr messages if void is False, otherwise None
     """
-    log = os.path.join(logpath, cmd[0] + '.log') if logpath else None
+    if logfile is not None:
+        log = logfile
+    else:
+        log = os.path.join(logpath, os.path.basename(cmd[0]) + '.log') if logpath else None
+    if shellscript is not None:
+        line = ' '.join([str(x) for x in cmd])
+        if inlist is not None:
+            line += ' <<< $"{}"'.format('\n'.join([str(x) for x in inlist]) + '\n')
+        with open(shellscript, 'a+') as sh:
+            if outdir is not None:
+                first = sh.read(1)
+                if not first:
+                    ts = datetime.now().strftime('%a %b %d %H:%M:%S %Y')
+                    sh.write('# this script was created automatically by pyroSAR on {}\n\n'.format(ts))
+                    sh.write('export base={}\n\n'.format(outdir))
+                line = line.replace(outdir, '$base')
+            sh.write(line + '\n\n')
     out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False, errorpass=True)
     gammaErrorHandler(out, err)
     if not void:
