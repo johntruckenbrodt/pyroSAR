@@ -45,6 +45,12 @@ def parse_command(command):
             if item != arg:
                 out = out.replace(item, arg)
     
+    # fix general inconsistencies in parameter naming
+    parnames_lookup = {'product': ('wgt_flg', 'wgt_flag')}
+    command_base = os.path.basename(command)
+    if command_base in parnames_lookup.keys():
+        out = out.replace(*parnames_lookup[command_base])
+    
     double = [k for k, v in Counter(arg_req + arg_opt).items() if v > 1]
     if len(double) > 0:
         raise RuntimeError('double parameter{0}: {1}'.format('s' if len(double) > 1 else '', ', '.join(double)))
