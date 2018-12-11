@@ -47,14 +47,14 @@ def parse_command(command):
     
     double = [k for k, v in Counter(arg_req + arg_opt).items() if v > 1]
     if len(double) > 0:
-        raise RuntimeError('double parameter{0}: {1}'.format('s' if len(double)> 1 else '', ', '.join(double)))
+        raise RuntimeError('double parameter{0}: {1}'.format('s' if len(double) > 1 else '', ', '.join(double)))
     
     # print('header_raw: \n{}\n'.format(header))
     # print('usage_raw: \n{}\n'.format(usage))
     # print('required args: {}\n'.format(', '.join(arg_req)))
     # print('optional args: {}\n'.format(', '.join(arg_opt)))
     # print('double args: {}\n'.format(', '.join(double)))
-    
+    ######################################################################################
     # create the function argument string for the Python function
     # optional arguments are parametrized with '-' as default value, e.g. arg_opt='-'
     # a '-' in the parameter name is replaced with '_'
@@ -62,6 +62,11 @@ def parse_command(command):
     argstr_function = re.sub(r'([^\'])-([^\'])', r'\1_\2', ', '.join(arg_req + [x + "='-'" for x in arg_opt])) \
         .replace(', def=', ', drm=')
     
+    # create the function definition string
+    fun_def = 'def {name}({args_fun}, logpath=None, outdir=None, shellscript=None):' \
+        .format(name=os.path.basename(command).replace('-', '_'),
+                args_fun=argstr_function)
+    ######################################################################################
     # create the process call argument string
     # a '-' in the parameter name is replaced with '_'
     # e.g. 'arg1, arg2, arg3'
@@ -70,8 +75,15 @@ def parse_command(command):
         .replace('-', '_') \
         .replace(', def,', ', drm,')
     
+    # create the process call string
+    fun_proc = "process(['{command}', {args_cmd}], logpath=logpath, outdir=outdir, shellscript=shellscript)" \
+        .format(command=command,
+                args_cmd=argstr_process)
+    
     # print('arg_str1: \n{}\n'.format(argstr_function))
     # print('arg_str2: \n{}\n'.format(argstr_process))
+    ######################################################################################
+    # create the function docstring
     
     # define the start of the parameter documentation string, which is either after 'input_parameters' or after
     # the usage description string
@@ -84,7 +96,7 @@ def parse_command(command):
     
     docstring_elements = ['Parameters\n----------']
     
-    # gather the indices, which mark the documentation start of the respective parameters within 
+    # collect the indices which mark the documentation start of the respective parameters within
     # the raw documentation text
     starts = []
     for x in arg_req + arg_opt:
@@ -149,20 +161,19 @@ def parse_command(command):
     doc = 'logpath: str or None\n{0}a directory to write command logfiles to'.format(indent)
     docstring_elements.append(doc)
     
-    # create the function definition string
-    fun_def = 'def {name}({args_fun}, logpath=None):' \
-        .format(name=os.path.basename(command).replace('-', '_'),
-                args_fun=argstr_function)
+    # create docstring for parameter outdir
+    doc = 'outdir: str or None\n{0}the directory to execute the command in'.format(indent)
+    docstring_elements.append(doc)
+    
+    # create docstring for parameter shellscript
+    doc = 'shellscript: str or None\n{0}a file to write the Gamma commands to in shell format'.format(indent)
+    docstring_elements.append(doc)
     
     # create the complete docstring
     fun_doc = '\n{header}\n\n{doc}\n' \
         .format(header=header,
                 doc='\n'.join(docstring_elements))
-    
-    # create the process call string
-    fun_proc = "process(['{command}', {args_cmd}], logpath=logpath)" \
-        .format(command=command,
-                args_cmd=argstr_process)
+    ######################################################################################
     
     # combine the elements to a complete Python function string
     fun = '''{defn}\n"""{doc}"""\n{proc}'''.format(defn=fun_def, doc=fun_doc, proc=fun_proc)
