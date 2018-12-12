@@ -374,9 +374,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         scene.scene = os.path.join(tempdir, os.path.basename(scene.file))
         os.makedirs(scene.scene)
     
-    logdir = os.path.join(scene.scene, 'logfiles')
-    if not os.path.isdir(logdir):
-        os.makedirs(logdir)
+    path_log = os.path.join(scene.scene, 'logfiles')
+    if not os.path.isdir(path_log):
+        os.makedirs(path_log)
     
     if scene.sensor in ['S1A', 'S1B']:
         print('removing border noise..')
@@ -392,7 +392,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         else:
             osvtype = 'POE'
         try:
-            correctOSV(id=scene, osvdir=osvdir, logpath=logdir, osvType=osvtype)
+            correctOSV(id=scene, osvdir=osvdir, logpath=path_log, osvType=osvtype)
         except RuntimeError:
             return
     
@@ -419,10 +419,6 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     #     n.appreciate(['ls_map'])
     
     ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
-    
-    path_log = os.path.join(scene.scene, 'logfiles')
-    if not os.path.isdir(path_log):
-        os.makedirs(path_log)
     
     master_par = ISPPar(master + '.par')
     
