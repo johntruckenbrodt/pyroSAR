@@ -66,7 +66,7 @@ def calibrate(id, directory, replace=False):
         raise NotImplementedError('calibration for class {} is not implemented yet'.format(type(id).__name__))
 
 
-def convert2gamma(id, directory, S1_noiseremoval=True):
+def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None, shellscript=None):
     """
     general function for converting SAR images to GAMMA format
 
@@ -107,7 +107,10 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                                     SLC_par=outname + '.par',
                                     CEOS_DAT=dat,
                                     SLC=outname,
-                                    inlist=[title])
+                                    inlist=[title],
+                                    logpath=logpath,
+                                    outdir=outdir,
+                                    shellscript=shellscript)
                 else:
                     print('scene already converted')
             else:
@@ -129,7 +132,10 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                 isp.par_EORC_PALSAR(CEOS_leader=id.file,
                                     SLC_par=outname + '.par',
                                     CEOS_data=image,
-                                    SLC=outname)
+                                    SLC=outname,
+                                    logpath=logpath,
+                                    outdir=outdir,
+                                    shellscript=shellscript)
             else:
                 outname_base = '{}_{}_mli_geo'.format(id.outname_base(), polarization)
                 outname = os.path.join(directory, outname_base)
@@ -138,7 +144,10 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                                         MLI_par=outname + '.par',
                                         DEM_par=outname + '_dem.par',
                                         CEOS_data=image,
-                                        MLI=outname)
+                                        MLI=outname,
+                                        logpath=logpath,
+                                        outdir=outdir,
+                                        shellscript=shellscript)
             par2hdr(outname + '.par', outname + '.hdr')
     
     elif isinstance(id, ESA):
@@ -151,7 +160,9 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
             
             isp.par_ASAR(ASAR_ERS_file=os.path.basename(id.file),
                          output_name=outname,
-                         outdir=os.path.dirname(id.file))
+                         outdir=os.path.dirname(id.file),
+                         logpath=logpath,
+                         shellscript=shellscript)
             
             os.remove(outname + '.hdr')
             for item in finder(directory, [os.path.basename(outname)], regex=True):
@@ -199,7 +210,10 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
             pars = {'GeoTIFF': tiff,
                     'annotation_XML': xml_ann,
                     'calibration_XML': xml_cal,
-                    'noise_XML': xml_noise}
+                    'noise_XML': xml_noise,
+                    'logpath': logpath,
+                    'shellscript': shellscript,
+                    'outdir': outdir}
             
             if product == 'slc':
                 swath = match.group('swath').upper()
@@ -223,7 +237,10 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
             outname = os.path.join(directory, id.outname_base() + '_' + pol)
             
             pars = {'annotation_XML': id.file,
-                    'pol': pol}
+                    'pol': pol,
+                    'logpath': logpath,
+                    'shellscript': shellscript,
+                    'outdir': outdir}
             
             if id.product == 'SSC':
                 outname += '_slc'
