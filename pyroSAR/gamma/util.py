@@ -32,6 +32,7 @@ from spatialist.ancillary import union, finder
 from ..S1 import OSV
 from ..drivers import ID, CEOS_ERS, CEOS_PSR, ESA, SAFE, TSX, identify
 from . import ISPPar, Namespace, process, par2hdr
+from .api import diff, disp, lat
 
 ogr.UseExceptions()
 
@@ -125,7 +126,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                 outname = os.path.join(directory, outname_base)
                 process(
                     ['par_EORC_PALSAR_geo', id.file, outname + '.par', outname + '_dem.par', image, outname])
-
+            
             par2hdr(outname + '.par', outname + '.hdr')
     
     elif isinstance(id, ESA):
@@ -341,6 +342,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     scene = scene if isinstance(scene, ID) else identify(scene)
     
+    shellscript = os.path.join(outdir, scene.outname_base() + '_commands.sh')
+    
     if scene.sensor not in ['S1A', 'S1B']:
         raise IOError('this method is currently only available for Sentinel-1. Please stay tuned...')
     
@@ -423,15 +426,34 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     master_par = ISPPar(master + '.par')
     
-    gc_map_args = [dem + '.par', dem, n.dem_seg + '.par', n.dem_seg, n.lut_coarse,
-                   ovs_lat, ovs_lon, n.sim_map, n.u, n.v, n.inc, n.psi, n.pix, n.ls_map,
-                   8, func_interp]
+    gc_map_args = {'DEM_par': dem + '.par',
+                   'DEM': dem,
+                   'DEM_seg_par': n.dem_seg + '.par',
+                   'DEM_seg': n.dem_seg,
+                   'lookup_table': n.lut_coarse,
+                   'lat_ovr': ovs_lat,
+                   'lon_ovr': ovs_lon,
+                   'sim_sar': n.sim_map,
+                   'u': n.u,
+                   'v': n.v,
+                   'inc': n.inc,
+                   'psi': n.psi,
+                   'pix': n.pix,
+                   'ls_map': n.ls_map,
+                   'frame': 8,
+                   'ls_mode': func_interp,
+                   'logpath': path_log,
+                   'shellscript': shellscript,
+                   'outdir': scene.scene}
     
     print('SAR image simulation from DEM..')
     if master_par.image_geometry == 'GROUND_RANGE':
-        process(['gc_map_grd', master + '.par'] + gc_map_args, logpath=path_log)
+        gc_map_args.update({'GRD_par': master + '.par'})
+        diff.gc_map_grd(**gc_map_args)
     else:
-        process(['gc_map', master + '.par', '-'] + gc_map_args, logpath=path_log)
+        gc_map_args.update({'MLI_par': master + '.par',
+                            'OFF_par': '-'})
+        diff.gc_map(**gc_map_args)
     
     for item in ['dem_seg', 'sim_map', 'u', 'v', 'psi', 'pix', 'inc']:
         if n.isappreciated(item):
@@ -449,13 +471,45 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     ######################################################################
     print('geocoding and normalization..')
     for image in images:
-        process(
-            ['geocode_back', image, master_par.range_samples, lut_final, image + '_geo', sim_width, '-', func_geoback],
-            logpath=path_log)
-        process(['product', image + '_geo', n.pix, image + '_geo_pan', sim_width, 1, 1, 0], logpath=path_log)
-        process(['lin_comb', 1, image + '_geo_pan', 0, math.cos(math.radians(master_par.incidence_angle)),
-                 image + '_geo_pan_flat', sim_width], logpath=path_log)
-        process(['sigma2gamma', image + '_geo_pan_flat', n.inc, image + '_geo_norm', sim_width], logpath=path_log)
+        diff.geocode_back(data_in=image,
+                          width_in=master_par.range_samples,
+                          gc_map=lut_final,
+                          data_out=image + '_geo',
+                          width_out=sim_width,
+                          nlines_out='-',
+                          interp_mode=func_geoback,
+                          logpath=path_log,
+                          outdir=scene.scene,
+                          shellscript=shellscript)
+        
+        lat.product(data_1=image + '_geo',
+                    data_2=n.pix,
+                    product=image + '_geo_pan',
+                    width=sim_width,
+                    bx=1,
+                    by=1,
+                    wgt_flag=0,
+                    logpath=path_log,
+                    outdir=scene.scene,
+                    shellscript=shellscript)
+        
+        lat.lin_comb(files=[image + '_geo_pan'],
+                     constant=0,
+                     factors=[math.cos(math.radians(master_par.incidence_angle))],
+                     f_out=image + '_geo_pan_flat',
+                     width=sim_width,
+                     logpath=path_log,
+                     outdir=scene.scene,
+                     shellscript=shellscript)
+        
+        lat.sigma2gamma(pwr1=image + '_geo_pan_flat',
+                        inc=n.inc,
+                        gamma=image + '_geo_norm',
+                        width=sim_width,
+                        logpath=path_log,
+                        outdir=scene.scene,
+                        shellscript=shellscript)
+        
         par2hdr(n.dem_seg + '.par', image + '_geo_norm.hdr')
     ######################################################################
     # normalization and backward geocoding approach 2 ####################
@@ -476,8 +530,16 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         for scale in scaling:
             if scale == 'db':
                 nodata_out = nodata[1]
-                process(['linear_to_dB', image + '_geo_norm', image + '_geo_norm_db', sim_width, 0, nodata_out],
-                        logpath=path_log)
+                
+                lat.linear_to_dB(data_in=image + '_geo_norm',
+                                 data_out=image + '_geo_norm_db',
+                                 width=sim_width,
+                                 inverse_flag=0,
+                                 null_value=nodata_out,
+                                 logpath=path_log,
+                                 outdir=scene.scene,
+                                 shellscript=shellscript)
+                
                 par2hdr(n.dem_seg + '.par', image + '_geo_norm_db.hdr')
             else:
                 nodata_out = nodata[0]
@@ -485,7 +547,14 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
             infile = image + '_geo_norm{}'.format(suffix)
             outfile = os.path.join(outdir, os.path.basename(image) + '_geo_norm{}.tif'.format(suffix))
             
-            process(['data2geotiff', n.dem_seg + '.par', infile, 2, outfile, nodata_out], logpath=path_log)
+            disp.data2geotiff(DEM_par=n.dem_seg + '.par',
+                              data=infile,
+                              type=2,
+                              GeoTIFF=outfile,
+                              nodata=nodata_out,
+                              logpath=path_log,
+                              outdir=scene.scene,
+                              shellscript=shellscript)
     
     if scene.sensor in ['S1A', 'S1B']:
         shutil.copyfile(os.path.join(scene.scene, 'manifest.safe'),
