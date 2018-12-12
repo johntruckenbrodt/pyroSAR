@@ -64,6 +64,11 @@ def parse_command(command):
     double = [k for k, v in Counter(arg_req + arg_opt).items() if v > 1]
     if len(double) > 0:
         raise RuntimeError('double parameter{0}: {1}'.format('s' if len(double) > 1 else '', ', '.join(double)))
+
+    inlist = ['par_ESA_ERS']
+    
+    if command_base in inlist:
+        arg_req.append('inlist')
     
     # print('header_raw: \n{}\n'.format(header))
     # print('usage_raw: \n{}\n'.format(usage))
@@ -92,6 +97,9 @@ def parse_command(command):
     
     proc_args = arg_req + arg_opt
     
+    if command_base in inlist:
+        proc_args.remove('inlist')
+    
     if command_base == 'lin_comb':
         proc_args.insert(0, 'len(files)')
     
@@ -100,9 +108,10 @@ def parse_command(command):
         .replace(', def,', ', drm,')
     
     # create the process call string
-    fun_proc = "process(['{command}', {args_cmd}], logpath=logpath, outdir=outdir, shellscript=shellscript)" \
+    fun_proc = "process(['{command}', {args_cmd}], logpath=logpath, outdir=outdir{inlist}, shellscript=shellscript)" \
         .format(command=command,
-                args_cmd=argstr_process)
+                args_cmd=argstr_process,
+                inlist=', inlist=inlist' if command_base in inlist else '')
     
     # print('arg_str1: \n{}\n'.format(argstr_function))
     # print('arg_str2: \n{}\n'.format(argstr_process))
@@ -119,6 +128,10 @@ def parse_command(command):
         doc_raw = doc[starts[i]:starts[i + 1]]
         doc_tuple = re.search(pattern, doc_raw, flags=re.DOTALL).groups()
         doc_items.append(doc_tuple)
+    
+    if command_base in inlist:
+        pos = [x[0] for x in doc_items].index(arg_opt[0])
+        doc_items.insert(pos, ('inlist', 'a list of arguments to be passed to stdin'))
     
     # insert the parameter replacements
     if command_base in replacements.keys():
