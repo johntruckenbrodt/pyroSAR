@@ -30,6 +30,12 @@ def parse_command(command):
     out, err = proc.communicate()
     out += err
     
+    # fix general inconsistencies in parameter naming
+    parnames_lookup = {'product': ('wgt_flg', 'wgt_flag'),
+                       'par_ASAR': ('ASAR/ERS_file', 'ASAR_ERS_file')}
+    if command_base in parnames_lookup.keys():
+        out = out.replace(*parnames_lookup[command_base])
+    
     # filter header command description and usage description text
     header = '\n'.join([x.strip('* ') for x in re.findall('[*]{3}.*[*]{3}', out)])
     header = '| ' + header.replace('\n', '\n| ')
@@ -55,11 +61,6 @@ def parse_command(command):
     if command_base in replacements.keys():
         for old, new, description in replacements['lin_comb']:
             arg_req = replace(old, new, arg_req)
-    
-    # fix general inconsistencies in parameter naming
-    parnames_lookup = {'product': ('wgt_flg', 'wgt_flag')}
-    if command_base in parnames_lookup.keys():
-        out = out.replace(*parnames_lookup[command_base])
     
     double = [k for k, v in Counter(arg_req + arg_opt).items() if v > 1]
     if len(double) > 0:
