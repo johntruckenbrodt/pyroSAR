@@ -443,7 +443,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         scene.removeGRDBorderNoise()
     
     print('converting scene to GAMMA format..')
-    convert2gamma(scene, scene.scene)
+    convert2gamma(scene, scene.scene, logpath=path_log, outdir=scene.scene, shellscript=shellscript)
     
     if scene.sensor in ['S1A', 'S1B']:
         print('updating orbit state vectors..')
