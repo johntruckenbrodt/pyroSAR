@@ -78,6 +78,12 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
         the output directory for the converted images
     S1_noiseremoval: bool
         only Sentinel-1: should noise removal be applied to the image?
+    logpath: str or None
+        a directory to write command logfiles to
+    outdir: str or None
+        the directory to execute the command in
+    shellscript: str or None
+        a file to write the Gamma commands to in shell format
 
     Returns
     -------
