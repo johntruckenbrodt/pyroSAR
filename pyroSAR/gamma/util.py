@@ -32,7 +32,7 @@ from spatialist.ancillary import union, finder
 from ..S1 import OSV
 from ..drivers import ID, CEOS_ERS, CEOS_PSR, ESA, SAFE, TSX, identify
 from . import ISPPar, Namespace, process, par2hdr
-from .api import diff, disp, lat
+from .api import diff, disp, isp, lat
 
 ogr.UseExceptions()
 
@@ -102,7 +102,12 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                     lea = id.findfiles('LEA_01.001')[0]
                     dat = id.findfiles('DAT_01.001')[0]
                     title = re.sub('\.PS$', '', os.path.basename(id.file))
-                    process(['par_ESA_ERS', lea, outname + '.par', dat, outname], inlist=[title])
+                    
+                    isp.par_ESA_ERS(CEOS_SAR_leader=lea,
+                                    SLC_par=outname + '.par',
+                                    CEOS_DAT=dat,
+                                    SLC=outname,
+                                    inlist=[title])
                 else:
                     print('scene already converted')
             else:
@@ -120,13 +125,20 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
             if id.product == '1.1':
                 outname_base = '{}_{}_slc'.format(id.outname_base(), polarization)
                 outname = os.path.join(directory, outname_base)
-                process(['par_EORC_PALSAR', id.file, outname + '.par', image, outname])
+                
+                isp.par_EORC_PALSAR(CEOS_leader=id.file,
+                                    SLC_par=outname + '.par',
+                                    CEOS_data=image,
+                                    SLC=outname)
             else:
                 outname_base = '{}_{}_mli_geo'.format(id.outname_base(), polarization)
                 outname = os.path.join(directory, outname_base)
-                process(
-                    ['par_EORC_PALSAR_geo', id.file, outname + '.par', outname + '_dem.par', image, outname])
-            
+                
+                isp.par_EORC_PALSAR_geo(CEOS_leader=id.file,
+                                        MLI_par=outname + '.par',
+                                        DEM_par=outname + '_dem.par',
+                                        CEOS_data=image,
+                                        MLI=outname)
             par2hdr(outname + '.par', outname + '.hdr')
     
     elif isinstance(id, ESA):
@@ -136,7 +148,11 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
         """
         outname = os.path.join(directory, id.outname_base())
         if not id.is_processed(directory):
-            process(['par_ASAR', os.path.basename(id.file), outname], os.path.dirname(id.file))
+            
+            isp.par_ASAR(ASAR_ERS_file=os.path.basename(id.file),
+                         output_name=outname,
+                         outdir=os.path.dirname(id.file))
+            
             os.remove(outname + '.hdr')
             for item in finder(directory, [os.path.basename(outname)], regex=True):
                 ext = '.par' if item.endswith('.par') else ''
@@ -180,14 +196,23 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                       product)
             name = os.path.join(directory, '_'.join(fields))
             
+            pars = {'GeoTIFF': tiff,
+                    'annotation_XML': xml_ann,
+                    'calibration_XML': xml_cal,
+                    'noise_XML': xml_noise}
+            
             if product == 'slc':
                 swath = match.group('swath').upper()
-                name = name.replace('{:_<{l}}'.format(id.acquisition_mode, l=len(swath)), swath)
-                cmd = ['par_S1_SLC', tiff, xml_ann, xml_cal, xml_noise, name + '.par', name, name + '.tops_par']
+                name = name.replace('{:_<{length}}'.format(id.acquisition_mode, length=len(swath)), swath)
+                pars['SLC'] = name
+                pars['SLC_par'] = name + '.par'
+                pars['TOPS_par'] = name + '.tops_par'
+                isp.par_S1_SLC(**pars)
             else:
-                cmd = ['par_S1_GRD', tiff, xml_ann, xml_cal, xml_noise, name + '.par', name]
+                pars['MLI'] = name
+                pars['MLI_par'] = name + '.par'
+                isp.par_S1_GRD(**pars)
             
-            process(cmd)
             par2hdr(name + '.par', name + '.hdr')
     
     elif isinstance(id, TSX):
@@ -196,17 +221,35 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
         for image in images:
             pol = pattern.match(os.path.basename(image)).group('pol')
             outname = os.path.join(directory, id.outname_base() + '_' + pol)
+            
+            pars = {'annotation_XML': id.file,
+                    'pol': pol}
+            
             if id.product == 'SSC':
                 outname += '_slc'
-                process(['par_TX_SLC', id.file, image, outname + '.par', outname, pol])
+                pars['COSAR'] = image
+                pars['SLC_par'] = outname + '.par'
+                pars['SLC'] = outname
+                isp.par_TX_SLC(**pars)
+            
             elif id.product == 'MGD':
                 outname += '_mli'
-                process(['par_TX_GRD', id.file, image, outname + '.par', outname, pol])
-            else:
+                pars['GeoTIFF'] = image
+                pars['GRD_par'] = outname + '.par'
+                pars['GRD'] = outname
+                isp.par_TX_GRD(**pars)
+            
+            elif id.product in ['GEC', 'EEC']:
                 outname += '_mli_geo'
-                process(['par_TX_geo', id.file, image, outname + '.par', outname + '_dem.par', outname, pol])
+                pars['GeoTIFF'] = image
+                pars['MLI_par'] = outname + '.par'
+                pars['DEM_par'] = outname + '_dem.par'
+                pars['GEO'] = outname
+                isp.par_TX_geo(**pars)
+            else:
+                raise RuntimeError('unknown product: {}'.format(id.product))
+            
             par2hdr(outname + '.par', outname + '.hdr')
-    
     else:
         raise NotImplementedError('conversion for class {} is not implemented yet'.format(type(id).__name__))
 
