@@ -25,6 +25,7 @@ def parse_command(command):
 
     """
     command = which(command)
+    command_base = os.path.basename(command)
     proc = sp.Popen(command, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True)
     out, err = proc.communicate()
     out += err
@@ -35,19 +36,28 @@ def parse_command(command):
     usage = re.search('usage:.*(?=\n)', out).group()
     
     # filter required and optional arguments from usage description text
-    arg_req = [re.sub('[^\w.-]*', '', x) for x in re.findall('[^<]*<([^>]*)>', usage)]
+    arg_req_raw = [re.sub('[^\w.-]*', '', x) for x in re.findall('[^<]*<([^>]*)>', usage)]
     arg_opt = [re.sub('[^\w.-]*', '', x) for x in re.findall('[^[]*\[([^]]*)\]', usage)]
     
-    # fix inconsistencies in parameter naming related to case differences,
-    # e.g. ISP_PAR in the usage text vs. ISP_Par in the parameter description
-    for arg in arg_req + arg_opt:
-        for item in re.findall(arg, out, re.IGNORECASE):
-            if item != arg:
-                out = out.replace(item, arg)
+    # define parameter replacements
+    replacements = {'lin_comb': [(['nfiles', 'f1', 'f2', '...'],
+                                  ['files'],
+                                  'a list of input data files (float)'),
+                                 (['factor1', 'factor2', '...'],
+                                  ['factors'],
+                                  'a list of factors to multiply the input files with')]}
+    
+    def replace(sequence, replacement, lst):
+        lst_repl = ','.join(lst).replace(','.join(sequence), ','.join(replacement))
+        return lst_repl.split(',')
+    
+    arg_req = arg_req_raw
+    if command_base in replacements.keys():
+        for old, new, description in replacements['lin_comb']:
+            arg_req = replace(old, new, arg_req)
     
     # fix general inconsistencies in parameter naming
     parnames_lookup = {'product': ('wgt_flg', 'wgt_flag')}
-    command_base = os.path.basename(command)
     if command_base in parnames_lookup.keys():
         out = out.replace(*parnames_lookup[command_base])
     
@@ -62,6 +72,7 @@ def parse_command(command):
     # print('double args: {}\n'.format(', '.join(double)))
     ######################################################################################
     # create the function argument string for the Python function
+    
     # optional arguments are parametrized with '-' as default value, e.g. arg_opt='-'
     # a '-' in the parameter name is replaced with '_'
     # example: "arg1, arg2, arg3='-'"
@@ -74,10 +85,17 @@ def parse_command(command):
                 args_fun=argstr_function)
     ######################################################################################
     # create the process call argument string
+    
     # a '-' in the parameter name is replaced with '_'
     # e.g. 'arg1, arg2, arg3'
     # if a parameter is named 'def' (not allowed in Python) it is renamed to 'drm'
-    argstr_process = ', '.join(arg_req + arg_opt) \
+    
+    proc_args = arg_req + arg_opt
+    
+    if command_base == 'lin_comb':
+        proc_args.insert(0, 'len(files)')
+    
+    argstr_process = ', '.join(proc_args) \
         .replace('-', '_') \
         .replace(', def,', ', drm,')
     
@@ -91,57 +109,59 @@ def parse_command(command):
     ######################################################################################
     # create the function docstring
     
-    # define the start of the parameter documentation string, which is either after 'input_parameters' or after
-    # the usage description string
+    # filter out all individual (parameter, description) docstring tuples
     doc_start = 'input parameters:[ ]*\n' if re.search('input parameters', out) else 'usage:.*(?=\n)'
+    doc = '\n' + out[re.search(doc_start, out).end():]
+    pattern = r'\n[ ]*[<]*(?P<par>{0})[>]*[ ]+(?P<doc>.*)'.format('|'.join(arg_req_raw + arg_opt).replace('.', '\.'))
+    starts = [m.start(0) for m in re.finditer(pattern, doc)] + [len(out)]
+    doc_items = []
+    for i in range(0, len(starts) - 1):
+        doc_raw = doc[starts[i]:starts[i + 1]]
+        doc_tuple = re.search(pattern, doc_raw, flags=re.DOTALL).groups()
+        doc_items.append(doc_tuple)
     
-    # parse the parameter documentation to a Python docstring format
+    # insert the parameter replacements
+    if command_base in replacements.keys():
+        for old, new, description in replacements[command_base]:
+            index = [doc_items.index(x) for x in doc_items if x[0] == old[0]][0]
+            doc_items.insert(index, (new[0], description))
     
-    # define the number of spaces to indent
-    indent = ' ' * 4
+    # remove the replaced parameters from the docstring list
+    doc_items = [x for x in doc_items if x[0] in arg_req + arg_opt]
+    
+    # replace parameter names
+    for i, item in enumerate(doc_items):
+        par = item[0].replace('-', '_').replace(', def,', ', drm,')
+        description = item[1]
+        doc_items[i] = (par, description)
+    
+    # check if all parameters are documented:
+    proc_args = [x.replace('-', '_').replace(', def,', ', drm,') for x in arg_req + arg_opt]
+    mismatch = [x for x in [y[0] for y in doc_items] if x not in proc_args]
+    if len(mismatch) > 0:
+        print(arg_req + arg_opt)
+        print([y[0] for y in doc_items])
+        raise RuntimeError('parameters missing in docsring: {}'.format(', '.join(mismatch)))
+    ###########################################
+    # format the docstring parameter descriptions
     
     docstring_elements = ['Parameters\n----------']
-    
-    # collect the indices which mark the documentation start of the respective parameters within
-    # the raw documentation text
-    starts = []
-    for x in arg_req + arg_opt:
-        try:
-            starts.append(re.search(r'\n[ ]*{0} .*'.format(x), out).start())
-        except AttributeError:
-            raise RuntimeError('cannot find parameter {}'.format(x))
-    starts += [len(out)]
-    
-    # define a pattern for parsing individual parameter documentations
-    pattern = r'\n[ ]*(?P<par>{0})[ ]+(?P<doc>.*)'.format('|'.join(arg_req + arg_opt))
-    # print(pattern)
-    
-    for i in range(0, len(starts) - 1):
-        # draw a subset from the Gamma docstring containing only the doc of a single parameter
-        doc_raw = out[starts[i]:starts[i + 1]]
-        # print(repr(doc_raw))
-        
-        # parse the docstring
-        match = re.match(pattern, doc_raw, flags=re.DOTALL)
-        if not match:
-            continue
-        
-        # retrieve the parameter name and the documentation lines
-        par = match.group('par')
-        doc_items = re.split('\n+\s*', match.group('doc').strip('\n'))
-        
+    # define the number of spaces to indent
+    indent = ' ' * 4
+    # do some extra formatting
+    for i, item in enumerate(doc_items):
+        par, description = item
+        description = re.split('\n+\s*', description.strip('\n'))
         # escape * characters (which are treated as special characters for bullet lists by sphinx)
-        doc_items = [x.replace('*', '\*') for x in doc_items]
-        
+        description = [x.replace('*', '\*') for x in description]
         # convert all lines starting with an integer number or 'NOTE' to bullet list items
         latest = None
-        for i in range(len(doc_items)):
-            item = doc_items[i]
+        for i in range(len(description)):
+            item = description[i]
             if re.search('^(?:(?:-|)[-0-9]+|NOTE):', item):
                 latest = i
                 # prepend '* ' and replace missing spaces after a colon: 'x:x' -> 'x: x'
-                doc_items[i] = '* ' + re.sub(r'((?:-|)[-0-9]+:)(\w+)', r'\1 \2', item)
-        
+                description[i] = '* ' + re.sub(r'((?:-|)[-0-9]+:)(\w+)', r'\1 \2', item)
         # format documentation lines coming after the last bullet list item
         # sphinx expects lines after the last bullet item to be indented by two spaces if
         # they belong to the bullet item or otherwise a blank line to mark the end of the bullet list
@@ -149,19 +169,20 @@ def parse_command(command):
             # case if there are still lines coming after the last bullet item,
             # prepend an extra two spaces to these lines so that they are properly
             # aligned with the text of the bullet item
-            if latest + 2 <= len(doc_items):
+            if latest + 2 <= len(description):
                 i = 1
-                while latest + i + 1 <= len(doc_items):
-                    doc_items[latest + i] = '  ' + doc_items[latest + i]
+                while latest + i + 1 <= len(description):
+                    description[latest + i] = '  ' + description[latest + i]
                     i += 1
             # if not, then insert an extra blank line
             else:
-                doc_items[-1] = doc_items[-1] + '\n'
-        
+                description[-1] = description[-1] + '\n'
         # parse the final documentation string for the current parameter
-        description = '\n{0}{0}'.join(doc_items).format(indent)
+        description = '\n{0}{0}'.join(description).format(indent)
         doc = '{0}:\n{1}{2}'.format(par, indent, description)
         docstring_elements.append(doc)
+    ###########################################
+    # add docsrings of general parameters and combine the result
     
     # create docstring for parameter logpath
     doc = 'logpath: str or None\n{0}a directory to write command logfiles to'.format(indent)
@@ -175,7 +196,7 @@ def parse_command(command):
     doc = 'shellscript: str or None\n{0}a file to write the Gamma commands to in shell format'.format(indent)
     docstring_elements.append(doc)
     
-    # create the complete docstring
+    # combine the complete docstring
     fun_doc = '\n{header}\n\n{doc}\n' \
         .format(header=header,
                 doc='\n'.join(docstring_elements))
