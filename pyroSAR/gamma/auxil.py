@@ -9,7 +9,7 @@ import json
 import subprocess as sp
 from datetime import datetime
 
-from spatialist.ancillary import parse_literal, run, union
+from spatialist.ancillary import parse_literal, run, union, dissolve
 from spatialist.envi import hdr
 
 from pyroSAR import ConfigHandler
@@ -232,7 +232,7 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
     else:
         log = os.path.join(logpath, os.path.basename(cmd[0]) + '.log') if logpath else None
     if shellscript is not None:
-        line = ' '.join([str(x) for x in cmd])
+        line = ' '.join([str(x) for x in dissolve(cmd)])
         if inlist is not None:
             line += ' <<< $"{}"'.format('\n'.join([str(x) for x in inlist]) + '\n')
         with open(shellscript, 'a+') as sh:
