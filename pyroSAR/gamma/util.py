@@ -31,19 +31,36 @@ from spatialist.ancillary import union, finder
 
 from ..S1 import OSV
 from ..drivers import ID, CEOS_ERS, CEOS_PSR, ESA, SAFE, TSX, identify
-from . import ISPPar, Namespace, process, par2hdr
+from . import ISPPar, Namespace, par2hdr
 from .api import diff, disp, isp, lat
 
 ogr.UseExceptions()
 
 
 def calibrate(id, directory, replace=False):
+    """
+    
+    Parameters
+    ----------
+    id: ~pyroSAR.drivers.ID
+        an SAR scene object of type pyroSAR.ID or any subclass
+    directory: str
+        the directory to search for Gamma calibration candidates
+    replace: bool
+        replace the input images by the new files? If True, the input images will be deleted.
+
+    Returns
+    -------
+
+    """
     if isinstance(id, CEOS_PSR):
         for image in id.getGammaImages(directory):
             if image.endswith('_slc'):
-                process(
-                    ['radcal_SLC', image, image + '.par', image + '_cal', image + '_cal.par',
-                     '-', '-', '-', '-', '-', '-', id.meta['k_dB']])
+                isp.radcal_SLC(SLC=image,
+                               SLC_par=image + '.par',
+                               CSLC=image + '_cal',
+                               CSLC_par=image + '_cal.par',
+                               K_dB=id.meta['k_dB'])
                 par2hdr(image + '_cal.par', image + '_cal.hdr')
     
     elif isinstance(id, ESA):
@@ -52,7 +69,12 @@ def calibrate(id, directory, replace=False):
         candidates = [x for x in id.getGammaImages(directory) if re.search('_pri$', x)]
         for image in candidates:
             out = image.replace('pri', 'grd')
-            process(['radcal_PRI', image, image + '.par', out, out + '.par', k_db, inc_ref])
+            isp.radcal_PRI(PRI=image,
+                           PRI_par=image + '.par',
+                           GRD=out,
+                           GRD_par=out + '.par',
+                           K_dB=k_db,
+                           inc_ref=inc_ref)
             par2hdr(out + '.par', out + '.hdr')
             if replace:
                 for item in [image, image + '.par', image + '.hdr']:
@@ -694,7 +716,6 @@ def multilook(infile, outfile, targetres):
     targetres: int
         the target resolution in ground range
 
-
     """
     # read the input parameter file
     par = ISPPar(infile + '.par')
@@ -713,12 +734,23 @@ def multilook(infile, outfile, targetres):
     rlks = rlks if rlks > 0 else 1
     azlks = azlks if azlks > 0 else 1
     
+    pars = {'rlks': rlks,
+            'azlks': azlks}
+    
     if par.image_format in ['SCOMPLEX', 'FCOMPLEX']:
         # multilooking for SLC images
-        process(['multi_look', infile, infile + '.par', outfile, outfile + '.par', rlks, azlks])
+        pars['SLC'] = infile
+        pars['SLC_par'] = infile + '.par'
+        pars['MLI'] = outfile
+        pars['MLI_par'] = outfile + '.par'
+        isp.multi_look(**pars)
     else:
         # multilooking for MLI images
-        process(['multi_look_MLI', infile, infile + '.par', outfile, outfile + '.par', rlks, azlks])
+        pars['MLI_in'] = infile
+        pars['MLI_in_par'] = infile + '.par'
+        pars['MLI_out'] = outfile
+        pars['MLI_out_par'] = outfile + '.par'
+        isp.multi_look_MLI(**pars)
     par2hdr(outfile + '.par', outfile + '.hdr')
 
 
@@ -748,8 +780,8 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False,
         the number of looks in azimuth
     replace: bool
         replace the burst images by the new file? If True, the three burst images will be deleted.
-    path_log: str
-        the directory to write the logfiles to
+    path_log: str or None
+        a directory to write command logfiles to
 
     Returns
     -------
@@ -768,9 +800,19 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False,
             for item in [burst1, burst2, burst3]:
                 out1.write(item + '\t' + item + '.par\t' + item + '.tops_par\n')
                 out2.write(item + '_drp\t' + item + '_drp.par\t' + item + '_drp.tops_par\n')
-    process(['SLC_deramp_S1_TOPS', tab_in, tab_out, 0, 0], logpath=path_log)
-    process(['SLC_mosaic_S1_TOPS', tab_out, name_out, name_out + '.par', rlks, azlks], logpath=path_log)
     
+    isp.S1_deramp_S1_TOPS(SLC1_tab=tab_in,
+                          SLC2_tab=tab_out,
+                          mode=0,
+                          phflg=0,
+                          logpath=path_log)
+    
+    isp.SLC_mosaic_S1_TOPS(SLC_tab=tab_out,
+                           SLC=name_out,
+                           SLC_par=name_out + '.par',
+                           rlks=rlks,
+                           azlks=azlks,
+                           logpath=path_log)
     if replace:
         for item in [burst1, burst2, burst3]:
             for subitem in [item + x for x in ['', '.par', '.tops_par']]:
