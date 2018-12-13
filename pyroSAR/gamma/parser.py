@@ -156,10 +156,8 @@ def parse_command(command):
     
     # check if all parameters are documented:
     proc_args = [x.replace('-', '_').replace(', def,', ', drm,') for x in arg_req + arg_opt]
-    mismatch = [x for x in [y[0] for y in doc_items] if x not in proc_args]
+    mismatch = [x for x in proc_args if x not in[y[0] for y in doc_items]]
     if len(mismatch) > 0:
-        print(arg_req + arg_opt)
-        print([y[0] for y in doc_items])
         raise RuntimeError('parameters missing in docsring: {}'.format(', '.join(mismatch)))
     ###########################################
     # format the docstring parameter descriptions
