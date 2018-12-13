@@ -277,7 +277,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
         raise NotImplementedError('conversion for class {} is not implemented yet'.format(type(id).__name__))
 
 
-def correctOSV(id, osvdir=None, logpath=None, osvType='POE'):
+def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shellscript=None):
     """
     correct GAMMA parameter files with orbit state vector information from dedicated OSV files
     
@@ -287,10 +287,12 @@ def correctOSV(id, osvdir=None, logpath=None, osvType='POE'):
         the scene to be corrected
     osvdir: str
         the directory of OSV files; subdirectories POEORB and RESORB are created automatically
-    logpath: str
-        a path to write logfiles to
-    osvType: str or list
-        the type of orbit file either 'POE', 'RES' or a list of both
+    logpath: str or None
+        a directory to write command logfiles to
+    outdir: str or None
+        the directory to execute the command in
+    shellscript: str or None
+        a file to write the Gamma commands to in shell format
 
     Returns
     -------
@@ -329,7 +331,11 @@ def correctOSV(id, osvdir=None, logpath=None, osvType='POE'):
     # update the GAMMA parameter file with the selected orbit state vectors
     print('correcting state vectors with file {}'.format(osvfile))
     for image in images:
-        process(['S1_OPOD_vec', image + '.par', osvfile], logpath=logpath)
+        isp.S1_OPOD_vec(SLC_par=image + '.par',
+                        OPOD=osvfile,
+                        logpath=logpath,
+                        outdir=outdir,
+                        shellscript=shellscript)
 
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=2,
