@@ -32,7 +32,8 @@ def parse_command(command):
     
     # fix general inconsistencies in parameter naming
     parnames_lookup = {'product': ('wgt_flg', 'wgt_flag'),
-                       'par_ASAR': ('ASAR/ERS_file', 'ASAR_ERS_file')}
+                       'par_ASAR': ('ASAR/ERS_file', 'ASAR_ERS_file'),
+                       'S1_OPOD_vec': ('SLC_PAR', 'SLC_par')}
     if command_base in parnames_lookup.keys():
         out = out.replace(*parnames_lookup[command_base])
     
