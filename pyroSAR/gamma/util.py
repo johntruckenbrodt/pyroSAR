@@ -37,7 +37,7 @@ from .api import diff, disp, isp, lat
 ogr.UseExceptions()
 
 
-def calibrate(id, directory, replace=False):
+def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscript=None):
     """
     
     Parameters
@@ -48,6 +48,12 @@ def calibrate(id, directory, replace=False):
         the directory to search for Gamma calibration candidates
     replace: bool
         replace the input images by the new files? If True, the input images will be deleted.
+    logpath: str or None
+        a directory to write command logfiles to
+    outdir: str or None
+        the directory to execute the command in
+    shellscript: str or None
+        a file to write the Gamma commands to in shell format
 
     Returns
     -------
@@ -60,7 +66,10 @@ def calibrate(id, directory, replace=False):
                                SLC_par=image + '.par',
                                CSLC=image + '_cal',
                                CSLC_par=image + '_cal.par',
-                               K_dB=id.meta['k_dB'])
+                               K_dB=id.meta['k_dB'],
+                               logpath=logpath,
+                               outdir=outdir,
+                               shellscript=shellscript)
                 par2hdr(image + '_cal.par', image + '_cal.hdr')
     
     elif isinstance(id, ESA):
@@ -74,7 +83,10 @@ def calibrate(id, directory, replace=False):
                            GRD=out,
                            GRD_par=out + '.par',
                            K_dB=k_db,
-                           inc_ref=inc_ref)
+                           inc_ref=inc_ref,
+                           logpath=logpath,
+                           outdir=outdir,
+                           shellscript=shellscript)
             par2hdr(out + '.par', out + '.hdr')
             if replace:
                 for item in [image, image + '.par', image + '.hdr']:
@@ -491,13 +503,14 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         except RuntimeError:
             return
     
-    calibrate(scene, scene.scene)
+    calibrate(scene, scene.scene, logpath=path_log, outdir=scene.scene, shellscript=shellscript)
     
     images = [x for x in scene.getGammaImages(scene.scene) if x.endswith('_grd') or x.endswith('_slc_cal')]
     
     print('multilooking..')
     for image in images:
-        multilook(image, image + '_mli', targetres)
+        multilook(infile=image, outfile=image + '_mli', targetres=targetres,
+                  logpath=path_log, outdir=scene.scene, shellscript=shellscript)
     
     images = [x + '_mli' for x in images]
     
@@ -695,7 +708,7 @@ def ovs(parfile, targetres):
     return ovs_lat, ovs_lon
 
 
-def multilook(infile, outfile, targetres):
+def multilook(infile, outfile, targetres, logpath=None, outdir=None, shellscript=None):
     """
     multilooking of SLC and MLI images
 
@@ -715,6 +728,12 @@ def multilook(infile, outfile, targetres):
         the name of the output GAMMA file
     targetres: int
         the target resolution in ground range
+    logpath: str or None
+        a directory to write command logfiles to
+    outdir: str or None
+        the directory to execute the command in
+    shellscript: str or None
+        a file to write the Gamma commands to in shell format
 
     """
     # read the input parameter file
@@ -735,7 +754,10 @@ def multilook(infile, outfile, targetres):
     azlks = azlks if azlks > 0 else 1
     
     pars = {'rlks': rlks,
-            'azlks': azlks}
+            'azlks': azlks,
+            'logpath': logpath,
+            'shellscript': shellscript,
+            'outdir': outdir}
     
     if par.image_format in ['SCOMPLEX', 'FCOMPLEX']:
         # multilooking for SLC images
@@ -754,7 +776,8 @@ def multilook(infile, outfile, targetres):
     par2hdr(outfile + '.par', outfile + '.hdr')
 
 
-def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False, path_log=None):
+def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
+               replace=False, logpath=None, outdir=None, shellscript=None):
     """
     Debursting of Sentinel-1 SLC imagery in GAMMA
     
@@ -780,8 +803,12 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False,
         the number of looks in azimuth
     replace: bool
         replace the burst images by the new file? If True, the three burst images will be deleted.
-    path_log: str or None
+    logpath: str or None
         a directory to write command logfiles to
+    outdir: str or None
+        the directory to execute the command in
+    shellscript: str or None
+        a file to write the Gamma commands to in shell format
 
     Returns
     -------
@@ -805,14 +832,18 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False,
                           SLC2_tab=tab_out,
                           mode=0,
                           phflg=0,
-                          logpath=path_log)
+                          logpath=logpath,
+                          outdir=outdir,
+                          shellscript=shellscript)
     
     isp.SLC_mosaic_S1_TOPS(SLC_tab=tab_out,
                            SLC=name_out,
                            SLC_par=name_out + '.par',
                            rlks=rlks,
                            azlks=azlks,
-                           logpath=path_log)
+                           logpath=logpath,
+                           outdir=outdir,
+                           shellscript=shellscript)
     if replace:
         for item in [burst1, burst2, burst3]:
             for subitem in [item + x for x in ['', '.par', '.tops_par']]:
