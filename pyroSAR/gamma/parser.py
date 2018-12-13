@@ -30,12 +30,16 @@ def parse_command(command):
     out, err = proc.communicate()
     out += err
     
-    # fix general inconsistencies in parameter naming
-    parnames_lookup = {'product': ('wgt_flg', 'wgt_flag'),
-                       'par_ASAR': ('ASAR/ERS_file', 'ASAR_ERS_file'),
-                       'S1_OPOD_vec': ('SLC_PAR', 'SLC_par')}
+    # fix command-specific inconsistencies in parameter naming
+    parnames_lookup = {'par_ASAR': [('ASAR/ERS_file', 'ASAR_ERS_file')],
+                       'product': [('wgt_flg', 'wgt_flag')],
+                       'radcal_PRI': [('GRD_PAR', 'GRD_par'),
+                                      ('PRI_PAR', 'PRI_par')],
+                       'radcal_SLC': [('SLC_PAR', 'SLC_par')],
+                       'S1_OPOD_vec': [('SLC_PAR', 'SLC_par')]}
     if command_base in parnames_lookup.keys():
-        out = out.replace(*parnames_lookup[command_base])
+        for replacement in parnames_lookup[command_base]:
+            out = out.replace(*replacement)
     
     # filter header command description and usage description text
     header = '\n'.join([x.strip('* ') for x in re.findall('[*]{3}.*[*]{3}', out)])
