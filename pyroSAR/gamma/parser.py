@@ -28,19 +28,86 @@ def parse_command(command):
     command_base = os.path.basename(command)
     proc = sp.Popen(command, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True)
     out, err = proc.communicate()
-    out += err
+    if command_base in ['ras_pt', 'ras_data_pt', 'rasdt_cmap_pt']:
+        # for some strange reason the usage line is passed as stderr
+        out = out.replace(' ***\n ', ' ***\n ' + err)
+    else:
+        out += err
     
     # fix command-specific inconsistencies in parameter naming
-    parnames_lookup = {'par_ASAR': [('ASAR/ERS_file', 'ASAR_ERS_file')],
+    parnames_lookup = {'adapt_filt': [('low_snr_thr', 'low_SNR_thr')],
+                       'foobar': [('', '')],
+                       'atm_mod2': [('rpt', 'report'),
+                                    ('[mode]', '[model_atm]'),
+                                    ('model     atm', 'model_atm atm')],
+                       'comb_interfs': [('combi_out', 'combi_int')],
+                       'coord_to_sarpix': [('north/lat', 'north_lat'),
+                                           ('east/lon', 'east_lon')],
+                       'base_init': [('<base>', '<baseline>')],
+                       'dis2hgt': [('m/cycle', 'm_cycle')],
+                       'discc': [('min_corr', 'cmin'),
+                                 ('max_corr', 'cmax')],
+                       'dispwr': [('data_type', 'dtype')],
+                       'DORIS_vec': [('SLC_PAR', 'SLC_par')],
+                       'gc_map_fd': [('fdtab', 'fd_tab')],
+                       'gc_map_grd': [('<MLI_par>', '<GRD_par>')],
+                       'GRD_to_SR': [('SLC_par', 'MLI_par')],
+                       'histogram_ras': [('mean/stdev', 'mean_stdev')],
+                       'hsi_color_scale': [('[chip]', '[chip_width]')],
+                       'interf_SLC': [('  SLC2_pa  ', '  SLC2_par  ')],
+                       'line_interp': [('input file', 'data_in'),
+                                       ('output file', 'data_out')],
+                       'm-alpha': [('<c2 ', '<c2> ')],
+                       'm-chi': [('<c2 ', '<c2> ')],
+                       'm-delta': [('<c2 ', '<c2> ')],
+                       'map_section': [('n1', 'north1'),
+                                       ('e1', 'east1'),
+                                       ('n2', 'north2'),
+                                       ('e2', 'east2')],
+                       'mask_class': [('...', '<...>')],
+                       'offset_fit': [('interact_flag', 'interact_mode')],
+                       'par_ASF_SLC': [('CEOS_SAR_leader', 'CEOS_leader')],
+                       'par_ASAR': [('ASAR/ERS_file', 'ASAR_ERS_file')],
+                       'par_EORC_JERS_SLC': [('slc', 'SLC')],
+                       'par_ERSDAC_PALSAR': [('VEXCEL_SLC_par', 'ERSDAC_SLC_par')],
+                       'par_MSP': [('SLC/MLI_par', 'SLC_MLI_par')],
+                       'par_SIRC': [('UTC/MET', 'UTC_MET')],
+                       'par_TX_GRD': [('COSAR', 'GeoTIFF')],
+                       'par_UAVSAR_SLC': [('SLC/MLI_par', 'SLC_MLI_par')],
+                       'par_UAVSAR_geo': [('SLC/MLI_par', 'SLC_MLI_par')],
                        'product': [('wgt_flg', 'wgt_flag')],
                        'radcal_PRI': [('GRD_PAR', 'GRD_par'),
                                       ('PRI_PAR', 'PRI_par')],
                        'radcal_SLC': [('SLC_PAR', 'SLC_par')],
-                       'S1_OPOD_vec': [('SLC_PAR', 'SLC_par')]}
+                       'ras_data_pt': [('pdata1', 'pdata')],
+                       'ras_to_rgb': [('<red channel>', '<red_channel>'),
+                                      ('<green channel>', '<green_channel>'),
+                                      ('<blue channel>', '<blue_channel>')],
+                       'rashgt': [('m/cycle', 'm_cycle')],
+                       'rashgt_shd': [('m/cycle', 'm_cycle'),
+                                      ('\n  cycle ', '\n  m_cycle ')],
+                       'rasdt_cmap_pt': [('pdata1', 'pdata')],
+                       'raspwr': [('hdrz', 'hdrsz')],
+                       'ras_ras': [('r_lin/log', 'r_lin_log'),
+                                   ('g_lin/log', 'g_lin_log'),
+                                   ('b_lin/log', 'b_lin_log')],
+                       'rasSLC': [('[header]', '[hdrsz]')],
+                       'ratio': [('wgt_flg', 'wgt_flag')],
+                       'restore_float': [('input file', 'data_in'),
+                                         ('output file', 'data_out'),
+                                         ('interpolation_limit', 'interp_limit')],
+                       'S1_OPOD_vec': [('SLC_PAR', 'SLC_par')],
+                       'scale_base': [('SLC-1_par-2', 'SLC1_par-2')],
+                       'SLC_interp_lt': [('SLC-2', 'SLC2')],
+                       'SLC_intf': [('SLC1s_par', 'SLC-1s_par'),
+                                    ('SLC2Rs_par', 'SLC-2Rs_par')],
+                       'SLC_interp_map': [('coffs2_sm', 'coffs_sm')],
+                       'texture': [('weights_flag', 'wgt_flag')],
+                       'uchar2float': [('infile', 'data_in'),
+                                       ('outfile', 'data_out')]}
     if command_base in parnames_lookup.keys():
         for replacement in parnames_lookup[command_base]:
             out = out.replace(*replacement)
-    
     # filter header command description and usage description text
     header = '\n'.join([x.strip('* ') for x in re.findall('[*]{3}.*[*]{3}', out)])
     header = '| ' + header.replace('\n', '\n| ')
@@ -56,7 +123,10 @@ def parse_command(command):
                                   'a list of input data files (float)'),
                                  (['factor1', 'factor2', '...'],
                                   ['factors'],
-                                  'a list of factors to multiply the input files with')]}
+                                  'a list of factors to multiply the input files with')],
+                    'mask_class': [(['n_class', 'class_1', '...', 'class_n'],
+                                    ['class_values'],
+                                    'a list of class map values')]}
     
     def replace(sequence, replacement, lst):
         lst_repl = ','.join(lst).replace(','.join(sequence), ','.join(replacement))
@@ -64,13 +134,13 @@ def parse_command(command):
     
     arg_req = arg_req_raw
     if command_base in replacements.keys():
-        for old, new, description in replacements['lin_comb']:
+        for old, new, description in replacements[command_base]:
             arg_req = replace(old, new, arg_req)
     
     double = [k for k, v in Counter(arg_req + arg_opt).items() if v > 1]
     if len(double) > 0:
         raise RuntimeError('double parameter{0}: {1}'.format('s' if len(double) > 1 else '', ', '.join(double)))
-
+    
     inlist = ['par_ESA_ERS']
     
     if command_base in inlist:
@@ -108,6 +178,8 @@ def parse_command(command):
     
     if command_base == 'lin_comb':
         proc_args.insert(0, 'len(files)')
+    elif command_base == 'mask_class':
+        proc_args.insert(6, 'len(class_values)')
     
     argstr_process = ', '.join(proc_args) \
         .replace('-', '_') \
@@ -127,7 +199,8 @@ def parse_command(command):
     # filter out all individual (parameter, description) docstring tuples
     doc_start = 'input parameters:[ ]*\n' if re.search('input parameters', out) else 'usage:.*(?=\n)'
     doc = '\n' + out[re.search(doc_start, out).end():]
-    pattern = r'\n[ ]*[<]*(?P<par>{0})[>]*[ ]+(?P<doc>.*)'.format('|'.join(arg_req_raw + arg_opt).replace('.', '\.'))
+    pattern = r'\n[ ]*[<\[]*(?P<par>{0})[>\]]*[\t ]+(?P<doc>.*)'.format(
+        '|'.join(arg_req_raw + arg_opt).replace('.', '\.'))
     starts = [m.start(0) for m in re.finditer(pattern, doc)] + [len(out)]
     doc_items = []
     for i in range(0, len(starts) - 1):
@@ -156,7 +229,7 @@ def parse_command(command):
     
     # check if all parameters are documented:
     proc_args = [x.replace('-', '_').replace(', def,', ', drm,') for x in arg_req + arg_opt]
-    mismatch = [x for x in proc_args if x not in[y[0] for y in doc_items]]
+    mismatch = [x for x in proc_args if x not in [y[0] for y in doc_items]]
     if len(mismatch) > 0:
         raise RuntimeError('parameters missing in docsring: {}'.format(', '.join(mismatch)))
     ###########################################
