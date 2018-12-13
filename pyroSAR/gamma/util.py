@@ -464,7 +464,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         else:
             osvtype = 'POE'
         try:
-            correctOSV(id=scene, osvdir=osvdir, logpath=path_log, osvType=osvtype)
+            correctOSV(id=scene, osvdir=osvdir, osvType=osvtype,
+                       logpath=path_log, outdir=scene.scene, shellscript=shellscript)
         except RuntimeError:
             return
     
