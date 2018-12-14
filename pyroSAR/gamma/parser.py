@@ -24,6 +24,7 @@ def parse_command(command):
         the full Python function text
 
     """
+    # run the command without passing arguments to just catch its usage description
     command = which(command)
     command_base = os.path.basename(command)
     proc = sp.Popen(command, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True)
@@ -33,7 +34,7 @@ def parse_command(command):
         out = out.replace(' ***\n ', ' ***\n ' + err)
     else:
         out += err
-    
+    ###########################################
     # fix command-specific inconsistencies in parameter naming
     parnames_lookup = {'adapt_filt': [('low_snr_thr', 'low_SNR_thr')],
                        'foobar': [('', '')],
@@ -108,7 +109,8 @@ def parse_command(command):
     if command_base in parnames_lookup.keys():
         for replacement in parnames_lookup[command_base]:
             out = out.replace(*replacement)
-    # filter header command description and usage description text
+    ###########################################
+    # filter header (general command description) and usage description string
     header = '\n'.join([x.strip('* ') for x in re.findall('[*]{3}.*[*]{3}', out)])
     header = '| ' + header.replace('\n', '\n| ')
     usage = re.search('usage:.*(?=\n)', out).group()
@@ -117,7 +119,25 @@ def parse_command(command):
     arg_req_raw = [re.sub('[^\w.-]*', '', x) for x in re.findall('[^<]*<([^>]*)>', usage)]
     arg_opt = [re.sub('[^\w.-]*', '', x) for x in re.findall('[^[]*\[([^]]*)\]', usage)]
     
-    # define parameter replacements
+    ###########################################
+    # remove parameters from the usage description which are not documented
+    removes = {'diplane_helix': ['image_format'],
+               'dis_data': ['term'],
+               'dis_ipta': ['term'],
+               'kml_pt': ['start_f1', 'start_f2'],
+               'phase_sum': ['nmin'],
+               'pt2d': ['wflg'],
+               'ras_clist': ['mflg'],
+               'temp_log_var': ['norm_pow']}
+    
+    if command_base in removes.keys():
+        for var in removes[command_base]:
+            arg_opt.remove(var)
+    
+    if command_base == 'res_map':
+        arg_req_raw.remove('report_file')
+    ###########################################
+    # define parameter replacements; this is intended for parameters which are to be aggregated into a list parameter
     replacements = {'lin_comb': [(['nfiles', 'f1', 'f2', '...'],
                                   ['files'],
                                   'a list of input data files (float)'),
@@ -136,10 +156,13 @@ def parse_command(command):
     if command_base in replacements.keys():
         for old, new, description in replacements[command_base]:
             arg_req = replace(old, new, arg_req)
+    ###########################################
     
     double = [k for k, v in Counter(arg_req + arg_opt).items() if v > 1]
     if len(double) > 0:
         raise RuntimeError('double parameter{0}: {1}'.format('s' if len(double) > 1 else '', ', '.join(double)))
+    ###########################################
+    # add a parameter inlist for commands which take interactive input via stdin
     
     inlist = ['par_ESA_ERS']
     
