@@ -7,7 +7,7 @@ from spatialist.ancillary import finder, which
 from .auxil import ExamineGamma
 
 
-def parse_command(command):
+def parse_command(command, indent='    '):
     """
     Parse the help text of a Gamma command to a Python function including a docstring.
     The docstring is in rst format and can thu be parsed by e.g. sphinx.
@@ -17,6 +17,8 @@ def parse_command(command):
     ----------
     command: str
         the name of the gamma command
+    indent: str
+        the Python function indentation string; default: four spaces
 
     Returns
     -------
@@ -29,15 +31,17 @@ def parse_command(command):
     command_base = os.path.basename(command)
     proc = sp.Popen(command, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True)
     out, err = proc.communicate()
+    # sometimes the description string is split between stdout and stderr
+    # for the following commands stderr contains the usage description line, which is inserted into stdout
     if command_base in ['ras_pt', 'ras_data_pt', 'rasdt_cmap_pt']:
-        # for some strange reason the usage line is passed as stderr
         out = out.replace(' ***\n ', ' ***\n ' + err)
     else:
+        # for all other commands stderr is just appended to stdout
         out += err
     ###########################################
     # fix command-specific inconsistencies in parameter naming
+    # in several commands the parameter naming in the usage description line does not match that of the docstring
     parnames_lookup = {'adapt_filt': [('low_snr_thr', 'low_SNR_thr')],
-                       'foobar': [('', '')],
                        'atm_mod2': [('rpt', 'report'),
                                     ('[mode]', '[model_atm]'),
                                     ('model     atm', 'model_atm atm')],
@@ -157,12 +161,14 @@ def parse_command(command):
         for old, new, description in replacements[command_base]:
             arg_req = replace(old, new, arg_req)
     ###########################################
+    # check if there are any double parameters
     
     double = [k for k, v in Counter(arg_req + arg_opt).items() if v > 1]
     if len(double) > 0:
         raise RuntimeError('double parameter{0}: {1}'.format('s' if len(double) > 1 else '', ', '.join(double)))
     ###########################################
     # add a parameter inlist for commands which take interactive input via stdin
+    # the list of commands, which are interactive is hard to assess and thus likely a source of future errors
     
     inlist = ['par_ESA_ERS']
     
@@ -219,18 +225,25 @@ def parse_command(command):
     ######################################################################################
     # create the function docstring
     
-    # filter out all individual (parameter, description) docstring tuples
+    # find the start of the docstring and filter the result
     doc_start = 'input parameters:[ ]*\n' if re.search('input parameters', out) else 'usage:.*(?=\n)'
     doc = '\n' + out[re.search(doc_start, out).end():]
+    
+    # define a pattern containing individual parameter documentations
     pattern = r'\n[ ]*[<\[]*(?P<par>{0})[>\]]*[\t ]+(?P<doc>.*)'.format(
         '|'.join(arg_req_raw + arg_opt).replace('.', '\.'))
+    
+    # identify the start indices of all pattern matches
     starts = [m.start(0) for m in re.finditer(pattern, doc)] + [len(out)]
+    
+    # filter out all individual (parameter, description) docstring tuples
     doc_items = []
     for i in range(0, len(starts) - 1):
         doc_raw = doc[starts[i]:starts[i + 1]]
         doc_tuple = re.search(pattern, doc_raw, flags=re.DOTALL).groups()
         doc_items.append(doc_tuple)
     
+    # add a parameter inlist to the docstring tuples
     if command_base in inlist:
         pos = [x[0] for x in doc_items].index(arg_opt[0])
         doc_items.insert(pos, ('inlist', 'a list of arguments to be passed to stdin'))
@@ -241,10 +254,10 @@ def parse_command(command):
             index = [doc_items.index(x) for x in doc_items if x[0] == old[0]][0]
             doc_items.insert(index, (new[0], description))
     
-    # remove the replaced parameters from the docstring list
+    # remove the replaced parameters from the argument lists
     doc_items = [x for x in doc_items if x[0] in arg_req + arg_opt]
     
-    # replace parameter names
+    # replace parameter names which are not possible in Python syntax, i.e. containing '-' or named 'def'
     for i, item in enumerate(doc_items):
         par = item[0].replace('-', '_').replace(', def,', ', drm,')
         description = item[1]
@@ -259,14 +272,15 @@ def parse_command(command):
     # format the docstring parameter descriptions
     
     docstring_elements = ['Parameters\n----------']
-    # define the number of spaces to indent
-    indent = ' ' * 4
+    
     # do some extra formatting
     for i, item in enumerate(doc_items):
         par, description = item
         description = re.split('\n+\s*', description.strip('\n'))
+        
         # escape * characters (which are treated as special characters for bullet lists by sphinx)
         description = [x.replace('*', '\*') for x in description]
+        
         # convert all lines starting with an integer number or 'NOTE' to bullet list items
         latest = None
         for i in range(len(description)):
@@ -275,6 +289,7 @@ def parse_command(command):
                 latest = i
                 # prepend '* ' and replace missing spaces after a colon: 'x:x' -> 'x: x'
                 description[i] = '* ' + re.sub(r'((?:-|)[-0-9]+:)(\w+)', r'\1 \2', item)
+        
         # format documentation lines coming after the last bullet list item
         # sphinx expects lines after the last bullet item to be indented by two spaces if
         # they belong to the bullet item or otherwise a blank line to mark the end of the bullet list
@@ -290,6 +305,7 @@ def parse_command(command):
             # if not, then insert an extra blank line
             else:
                 description[-1] = description[-1] + '\n'
+        
         # parse the final documentation string for the current parameter
         description = '\n{0}{0}'.join(description).format(indent)
         doc = '{0}:\n{1}{2}'.format(par, indent, description)
