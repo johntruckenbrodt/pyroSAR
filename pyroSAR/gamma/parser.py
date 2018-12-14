@@ -45,6 +45,7 @@ def parse_command(command, indent='    '):
                        'atm_mod2': [('rpt', 'report'),
                                     ('[mode]', '[model_atm]'),
                                     ('model     atm', 'model_atm atm')],
+                       'cc_monitoring': [('...', '<...>')],
                        'comb_interfs': [('combi_out', 'combi_int')],
                        'coord_to_sarpix': [('north/lat', 'north_lat'),
                                            ('east/lon', 'east_lon')],
@@ -52,6 +53,7 @@ def parse_command(command, indent='    '):
                        'dis2hgt': [('m/cycle', 'm_cycle')],
                        'discc': [('min_corr', 'cmin'),
                                  ('max_corr', 'cmax')],
+                       'dis_data': [('...', '<...>')],
                        'dispwr': [('data_type', 'dtype')],
                        'DORIS_vec': [('SLC_PAR', 'SLC_par')],
                        'gc_map_fd': [('fdtab', 'fd_tab')],
@@ -70,6 +72,7 @@ def parse_command(command, indent='    '):
                                        ('n2', 'north2'),
                                        ('e2', 'east2')],
                        'mask_class': [('...', '<...>')],
+                       'multi_class_mapping': [('...', '<...>')],
                        'offset_fit': [('interact_flag', 'interact_mode')],
                        'par_ASF_SLC': [('CEOS_SAR_leader', 'CEOS_leader')],
                        'par_ASAR': [('ASAR/ERS_file', 'ASAR_ERS_file')],
@@ -102,6 +105,7 @@ def parse_command(command, indent='    '):
                                          ('output file', 'data_out'),
                                          ('interpolation_limit', 'interp_limit')],
                        'S1_OPOD_vec': [('SLC_PAR', 'SLC_par')],
+                       'single_class_mapping': [('>...', '> <...>')],
                        'scale_base': [('SLC-1_par-2', 'SLC1_par-2')],
                        'SLC_interp_lt': [('SLC-2', 'SLC2')],
                        'SLC_intf': [('SLC1s_par', 'SLC-1s_par'),
@@ -109,7 +113,17 @@ def parse_command(command, indent='    '):
                        'SLC_interp_map': [('coffs2_sm', 'coffs_sm')],
                        'texture': [('weights_flag', 'wgt_flag')],
                        'uchar2float': [('infile', 'data_in'),
-                                       ('outfile', 'data_out')]}
+                                       ('outfile', 'data_out')],
+                       'validate': [('ras1', 'ras_map'),
+                                    ('rasf_map', 'ras_map'),
+                                    ('ras2', 'ras_inv'),
+                                    ('rasf_inventory', 'ras_inv'),
+                                    ('class1[1]', 'class1_1'),
+                                    ('class1[2]', 'class1_2'),
+                                    ('class1[n]', 'class1_n'),
+                                    ('class2[1]', 'class2_1'),
+                                    ('class2[2]', 'class2_2'),
+                                    ('class2[n]', 'class2_n')]}
     if command_base in parnames_lookup.keys():
         for replacement in parnames_lookup[command_base]:
             out = out.replace(*replacement)
@@ -142,24 +156,59 @@ def parse_command(command, indent='    '):
         arg_req_raw.remove('report_file')
     ###########################################
     # define parameter replacements; this is intended for parameters which are to be aggregated into a list parameter
-    replacements = {'lin_comb': [(['nfiles', 'f1', 'f2', '...'],
-                                  ['files'],
+    replacements = {'cc_monitoring': [(['nfiles', 'f1', 'f2', '...'],
+                                       'files',
+                                       'a list of input data files (float)')],
+                    'dis_data': [(['nstack', 'pdata1', '...'],
+                                  'pdata',
+                                  'a list of point data stack files')],
+                    'lin_comb': [(['nfiles', 'f1', 'f2', '...'],
+                                  'files',
                                   'a list of input data files (float)'),
                                  (['factor1', 'factor2', '...'],
-                                  ['factors'],
+                                  'factors',
                                   'a list of factors to multiply the input files with')],
+                    'lin_comb_cpx': [(['nfiles', 'f1', 'f2', '...'],
+                                      'files',
+                                      'a list of input data files (float)'),
+                                     (['factor1_r', 'factor2_r', '...'],
+                                      'factors_r',
+                                      'a list of real part factors to multiply the input files with'),
+                                     (['factor1_i', 'factor2_i'],
+                                      'factors_i',
+                                      'a list of imaginary part factors to multiply the input files with')],
                     'mask_class': [(['n_class', 'class_1', '...', 'class_n'],
-                                    ['class_values'],
-                                    'a list of class map values')]}
+                                    'class_values',
+                                    'a list of class map values')],
+                    'multi_class_mapping': [(['nfiles', 'f1', 'f2', '...', 'fn'],
+                                             'files',
+                                             'a list of input data files (float)')],
+                    'single_class_mapping': [(['nfiles', 'f1', '...', 'fn'],
+                                              'files',
+                                              'a list of point data stack files'),
+                                             (['lt1', 'ltn'],
+                                              'thres_lower',
+                                              'a list of lower thresholds for the files'),
+                                             (['ut1', 'utn'],
+                                              'thres_upper',
+                                              'a list of upper thresholds for the files')],
+                    'validate': [(['nclass1', 'class1_1', 'class1_2', '...', 'class1_n'],
+                                  'classes_map',
+                                  'a list of class values for the map data file (max. 16), 0 for all'),
+                                 (['nclass2', 'class2_1', 'class2_2', '...', 'class2_n'],
+                                  'classes_inv',
+                                  'a list of class values for the inventory data file (max. 16), 0 for all')]}
     
-    def replace(sequence, replacement, lst):
-        lst_repl = ','.join(lst).replace(','.join(sequence), ','.join(replacement))
-        return lst_repl.split(',')
+    if '..' in usage and command_base not in replacements.keys():
+        raise RuntimeError('the command contains multi-args which were not properly parsed')
     
-    arg_req = arg_req_raw
+    arg_req = list(arg_req_raw)
     if command_base in replacements.keys():
         for old, new, description in replacements[command_base]:
-            arg_req = replace(old, new, arg_req)
+            arg_req[arg_req.index(old[0])] = new
+            for i in range(1, len(old)):
+                if old[i] in arg_req:
+                    arg_req.remove(old[i])
     ###########################################
     # check if there are any double parameters
     
@@ -205,10 +254,13 @@ def parse_command(command, indent='    '):
     if command_base in inlist:
         proc_args.remove('inlist')
     
-    if command_base == 'lin_comb':
-        proc_args.insert(0, 'len(files)')
-    elif command_base == 'mask_class':
-        proc_args.insert(6, 'len(class_values)')
+    if command_base in replacements.keys():
+        key = replacements[command_base][0][1]
+        proc_args.insert(proc_args.index(key), 'len({})'.format(key))
+    
+    if command_base == 'validate':
+        index = proc_args.index('classes_inv')
+        proc_args.insert(index, 'len(classes_inv)')
     
     argstr_process = ', '.join(proc_args) \
         .replace('-', '_') \
@@ -219,6 +271,11 @@ def parse_command(command, indent='    '):
         .format(command=command,
                 args_cmd=argstr_process,
                 inlist=', inlist=inlist' if command_base in inlist else '')
+    
+    if command_base == 'lin_comb_cpx':
+        fun_proc = fun_proc.replace('factors_r, factors_i', 'zip(factors_r, factors_i)')
+    elif command_base == 'single_class_mapping':
+        fun_proc = fun_proc.replace('files, thres_lower, thres_upper', 'zip(files, thres_lower, thres_upper)')
     
     # print('arg_str1: \n{}\n'.format(argstr_function))
     # print('arg_str2: \n{}\n'.format(argstr_process))
@@ -252,7 +309,7 @@ def parse_command(command, indent='    '):
     if command_base in replacements.keys():
         for old, new, description in replacements[command_base]:
             index = [doc_items.index(x) for x in doc_items if x[0] == old[0]][0]
-            doc_items.insert(index, (new[0], description))
+            doc_items.insert(index, (new, description))
     
     # remove the replaced parameters from the argument lists
     doc_items = [x for x in doc_items if x[0] in arg_req + arg_opt]
