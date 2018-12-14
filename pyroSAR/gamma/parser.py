@@ -418,7 +418,7 @@ def parse_module(bindir, outfile):
     >>> outname = os.path.join(os.environ['HOME'], 'isp.py')
     >>> parse_module('/cluster/GAMMA_SOFTWARE-20161207/ISP/bin', outname)
     """
-    excludes = ['coord_trans', 'mosaic', 'lin_comb_cpx', 'validate']
+    excludes = ['coord_trans']
     failed = []
     outstring = 'from pyroSAR.gamma.auxil import process\n\n\n'
     for cmd in sorted(finder(bindir, ['*']), key=lambda s: s.lower()):
