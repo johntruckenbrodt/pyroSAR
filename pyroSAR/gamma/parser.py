@@ -61,6 +61,7 @@ def parse_command(command, indent='    '):
                        'GRD_to_SR': [('SLC_par', 'MLI_par')],
                        'histogram_ras': [('mean/stdev', 'mean_stdev')],
                        'hsi_color_scale': [('[chip]', '[chip_width]')],
+                       'HUYNEN_DEC': [('T11_0', 'T11')],
                        'interf_SLC': [('  SLC2_pa  ', '  SLC2_par  ')],
                        'line_interp': [('input file', 'data_in'),
                                        ('output file', 'data_out')],
@@ -113,6 +114,7 @@ def parse_command(command, indent='    '):
                                     ('SLC2Rs_par', 'SLC-2Rs_par')],
                        'SLC_interp_map': [('coffs2_sm', 'coffs_sm')],
                        'texture': [('weights_flag', 'wgt_flag')],
+                       'TX_SLC_preproc': [('TX_list', 'TSX_list')],
                        'uchar2float': [('infile', 'data_in'),
                                        ('outfile', 'data_out')],
                        'validate': [('ras1', 'ras_map'),
@@ -419,10 +421,10 @@ def parse_module(bindir, outfile):
     >>> outname = os.path.join(os.environ['HOME'], 'isp.py')
     >>> parse_module('/cluster/GAMMA_SOFTWARE-20161207/ISP/bin', outname)
     """
-    excludes = ['coord_trans']
+    excludes = ['coord_trans', 'PRI_to_MLI', 'RSAT2_SLC_preproc', 'mk_ASF_CEOS_list', '2PASS_UNW', 'mk_diff_2d']
     failed = []
     outstring = 'from pyroSAR.gamma.auxil import process\n\n\n'
-    for cmd in sorted(finder(bindir, ['*']), key=lambda s: s.lower()):
+    for cmd in sorted(finder(bindir, ['^\w+$'], regex=True), key=lambda s: s.lower()):
         basename = os.path.basename(cmd)
         if basename not in excludes:
             # print(basename)
@@ -430,6 +432,9 @@ def parse_module(bindir, outfile):
                 fun = parse_command(cmd)
             except RuntimeError as e:
                 failed.append('{0}: {1}'.format(basename, str(e)))
+                continue
+            except:
+                failed.append('{0}: {1}'.format(basename, 'error yet to be assessed'))
                 continue
             outstring += fun + '\n\n'
     with open(outfile, 'w') as out:
@@ -464,7 +469,10 @@ def autoparse():
         outfile = os.path.join(target, os.path.basename(module).lower() + '.py')
         if not os.path.isfile(outfile):
             print('parsing module {}'.format(os.path.basename(module)))
+            print('-' * 10 + '\nbin')
             parse_module(os.path.join(module, 'bin'), outfile)
+            print('-' * 10 + '\nscripts')
+            parse_module(os.path.join(module, 'scripts'), outfile)
             print('=' * 20)
     modules = [re.sub('\.py', '', os.path.basename(x)) for x in finder(target, ['[a-z]+\.py$'], regex=True)]
     if len(modules) > 0:
