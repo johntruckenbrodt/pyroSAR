@@ -84,6 +84,7 @@ def parse_command(command, indent='    '):
                        'par_UAVSAR_SLC': [('SLC/MLI_par', 'SLC_MLI_par')],
                        'par_UAVSAR_geo': [('SLC/MLI_par', 'SLC_MLI_par')],
                        'product': [('wgt_flg', 'wgt_flag')],
+                       'radcal_MLI': [('MLI_PAR', 'MLI_par')],
                        'radcal_PRI': [('GRD_PAR', 'GRD_par'),
                                       ('PRI_PAR', 'PRI_par')],
                        'radcal_SLC': [('SLC_PAR', 'SLC_par')],
