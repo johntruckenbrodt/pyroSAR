@@ -268,16 +268,19 @@ def makeSRTM(scenes, srtmdir, outname):
     
     hgt_files = finder(srtmdir, hgt_options)
     
-    # todo: check if really needed
-    nodatas = [str(int(raster.Raster(x).nodata)) for x in hgt_files]
+    nodatas = list(set([raster.Raster(x).nodata for x in hgt_files]))
+    if len(nodatas) == 1:
+        nodata = nodatas[0]
+    else:
+        raise RuntimeError('different nodata values are not permitted')
     
     srtm_vrt = os.path.join(tempdir, 'srtm.vrt')
     srtm_temp = srtm_vrt.replace('.vrt', '_tmp')
     srtm_final = srtm_vrt.replace('.vrt', '')
     
-    gdalbuildvrt(hgt_files, srtm_vrt, {'srcNodata': nodatas, 'options': ['-overwrite']})
+    gdalbuildvrt(hgt_files, srtm_vrt, {'srcNodata': nodata, 'options': ['-overwrite']})
     
-    gdal_translate(srtm_vrt, srtm_temp, {'format': 'ENVI', 'noData': -32768})
+    gdal_translate(srtm_vrt, srtm_temp, {'format': 'ENVI', 'noData': nodata})
     
     process(['srtm2dem', srtm_temp, srtm_final, srtm_final + '.par', 2, '-'], outdir=tempdir)
     
