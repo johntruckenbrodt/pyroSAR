@@ -20,8 +20,8 @@ import re
 import shutil
 import zipfile as zf
 
-from spatialist import raster, gdal_translate, gdalbuildvrt
-from spatialist.ancillary import finder, run
+from spatialist import raster, gdal_translate, gdalbuildvrt, gdalwarp
+from spatialist.ancillary import finder
 from spatialist.envi import HDRobject
 
 from ..drivers import ID
@@ -195,8 +195,14 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
     """
     if len(demlist) < 2:
         raise IOError('length of demlist < 2')
-    nodata = str(raster.Raster(demlist[0]).nodata)
-    run(['gdalwarp', '-q', '-of', 'ENVI', '-srcnodata', nodata, '-dstnodata', nodata, demlist, outname])
+    with raster.Raster(demlist[0]) as ras:
+        nodata = ras.nodata
+    
+    par = {'format': 'ENVI',
+           'srcNodata': nodata, ' dstNodata': nodata,
+           'options': ['-q']}
+    gdalwarp(demlist, outname, par)
+    
     if byteorder == 1:
         swap(outname, outname + '_swap')
         for item in [outname, outname + '.hdr', outname + '.aux.xml']:
