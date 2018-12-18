@@ -591,7 +591,6 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                               logpath=path_log,
                               outdir=scene.scene,
                               shellscript=shellscript)
-            
             lat.product(data_1=image + '_geo',
                         data_2=n.pix,
                         product=image + '_geo_pan',
@@ -602,7 +601,6 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                         logpath=path_log,
                         outdir=scene.scene,
                         shellscript=shellscript)
-            
             lat.lin_comb(files=[image + '_geo_pan'],
                          constant=0,
                          factors=[math.cos(math.radians(master_par.incidence_angle))],
@@ -611,7 +609,6 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                          logpath=path_log,
                          outdir=scene.scene,
                          shellscript=shellscript)
-            
             lat.sigma2gamma(pwr1=image + '_geo_pan_flat',
                             inc=n.inc,
                             gamma=image + '_geo_norm',
@@ -619,23 +616,75 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                             logpath=path_log,
                             outdir=scene.scene,
                             shellscript=shellscript)
-            
             par2hdr(n.dem_seg + '.par', image + '_geo_norm.hdr')
     ######################################################################
     # normalization and backward geocoding approach 2 ####################
     ######################################################################
     elif geocode_method == 2:
         n.appreciate(['pixel_area_fine', 'ellipse_pixel_area', 'ratio_sigma0'])
-        process(['pixel_area', master+'.par', n.dem_seg+'.par', n.dem_seg, lut_final, n.ls_map, n.inc, n.pixel_area_fine], logpath=path_log)
-        process(['radcal_MLI', master, master+'.par', '-', master+'_cal', '-', 0, 0, 1, 0.0, '-', n.ellipse_pixel_area], logpath=path_log)
-        process(['ratio', n.ellipse_pixel_area, n.pixel_area_fine, n.ratio_sigma0, master_par.range_samples, 1, 1], logpath=path_log)
-    
+        diff.pixel_area(MLI_par=master + '.par',
+                        DEM_par=n.dem_seg + '.par',
+                        DEM=n.dem_seg,
+                        lookup_table=lut_final,
+                        ls_map=n.ls_map,
+                        inc_map=n.inc,
+                        pix_sigma0=n.pixel_area_fine,
+                        logpath=path_log,
+                        outdir=scene.scene,
+                        shellscript=shellscript)
+        isp.radcal_MLI(MLI=master,
+                       MLI_par=master + '.par',
+                       OFF_par='-',
+                       CMLI=master + '_cal',
+                       refarea_flag=1,
+                       pix_area=n.ellipse_pixel_area,
+                       logpath=path_log,
+                       outdir=scene.scene,
+                       shellscript=shellscript)
+        lat.ratio(d1=n.ellipse_pixel_area,
+                  d2=n.pixel_area_fine,
+                  ratio=n.ratio_sigma0,
+                  width=master_par.range_samples,
+                  bx=1,
+                  by=1,
+                  logpath=path_log,
+                  outdir=scene.scene,
+                  shellscript=shellscript)
         for image in images:
-            process(['product', image, n.ratio_sigma0, image+'_pan', master_par.range_samples, 1, 1], logpath=path_log)
-            process(['geocode_back', image+'_pan', master_par.range_samples, lut_final, image+'_pan_geo', sim_width, 0, func_geoback], logpath=path_log)
-            process(['lin_comb', 1, image+'_pan_geo', 0, math.cos(math.radians(master_par.incidence_angle)), image+'_pan_geo_flat', sim_width], logpath=path_log)
-            process(['sigma2gamma', image+'_pan_geo_flat', n.inc, image+'_geo_norm', sim_width], logpath=path_log)
-            par2hdr(n.dem_seg+'.par', image+'_geo_norm.hdr')
+            lat.product(data_1=image,
+                        data_2=n.ratio_sigma0,
+                        product=image + '_pan',
+                        width=master_par.range_samples,
+                        bx=1,
+                        by=1,
+                        logpath=path_log,
+                        outdir=scene.scene,
+                        shellscript=shellscript)
+            diff.geocode_back(data_in=image + '_pan',
+                              width_in=master_par.range_samples,
+                              gc_map=lut_final,
+                              data_out=image + '_pan_geo',
+                              width_out=sim_width,
+                              interp_mode=func_geoback,
+                              logpath=path_log,
+                              outdir=scene.scene,
+                              shellscript=shellscript)
+            lat.lin_comb(files=[image + '_pan_geo'],
+                         constant=0,
+                         factors=[math.cos(math.radians(master_par.incidence_angle))],
+                         f_out=image + '_pan_geo_flat',
+                         width=sim_width,
+                         logpath=path_log,
+                         outdir=scene.scene,
+                         shellscript=shellscript)
+            lat.sigma2gamma(pwr1=image + '_pan_geo_flat',
+                            inc=n.inc,
+                            gamma=image + '_geo_norm',
+                            width=sim_width,
+                            logpath=path_log,
+                            outdir=scene.scene,
+                            shellscript=shellscript)
+            par2hdr(n.dem_seg + '.par', image + '_geo_norm.hdr')
     else:
         raise RuntimeError('unknown geocode_method option')
     ######################################################################
