@@ -421,8 +421,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         Otherwise the function will raise an error if no POE file exists
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
-    normalization_method: {1,2}
-        the topographiy normalization approach to be used
+    normalization_method: {1, 2}
+        the topographic normalization approach to be used
          * 1: first geocoding, then terrain flattening
          * 2: first terrain flattening, then geocoding; see `Small 2011 <https://doi.org/10.1109/Tgrs.2011.2120616>`_
     
