@@ -580,6 +580,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     ######################################################################
     print('geocoding and normalization..')
     if geocode_method == 1:
+        method_suffix = 'geo_norm'
         for image in images:
             diff.geocode_back(data_in=image,
                               width_in=master_par.range_samples,
@@ -609,16 +610,17 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                          shellscript=shellscript)
             lat.sigma2gamma(pwr1=image + '_geo_pan_flat',
                             inc=n.inc,
-                            gamma=image + '_geo_norm',
+                            gamma=image + '_{}'.format(method_suffix),
                             width=sim_width,
                             logpath=path_log,
                             outdir=scene.scene,
                             shellscript=shellscript)
-            par2hdr(n.dem_seg + '.par', image + '_geo_norm.hdr')
+            par2hdr(n.dem_seg + '.par', image + '_{}.hdr'.format(method_suffix))
     ######################################################################
     # normalization and backward geocoding approach 2 ####################
     ######################################################################
     elif geocode_method == 2:
+        method_suffix = 'norm_geo'
         n.appreciate(['pixel_area_fine', 'ellipse_pixel_area', 'ratio_sigma0'])
         diff.pixel_area(MLI_par=master + '.par',
                         DEM_par=n.dem_seg + '.par',
@@ -677,12 +679,12 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                          shellscript=shellscript)
             lat.sigma2gamma(pwr1=image + '_pan_geo_flat',
                             inc=n.inc,
-                            gamma=image + '_geo_norm',
+                            gamma=image + '_{}'.format(method_suffix),
                             width=sim_width,
                             logpath=path_log,
                             outdir=scene.scene,
                             shellscript=shellscript)
-            par2hdr(n.dem_seg + '.par', image + '_geo_norm.hdr')
+            par2hdr(n.dem_seg + '.par', image + '_{}.hdr'.format(method_suffix))
     else:
         raise RuntimeError('unknown geocode_method option')
     ######################################################################
@@ -691,23 +693,20 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         for scale in scaling:
             if scale == 'db':
                 nodata_out = nodata[1]
-                
-                lat.linear_to_dB(data_in=image + '_geo_norm',
-                                 data_out=image + '_geo_norm_db',
+                lat.linear_to_dB(data_in=image + '_{}'.format(method_suffix),
+                                 data_out=image + '_{}_db'.format(method_suffix),
                                  width=sim_width,
                                  inverse_flag=0,
                                  null_value=nodata_out,
                                  logpath=path_log,
                                  outdir=scene.scene,
                                  shellscript=shellscript)
-                
-                par2hdr(n.dem_seg + '.par', image + '_geo_norm_db.hdr')
+                par2hdr(n.dem_seg + '.par', image + '_{}_db.hdr'.format(method_suffix))
             else:
                 nodata_out = nodata[0]
             suffix = {'linear': '', 'db': '_db'}[scale]
-            infile = image + '_geo_norm{}'.format(suffix)
-            outfile = os.path.join(outdir, os.path.basename(image) + '_geo_norm{}.tif'.format(suffix))
-            
+            infile = image + '_{0}{1}'.format(method_suffix, suffix)
+            outfile = os.path.join(outdir, os.path.basename(image) + '_{0}{1}.tif'.format(method_suffix, suffix))
             disp.data2geotiff(DEM_par=n.dem_seg + '.par',
                               data=infile,
                               type=2,
@@ -716,7 +715,6 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                               logpath=path_log,
                               outdir=scene.scene,
                               shellscript=shellscript)
-    
     if scene.sensor in ['S1A', 'S1B']:
         shutil.copyfile(os.path.join(scene.scene, 'manifest.safe'),
                         os.path.join(outdir, scene.outname_base() + '_manifest.safe'))
