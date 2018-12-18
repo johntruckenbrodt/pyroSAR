@@ -374,7 +374,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=2,
             func_interp=0, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
-            cleanup=True, normalization_method=1):
+            cleanup=True, normalization_method=2):
     """
     general function for geocoding SAR images with GAMMA
     
