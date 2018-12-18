@@ -220,7 +220,7 @@ def parse_command(command, indent='    '):
     # add a parameter inlist for commands which take interactive input via stdin
     # the list of commands, which are interactive is hard to assess and thus likely a source of future errors
     
-    inlist = ['par_ESA_ERS']
+    inlist = ['create_dem_par', 'par_ESA_ERS']
     
     if command_base in inlist:
         arg_req.append('inlist')
