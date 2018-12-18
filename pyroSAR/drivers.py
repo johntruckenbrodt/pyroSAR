@@ -1236,11 +1236,11 @@ class SAFE(ID):
         
         # download the files
         if osvType in ['POE', 'RES']:
-            with OSV(outdir) as osv:
+            with S1.OSV(outdir) as osv:
                 files = osv.catch(osvType, before, after)
                 osv.retrieve(files)
         elif sorted(osvType) == ['POE', 'RES']:
-            with OSV(outdir) as osv:
+            with S1.OSV(outdir) as osv:
                 files = osv.catch('POE', before, after)
                 if len(files) == 0:
                     files = osv.catch('RES', before, after)
