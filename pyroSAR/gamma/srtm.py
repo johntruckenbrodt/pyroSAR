@@ -20,7 +20,7 @@ import re
 import shutil
 import zipfile as zf
 
-from spatialist import raster
+from spatialist import raster, gdal_translate, gdalbuildvrt
 from spatialist.ancillary import finder, run
 from spatialist.envi import HDRobject
 
@@ -274,11 +274,11 @@ def makeSRTM(scenes, srtmdir, outname):
     srtm_vrt = os.path.join(tempdir, 'srtm.vrt')
     srtm_temp = srtm_vrt.replace('.vrt', '_tmp')
     srtm_final = srtm_vrt.replace('.vrt', '')
-
-    run(['gdalbuildvrt', '-overwrite', '-srcnodata', ' '.join(nodatas), srtm_vrt, hgt_files])
-
-    run(['gdal_translate', '-of', 'ENVI', '-a_nodata', -32768, srtm_vrt, srtm_temp])
-
+    
+    gdalbuildvrt(hgt_files, srtm_vrt, {'srcNodata': nodatas, 'options': ['-overwrite']})
+    
+    gdal_translate(srtm_vrt, srtm_temp, {'format': 'ENVI', 'noData': -32768})
+    
     process(['srtm2dem', srtm_temp, srtm_final, srtm_final + '.par', 2, '-'], outdir=tempdir)
     
     shutil.move(srtm_final, outname)
