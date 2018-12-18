@@ -288,7 +288,12 @@ def makeSRTM(scenes, srtmdir, outname):
     
     gdal_translate(srtm_vrt, srtm_temp, {'format': 'ENVI', 'noData': nodata})
     
-    process(['srtm2dem', srtm_temp, srtm_final, srtm_final + '.par', 2, '-'], outdir=tempdir)
+    diff.srtm2dem(SRTM_DEM=srtm_temp,
+                  DEM=srtm_final,
+                  DEM_par=srtm_final + '.par',
+                  gflg=2,
+                  geoid='-',
+                  outdir=tempdir)
     
     shutil.move(srtm_final, outname)
     shutil.move(srtm_final + '.par', outname + '.par')
