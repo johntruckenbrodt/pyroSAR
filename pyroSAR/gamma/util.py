@@ -31,7 +31,7 @@ from spatialist.ancillary import union, finder
 
 from ..S1 import OSV
 from ..drivers import ID, CEOS_ERS, CEOS_PSR, ESA, SAFE, TSX, identify
-from . import ISPPar, Namespace, par2hdr, process
+from . import ISPPar, Namespace, par2hdr
 from .api import diff, disp, isp, lat
 
 ogr.UseExceptions()
@@ -374,7 +374,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=2,
             func_interp=0, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
-            cleanup=True, geocode_method=1):
+            cleanup=True, normalization_method=1):
     """
     general function for geocoding SAR images with GAMMA
     
@@ -421,10 +421,10 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         Otherwise the function will raise an error if no POE file exists
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
-    geocode_method: int
-        this is still experimental and gives the option to decide between two different back-geocoding approaches
+    normalization_method: {1,2}
+        the topographiy normalization approach to be used
          * 1: first geocoding, then terrain flattening
-         * 2: first terrain flattening, then geocoding
+         * 2: first terrain flattening, then geocoding; see `Small 2011 <https://doi.org/10.1109/Tgrs.2011.2120616>`_
     
     Returns
     -------
@@ -579,7 +579,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     # normalization and backward geocoding approach 1 ####################
     ######################################################################
     print('geocoding and normalization..')
-    if geocode_method == 1:
+    if normalization_method == 1:
         method_suffix = 'geo_norm'
         for image in images:
             diff.geocode_back(data_in=image,
@@ -619,7 +619,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     ######################################################################
     # normalization and backward geocoding approach 2 ####################
     ######################################################################
-    elif geocode_method == 2:
+    elif normalization_method == 2:
         method_suffix = 'norm_geo'
         n.appreciate(['pixel_area_fine', 'ellipse_pixel_area', 'ratio_sigma0'])
         diff.pixel_area(MLI_par=master + '.par',
@@ -686,7 +686,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                             shellscript=shellscript)
             par2hdr(n.dem_seg + '.par', image + '_{}.hdr'.format(method_suffix))
     else:
-        raise RuntimeError('unknown geocode_method option')
+        raise RuntimeError('unknown option for normalization_method')
     ######################################################################
     print('conversion to (dB and) geotiff..')
     for image in images:
