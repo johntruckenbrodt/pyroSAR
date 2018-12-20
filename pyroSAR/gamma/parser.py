@@ -2,7 +2,7 @@ import os
 import re
 import subprocess as sp
 from collections import Counter
-from spatialist.ancillary import finder, which
+from spatialist.ancillary import finder, which, dissolve
 
 from .auxil import ExamineGamma
 
@@ -38,10 +38,14 @@ def parse_command(command, indent='    '):
     else:
         # for all other commands stderr is just appended to stdout
         out += err
+    
+    if re.search("Can't locate FILE/Path\.pm in @INC", out):
+        raise RuntimeError('unable to parse Perl script')
     ###########################################
     # fix command-specific inconsistencies in parameter naming
     # in several commands the parameter naming in the usage description line does not match that of the docstring
-    parnames_lookup = {'adapt_filt': [('low_snr_thr', 'low_SNR_thr')],
+    parnames_lookup = {'2PASS_INT': [('OFF_PAR', 'OFF_par')],
+                       'adapt_filt': [('low_snr_thr', 'low_SNR_thr')],
                        'atm_mod2': [('rpt', 'report'),
                                     ('[mode]', '[model_atm]'),
                                     ('model     atm', 'model_atm atm')],
@@ -49,20 +53,28 @@ def parse_command(command, indent='    '):
                        'comb_interfs': [('combi_out', 'combi_int')],
                        'coord_to_sarpix': [('north/lat', 'north_lat'),
                                            ('east/lon', 'east_lon')],
+                       'base_calc': [('plt_flg', 'plt_flag'),
+                                     ('pltflg', 'plt_flag')],
                        'base_init': [('<base>', '<baseline>')],
+                       'base_plot': [('plt_flg', 'plt_flag'),
+                                     ('pltflg', 'plt_flag')],
                        'dis2hgt': [('m/cycle', 'm_cycle')],
                        'discc': [('min_corr', 'cmin'),
                                  ('max_corr', 'cmax')],
+                       'disp2ras': [('<list>', '<DISP_tab>')],
                        'dis_data': [('...', '<...>')],
                        'dispwr': [('data_type', 'dtype')],
                        'DORIS_vec': [('SLC_PAR', 'SLC_par')],
                        'gc_map_fd': [('fdtab', 'fd_tab')],
                        'gc_map_grd': [('<MLI_par>', '<GRD_par>')],
                        'GRD_to_SR': [('SLC_par', 'MLI_par')],
+                       'haalpha': [('<alpha> <entropy>', '<alpha2> <entropy>'),
+                                   ('alpha       (output)', 'alpha2      (output)')],
                        'histogram_ras': [('mean/stdev', 'mean_stdev')],
                        'hsi_color_scale': [('[chip]', '[chip_width]')],
                        'HUYNEN_DEC': [('T11_0', 'T11')],
                        'interf_SLC': [('  SLC2_pa  ', '  SLC2_par  ')],
+                       'landsat2dem': [('<DEM>', '<image>')],
                        'line_interp': [('input file', 'data_in'),
                                        ('output file', 'data_out')],
                        'm-alpha': [('<c2 ', '<c2> ')],
@@ -73,8 +85,37 @@ def parse_command(command, indent='    '):
                                        ('n2', 'north2'),
                                        ('e2', 'east2')],
                        'mask_class': [('...', '<...>')],
+                       'mk_2d_im_geo': [('exponent', 'exp')],
+                       'mk_base_calc': [('<RSLC_tab>', '<SLC_tab>')],
+                       'mk_cpd_all': [('dtab', 'data_tab')],
+                       'mk_cpx_ref_2d': [('diff_tab', 'cpx_tab')],
+                       'mk_dispmap2_2d': [('RMLI_image', 'MLI'),
+                                          ('RMLI_par', 'MLI_par'),
+                                          ('MLI_image', 'MLI'),
+                                          ('DISP_tab', 'disp_tab')],
+                       'mk_dispmap_2d': [('RMLI_image', 'MLI'),
+                                         ('RMLI_par', 'MLI_par'),
+                                         ('MLI_image', 'MLI'),
+                                         ('DISP_tab', 'disp_tab')],
+                       'mk_geo_data_all': [('data_geo_dir', 'geo_dir')],
+                       'mk_itab': [('<offset>', '<start>')],
+                       'mk_hgt_2d': [('m/cycle', 'm_cycle')],
+                       'mk_pol2rec_2d': [('data_tab', 'DIFF_tab'),
+                                         ('<type> <rmli>', '<type>')],
+                       'mk_rasdt_all': [('RMLI_image', 'MLI'),
+                                         ('MLI_image', 'MLI')],
+                       'mk_rasmph_all': [('RMLI_image', 'MLI'),
+                                         ('MLI_image', 'MLI')],
+                       'mk_unw_2d': [('unw_mask1', 'unw_mask')],
+                       'mk_unw_ref_2d': [('diff_tab', 'DIFF_tab')],
+                       'MLI2pt': [('MLI_TAB', 'MLI_tab'),
+                                  ('pSLC_par', 'pMLI_par')],
+                       'mosaic': [('<..>', '<...>'),
+                                  ('DEM_parout', 'DEM_par_out')],
                        'multi_class_mapping': [('...', '<...>')],
                        'offset_fit': [('interact_flag', 'interact_mode')],
+                       'offset_plot_az': [('rmin', 'r_min'),
+                                          ('rmax', 'r_max')],
                        'par_ASF_SLC': [('CEOS_SAR_leader', 'CEOS_leader')],
                        'par_ASAR': [('ASAR/ERS_file', 'ASAR_ERS_file')],
                        'par_EORC_JERS_SLC': [('slc', 'SLC')],
@@ -89,10 +130,13 @@ def parse_command(command, indent='    '):
                        'radcal_PRI': [('GRD_PAR', 'GRD_par'),
                                       ('PRI_PAR', 'PRI_par')],
                        'radcal_SLC': [('SLC_PAR', 'SLC_par')],
+                       'ras2jpg': [('{', '{{'),
+                                   ('}', '}}')],
                        'ras_data_pt': [('pdata1', 'pdata')],
                        'ras_to_rgb': [('<red channel>', '<red_channel>'),
                                       ('<green channel>', '<green_channel>'),
                                       ('<blue channel>', '<blue_channel>')],
+                       'rascc_mask_thinning': [('...', '[...]')],
                        'rashgt': [('m/cycle', 'm_cycle')],
                        'rashgt_shd': [('m/cycle', 'm_cycle'),
                                       ('\n  cycle ', '\n  m_cycle ')],
@@ -109,10 +153,12 @@ def parse_command(command, indent='    '):
                        'S1_OPOD_vec': [('SLC_PAR', 'SLC_par')],
                        'single_class_mapping': [('>...', '> <...>')],
                        'scale_base': [('SLC-1_par-2', 'SLC1_par-2')],
-                       'SLC_interp_lt': [('SLC-2', 'SLC2')],
+                       'SLC_interp_lt': [('SLC-2', 'SLC2'),
+                                         ('blksz', 'blk_size')],
                        'SLC_intf': [('SLC1s_par', 'SLC-1s_par'),
                                     ('SLC2Rs_par', 'SLC-2Rs_par')],
                        'SLC_interp_map': [('coffs2_sm', 'coffs_sm')],
+                       'srtm_mosaic': [('<lon>', '<lon2>')],
                        'texture': [('weights_flag', 'wgt_flag')],
                        'TX_SLC_preproc': [('TX_list', 'TSX_list')],
                        'uchar2float': [('infile', 'data_in'),
@@ -132,13 +178,13 @@ def parse_command(command, indent='    '):
             out = out.replace(*replacement)
     ###########################################
     # filter header (general command description) and usage description string
-    header = '\n'.join([x.strip('* ') for x in re.findall('[*]{3}.*[*]{3}', out)])
+    header = '\n'.join([x.strip('* ') for x in re.findall('[*]{3}.*(?:[*]{3}|)', out)])
     header = '| ' + header.replace('\n', '\n| ')
     usage = re.search('usage:.*(?=\n)', out).group()
     
     # filter required and optional arguments from usage description text
     arg_req_raw = [re.sub('[^\w.-]*', '', x) for x in re.findall('[^<]*<([^>]*)>', usage)]
-    arg_opt = [re.sub('[^\w.-]*', '', x) for x in re.findall('[^[]*\[([^]]*)\]', usage)]
+    arg_opt_raw = [re.sub('[^\w.-]*', '', x) for x in re.findall('[^[]*\[([^]]*)\]', usage)]
     
     ###########################################
     # remove parameters from the usage description which are not documented
@@ -153,7 +199,7 @@ def parse_command(command, indent='    '):
     
     if command_base in removes.keys():
         for var in removes[command_base]:
-            arg_opt.remove(var)
+            arg_opt_raw.remove(var)
     
     if command_base == 'res_map':
         arg_req_raw.remove('report_file')
@@ -183,9 +229,17 @@ def parse_command(command, indent='    '):
                     'mask_class': [(['n_class', 'class_1', '...', 'class_n'],
                                     'class_values',
                                     'a list of class map values')],
+                    'mosaic': [(['nfiles', 'data_in1', 'DEM_par1', 'data_in2', 'DEM_par2', '...', '...'],
+                                ['data_in_list', 'DEM_par_list'],
+                                ['a list of input data files',
+                                 'a list of DEM/MAP parameter files for each data file'])],
                     'multi_class_mapping': [(['nfiles', 'f1', 'f2', '...', 'fn'],
                                              'files',
                                              'a list of input data files (float)')],
+                    'rascc_mask_thinning': [(['thresh_1', '...', 'thresh_nmax'],
+                                             'thresholds',
+                                             'a list of thresholds sorted from smallest to '
+                                             'largest scale sampling reduction')],
                     'single_class_mapping': [(['nfiles', 'f1', '...', 'fn'],
                                               'files',
                                               'a list of point data stack files'),
@@ -205,13 +259,26 @@ def parse_command(command, indent='    '):
     if '..' in usage and command_base not in replacements.keys():
         raise RuntimeError('the command contains multi-args which were not properly parsed')
     
-    arg_req = list(arg_req_raw)
-    if command_base in replacements.keys():
-        for old, new, description in replacements[command_base]:
-            arg_req[arg_req.index(old[0])] = new
+    def replace(inlist, replacement):
+        outlist = list(inlist)
+        for old, new, description in replacement:
+            if old[0] not in outlist:
+                return outlist
+            outlist[outlist.index(old[0])] = new
             for i in range(1, len(old)):
-                if old[i] in arg_req:
-                    arg_req.remove(old[i])
+                if old[i] in outlist:
+                    outlist.remove(old[i])
+        return dissolve(outlist)
+    
+    arg_req = list(arg_req_raw)
+    arg_opt = list(arg_opt_raw)
+    
+    if command_base in replacements.keys():
+        arg_req = replace(arg_req, replacements[command_base])
+        arg_opt = replace(arg_opt, replacements[command_base])
+    
+    if command_base in ['par_CS_geo', 'par_KS_geo']:
+        out = re.sub('[ ]*trunk.*', '', out, flags=re.DOTALL)
     ###########################################
     # check if there are any double parameters
     
@@ -243,8 +310,11 @@ def parse_command(command, indent='    '):
     
     # create the function definition string
     fun_def = 'def {name}({args_fun}, logpath=None, outdir=None, shellscript=None):' \
-        .format(name=os.path.basename(command).replace('-', '_'),
+        .format(name=command_base.replace('-', '_'),
                 args_fun=argstr_function)
+    
+    if command_base == '2PASS_INT':
+        fun_def = fun_def.replace(command_base, 'TWO_PASS_INT')
     ######################################################################################
     # create the process call argument string
     
@@ -252,13 +322,16 @@ def parse_command(command, indent='    '):
     # e.g. 'arg1, arg2, arg3'
     # if a parameter is named 'def' (not allowed in Python) it is renamed to 'drm'
     
+    # inlist is not a proc arg but a parameter passed to function process
     proc_args = arg_req + arg_opt
-    
     if command_base in inlist:
         proc_args.remove('inlist')
     
-    if command_base in replacements.keys():
+    # insert the length of a list argument as a proc arg
+    if command_base in replacements.keys() and command_base != 'rascc_mask_thinning':
         key = replacements[command_base][0][1]
+        if isinstance(key, list):
+            key = key[0]
         proc_args.insert(proc_args.index(key), 'len({})'.format(key))
     
     if command_base == 'validate':
@@ -277,6 +350,8 @@ def parse_command(command, indent='    '):
     
     if command_base == 'lin_comb_cpx':
         fun_proc = fun_proc.replace('factors_r, factors_i', 'zip(factors_r, factors_i)')
+    elif command_base == 'mosaic':
+        fun_proc = fun_proc.replace('data_in_list, DEM_par_list', 'zip(data_in_list, DEM_par_list)')
     elif command_base == 'single_class_mapping':
         fun_proc = fun_proc.replace('files, thres_lower, thres_upper', 'zip(files, thres_lower, thres_upper)')
     
@@ -291,7 +366,7 @@ def parse_command(command, indent='    '):
     
     # define a pattern containing individual parameter documentations
     pattern = r'\n[ ]*[<\[]*(?P<par>{0})[>\]]*[\t ]+(?P<doc>.*)'.format(
-        '|'.join(arg_req_raw + arg_opt).replace('.', '\.'))
+        '|'.join(arg_req_raw + arg_opt_raw).replace('.', '\.'))
     
     # identify the start indices of all pattern matches
     starts = [m.start(0) for m in re.finditer(pattern, doc)] + [len(out)]
@@ -312,7 +387,11 @@ def parse_command(command, indent='    '):
     if command_base in replacements.keys():
         for old, new, description in replacements[command_base]:
             index = [doc_items.index(x) for x in doc_items if x[0] == old[0]][0]
-            doc_items.insert(index, (new, description))
+            if isinstance(new, str):
+                doc_items.insert(index, (new, description))
+            else:
+                for i in reversed(range(0, len(new))):
+                    doc_items.insert(index, (new[i], description[i]))
     
     # remove the replaced parameters from the argument lists
     doc_items = [x for x in doc_items if x[0] in arg_req + arg_opt]
@@ -322,6 +401,11 @@ def parse_command(command, indent='    '):
         par = item[0].replace('-', '_').replace(', def,', ', drm,')
         description = item[1]
         doc_items[i] = (par, description)
+    
+    if command_base in ['par_CS_geo', 'par_KS_geo']:
+        doc_items.append(('MLI_par', '(output) ISP SLC/MLI parameter file (example: yyyymmdd.mli.par)'))
+        doc_items.append(('DEM_par', '(output) DIFF/GEO DEM parameter file (example: yyyymmdd.dem_par)'))
+        doc_items.append(('GEO', '(output) Geocoded image data file (example: yyyymmdd.geo)'))
     
     # check if all parameters are documented:
     proc_args = [x.replace('-', '_').replace(', def,', ', drm,') for x in arg_req + arg_opt]
@@ -421,7 +505,16 @@ def parse_module(bindir, outfile):
     >>> outname = os.path.join(os.environ['HOME'], 'isp.py')
     >>> parse_module('/cluster/GAMMA_SOFTWARE-20161207/ISP/bin', outname)
     """
-    excludes = ['coord_trans', 'PRI_to_MLI', 'RSAT2_SLC_preproc', 'mk_ASF_CEOS_list', '2PASS_UNW', 'mk_diff_2d']
+    excludes = ['coord_trans',  # doesn't take any parameters and is interactive
+                'interp_cpx',  # replaced by interp_data
+                'interp_real',  # replaced by interp_data
+                'PRI_to_MLI',  # replaced by radcal_MLI
+                'RSAT2_SLC_preproc',  # takes option flags
+                'mk_ASF_CEOS_list',  # "cannot create : Directory nonexistent"
+                '2PASS_UNW',  # parameter name inconsistencies
+                'mk_diff_2d',  # takes option flags
+                'gamma_doc'  # opens the Gamma documentation
+                ]
     failed = []
     outstring = 'from pyroSAR.gamma.auxil import process\n\n\n'
     for cmd in sorted(finder(bindir, ['^\w+$'], regex=True), key=lambda s: s.lower()):
