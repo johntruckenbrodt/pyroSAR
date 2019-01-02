@@ -5332,9 +5332,6 @@ def unw_model(interf, unw_model, unw, width, xinit='-', yinit='-', ref_ph='-', w
          width_model], logpath=logpath, outdir=outdir, shellscript=shellscript)
 
 
-from pyroSAR.gamma.auxil import process
-
-
 def bpf_ssi(SLC, SLC_par, SLC_flow, SLC_flow_par, SLC_fhigh, SLC_fhigh_par, rbs='-', logpath=None, outdir=None,
             shellscript=None):
     """
