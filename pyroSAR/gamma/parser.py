@@ -530,7 +530,7 @@ def parse_module(bindir, outfile):
                 failed.append('{0}: {1}'.format(basename, 'error yet to be assessed'))
                 continue
             outstring += fun + '\n\n'
-    with open(outfile, 'w') as out:
+    with open(outfile, 'a') as out:
         out.write(outstring)
     if len(failed) > 0:
         print('the following functions could not be parsed:\n{0}\n({1} total)'.format('\n'.join(failed), len(failed)))
