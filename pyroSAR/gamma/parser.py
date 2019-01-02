@@ -204,6 +204,15 @@ def parse_command(command, indent='    '):
     if command_base == 'res_map':
         arg_req_raw.remove('report_file')
     ###########################################
+    # add parameters missing in the usage argument lists
+    
+    appends = {'SLC_interp_S1_TOPS': ['mode', 'order'],
+               'SLC_interp_map': ['mode', 'order']}
+
+    if command_base in appends.keys():
+        for var in appends[command_base]:
+            arg_opt_raw.append(var)
+    ###########################################
     # define parameter replacements; this is intended for parameters which are to be aggregated into a list parameter
     replacements = {'cc_monitoring': [(['nfiles', 'f1', 'f2', '...'],
                                        'files',
