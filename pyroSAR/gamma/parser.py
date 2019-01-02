@@ -525,7 +525,7 @@ def parse_module(bindir, outfile):
                 'gamma_doc'  # opens the Gamma documentation
                 ]
     failed = []
-    outstring = 'from pyroSAR.gamma.auxil import process\n\n\n'
+    outstring = ''
     for cmd in sorted(finder(bindir, ['^\w+$'], regex=True), key=lambda s: s.lower()):
         basename = os.path.basename(cmd)
         if basename not in excludes:
@@ -539,8 +539,12 @@ def parse_module(bindir, outfile):
                 failed.append('{0}: {1}'.format(basename, 'error yet to be assessed'))
                 continue
             outstring += fun + '\n\n'
-    with open(outfile, 'a') as out:
-        out.write(outstring)
+    if len(outstring) > 0:
+        if not os.path.isfile(outfile):
+            with open(outfile, 'w') as out:
+                out.write('from pyroSAR.gamma.auxil import process\n\n\n')
+        with open(outfile, 'a') as out:
+            out.write(outstring)
     if len(failed) > 0:
         print('the following functions could not be parsed:\n{0}\n({1} total)'.format('\n'.join(failed), len(failed)))
 
