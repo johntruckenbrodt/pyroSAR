@@ -25,7 +25,7 @@ from spatialist.ancillary import finder
 from spatialist.envi import HDRobject
 
 from ..drivers import ID
-from . import ISPPar, process, UTM, slc_corners, par2hdr
+from . import ISPPar, UTM, slc_corners, par2hdr
 from .api import diff, disp, isp
 
 
