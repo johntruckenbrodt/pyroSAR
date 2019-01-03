@@ -31,18 +31,45 @@ from spatialist.ancillary import union, finder
 
 from ..S1 import OSV
 from ..drivers import ID, CEOS_ERS, CEOS_PSR, ESA, SAFE, TSX, identify
-from . import ISPPar, Namespace, process, par2hdr
+from . import ISPPar, Namespace, par2hdr
+from .api import diff, disp, isp, lat
 
 ogr.UseExceptions()
 
 
-def calibrate(id, directory, replace=False):
+def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscript=None):
+    """
+    
+    Parameters
+    ----------
+    id: ~pyroSAR.drivers.ID
+        an SAR scene object of type pyroSAR.ID or any subclass
+    directory: str
+        the directory to search for Gamma calibration candidates
+    replace: bool
+        replace the input images by the new files? If True, the input images will be deleted.
+    logpath: str or None
+        a directory to write command logfiles to
+    outdir: str or None
+        the directory to execute the command in
+    shellscript: str or None
+        a file to write the Gamma commands to in shell format
+
+    Returns
+    -------
+
+    """
     if isinstance(id, CEOS_PSR):
         for image in id.getGammaImages(directory):
             if image.endswith('_slc'):
-                process(
-                    ['radcal_SLC', image, image + '.par', image + '_cal', image + '_cal.par',
-                     '-', '-', '-', '-', '-', '-', id.meta['k_dB']])
+                isp.radcal_SLC(SLC=image,
+                               SLC_par=image + '.par',
+                               CSLC=image + '_cal',
+                               CSLC_par=image + '_cal.par',
+                               K_dB=id.meta['k_dB'],
+                               logpath=logpath,
+                               outdir=outdir,
+                               shellscript=shellscript)
                 par2hdr(image + '_cal.par', image + '_cal.hdr')
     
     elif isinstance(id, ESA):
@@ -51,7 +78,15 @@ def calibrate(id, directory, replace=False):
         candidates = [x for x in id.getGammaImages(directory) if re.search('_pri$', x)]
         for image in candidates:
             out = image.replace('pri', 'grd')
-            process(['radcal_PRI', image, image + '.par', out, out + '.par', k_db, inc_ref])
+            isp.radcal_PRI(PRI=image,
+                           PRI_par=image + '.par',
+                           GRD=out,
+                           GRD_par=out + '.par',
+                           K_dB=k_db,
+                           inc_ref=inc_ref,
+                           logpath=logpath,
+                           outdir=outdir,
+                           shellscript=shellscript)
             par2hdr(out + '.par', out + '.hdr')
             if replace:
                 for item in [image, image + '.par', image + '.hdr']:
@@ -65,7 +100,7 @@ def calibrate(id, directory, replace=False):
         raise NotImplementedError('calibration for class {} is not implemented yet'.format(type(id).__name__))
 
 
-def convert2gamma(id, directory, S1_noiseremoval=True):
+def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None, shellscript=None):
     """
     general function for converting SAR images to GAMMA format
 
@@ -77,6 +112,12 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
         the output directory for the converted images
     S1_noiseremoval: bool
         only Sentinel-1: should noise removal be applied to the image?
+    logpath: str or None
+        a directory to write command logfiles to
+    outdir: str or None
+        the directory to execute the command in
+    shellscript: str or None
+        a file to write the Gamma commands to in shell format
 
     Returns
     -------
@@ -101,7 +142,15 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                     lea = id.findfiles('LEA_01.001')[0]
                     dat = id.findfiles('DAT_01.001')[0]
                     title = re.sub('\.PS$', '', os.path.basename(id.file))
-                    process(['par_ESA_ERS', lea, outname + '.par', dat, outname], inlist=[title])
+                    
+                    isp.par_ESA_ERS(CEOS_SAR_leader=lea,
+                                    SLC_par=outname + '.par',
+                                    CEOS_DAT=dat,
+                                    SLC=outname,
+                                    inlist=[title],
+                                    logpath=logpath,
+                                    outdir=outdir,
+                                    shellscript=shellscript)
                 else:
                     print('scene already converted')
             else:
@@ -119,13 +168,26 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
             if id.product == '1.1':
                 outname_base = '{}_{}_slc'.format(id.outname_base(), polarization)
                 outname = os.path.join(directory, outname_base)
-                process(['par_EORC_PALSAR', id.file, outname + '.par', image, outname])
+                
+                isp.par_EORC_PALSAR(CEOS_leader=id.file,
+                                    SLC_par=outname + '.par',
+                                    CEOS_data=image,
+                                    SLC=outname,
+                                    logpath=logpath,
+                                    outdir=outdir,
+                                    shellscript=shellscript)
             else:
                 outname_base = '{}_{}_mli_geo'.format(id.outname_base(), polarization)
                 outname = os.path.join(directory, outname_base)
-                process(
-                    ['par_EORC_PALSAR_geo', id.file, outname + '.par', outname + '_dem.par', image, outname])
-
+                
+                isp.par_EORC_PALSAR_geo(CEOS_leader=id.file,
+                                        MLI_par=outname + '.par',
+                                        DEM_par=outname + '_dem.par',
+                                        CEOS_data=image,
+                                        MLI=outname,
+                                        logpath=logpath,
+                                        outdir=outdir,
+                                        shellscript=shellscript)
             par2hdr(outname + '.par', outname + '.hdr')
     
     elif isinstance(id, ESA):
@@ -135,7 +197,13 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
         """
         outname = os.path.join(directory, id.outname_base())
         if not id.is_processed(directory):
-            process(['par_ASAR', os.path.basename(id.file), outname], os.path.dirname(id.file))
+            
+            isp.par_ASAR(ASAR_ERS_file=os.path.basename(id.file),
+                         output_name=outname,
+                         outdir=os.path.dirname(id.file),
+                         logpath=logpath,
+                         shellscript=shellscript)
+            
             os.remove(outname + '.hdr')
             for item in finder(directory, [os.path.basename(outname)], regex=True):
                 ext = '.par' if item.endswith('.par') else ''
@@ -179,14 +247,26 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
                       product)
             name = os.path.join(directory, '_'.join(fields))
             
+            pars = {'GeoTIFF': tiff,
+                    'annotation_XML': xml_ann,
+                    'calibration_XML': xml_cal,
+                    'noise_XML': xml_noise,
+                    'logpath': logpath,
+                    'shellscript': shellscript,
+                    'outdir': outdir}
+            
             if product == 'slc':
                 swath = match.group('swath').upper()
-                name = name.replace('{:_<{l}}'.format(id.acquisition_mode, l=len(swath)), swath)
-                cmd = ['par_S1_SLC', tiff, xml_ann, xml_cal, xml_noise, name + '.par', name, name + '.tops_par']
+                name = name.replace('{:_<{length}}'.format(id.acquisition_mode, length=len(swath)), swath)
+                pars['SLC'] = name
+                pars['SLC_par'] = name + '.par'
+                pars['TOPS_par'] = name + '.tops_par'
+                isp.par_S1_SLC(**pars)
             else:
-                cmd = ['par_S1_GRD', tiff, xml_ann, xml_cal, xml_noise, name + '.par', name]
+                pars['MLI'] = name
+                pars['MLI_par'] = name + '.par'
+                isp.par_S1_GRD(**pars)
             
-            process(cmd)
             par2hdr(name + '.par', name + '.hdr')
     
     elif isinstance(id, TSX):
@@ -195,22 +275,43 @@ def convert2gamma(id, directory, S1_noiseremoval=True):
         for image in images:
             pol = pattern.match(os.path.basename(image)).group('pol')
             outname = os.path.join(directory, id.outname_base() + '_' + pol)
+            
+            pars = {'annotation_XML': id.file,
+                    'pol': pol,
+                    'logpath': logpath,
+                    'shellscript': shellscript,
+                    'outdir': outdir}
+            
             if id.product == 'SSC':
                 outname += '_slc'
-                process(['par_TX_SLC', id.file, image, outname + '.par', outname, pol])
+                pars['COSAR'] = image
+                pars['SLC_par'] = outname + '.par'
+                pars['SLC'] = outname
+                isp.par_TX_SLC(**pars)
+            
             elif id.product == 'MGD':
                 outname += '_mli'
-                process(['par_TX_GRD', id.file, image, outname + '.par', outname, pol])
-            else:
+                pars['GeoTIFF'] = image
+                pars['GRD_par'] = outname + '.par'
+                pars['GRD'] = outname
+                isp.par_TX_GRD(**pars)
+            
+            elif id.product in ['GEC', 'EEC']:
                 outname += '_mli_geo'
-                process(['par_TX_geo', id.file, image, outname + '.par', outname + '_dem.par', outname, pol])
+                pars['GeoTIFF'] = image
+                pars['MLI_par'] = outname + '.par'
+                pars['DEM_par'] = outname + '_dem.par'
+                pars['GEO'] = outname
+                isp.par_TX_geo(**pars)
+            else:
+                raise RuntimeError('unknown product: {}'.format(id.product))
+            
             par2hdr(outname + '.par', outname + '.hdr')
-    
     else:
         raise NotImplementedError('conversion for class {} is not implemented yet'.format(type(id).__name__))
 
 
-def correctOSV(id, osvdir=None, logpath=None, osvType='POE'):
+def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shellscript=None):
     """
     correct GAMMA parameter files with orbit state vector information from dedicated OSV files
     
@@ -220,10 +321,12 @@ def correctOSV(id, osvdir=None, logpath=None, osvType='POE'):
         the scene to be corrected
     osvdir: str
         the directory of OSV files; subdirectories POEORB and RESORB are created automatically
-    logpath: str
-        a path to write logfiles to
-    osvType: str or list
-        the type of orbit file either 'POE', 'RES' or a list of both
+    logpath: str or None
+        a directory to write command logfiles to
+    outdir: str or None
+        the directory to execute the command in
+    shellscript: str or None
+        a file to write the Gamma commands to in shell format
 
     Returns
     -------
@@ -262,11 +365,16 @@ def correctOSV(id, osvdir=None, logpath=None, osvType='POE'):
     # update the GAMMA parameter file with the selected orbit state vectors
     print('correcting state vectors with file {}'.format(osvfile))
     for image in images:
-        process(['S1_OPOD_vec', image + '.par', osvfile], logpath=logpath)
+        isp.S1_OPOD_vec(SLC_par=image + '.par',
+                        OPOD=osvfile,
+                        logpath=logpath,
+                        outdir=outdir,
+                        shellscript=shellscript)
 
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=2,
-            func_interp=0, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False, cleanup=True):
+            func_interp=0, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
+            cleanup=True, normalization_method=2):
     """
     general function for geocoding SAR images with GAMMA
     
@@ -313,6 +421,10 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         Otherwise the function will raise an error if no POE file exists
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
+    normalization_method: {1, 2}
+        the topographic normalization approach to be used
+         * 1: first geocoding, then terrain flattening
+         * 2: first terrain flattening, then geocoding; see `Small 2011 <https://doi.org/10.1109/Tgrs.2011.2120616>`_
     
     Returns
     -------
@@ -340,6 +452,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     """
     
     scene = scene if isinstance(scene, ID) else identify(scene)
+    
+    shellscript = os.path.join(outdir, scene.outname_base() + '_commands.sh')
     
     if scene.sensor not in ['S1A', 'S1B']:
         raise IOError('this method is currently only available for Sentinel-1. Please stay tuned...')
@@ -371,16 +485,16 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         scene.scene = os.path.join(tempdir, os.path.basename(scene.file))
         os.makedirs(scene.scene)
     
-    logdir = os.path.join(scene.scene, 'logfiles')
-    if not os.path.isdir(logdir):
-        os.makedirs(logdir)
+    path_log = os.path.join(scene.scene, 'logfiles')
+    if not os.path.isdir(path_log):
+        os.makedirs(path_log)
     
     if scene.sensor in ['S1A', 'S1B']:
         print('removing border noise..')
         scene.removeGRDBorderNoise()
     
     print('converting scene to GAMMA format..')
-    convert2gamma(scene, scene.scene)
+    convert2gamma(scene, scene.scene, logpath=path_log, outdir=scene.scene, shellscript=shellscript)
     
     if scene.sensor in ['S1A', 'S1B']:
         print('updating orbit state vectors..')
@@ -389,17 +503,19 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         else:
             osvtype = 'POE'
         try:
-            correctOSV(id=scene, osvdir=osvdir, logpath=logdir, osvType=osvtype)
+            correctOSV(id=scene, osvdir=osvdir, osvType=osvtype,
+                       logpath=path_log, outdir=scene.scene, shellscript=shellscript)
         except RuntimeError:
             return
     
-    calibrate(scene, scene.scene)
+    calibrate(scene, scene.scene, logpath=path_log, outdir=scene.scene, shellscript=shellscript)
     
     images = [x for x in scene.getGammaImages(scene.scene) if x.endswith('_grd') or x.endswith('_slc_cal')]
     
     print('multilooking..')
     for image in images:
-        multilook(image, image + '_mli', targetres)
+        multilook(infile=image, outfile=image + '_mli', targetres=targetres,
+                  logpath=path_log, outdir=scene.scene, shellscript=shellscript)
     
     images = [x + '_mli' for x in images]
     
@@ -417,21 +533,36 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
     
-    path_log = os.path.join(scene.scene, 'logfiles')
-    if not os.path.isdir(path_log):
-        os.makedirs(path_log)
-    
     master_par = ISPPar(master + '.par')
     
-    gc_map_args = [dem + '.par', dem, n.dem_seg + '.par', n.dem_seg, n.lut_coarse,
-                   ovs_lat, ovs_lon, n.sim_map, n.u, n.v, n.inc, n.psi, n.pix, n.ls_map,
-                   8, func_interp]
+    gc_map_args = {'DEM_par': dem + '.par',
+                   'DEM': dem,
+                   'DEM_seg_par': n.dem_seg + '.par',
+                   'DEM_seg': n.dem_seg,
+                   'lookup_table': n.lut_coarse,
+                   'lat_ovr': ovs_lat,
+                   'lon_ovr': ovs_lon,
+                   'sim_sar': n.sim_map,
+                   'u': n.u,
+                   'v': n.v,
+                   'inc': n.inc,
+                   'psi': n.psi,
+                   'pix': n.pix,
+                   'ls_map': n.ls_map,
+                   'frame': 8,
+                   'ls_mode': func_interp,
+                   'logpath': path_log,
+                   'shellscript': shellscript,
+                   'outdir': scene.scene}
     
     print('SAR image simulation from DEM..')
     if master_par.image_geometry == 'GROUND_RANGE':
-        process(['gc_map_grd', master + '.par'] + gc_map_args, logpath=path_log)
+        gc_map_args.update({'GRD_par': master + '.par'})
+        diff.gc_map_grd(**gc_map_args)
     else:
-        process(['gc_map', master + '.par', '-'] + gc_map_args, logpath=path_log)
+        gc_map_args.update({'MLI_par': master + '.par',
+                            'OFF_par': '-'})
+        diff.gc_map(**gc_map_args)
     
     for item in ['dem_seg', 'sim_map', 'u', 'v', 'psi', 'pix', 'inc']:
         if n.isappreciated(item):
@@ -448,45 +579,142 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     # normalization and backward geocoding approach 1 ####################
     ######################################################################
     print('geocoding and normalization..')
-    for image in images:
-        process(
-            ['geocode_back', image, master_par.range_samples, lut_final, image + '_geo', sim_width, '-', func_geoback],
-            logpath=path_log)
-        process(['product', image + '_geo', n.pix, image + '_geo_pan', sim_width, 1, 1, 0], logpath=path_log)
-        process(['lin_comb', 1, image + '_geo_pan', 0, math.cos(math.radians(master_par.incidence_angle)),
-                 image + '_geo_pan_flat', sim_width], logpath=path_log)
-        process(['sigma2gamma', image + '_geo_pan_flat', n.inc, image + '_geo_norm', sim_width], logpath=path_log)
-        par2hdr(n.dem_seg + '.par', image + '_geo_norm.hdr')
+    if normalization_method == 1:
+        method_suffix = 'geo_norm'
+        for image in images:
+            diff.geocode_back(data_in=image,
+                              width_in=master_par.range_samples,
+                              gc_map=lut_final,
+                              data_out=image + '_geo',
+                              width_out=sim_width,
+                              interp_mode=func_geoback,
+                              logpath=path_log,
+                              outdir=scene.scene,
+                              shellscript=shellscript)
+            lat.product(data_1=image + '_geo',
+                        data_2=n.pix,
+                        product=image + '_geo_pan',
+                        width=sim_width,
+                        bx=1,
+                        by=1,
+                        logpath=path_log,
+                        outdir=scene.scene,
+                        shellscript=shellscript)
+            lat.lin_comb(files=[image + '_geo_pan'],
+                         constant=0,
+                         factors=[math.cos(math.radians(master_par.incidence_angle))],
+                         f_out=image + '_geo_pan_flat',
+                         width=sim_width,
+                         logpath=path_log,
+                         outdir=scene.scene,
+                         shellscript=shellscript)
+            lat.sigma2gamma(pwr1=image + '_geo_pan_flat',
+                            inc=n.inc,
+                            gamma=image + '_{}'.format(method_suffix),
+                            width=sim_width,
+                            logpath=path_log,
+                            outdir=scene.scene,
+                            shellscript=shellscript)
+            par2hdr(n.dem_seg + '.par', image + '_{}.hdr'.format(method_suffix))
     ######################################################################
     # normalization and backward geocoding approach 2 ####################
     ######################################################################
-    # process(['pixel_area', master+'.par', dem_seg+'.par', dem_seg, lut_fine, ls_map, inc, pixel_area_fine], logpath=path_log)
-    # process(['radcal_MLI', master, master+'.par', '-', master+'_cal', '-', 0, 0, 1, 0.0, '-', ellipse_pixel_area], logpath=path_log)
-    # process(['ratio', ellipse_pixel_area, pixel_area_fine, ratio_sigma0, master_par.range_samples, 1, 1], logpath=path_log)
-    #
-    # for image in images:
-    #     process(['product', image, ratio_sigma0, image+'_pan', master_par.range_samples, 1, 1], logpath=path_log)
-    #     process(['geocode_back', image+'_pan', master_par.range_samples, lut_fine, image+'_pan_geo', sim_width, 0, func_geoback], logpath=path_log)
-    #     process(['lin_comb', 1, image+'_pan_geo', 0, math.cos(math.radians(master_par.incidence_angle)), image+'_pan_geo_flat', sim_width], logpath=path_log)
-    #     process(['sigma2gamma', image+'_pan_geo_flat', inc, image+'_geo_norm', sim_width], logpath=path_log)
-    #     par2hdr(dem_seg+'.par', image+'_geo_norm.hdr')
+    elif normalization_method == 2:
+        method_suffix = 'norm_geo'
+        n.appreciate(['pixel_area_fine', 'ellipse_pixel_area', 'ratio_sigma0'])
+        diff.pixel_area(MLI_par=master + '.par',
+                        DEM_par=n.dem_seg + '.par',
+                        DEM=n.dem_seg,
+                        lookup_table=lut_final,
+                        ls_map=n.ls_map,
+                        inc_map=n.inc,
+                        pix_sigma0=n.pixel_area_fine,
+                        logpath=path_log,
+                        outdir=scene.scene,
+                        shellscript=shellscript)
+        isp.radcal_MLI(MLI=master,
+                       MLI_par=master + '.par',
+                       OFF_par='-',
+                       CMLI=master + '_cal',
+                       refarea_flag=1,
+                       pix_area=n.ellipse_pixel_area,
+                       logpath=path_log,
+                       outdir=scene.scene,
+                       shellscript=shellscript)
+        lat.ratio(d1=n.ellipse_pixel_area,
+                  d2=n.pixel_area_fine,
+                  ratio=n.ratio_sigma0,
+                  width=master_par.range_samples,
+                  bx=1,
+                  by=1,
+                  logpath=path_log,
+                  outdir=scene.scene,
+                  shellscript=shellscript)
+        for image in images:
+            lat.product(data_1=image,
+                        data_2=n.ratio_sigma0,
+                        product=image + '_pan',
+                        width=master_par.range_samples,
+                        bx=1,
+                        by=1,
+                        logpath=path_log,
+                        outdir=scene.scene,
+                        shellscript=shellscript)
+            diff.geocode_back(data_in=image + '_pan',
+                              width_in=master_par.range_samples,
+                              gc_map=lut_final,
+                              data_out=image + '_pan_geo',
+                              width_out=sim_width,
+                              interp_mode=func_geoback,
+                              logpath=path_log,
+                              outdir=scene.scene,
+                              shellscript=shellscript)
+            lat.lin_comb(files=[image + '_pan_geo'],
+                         constant=0,
+                         factors=[math.cos(math.radians(master_par.incidence_angle))],
+                         f_out=image + '_pan_geo_flat',
+                         width=sim_width,
+                         logpath=path_log,
+                         outdir=scene.scene,
+                         shellscript=shellscript)
+            lat.sigma2gamma(pwr1=image + '_pan_geo_flat',
+                            inc=n.inc,
+                            gamma=image + '_{}'.format(method_suffix),
+                            width=sim_width,
+                            logpath=path_log,
+                            outdir=scene.scene,
+                            shellscript=shellscript)
+            par2hdr(n.dem_seg + '.par', image + '_{}.hdr'.format(method_suffix))
+    else:
+        raise RuntimeError('unknown option for normalization_method')
     ######################################################################
     print('conversion to (dB and) geotiff..')
     for image in images:
         for scale in scaling:
             if scale == 'db':
                 nodata_out = nodata[1]
-                process(['linear_to_dB', image + '_geo_norm', image + '_geo_norm_db', sim_width, 0, nodata_out],
-                        logpath=path_log)
-                par2hdr(n.dem_seg + '.par', image + '_geo_norm_db.hdr')
+                lat.linear_to_dB(data_in=image + '_{}'.format(method_suffix),
+                                 data_out=image + '_{}_db'.format(method_suffix),
+                                 width=sim_width,
+                                 inverse_flag=0,
+                                 null_value=nodata_out,
+                                 logpath=path_log,
+                                 outdir=scene.scene,
+                                 shellscript=shellscript)
+                par2hdr(n.dem_seg + '.par', image + '_{}_db.hdr'.format(method_suffix))
             else:
                 nodata_out = nodata[0]
             suffix = {'linear': '', 'db': '_db'}[scale]
-            infile = image + '_geo_norm{}'.format(suffix)
-            outfile = os.path.join(outdir, os.path.basename(image) + '_geo_norm{}.tif'.format(suffix))
-            
-            process(['data2geotiff', n.dem_seg + '.par', infile, 2, outfile, nodata_out], logpath=path_log)
-    
+            infile = image + '_{0}{1}'.format(method_suffix, suffix)
+            outfile = os.path.join(outdir, os.path.basename(image) + '_{0}{1}.tif'.format(method_suffix, suffix))
+            disp.data2geotiff(DEM_par=n.dem_seg + '.par',
+                              data=infile,
+                              type=2,
+                              GeoTIFF=outfile,
+                              nodata=nodata_out,
+                              logpath=path_log,
+                              outdir=scene.scene,
+                              shellscript=shellscript)
     if scene.sensor in ['S1A', 'S1B']:
         shutil.copyfile(os.path.join(scene.scene, 'manifest.safe'),
                         os.path.join(outdir, scene.outname_base() + '_manifest.safe'))
@@ -535,7 +763,7 @@ def ovs(parfile, targetres):
     return ovs_lat, ovs_lon
 
 
-def multilook(infile, outfile, targetres):
+def multilook(infile, outfile, targetres, logpath=None, outdir=None, shellscript=None):
     """
     multilooking of SLC and MLI images
 
@@ -555,7 +783,12 @@ def multilook(infile, outfile, targetres):
         the name of the output GAMMA file
     targetres: int
         the target resolution in ground range
-
+    logpath: str or None
+        a directory to write command logfiles to
+    outdir: str or None
+        the directory to execute the command in
+    shellscript: str or None
+        a file to write the Gamma commands to in shell format
 
     """
     # read the input parameter file
@@ -575,16 +808,31 @@ def multilook(infile, outfile, targetres):
     rlks = rlks if rlks > 0 else 1
     azlks = azlks if azlks > 0 else 1
     
+    pars = {'rlks': rlks,
+            'azlks': azlks,
+            'logpath': logpath,
+            'shellscript': shellscript,
+            'outdir': outdir}
+    
     if par.image_format in ['SCOMPLEX', 'FCOMPLEX']:
         # multilooking for SLC images
-        process(['multi_look', infile, infile + '.par', outfile, outfile + '.par', rlks, azlks])
+        pars['SLC'] = infile
+        pars['SLC_par'] = infile + '.par'
+        pars['MLI'] = outfile
+        pars['MLI_par'] = outfile + '.par'
+        isp.multi_look(**pars)
     else:
         # multilooking for MLI images
-        process(['multi_look_MLI', infile, infile + '.par', outfile, outfile + '.par', rlks, azlks])
+        pars['MLI_in'] = infile
+        pars['MLI_in_par'] = infile + '.par'
+        pars['MLI_out'] = outfile
+        pars['MLI_out_par'] = outfile + '.par'
+        isp.multi_look_MLI(**pars)
     par2hdr(outfile + '.par', outfile + '.hdr')
 
 
-def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False, path_log=None):
+def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
+               replace=False, logpath=None, outdir=None, shellscript=None):
     """
     Debursting of Sentinel-1 SLC imagery in GAMMA
     
@@ -610,8 +858,12 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False,
         the number of looks in azimuth
     replace: bool
         replace the burst images by the new file? If True, the three burst images will be deleted.
-    path_log: str
-        the directory to write the logfiles to
+    logpath: str or None
+        a directory to write command logfiles to
+    outdir: str or None
+        the directory to execute the command in
+    shellscript: str or None
+        a file to write the Gamma commands to in shell format
 
     Returns
     -------
@@ -630,9 +882,23 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1, replace=False,
             for item in [burst1, burst2, burst3]:
                 out1.write(item + '\t' + item + '.par\t' + item + '.tops_par\n')
                 out2.write(item + '_drp\t' + item + '_drp.par\t' + item + '_drp.tops_par\n')
-    process(['SLC_deramp_S1_TOPS', tab_in, tab_out, 0, 0], logpath=path_log)
-    process(['SLC_mosaic_S1_TOPS', tab_out, name_out, name_out + '.par', rlks, azlks], logpath=path_log)
     
+    isp.S1_deramp_S1_TOPS(SLC1_tab=tab_in,
+                          SLC2_tab=tab_out,
+                          mode=0,
+                          phflg=0,
+                          logpath=logpath,
+                          outdir=outdir,
+                          shellscript=shellscript)
+    
+    isp.SLC_mosaic_S1_TOPS(SLC_tab=tab_out,
+                           SLC=name_out,
+                           SLC_par=name_out + '.par',
+                           rlks=rlks,
+                           azlks=azlks,
+                           logpath=logpath,
+                           outdir=outdir,
+                           shellscript=shellscript)
     if replace:
         for item in [burst1, burst2, burst3]:
             for subitem in [item + x for x in ['', '.par', '.tops_par']]:

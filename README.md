@@ -32,8 +32,7 @@ The pyroSAR package aims at providing a complete solution for the scalable organ
 * User-friendly access to processing utilities in SNAP and GAMMA Remote Sensing software
 * Formatting of the preprocessed data for further analysis
 
-This software used to run on a local server and is currently being restructured into a Python package.
-Not everything is working properly, stay tuned...
+[Here](https://pyrosar.readthedocs.io/en/latest/?badge=latest) you can find the documentation.
 
 # Installation
 For the installation we need the Python tool pip and the version control system git. On Windows pip is 

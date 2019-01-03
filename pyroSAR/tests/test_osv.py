@@ -2,15 +2,16 @@ import os
 import sys
 import time
 import pytest
-import pyroSAR
+from pyroSAR import identify
+from pyroSAR.S1 import OSV
 
 
 def test_scene_osv(tmpdir, testdata):
-    id = pyroSAR.identify(testdata['s1'])
+    id = identify(testdata['s1'])
     osvdir = os.path.join(str(tmpdir), 'osv')
     if sys.version_info >= (2, 7, 9):
         id.getOSV(osvdir)
-        with pyroSAR.OSV(osvdir) as osv:
+        with OSV(osvdir) as osv:
             with pytest.raises(IOError):
                 osv.catch(osvtype='XYZ')
             res = osv.catch(osvtype='RES', start=osv.mindate('POE'), stop=osv.maxdate('POE'))

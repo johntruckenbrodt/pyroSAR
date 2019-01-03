@@ -125,7 +125,7 @@ Sentinel-1 Tools
 ================
 
 .. automodule:: pyroSAR.S1.auxil
-    :members: OSV
+    :members: OSV, removeGRDBorderNoise
     :undoc-members:
     :show-inheritance:
 
