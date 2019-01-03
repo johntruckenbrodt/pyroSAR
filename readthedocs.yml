@@ -1,0 +1,13 @@
+build:
+  image: latest
+
+python:
+  version: 3.6
+  setup_py_install: true
+  use_system_site_packages: true
+
+formats:
+  - epub
+  - pdf
+
+requirements_file: requirements-dev.txt
