@@ -32,7 +32,11 @@ from spatialist.ancillary import union, finder
 from ..S1 import OSV
 from ..drivers import ID, CEOS_ERS, CEOS_PSR, ESA, SAFE, TSX, identify
 from . import ISPPar, Namespace, par2hdr
-from .api import diff, disp, isp, lat
+
+try:
+    from .api import diff, disp, isp, lat
+except ImportError:
+    pass
 
 ogr.UseExceptions()
 

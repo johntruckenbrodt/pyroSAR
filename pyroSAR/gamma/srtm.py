@@ -26,7 +26,10 @@ from spatialist.envi import HDRobject
 
 from ..drivers import ID
 from . import ISPPar, UTM, slc_corners, par2hdr
-from .api import diff, disp, isp
+try:
+    from .api import diff, disp, isp
+except ImportError:
+    pass
 
 
 def fill(dem, dem_out, logpath=None, replace=False):
