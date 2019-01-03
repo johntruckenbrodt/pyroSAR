@@ -517,6 +517,8 @@ def parse_module(bindir, outfile):
     excludes = ['coord_trans',  # doesn't take any parameters and is interactive
                 'interp_cpx',  # replaced by interp_data
                 'interp_real',  # replaced by interp_data
+                'par_RSI',  # replaced by par_RSI_ERS
+                'par_RSI_RSAT',  # replaced by par_RSAT_SLC
                 'PRI_to_MLI',  # replaced by radcal_MLI
                 'RSAT2_SLC_preproc',  # takes option flags
                 'mk_ASF_CEOS_list',  # "cannot create : Directory nonexistent"
