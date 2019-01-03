@@ -59,6 +59,25 @@ GAMMA Processing
         process
         S1_deburst
 
+SRTM tools
+----------
+
+.. automodule:: pyroSAR.gamma.srtm
+    :members: dempar, fill, hgt, hgt_collect, makeSRTM, mosaic, swap
+    :undoc-members:
+    :show-inheritance:
+
+    .. autosummary::
+        :nosignatures:
+
+        dempar
+        fill
+        hgt
+        hgt_collect
+        makeSRTM
+        mosaic
+        swap
+
 GAMMA Command API
 -----------------
 
