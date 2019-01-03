@@ -2,7 +2,7 @@
 ##############################################################
 # preparation of srtm data for use in gamma
 # module of software pyroSAR
-# John Truckenbrodt 2014-18
+# John Truckenbrodt 2014-19
 ##############################################################
 
 """
@@ -33,6 +33,24 @@ except ImportError:
 
 
 def fill(dem, dem_out, logpath=None, replace=False):
+    """
+    interpolate missing values in the SRTM DEM (value -32768)
+    
+    Parameters
+    ----------
+    dem: str
+        the input DEM to be filled
+    dem_out: str
+        the name of the filled DEM
+    logpath: str
+        a directory to write logfiles to
+    replace: bool
+        delete `dem` once finished?
+
+    Returns
+    -------
+
+    """
     width = ISPPar(dem + '.par').width
     
     path_dem = os.path.dirname(dem_out)
@@ -127,7 +145,19 @@ def transform(infile, outfile, posting=90):
 def dempar(dem, logpath=None):
     """
     create GAMMA parameter text files for DEM files
+    
     currently only EQA and UTM projections with WGS84 ellipsoid are supported
+    
+    Parameters
+    ----------
+    dem: str
+        the name of the DEM
+    logpath: str
+        a directory to write logfiles to
+
+    Returns
+    -------
+
     """
     rast = raster.Raster(dem)
     
@@ -173,6 +203,17 @@ def dempar(dem, logpath=None):
 def swap(data, outname):
     """
     byte swapping from small to big endian (as required by GAMMA)
+    
+    Parameters
+    ----------
+    data: str
+        the DEM file to be swapped
+    outname: str
+        the name of the file to write
+
+    Returns
+    -------
+
     """
     with raster.Raster(data) as ras:
         dtype = ras.dtype
@@ -195,6 +236,25 @@ def swap(data, outname):
 def mosaic(demlist, outname, byteorder=1, gammapar=True):
     """
     mosaicing of multiple DEMs
+    
+    Parameters
+    ----------
+    demlist: list
+        a list of DEM names to be mosaiced
+    outname: str
+        the name of the final mosaic file
+    byteorder: {0, 1}
+        the byte order of the mosaic
+        
+        - 0: small endian
+        - 1: big endian
+        
+    gammapar: bool
+        create a Gamma parameter file for the mosaic?
+
+    Returns
+    -------
+
     """
     if len(demlist) < 2:
         raise IOError('length of demlist < 2')
@@ -219,11 +279,11 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
 def hgt(parfiles):
     """
     concatenate hgt file names overlapping with multiple SAR scenes
-    input is a list of GAMMA SAR scene parameter files
-    this list is read for corner coordinates of which the next integer lower left latitude and longitude is computed
-    hgt files are supplied in 1 degree equiangular format named e.g. N16W094.hgt (with pattern [NS][0-9]{2}[EW][0-9]{3}.hgt
-    For north and east hemisphere the respective absolute latitude and longitude values are smaller than the lower left coordinate of the SAR image
-    west and south coordinates are negative and hence the nearest lower left integer absolute value is going to be larger
+    
+    - this list is read for corner coordinates of which the next integer lower left latitude and longitude is computed
+    - hgt files are supplied in 1 degree equiangular format named e.g. N16W094.hgt (with pattern [NS][0-9]{2}[EW][0-9]{3}.hgt
+    - For north and east hemisphere the respective absolute latitude and longitude values are smaller than the lower left coordinate of the SAR image
+    - west and south coordinates are negative and hence the nearest lower left integer absolute value is going to be larger
     
     Parameters
     ----------
@@ -232,7 +292,8 @@ def hgt(parfiles):
     
     Returns
     -------
-
+    list
+        the names of hgt files overlapping with the supplied parameter files/objects
     """
     
     lat = []
@@ -264,10 +325,28 @@ def hgt(parfiles):
 
 def makeSRTM(scenes, srtmdir, outname):
     """
-    Create a DEM from SRTM tiles
-    Input is a list of pyroSAR.ID objects from which coordinates are read to determine the required DEM extent
-    Mosaics SRTM DEM tiles, converts them to Gamma format and subtracts offset to WGS84 ellipsoid
-    for DEMs downloaded from USGS https://gdex.cr.usgs.gov/gdex/ or CGIAR http://srtm.csi.cgiar.org
+    Create a DEM in Gamma format from SRTM tiles
+    
+    - coordinates are read to determine the required DEM extent and select the necessary hgt tiles
+    - mosaics SRTM DEM tiles, converts them to Gamma format and subtracts offset to WGS84 ellipsoid
+    
+    intended for SRTM products downloaded from:
+    
+    - USGS: https://gdex.cr.usgs.gov/gdex/
+    - CGIAR: http://srtm.csi.cgiar.org
+    
+    Parameters
+    ----------
+    scenes: list of str or pyroSAR.ID
+        a list of Gamma parameter files or pyroSAR ID objects to read the DEM extent from
+    srtmdir: str
+        a directory containing the SRTM hgt tiles
+    outname: str
+        the name of the final DEM file
+
+    Returns
+    -------
+
     """
     
     tempdir = outname + '___temp'
@@ -308,8 +387,22 @@ def makeSRTM(scenes, srtmdir, outname):
 def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
     """
     automatic downloading and unpacking of srtm tiles
-    base directory must contain SLC files in GAMMA format including their parameter files for reading coordinates
-    additional dem directory may locally contain srtm files. This directory is searched for locally existing files, which are then copied to the current working directory
+    
+    Parameters
+    ----------
+    parfiles: list of str or pyroSAR.ID
+        a list of Gamma parameter files or pyroSAR ID objects
+    outdir: str
+        a target directory to download the tiles to
+    demdir: str or None
+        an additional directory already containing hgt tiles
+    arcsec: {1, 3}
+        the spatial resolution to be used
+
+    Returns
+    -------
+    list
+        the names of all local hgt tiles overlapping with the parfiles
     """
     
     # concatenate required hgt tile names
