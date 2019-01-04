@@ -49,3 +49,38 @@ Python package integrity
 ************************
 - add trove classifiers for supported operating systems and MIT license for easier online search
 - exchange http with https for all URLs that support it
+
+0.7 / 2019-01-03
+----------------
+
+several changes to the functioning of the Gamma command API
+
+GAMMA API
+*********
+
+processing
+++++++++++
+- :func:`pyroSAR.gamma.geocode`:
+
+  * optionally write all Gamma commands to shellscript
+  * newly introduced choice of normalization method
+  * changed normalization default approach
+
+- :func:`pyroSAR.gamma.process`:
+
+  * new parameter `logfile` to specify a logfile instead of just a directory with automated file naming
+  * new parameter `shellscript` to write the executed command to a shell script protocol
+
+command parser
+++++++++++++++
+- add parameters `outdir` and `shellscript` to parsed functions
+- extensive improvement to accurately parse more commands
+- add parameter `inlist` to some commands, which require interactive input via `stdin`
+
+general
++++++++
+- several bug fixes
+- extended documentation
+- make use of parsed command functions internally
+- enable passing `logpath`, `outdir` and `shellscript` to all parsed functions via additional parameters for other
+  convenience functions
