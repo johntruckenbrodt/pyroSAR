@@ -23,7 +23,7 @@ year = datetime.datetime.now().year
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('..') + os.sep)
+sys.path.insert(0, os.path.abspath('..'))
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -52,7 +52,7 @@ extensions = [
 ]
 
 # autodoc_default_flags = ['members']
-autosummary_generate = True
+autosummary_generate = False
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
                        'spatialist': ('https://spatialist.readthedocs.io/en/latest', None)}
