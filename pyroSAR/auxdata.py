@@ -10,7 +10,8 @@ else:
 from . import identify
 from .snap import ExamineSnap
 
-from spatialist.ancillary import dissolve
+from spatialist.ancillary import dissolve, finder
+from spatialist.auxil import gdalbuildvrt
 
 
 class Handler:
@@ -41,15 +42,19 @@ class Handler:
                 locals.append(outfile)
         return locals
     
-    def srtm_1sec_hgt(self):
+    def srtm_1sec_hgt(self, vrt=None):
         url = 'https://step.esa.int/auxdata/dem/SRTMGL1'
         outdir = os.path.join(self.auxdatapath, 'dem', 'SRTM 1Sec HGT')
         files = [x.replace('hgt', 'SRTMGL1.hgt.zip') for x in
                  list(set(dissolve([scene.getHGT() for scene in self.scenes])))]
         locals = self.__retrieve(url, files, outdir)
+        if vrt is not None:
+            locals = ['/vsizip/' + finder(x, ['*.hgt'])[0] for x in locals]
+            gdalbuildvrt(src=locals, dst=vrt)
+            return vrt
         return locals
     
-    def srtm_3sec(self):
+    def srtm_3sec(self, vrt=None):
         url = 'http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF'
         outdir = os.path.join(self.auxdatapath, 'dem', 'SRTM 3Sec')
         files = []
@@ -59,4 +64,8 @@ class Handler:
             y_id = [int((60 - corners[x]) // 5) + 1 for x in ['ymin', 'ymax']]
             files.extend(['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in x_id for y in y_id])
         locals = self.__retrieve(url, files, outdir)
+        if vrt is not None:
+            locals = ['/vsizip/' + finder(x, ['*.tif'])[0] for x in locals]
+            gdalbuildvrt(src=locals, dst=vrt)
+            return vrt
         return locals
