@@ -15,6 +15,15 @@ from spatialist.auxil import gdalbuildvrt
 
 
 class Handler:
+    """
+    | An interface to obtain auxiliary data for selected SAR scenes
+    | The files are downloaded into the ESA SNAP auxdata directory structure
+    
+    Parameters
+    ----------
+    scenes: list
+        a list of SAR scenes to obtain auxiliary data for
+    """
     def __init__(self, scenes):
         self.scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
         try:
@@ -43,6 +52,19 @@ class Handler:
         return locals
     
     def srtm_1sec_hgt(self, vrt=None):
+        """
+        obtain SRTM 1arcsec DEM tiles in HGT format
+        
+        Parameters
+        ----------
+        vrt: str or None
+            an optional GDAL VRT file created from the obtained DEM tiles
+
+        Returns
+        -------
+        list or str
+            the names of the obtained files or the name of the VRT file
+        """
         url = 'https://step.esa.int/auxdata/dem/SRTMGL1'
         outdir = os.path.join(self.auxdatapath, 'dem', 'SRTM 1Sec HGT')
         files = [x.replace('hgt', 'SRTMGL1.hgt.zip') for x in
@@ -55,6 +77,19 @@ class Handler:
         return locals
     
     def srtm_3sec(self, vrt=None):
+        """
+        obtain SRTM 3arcsec DEM tiles in GeoTiff format
+        
+        Parameters
+        ----------
+        vrt: str or None
+            an optional GDAL VRT file created from the obtained DEM tiles
+
+        Returns
+        -------
+        list or str
+            the names of the obtained files or the name of the VRT file
+        """
         url = 'http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF'
         outdir = os.path.join(self.auxdatapath, 'dem', 'SRTM 3Sec')
         files = []
