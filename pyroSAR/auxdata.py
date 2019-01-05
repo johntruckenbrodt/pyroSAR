@@ -24,6 +24,7 @@ class Handler:
     scenes: list
         a list of SAR scenes to obtain auxiliary data for
     """
+    
     def __init__(self, scenes):
         self.scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
         try:
@@ -41,7 +42,7 @@ class Handler:
             if not os.path.isfile(outfile):
                 try:
                     input = urlopen(infile)
-                    print('downloading file {}'.format(infile))
+                    print('{} -->> {}'.format(infile, outfile))
                 except HTTPError:
                     continue
                 with open(outfile, 'wb') as output:
@@ -50,6 +51,46 @@ class Handler:
             if os.path.isfile(outfile):
                 locals.append(outfile)
         return locals
+    
+    def aw3d30(self, vrt=None):
+        """
+        obtain ALOS Global Digital Surface Model "ALOS World 3D - 30m (AW3D30)"
+        
+        Parameters
+        ----------
+        vrt: str or None
+            an optional GDAL VRT file created from the obtained DEM tiles
+
+        Returns
+        -------
+        list or str
+            the names of the obtained files or the name of the VRT file
+        """
+        url = 'ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804'
+        outdir = os.path.join(self.auxdatapath, 'dem', 'AW3D30')
+        if not os.path.isdir(outdir):
+            os.makedirs(outdir)
+        for scene in self.scenes:
+            corners = scene.getCorners()
+            xmin = int(corners['xmin'] // 5)
+            xmax = int(corners['xmax'] // 5)
+            ymin = int(corners['ymin'] // 5)
+            ymax = int(corners['ymax'] // 5)
+            
+            def index(x, y):
+                return '{}{:03d}{}{:03d}'.format('S' if y < 0 else 'N', abs(y),
+                                                 'W' if x < 0 else 'E', abs(x))
+            
+            files = []
+            for x in range(xmin, xmax + 1):
+                for y in range(ymin, ymax + 1):
+                    files.append('{}_{}.tar.gz'.format(index(x * 5, y * 5), index(x * 5 + 5, y * 5 + 5)))
+            locals = self.__retrieve(url, files, outdir)
+            if vrt is not None:
+                locals = ['/vsitar/' + x for x in dissolve([finder(x, ['*DSM.tif']) for x in locals])]
+                gdalbuildvrt(src=locals, dst=vrt)
+                return vrt
+            return locals
     
     def srtm_1sec_hgt(self, vrt=None):
         """
