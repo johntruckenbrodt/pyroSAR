@@ -7,7 +7,6 @@ if sys.version_info >= (3, 0):
 else:
     from urllib2 import urlopen, HTTPError
 
-from . import identify
 from .snap import ExamineSnap
 
 from spatialist.ancillary import dissolve, finder
@@ -21,12 +20,19 @@ class DEMHandler:
     
     Parameters
     ----------
-    scenes: list
-        a list of SAR scenes to obtain auxiliary data for
+    geometries: list of spatialist.Vector
+        a list of geometries
     """
     
-    def __init__(self, scenes):
-        self.scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
+    def __init__(self, geometries):
+        if not isinstance(geometries, list):
+            raise RuntimeError('geometries must be of type list')
+        
+        for geometry in geometries:
+            if geometry.getProjection('epsg') != 4326:
+                raise RuntimeError('input geometry CRS must be WGS84 LatLon (EPSG 4326)')
+        
+        self.geometries = geometries
         try:
             self.auxdatapath = ExamineSnap().auxdatapath
         except AttributeError:
@@ -76,8 +82,8 @@ class DEMHandler:
         outdir = os.path.join(self.auxdatapath, 'dem', 'AW3D30')
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
-        for scene in self.scenes:
-            corners = scene.getCorners()
+        for geo in self.geometries:
+            corners = geo.extent
             xmin = int(corners['xmin'] // 5)
             xmax = int(corners['xmax'] // 5)
             ymin = int(corners['ymin'] // 5)
@@ -114,8 +120,26 @@ class DEMHandler:
         """
         url = 'https://step.esa.int/auxdata/dem/SRTMGL1'
         outdir = os.path.join(self.auxdatapath, 'dem', 'SRTM 1Sec HGT')
-        files = [x.replace('hgt', 'SRTMGL1.hgt.zip') for x in
-                 list(set(dissolve([scene.getHGT() for scene in self.scenes])))]
+        
+        files = []
+        
+        for geo in self.geometries:
+            corners = geo.extent
+            
+            # generate sequence of integer coordinates marking the tie points of the overlapping hgt tiles
+            lat = range(int(float(corners['ymin']) // 1), int(float(corners['ymax']) // 1) + 1)
+            lon = range(int(float(corners['xmin']) // 1), int(float(corners['xmax']) // 1) + 1)
+            
+            # convert coordinates to string with leading zeros and hemisphere identification letter
+            lat = [str(x).zfill(2 + len(str(x)) - len(str(x).strip('-'))) for x in lat]
+            lat = [x.replace('-', 'S') if '-' in x else 'N' + x for x in lat]
+            
+            lon = [str(x).zfill(3 + len(str(x)) - len(str(x).strip('-'))) for x in lon]
+            lon = [x.replace('-', 'W') if '-' in x else 'E' + x for x in lon]
+            
+            # concatenate all formatted latitudes and longitudes with each other as final product
+            files.extend([x + y + '.SRTMGL1.hgt.zip' for x in lat for y in lon])
+        
         locals = self.__retrieve(url, files, outdir)
         
         if vrt is not None:
