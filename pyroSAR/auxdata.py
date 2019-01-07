@@ -14,9 +14,9 @@ from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt
 
 
-class Handler:
+class DEMHandler:
     """
-    | An interface to obtain auxiliary data for selected SAR scenes
+    | An interface to obtain DEM data for selected geometries
     | The files are downloaded into the ESA SNAP auxdata directory structure
     
     Parameters
@@ -31,6 +31,12 @@ class Handler:
             self.auxdatapath = ExamineSnap().auxdatapath
         except AttributeError:
             self.auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return
     
     @staticmethod
     def __retrieve(url, filenames, outdir):
@@ -111,6 +117,7 @@ class Handler:
         files = [x.replace('hgt', 'SRTMGL1.hgt.zip') for x in
                  list(set(dissolve([scene.getHGT() for scene in self.scenes])))]
         locals = self.__retrieve(url, files, outdir)
+        
         if vrt is not None:
             locals = ['/vsizip/' + finder(x, ['*.hgt'])[0] for x in locals]
             gdalbuildvrt(src=locals, dst=vrt)
@@ -134,8 +141,8 @@ class Handler:
         url = 'http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF'
         outdir = os.path.join(self.auxdatapath, 'dem', 'SRTM 3Sec')
         files = []
-        for scene in self.scenes:
-            corners = scene.getCorners()
+        for geo in self.geometries:
+            corners = geo.extent
             x_id = [int((corners[x] + 180) // 5) + 1 for x in ['xmin', 'xmax']]
             y_id = [int((60 - corners[x]) // 5) + 1 for x in ['ymin', 'ymax']]
             files.extend(['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in x_id for y in y_id])
