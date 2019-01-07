@@ -13,6 +13,48 @@ from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt
 
 
+def dem_autoload(geometries, demType, vrt=None):
+    """
+    obtain all relevant DEM tiles for selected geometries
+
+    Parameters
+    ----------
+    geometries: list
+        a list of :class:`spatialist.vector.Vector` geometries to obtain DEM data for; CRS must be WGS84 LatLon (EPSG 4326)
+    demType: str
+        the type fo DEM to be used; current options:
+
+        - 'AW3D30' (ALOS Global Digital Surface Model "ALOS World 3D - 30m (AW3D30)")
+
+          * url: ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804
+
+        - 'SRTM 1Sec HGT'
+
+          * url: https://step.esa.int/auxdata/dem/SRTMGL1
+
+        - 'SRTM 3sec'
+
+          * url: http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF
+
+    vrt: str or None
+        an optional GDAL VRT file created from the obtained DEM tiles
+
+    Returns
+    -------
+    list or str
+        the names of the obtained files or the name of the VRT file
+    """
+    with DEMHandler(geometries) as handler:
+        if demType == 'AW3D30':
+            return handler.aw3d30(vrt)
+        elif demType == 'SRTM 1Sec HGT':
+            return handler.srtm_1sec_hgt(vrt)
+        elif demType == 'SRTM 3Sec':
+            return handler.srtm_3sec(vrt)
+        else:
+            raise RuntimeError('demType unknown')
+
+
 class DEMHandler:
     """
     | An interface to obtain DEM data for selected geometries
@@ -20,7 +62,7 @@ class DEMHandler:
     
     Parameters
     ----------
-    geometries: list of spatialist.Vector
+    geometries: list of spatialist.vector.Vector
         a list of geometries
     """
     
