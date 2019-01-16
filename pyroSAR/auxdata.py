@@ -14,7 +14,7 @@ from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt
 
 
-def dem_autoload(geometries, demType, vrt=None):
+def dem_autoload(geometries, demType, vrt=None, username=None, password=None):
     """
     obtain all relevant DEM tiles for selected geometries
 
@@ -39,6 +39,10 @@ def dem_autoload(geometries, demType, vrt=None):
 
     vrt: str or None
         an optional GDAL VRT file created from the obtained DEM tiles
+    username: str or None
+        (optional) the user name for services requiring registration
+    password: str or None
+        (optional) the password for the registration account
 
     Returns
     -------
