@@ -1,5 +1,6 @@
 import os
 import sys
+import ftplib
 
 if sys.version_info >= (3, 0):
     from urllib.request import urlopen
@@ -104,6 +105,31 @@ class DEMHandler:
                 input.close()
             if os.path.isfile(outfile):
                 locals.append(outfile)
+        return locals
+    
+    @staticmethod
+    def __retrieve_ftp(url, filenames, outdir, username, password):
+        files = list(set(filenames))
+        if not os.path.isdir(outdir):
+            os.makedirs(outdir)
+        ftps = ftplib.FTP_TLS(url)
+        ftps.login(username, password)  # login anonymously before securing control channel
+        ftps.prot_p()  # switch to secure data connection.. IMPORTANT! Otherwise, only the user and password is encrypted and not all the file data.
+        
+        locals = []
+        for product_remote in files:
+            product_local = os.path.join(outdir, os.path.basename(product_remote))
+            if not os.path.isfile(product_local):
+                try:
+                    targetlist = ftps.nlst(product_remote)
+                except ftplib.error_temp:
+                    continue
+                print('ftpes://{}/{} -->> {}'.format(url, product_remote, product_local))
+                with open(product_local, 'wb') as myfile:
+                    ftps.retrbinary('RETR {}'.format(product_remote), myfile.write)
+            if os.path.isfile(product_local):
+                locals.append(product_local)
+        ftps.close()
         return locals
     
     def aw3d30(self, vrt=None):
