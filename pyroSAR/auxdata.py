@@ -244,3 +244,51 @@ class DEMHandler:
             gdalbuildvrt(src=locals, dst=vrt)
             return vrt
         return locals
+    
+    def tdx90m(self, username, password, vrt=None):
+        """
+        | obtain TanDEM-X 90 m DEM tiles in GeoTiff format
+        | registration via DLR is necessary, see https://geoservice.dlr.de/web/dataguide/tdm90
+        
+        Parameters
+        ----------
+        username: str
+            the DLR user name
+        password: str
+            the user password
+        vrt: str or None
+            an optional GDAL VRT file created from the obtained DEM tiles
+
+        Returns
+        -------
+        list or str
+            the names of the obtained files or the name of the VRT file
+        """
+        url = 'tandemx-90m.dlr.de'
+        outdir = os.path.join(self.auxdatapath, 'dem', 'TDX90m')
+        
+        for geo in self.geometries:
+            corners = geo.extent
+            lat = range(int(float(corners['ymin']) // 1), int(float(corners['ymax']) // 1) + 1)
+            lon = range(int(float(corners['xmin']) // 1), int(float(corners['xmax']) // 1) + 1)
+            
+            # convert coordinates to string with leading zeros and hemisphere identification letter
+            lat_id = [str(x).zfill(2 + len(str(x)) - len(str(x).strip('-'))) for x in lat]
+            lat_id = [x.replace('-', 'S') if '-' in x else 'N' + x for x in lat_id]
+            
+            lon_id = [str(x).zfill(3 + len(str(x)) - len(str(x).strip('-'))) for x in lon]
+            lon_id = [x.replace('-', 'W') if '-' in x else 'E' + x for x in lon_id]
+            
+            remotes = []
+            for x in lon_id:
+                for y in lat_id:
+                    xr = int(x[1:]) // 10 * 10
+                    remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
+                                   .format(x=x, xr=xr, y=y, hem=x[0]))
+            
+            locals = self.__retrieve_ftp(url, remotes, outdir, username=username, password=password)
+            if vrt is not None:
+                locals = ['/vsizip/' + finder(x, ['*_DEM.tif'])[0] for x in locals]
+                gdalbuildvrt(src=locals, dst=vrt)
+                return vrt
+            return locals
