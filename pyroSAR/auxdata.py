@@ -36,6 +36,11 @@ def dem_autoload(geometries, demType, vrt=None, username=None, password=None):
         - 'SRTM 3sec'
 
           * url: http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF
+        
+        - 'TDX90m'
+        
+          * registration:  https://geoservice.dlr.de/web/dataguide/tdm90
+          * url: ftpes://tandemx-90m.dlr.de
 
     vrt: str or None
         an optional GDAL VRT file created from the obtained DEM tiles
@@ -56,6 +61,10 @@ def dem_autoload(geometries, demType, vrt=None, username=None, password=None):
             return handler.srtm_1sec_hgt(vrt)
         elif demType == 'SRTM 3Sec':
             return handler.srtm_3sec(vrt)
+        elif demType == 'TDX90m':
+            return handler.tdx90m(username=username,
+                                  password=password,
+                                  vrt=vrt)
         else:
             raise RuntimeError('demType unknown')
 
