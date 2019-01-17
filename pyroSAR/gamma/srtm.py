@@ -209,11 +209,16 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
-        print('geoid correction and conversion to Gamma format')
-        
         # The heights of the TanDEM-X DEM products are ellipsoidal heights, all others are EGM96 Geoid heights
         # Gamma works only with Ellipsoid heights and the offset needs to be corrected
-        gflg = 0 if demType == 'TDX90m' else 2
+        if demType == 'TDX90m':
+            gflg = 0
+            message = 'conversion to Gamma format'
+        else:
+            gflg =2
+            message = 'geoid correction and conversion to Gamma format'
+
+        print(message)
         
         diff.srtm2dem(SRTM_DEM=dem,
                       DEM=outfile_tmp,
