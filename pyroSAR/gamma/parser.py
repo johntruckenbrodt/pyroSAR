@@ -514,6 +514,10 @@ def parse_module(bindir, outfile):
     >>> outname = os.path.join(os.environ['HOME'], 'isp.py')
     >>> parse_module('/cluster/GAMMA_SOFTWARE-20161207/ISP/bin', outname)
     """
+    
+    if not os.path.isdir(bindir):
+        raise OSError('directory does not exist: {}'.format(bindir))
+    
     excludes = ['coord_trans',  # doesn't take any parameters and is interactive
                 'interp_cpx',  # replaced by interp_data
                 'interp_real',  # replaced by interp_data
