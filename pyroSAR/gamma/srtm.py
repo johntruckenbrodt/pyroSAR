@@ -143,7 +143,7 @@ def transform(infile, outfile, posting=90):
     par2hdr(outfile + '.par', outfile + '.hdr')
 
 
-def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None):
+def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, username=None, password=None):
     """
     | automatically create a DEM in Gamma format for a defined spatial geometry
     | the following steps will be performed:
@@ -168,6 +168,10 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None):
         a buffer in degrees to create around the DEM file
     logpath: str
         a directory to write Gamma logfiles to
+    username: str or None
+        (optional) the user name for services requiring registration; see :func:`~pyroSAR.auxdata.dem_autoload`
+    password: str or None
+        (optional) the password for the registration account
 
     Returns
     -------
@@ -188,7 +192,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None):
         dem = os.path.join(tmpdir, 'dem.tif')
         
         print('collecting DEM tiles')
-        vrt = dem_autoload([geometry], demType, vrt=vrt)
+        vrt = dem_autoload([geometry], demType, vrt=vrt, username=username, password=password)
         
         ext = geometry.extent
         
