@@ -580,11 +580,13 @@ def autoparse():
     for module in finder(home, ['[A-Z]*'], foldermode=2):
         outfile = os.path.join(target, os.path.basename(module).lower() + '.py')
         if not os.path.isfile(outfile):
-            print('parsing module {}'.format(os.path.basename(module)))
-            print('-' * 10 + '\nbin')
-            parse_module(os.path.join(module, 'bin'), outfile)
-            print('-' * 10 + '\nscripts')
-            parse_module(os.path.join(module, 'scripts'), outfile)
+            print('parsing module {} to {}'.format(os.path.basename(module), outfile))
+            for submodule in ['bin', 'scripts']:
+                print('-' * 10 + '\n{}'.format(submodule))
+                try:
+                    parse_module(os.path.join(module, submodule), outfile)
+                except OSError:
+                    print('..does not exist')
             print('=' * 20)
     modules = [re.sub('\.py', '', os.path.basename(x)) for x in finder(target, ['[a-z]+\.py$'], regex=True)]
     if len(modules) > 0:
