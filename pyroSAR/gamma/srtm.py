@@ -205,16 +205,21 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
         gdalwarp(vrt, dem, {'format': 'GTiff',
                             'outputBounds': (ext['xmin'], ext['ymin'], ext['xmax'], ext['ymax'])})
         
+        outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
+        
         print('geoid correction and conversion to Gamma format')
         diff.srtm2dem(SRTM_DEM=dem,
-                      DEM=outfile,
-                      DEM_par=outfile + '.par',
+                      DEM=outfile_tmp,
+                      DEM_par=outfile_tmp + '.par',
                       gflg=2,
                       geoid='-',
                       logpath=logpath,
                       outdir=tmpdir)
-        par2hdr(outfile + '.par', outfile + '.hdr')
-    
+        par2hdr(outfile_tmp + '.par', outfile_tmp + '.hdr')
+        
+        for suffix in ['', '.par', '.hdr']:
+            shutil.copyfile(outfile_tmp + suffix, outfile + suffix)
+        
     except RuntimeError as e:
         raise e
     finally:
