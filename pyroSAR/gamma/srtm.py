@@ -155,6 +155,8 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
 
     - create a mosaic GeoTiff of the same spatial extent as the input geometry plus a defined buffer using gdalwarp
     - subtract the EGM96-WGS84 Geoid-Ellipsoid difference and convert the result to Gamma format using Gamma command srtm2dem
+    
+      * this correction is not done for TanDEM-X data, which contains ellipsoid heights; see `here <https://geoservice.dlr.de/web/dataguide/tdm90>`_
 
     Parameters
     ----------
@@ -208,10 +210,15 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
         print('geoid correction and conversion to Gamma format')
+        
+        # The heights of the TanDEM-X DEM products are ellipsoidal heights, all others are EGM96 Geoid heights
+        # Gamma works only with Ellipsoid heights and the offset needs to be corrected
+        gflg = 0 if demType == 'TDX90m' else 2
+        
         diff.srtm2dem(SRTM_DEM=dem,
                       DEM=outfile_tmp,
                       DEM_par=outfile_tmp + '.par',
-                      gflg=2,
+                      gflg=gflg,
                       geoid='-',
                       logpath=logpath,
                       outdir=tmpdir)
