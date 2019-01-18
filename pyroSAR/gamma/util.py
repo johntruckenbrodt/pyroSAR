@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ##############################################################
 # universal core routines for processing SAR images with GAMMA
-# John Truckenbrodt 2014-2018
+# John Truckenbrodt 2014-2019
 ##############################################################
 
 """
@@ -568,10 +568,11 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                             'OFF_par': '-'})
         diff.gc_map(**gc_map_args)
     
-    for item in ['dem_seg', 'sim_map', 'u', 'v', 'psi', 'pix', 'inc']:
+    for item in ['dem_seg', 'sim_map', 'u', 'v', 'psi', 'pix', 'inc', 'ls_map']:
         if n.isappreciated(item):
-            par2hdr(n.dem_seg + '.par', n.get(item) + '.hdr')
-    
+            mods = {'data_type': 1} if item == 'ls_map' else None
+            par2hdr(n.dem_seg + '.par', n.get(item) + '.hdr', mods)
+            
     sim_width = ISPPar(n.dem_seg + '.par').width
     
     if sarSimCC:
@@ -595,6 +596,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                               logpath=path_log,
                               outdir=scene.scene,
                               shellscript=shellscript)
+            par2hdr(n.dem_seg + '.par', image + '_geo.hdr')
             lat.product(data_1=image + '_geo',
                         data_2=n.pix,
                         product=image + '_geo_pan',
@@ -604,6 +606,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                         logpath=path_log,
                         outdir=scene.scene,
                         shellscript=shellscript)
+            par2hdr(n.dem_seg + '.par', image + '_geo_pan.hdr')
             lat.lin_comb(files=[image + '_geo_pan'],
                          constant=0,
                          factors=[math.cos(math.radians(master_par.incidence_angle))],
@@ -612,6 +615,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                          logpath=path_log,
                          outdir=scene.scene,
                          shellscript=shellscript)
+            par2hdr(n.dem_seg + '.par', image + '_geo_pan_flat.hdr')
             lat.sigma2gamma(pwr1=image + '_geo_pan_flat',
                             inc=n.inc,
                             gamma=image + '_{}'.format(method_suffix),
@@ -626,6 +630,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     elif normalization_method == 2:
         method_suffix = 'norm_geo'
         n.appreciate(['pixel_area_fine', 'ellipse_pixel_area', 'ratio_sigma0'])
+        # actual illuminated area as obtained from integrating DEM-facets (pix_area_sigma0 | pix_area_gamma0)
         diff.pixel_area(MLI_par=master + '.par',
                         DEM_par=n.dem_seg + '.par',
                         DEM=n.dem_seg,
@@ -636,6 +641,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                         logpath=path_log,
                         outdir=scene.scene,
                         shellscript=shellscript)
+        par2hdr(master + '.par', n.pixel_area_fine + '.hdr')
+        # ellipsoid-based pixel area (ellip_pix_sigma0)
         isp.radcal_MLI(MLI=master,
                        MLI_par=master + '.par',
                        OFF_par='-',
@@ -645,6 +652,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                        logpath=path_log,
                        outdir=scene.scene,
                        shellscript=shellscript)
+        par2hdr(master + '.par', n.ellipse_pixel_area + '.hdr')
+        par2hdr(master + '.par', master + '_cal.hdr')
+        # ratio of ellipsoid based pixel area and DEM-facet pixel area
         lat.ratio(d1=n.ellipse_pixel_area,
                   d2=n.pixel_area_fine,
                   ratio=n.ratio_sigma0,
@@ -654,7 +664,10 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                   logpath=path_log,
                   outdir=scene.scene,
                   shellscript=shellscript)
+        par2hdr(master + '.par', n.ratio_sigma0 + '.hdr')
         for image in images:
+            # sigma0 = MLI * ellip_pix_sigma0 / pix_area_sigma0
+            # gamma0 = MLI * ellip_pix_sigma0 / pix_area_gamma0
             lat.product(data_1=image,
                         data_2=n.ratio_sigma0,
                         product=image + '_pan',
@@ -664,6 +677,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                         logpath=path_log,
                         outdir=scene.scene,
                         shellscript=shellscript)
+            par2hdr(master + '.par', image + '_pan.hdr')
             diff.geocode_back(data_in=image + '_pan',
                               width_in=master_par.range_samples,
                               gc_map=lut_final,
@@ -673,6 +687,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                               logpath=path_log,
                               outdir=scene.scene,
                               shellscript=shellscript)
+            par2hdr(n.dem_seg + '.par', image + '_pan_geo.hdr')
             lat.lin_comb(files=[image + '_pan_geo'],
                          constant=0,
                          factors=[math.cos(math.radians(master_par.incidence_angle))],
@@ -681,6 +696,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                          logpath=path_log,
                          outdir=scene.scene,
                          shellscript=shellscript)
+            par2hdr(n.dem_seg + '.par', image + '_pan_geo_flat.hdr')
             lat.sigma2gamma(pwr1=image + '_pan_geo_flat',
                             inc=n.inc,
                             gamma=image + '_{}'.format(method_suffix),
