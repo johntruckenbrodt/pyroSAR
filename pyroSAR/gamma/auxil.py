@@ -1,6 +1,6 @@
 ##############################################################
 # general GAMMA utilities
-# Stefan Engelhardt, John Truckenbrodt 2014-2018
+# Stefan Engelhardt, John Truckenbrodt 2014-2019
 ##############################################################
 import math
 import os
@@ -156,7 +156,7 @@ class ISPPar(object):
         return out
 
 
-def par2hdr(parfile, hdrfile):
+def par2hdr(parfile, hdrfile, modifications=None):
     """
     Create an ENVI HDR file from a Gamma PAR file
     
@@ -166,13 +166,30 @@ def par2hdr(parfile, hdrfile):
         the Gamma parfile
     hdrfile: str
         the ENVI HDR file
+    modifications: dict or None
+        a dictionary containing value deviations to write to the HDR file
 
     Returns
     -------
-
+    
+    Examples
+    --------
+    >>> from pyroSAR.gamma.auxil import par2hdr
+    >>> par2hdr('dem_seg.par', 'inc.hdr')
+    # write a HDR file for byte data based on a parfile of float data
+    >>> par2hdr('dem_seg.par', 'ls_map.hdr', modifications={'data_type': 1})
+    
+    See Also
+    --------
+    :class:`spatialist.envi.HDRobject`
+    :func:`spatialist.envi.hdr`
     """
+    
     with ISPPar(parfile) as par:
-        hdr(par.envidict(), hdrfile)
+        items = par.envidict()
+        if modifications is not None:
+            items.update(modifications)
+        hdr(items, hdrfile)
 
 
 class UTM(object):
@@ -357,14 +374,14 @@ class ExamineGamma(object):
     def __update_config(self):
         if 'GAMMA' not in ConfigHandler.sections:
             ConfigHandler.add_section('GAMMA')
-    
+        
         for attr in ['home', 'version']:
             self.__update_config_attr(attr, getattr(self, attr), 'GAMMA')
-
+    
     @staticmethod
     def __update_config_attr(attr, value, section):
         if isinstance(value, list):
             value = json.dumps(value)
-    
+        
         if attr not in ConfigHandler[section].keys() or ConfigHandler[section][attr] != value:
             ConfigHandler.set(section, key=attr, value=value, overwrite=True)
