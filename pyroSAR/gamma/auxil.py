@@ -131,8 +131,8 @@ class ISPPar(object):
         dtypes_lookup = {'FCOMPLEX': 6, 'FLOAT': 4, 'REAL*4': 4, 'INTEGER*2': 2, 'SHORT': 12}
         dtype = getattr(self, union(['data_format', 'image_format'], self.keys)[0])
         
-        if dtype == 'SCOMPLEX':
-            raise TypeError('unsupported data type: SCOMPLEX (2x16 bit complex)')
+        if dtype not in dtypes_lookup.keys():
+            raise TypeError('unsupported data type: {}'.format(dtype))
         
         out['data_type'] = dtypes_lookup[dtype]
         
@@ -152,7 +152,7 @@ class ISPPar(object):
                                    str(abs(float(self.post_lon))), str(abs(float(self.post_lat))),
                                    'WGS-84', 'units=Degrees']
             else:
-                raise RuntimeError('unsupported projection')
+                raise RuntimeError('unsupported projection: {}'.format(self.DEM_projection))
         return out
 
 
