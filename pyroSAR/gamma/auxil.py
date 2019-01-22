@@ -1,6 +1,6 @@
 ##############################################################
 # general GAMMA utilities
-# Stefan Engelhardt, John Truckenbrodt 2014-2018
+# Stefan Engelhardt, John Truckenbrodt 2014-2019
 ##############################################################
 import math
 import os
@@ -96,6 +96,9 @@ class ISPPar(object):
                 setattr(self, key, value)
         finally:
             par_file.close()
+
+        if hasattr(self, 'date'):
+            self.date = '{}-{:02d}-{:02d}T{:02d}:{:02d}:{:02f}'.format(*self.date)
     
     def __enter__(self):
         return self
@@ -357,14 +360,14 @@ class ExamineGamma(object):
     def __update_config(self):
         if 'GAMMA' not in ConfigHandler.sections:
             ConfigHandler.add_section('GAMMA')
-    
+        
         for attr in ['home', 'version']:
             self.__update_config_attr(attr, getattr(self, attr), 'GAMMA')
-
+    
     @staticmethod
     def __update_config_attr(attr, value, section):
         if isinstance(value, list):
             value = json.dumps(value)
-    
+        
         if attr not in ConfigHandler[section].keys() or ConfigHandler[section][attr] != value:
             ConfigHandler.set(section, key=attr, value=value, overwrite=True)
