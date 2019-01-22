@@ -514,6 +514,10 @@ def parse_module(bindir, outfile):
     >>> outname = os.path.join(os.environ['HOME'], 'isp.py')
     >>> parse_module('/cluster/GAMMA_SOFTWARE-20161207/ISP/bin', outname)
     """
+    
+    if not os.path.isdir(bindir):
+        raise OSError('directory does not exist: {}'.format(bindir))
+    
     excludes = ['coord_trans',  # doesn't take any parameters and is interactive
                 'interp_cpx',  # replaced by interp_data
                 'interp_real',  # replaced by interp_data
@@ -576,11 +580,13 @@ def autoparse():
     for module in finder(home, ['[A-Z]*'], foldermode=2):
         outfile = os.path.join(target, os.path.basename(module).lower() + '.py')
         if not os.path.isfile(outfile):
-            print('parsing module {}'.format(os.path.basename(module)))
-            print('-' * 10 + '\nbin')
-            parse_module(os.path.join(module, 'bin'), outfile)
-            print('-' * 10 + '\nscripts')
-            parse_module(os.path.join(module, 'scripts'), outfile)
+            print('parsing module {} to {}'.format(os.path.basename(module), outfile))
+            for submodule in ['bin', 'scripts']:
+                print('-' * 10 + '\n{}'.format(submodule))
+                try:
+                    parse_module(os.path.join(module, submodule), outfile)
+                except OSError:
+                    print('..does not exist')
             print('=' * 20)
     modules = [re.sub('\.py', '', os.path.basename(x)) for x in finder(target, ['[a-z]+\.py$'], regex=True)]
     if len(modules) > 0:

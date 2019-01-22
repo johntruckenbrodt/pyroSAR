@@ -40,7 +40,7 @@ def groupby(images, attribute):
     while len(images_sort) > 0:
         filename = images_sort.pop(0)
         meta = parse_datasetname(filename)
-
+        
         if out_meta[-1][0][attribute] == meta[attribute]:
             out_meta[-1].append(meta)
         else:
@@ -75,7 +75,8 @@ def groupbyTime(images, function, time):
     
     for i in range(1, len(srcfiles)):
         item = srcfiles[i]
-        if 0 < abs(function(item) - function(group[-1])) <= time:
+        timediff = abs(function(item) - function(group[-1]))
+        if timediff <= time:
             group.append(item)
         else:
             groups.append([item])

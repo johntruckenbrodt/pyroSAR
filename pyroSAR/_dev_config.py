@@ -181,7 +181,7 @@ class ConfigHandler(object):
     The syntax is the same as in ConfigParser. Here, keys are called options.
 
     """
-
+    
     # Define __setter to control changeable keys (optional)
     # __setter = ["etc", "auxdata"]
     
@@ -189,7 +189,6 @@ class ConfigHandler(object):
         
         path = os.path.expanduser('~') if path is None else os.path.realpath(path)
         path = os.path.join(path, '.pyrosar')
-
         
         self.__GLOBAL = {
             'path': path,
@@ -197,7 +196,6 @@ class ConfigHandler(object):
             'config': os.path.join(path, config_fname),
         }
         
-
         if not os.path.isfile(self.__GLOBAL['config']):
             self.__create_config()
         
@@ -249,7 +247,6 @@ class ConfigHandler(object):
     def sections(self):
         return self.parser.sections()
     
-
     def keys(self, section):
         """
         Get all keys (options) of a section.
@@ -277,7 +274,7 @@ class ConfigHandler(object):
         """
         
         os.startfile(self.__GLOBAL['config'])
-
+    
     def add_section(self, section='SNAP'):
         """
         Create a new section in the configuration.
@@ -295,7 +292,7 @@ class ConfigHandler(object):
         if not self.parser.has_section(section):
             self.parser.add_section(section)
             self.write()
-
+    
     def set(self, section, key, value, overwrite=False):
         """
         Set an option.
@@ -317,7 +314,7 @@ class ConfigHandler(object):
         """
         if not self.parser.has_section(section):
             raise AttributeError('Section {0} does not exist.'.format(str(section)))
-
+        
         if isinstance(value, list):
             value = json.dumps(value)
         
