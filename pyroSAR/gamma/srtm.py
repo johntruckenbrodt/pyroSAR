@@ -167,7 +167,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
     outfile: str
         the name of the final DEM file
     buffer: float
-        a buffer in degrees to create around the DEM file
+        a buffer in degrees to create around the geometry
     logpath: str
         a directory to write Gamma logfiles to
     username: str or None
