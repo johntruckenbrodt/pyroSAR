@@ -112,13 +112,19 @@ class ISPPar(object):
                                                       sep=(maxlen - len(key)) * ' ',
                                                       value=getattr(self, key)) for key in self.keys])
     
-    def envidict(self):
+    def envidict(self, nodata=None):
         """
         export relevant metadata to a ENVI HDR file compliant format
+        
+        Parameters
+        ----------
+        nodata: str or None
+            a no data value to write to the HDR file via attribute 'data ignore value'
         
         Returns
         -------
         dict
+            a dictionary containing attributes translated to ENVI HDR naming
         """
         out = dict(bands=1,
                    header_offset=0,
@@ -127,6 +133,9 @@ class ISPPar(object):
                    sensor_type='Unknown',
                    byte_order=1,
                    wavelength_units='Unknown')
+        
+        if hasattr(self, 'date'):
+            out['acquisition_time'] = self.date + 'Z'
         
         out['samples'] = getattr(self, union(['width', 'range_samples', 'samples'], self.keys)[0])
         out['lines'] = getattr(self, union(['nlines', 'azimuth_lines', 'lines'], self.keys)[0])
@@ -138,6 +147,9 @@ class ISPPar(object):
             raise TypeError('unsupported data type: {}'.format(dtype))
         
         out['data_type'] = dtypes_lookup[dtype]
+        
+        if nodata is not None:
+            out['data_ignore_value'] = nodata
         
         if out['data_type'] == 6:
             out['complex_function'] = 'Power'
@@ -159,7 +171,7 @@ class ISPPar(object):
         return out
 
 
-def par2hdr(parfile, hdrfile):
+def par2hdr(parfile, hdrfile, nodata=None):
     """
     Create an ENVI HDR file from a Gamma PAR file
     
@@ -169,13 +181,15 @@ def par2hdr(parfile, hdrfile):
         the Gamma parfile
     hdrfile: str
         the ENVI HDR file
+    nodata: str or None
+        a no data value to write to the HDR file via attribute 'data ignore value'
 
     Returns
     -------
 
     """
     with ISPPar(parfile) as par:
-        hdr(par.envidict(), hdrfile)
+        hdr(par.envidict(nodata), hdrfile)
 
 
 class UTM(object):
