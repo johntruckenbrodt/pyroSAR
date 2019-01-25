@@ -436,22 +436,41 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     Note
     ----
     intermediate output files (named <master_MLI>_<suffix>):
-     * dem_seg: dem subsetted to the extent of the SAR image
-     * lut: rough geocoding lookup table
-     * lut_fine: fine geocoding lookup table
-     * sim_map: simulated SAR backscatter image in DEM geometry
-     * sim_sar: simulated SAR backscatter image in SAR geometry
-     * u: zenith angle of surface normal vector n (angle between z and n)
-     * v: orientation angle of n (between x and projection of n in xy plane)
-     * inc: local incidence angle (between surface normal and look vector)
-     * psi: projection angle (between surface normal and image plane normal)
-     * pix: pixel area normalization factor
-     * ls_map: layover and shadow map (in map projection)
-     * diffpar: ISP offset/interferogram parameter file
-     * offs: offset estimates (fcomplex)
-     * coffs: culled range and azimuth offset estimates (fcomplex)
-     * coffsets: culled offset estimates and cross correlation values (text format)
-     * ccp: cross-correlation of each patch (0.0->1.0) (float)
+    
+    * images in range-Doppler geometry
+     
+      - grd: the ground range detected SAR intensity image
+      - grd_mli: the multi-looked grd image with approached target resolution
+      - specific to normalization method 2:
+      
+        + pix_ellip_sigma0: ellipsoid-based pixel area
+        + pix_area_sigma0: actual illuminated area as obtained from integrating DEM-facets (command pixel_area)
+        + pix_fine: refined pixel area normalization factor (pix_ellip_sigma0 / pix_area_sigma0)
+        + grd_mli_pan: the pixel area normalized MLI (grd_mli * pix_fine)
+     
+    * images in map geometry
+     
+      - dem_seg_geo: dem subsetted to the extent of the intersect between input DEM and SAR image
+      - (u_geo): zenith angle of surface normal vector n (angle between z and n)
+      - (v_geo): orientation angle of n (between x and projection of n in xy plane)
+      - inc_geo: local incidence angle (between surface normal and look vector)
+      - (psi_geo): projection angle (between surface normal and image plane normal)
+      - pix_geo: pixel area normalization factor (command gc_map)
+      - ls_map_geo: layover and shadow map (in map projection)
+      - (sim_sar_geo): simulated SAR backscatter image
+     
+    * additional files
+     
+      - lut_init: initial geocoding lookup table
+     
+    * files specific to SAR simulation cross-correlation geocoding
+     
+      - lut_fine: refined geocoding lookup table
+      - diffpar: ISP offset/interferogram parameter file
+      - offs: offset estimates (fcomplex)
+      - coffs: culled range and azimuth offset estimates (fcomplex)
+      - coffsets: culled offset estimates and cross correlation values (text format)
+      - ccp: cross-correlation of each patch (0.0->1.0) (float)
     
     """
     
@@ -529,11 +548,11 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     # appreciated files will be written
     # depreciated files will be set to '-' in the GAMMA function call and are thus not written
     n = Namespace(scene.scene, scene.outname_base())
-    n.appreciate(['dem_seg', 'lut_coarse', 'lut_fine', 'pix', 'ccp', 'inc', 'ls_map'])
-    n.depreciate(['sim_map', 'u', 'v', 'psi'])
+    n.appreciate(['dem_seg_geo', 'lut_init', 'lut_fine', 'pix_geo', 'ccp', 'inc_geo', 'ls_map_geo'])
+    n.depreciate(['sim_sar_geo', 'u_geo', 'v_geo', 'psi_geo'])
     
     # if sarSimCC:
-    #     n.appreciate(['ls_map'])
+    #     n.appreciate(['ls_map_geo'])
     
     ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
     
@@ -541,18 +560,18 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     gc_map_args = {'DEM_par': dem + '.par',
                    'DEM': dem,
-                   'DEM_seg_par': n.dem_seg + '.par',
-                   'DEM_seg': n.dem_seg,
-                   'lookup_table': n.lut_coarse,
+                   'DEM_seg_par': n.dem_seg_geo + '.par',
+                   'DEM_seg': n.dem_seg_geo,
+                   'lookup_table': n.lut_init,
                    'lat_ovr': ovs_lat,
                    'lon_ovr': ovs_lon,
-                   'sim_sar': n.sim_map,
-                   'u': n.u,
-                   'v': n.v,
-                   'inc': n.inc,
-                   'psi': n.psi,
-                   'pix': n.pix,
-                   'ls_map': n.ls_map,
+                   'sim_sar': n.sim_sar_geo,
+                   'u': n.u_geo,
+                   'v': n.v_geo,
+                   'inc': n.inc_geo,
+                   'psi': n.psi_geo,
+                   'pix': n.pix_geo,
+                   'ls_map': n.ls_map_geo,
                    'frame': 8,
                    'ls_mode': func_interp,
                    'logpath': path_log,
@@ -568,17 +587,17 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                             'OFF_par': '-'})
         diff.gc_map(**gc_map_args)
     
-    for item in ['dem_seg', 'sim_map', 'u', 'v', 'psi', 'pix', 'inc', 'ls_map']:
+    for item in ['dem_seg_geo', 'sim_sar_geo', 'u_geo', 'v_geo', 'psi_geo', 'pix_geo', 'inc_geo', 'ls_map_geo']:
         if n.isappreciated(item):
-            mods = {'data_type': 1} if item == 'ls_map' else None
-            par2hdr(n.dem_seg + '.par', n.get(item) + '.hdr', mods)
+            mods = {'data_type': 1} if item == 'ls_map_geo' else None
+            par2hdr(n.dem_seg_geo + '.par', n.get(item) + '.hdr', mods)
             
-    sim_width = ISPPar(n.dem_seg + '.par').width
+    sim_width = ISPPar(n.dem_seg_geo + '.par').width
     
     if sarSimCC:
         raise IOError('geocoding with cross correlation offset refinement is still in the making. Please stay tuned...')
     else:
-        lut_final = n.lut_coarse
+        lut_final = n.lut_init
     
     ######################################################################
     # normalization and backward geocoding approach 1 ####################
@@ -596,9 +615,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                               logpath=path_log,
                               outdir=scene.scene,
                               shellscript=shellscript)
-            par2hdr(n.dem_seg + '.par', image + '_geo.hdr')
+            par2hdr(n.dem_seg_geo + '.par', image + '_geo.hdr')
             lat.product(data_1=image + '_geo',
-                        data_2=n.pix,
+                        data_2=n.pix_geo,
                         product=image + '_geo_pan',
                         width=sim_width,
                         bx=1,
@@ -606,7 +625,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                         logpath=path_log,
                         outdir=scene.scene,
                         shellscript=shellscript)
-            par2hdr(n.dem_seg + '.par', image + '_geo_pan.hdr')
+            par2hdr(n.dem_seg_geo + '.par', image + '_geo_pan.hdr')
             lat.lin_comb(files=[image + '_geo_pan'],
                          constant=0,
                          factors=[math.cos(math.radians(master_par.incidence_angle))],
@@ -615,61 +634,61 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                          logpath=path_log,
                          outdir=scene.scene,
                          shellscript=shellscript)
-            par2hdr(n.dem_seg + '.par', image + '_geo_pan_flat.hdr')
+            par2hdr(n.dem_seg_geo + '.par', image + '_geo_pan_flat.hdr')
             lat.sigma2gamma(pwr1=image + '_geo_pan_flat',
-                            inc=n.inc,
+                            inc=n.inc_geo,
                             gamma=image + '_{}'.format(method_suffix),
                             width=sim_width,
                             logpath=path_log,
                             outdir=scene.scene,
                             shellscript=shellscript)
-            par2hdr(n.dem_seg + '.par', image + '_{}.hdr'.format(method_suffix))
+            par2hdr(n.dem_seg_geo + '.par', image + '_{}.hdr'.format(method_suffix))
     ######################################################################
     # normalization and backward geocoding approach 2 ####################
     ######################################################################
     elif normalization_method == 2:
         method_suffix = 'norm_geo'
-        n.appreciate(['pixel_area_fine', 'ellipse_pixel_area', 'ratio_sigma0'])
+        n.appreciate(['pix_area_sigma0', 'pix_ellip_sigma0', 'pix_fine'])
         # actual illuminated area as obtained from integrating DEM-facets (pix_area_sigma0 | pix_area_gamma0)
         diff.pixel_area(MLI_par=master + '.par',
-                        DEM_par=n.dem_seg + '.par',
-                        DEM=n.dem_seg,
+                        DEM_par=n.dem_seg_geo + '.par',
+                        DEM=n.dem_seg_geo,
                         lookup_table=lut_final,
-                        ls_map=n.ls_map,
-                        inc_map=n.inc,
-                        pix_sigma0=n.pixel_area_fine,
+                        ls_map=n.ls_map_geo,
+                        inc_map=n.inc_geo,
+                        pix_sigma0=n.pix_area_sigma0,
                         logpath=path_log,
                         outdir=scene.scene,
                         shellscript=shellscript)
-        par2hdr(master + '.par', n.pixel_area_fine + '.hdr')
+        par2hdr(master + '.par', n.pix_area_sigma0 + '.hdr')
         # ellipsoid-based pixel area (ellip_pix_sigma0)
         isp.radcal_MLI(MLI=master,
                        MLI_par=master + '.par',
                        OFF_par='-',
                        CMLI=master + '_cal',
-                       refarea_flag=1,
-                       pix_area=n.ellipse_pixel_area,
+                       refarea_flag=1,  # calculate sigma0, scale area by sin(inc_ang)/sin(ref_inc_ang)
+                       pix_area=n.pix_ellip_sigma0,
                        logpath=path_log,
                        outdir=scene.scene,
                        shellscript=shellscript)
-        par2hdr(master + '.par', n.ellipse_pixel_area + '.hdr')
+        par2hdr(master + '.par', n.pix_ellip_sigma0 + '.hdr')
         par2hdr(master + '.par', master + '_cal.hdr')
         # ratio of ellipsoid based pixel area and DEM-facet pixel area
-        lat.ratio(d1=n.ellipse_pixel_area,
-                  d2=n.pixel_area_fine,
-                  ratio=n.ratio_sigma0,
+        lat.ratio(d1=n.pix_ellip_sigma0,
+                  d2=n.pix_area_sigma0,
+                  ratio=n.pix_fine,
                   width=master_par.range_samples,
                   bx=1,
                   by=1,
                   logpath=path_log,
                   outdir=scene.scene,
                   shellscript=shellscript)
-        par2hdr(master + '.par', n.ratio_sigma0 + '.hdr')
+        par2hdr(master + '.par', n.pix_fine + '.hdr')
         for image in images:
             # sigma0 = MLI * ellip_pix_sigma0 / pix_area_sigma0
             # gamma0 = MLI * ellip_pix_sigma0 / pix_area_gamma0
             lat.product(data_1=image,
-                        data_2=n.ratio_sigma0,
+                        data_2=n.pix_fine,
                         product=image + '_pan',
                         width=master_par.range_samples,
                         bx=1,
@@ -687,7 +706,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                               logpath=path_log,
                               outdir=scene.scene,
                               shellscript=shellscript)
-            par2hdr(n.dem_seg + '.par', image + '_pan_geo.hdr')
+            par2hdr(n.dem_seg_geo + '.par', image + '_pan_geo.hdr')
             lat.lin_comb(files=[image + '_pan_geo'],
                          constant=0,
                          factors=[math.cos(math.radians(master_par.incidence_angle))],
@@ -696,15 +715,15 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                          logpath=path_log,
                          outdir=scene.scene,
                          shellscript=shellscript)
-            par2hdr(n.dem_seg + '.par', image + '_pan_geo_flat.hdr')
+            par2hdr(n.dem_seg_geo + '.par', image + '_pan_geo_flat.hdr')
             lat.sigma2gamma(pwr1=image + '_pan_geo_flat',
-                            inc=n.inc,
+                            inc=n.inc_geo,
                             gamma=image + '_{}'.format(method_suffix),
                             width=sim_width,
                             logpath=path_log,
                             outdir=scene.scene,
                             shellscript=shellscript)
-            par2hdr(n.dem_seg + '.par', image + '_{}.hdr'.format(method_suffix))
+            par2hdr(n.dem_seg_geo + '.par', image + '_{}.hdr'.format(method_suffix))
     else:
         raise RuntimeError('unknown option for normalization_method')
     ######################################################################
@@ -721,13 +740,13 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                                  logpath=path_log,
                                  outdir=scene.scene,
                                  shellscript=shellscript)
-                par2hdr(n.dem_seg + '.par', image + '_{}_db.hdr'.format(method_suffix))
+                par2hdr(n.dem_seg_geo + '.par', image + '_{}_db.hdr'.format(method_suffix))
             else:
                 nodata_out = nodata[0]
             suffix = {'linear': '', 'db': '_db'}[scale]
             infile = image + '_{0}{1}'.format(method_suffix, suffix)
             outfile = os.path.join(outdir, os.path.basename(image) + '_{0}{1}.tif'.format(method_suffix, suffix))
-            disp.data2geotiff(DEM_par=n.dem_seg + '.par',
+            disp.data2geotiff(DEM_par=n.dem_seg_geo + '.par',
                               data=infile,
                               type=2,
                               GeoTIFF=outfile,
@@ -738,6 +757,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if scene.sensor in ['S1A', 'S1B']:
         shutil.copyfile(os.path.join(scene.scene, 'manifest.safe'),
                         os.path.join(outdir, scene.outname_base() + '_manifest.safe'))
+    
     if cleanup:
         print('cleaning up temporary files..')
         shutil.rmtree(scene.scene)
