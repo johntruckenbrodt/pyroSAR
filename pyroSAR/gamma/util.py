@@ -473,6 +473,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
       - ccp: cross-correlation of each patch (0.0->1.0) (float)
     
     """
+    if normalization_method == 2 and func_interp != 2:
+        raise RuntimeError('parameter func_interp must be set to 2 if normalization_method is set to 2; '
+                           'see documentation of Gamma command pixel_area')
     
     scene = scene if isinstance(scene, ID) else identify(scene)
     
