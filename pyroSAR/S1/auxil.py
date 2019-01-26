@@ -221,7 +221,7 @@ class OSV(object):
         """
         maxdate_poe = self.maxdate('POE', 'stop')
         deprecated = [x for x in self.getLocals('RES') if self.date(x, 'stop') < maxdate_poe]
-        print('deleting {0} RES files'.format(len(deprecated)))
+        print('deleting {} RES file{}'.format(len(deprecated), '' if len(deprecated) == 1 else 's'))
         for item in deprecated:
             os.remove(item)
     
@@ -337,9 +337,11 @@ class OSV(object):
             downloads = [x for x in files
                          if re.search('{}ORB'.format(type), x) and
                          not os.path.isfile(os.path.join(outdir, os.path.basename(x)))]
-            for item in downloads:
-                infile = urlopen(item, context=self.sslcontext)
-                with open(os.path.join(outdir, os.path.basename(item)), 'wb') as outfile:
+            print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
+            for remote in downloads:
+                local = os.path.join(outdir, os.path.basename(remote))
+                infile = urlopen(remote, context=self.sslcontext)
+                with open(local, 'wb') as outfile:
                     outfile.write(infile.read())
                 infile.close()
     
