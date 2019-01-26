@@ -439,38 +439,38 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     * images in range-Doppler geometry
      
-      - grd: the ground range detected SAR intensity image
-      - grd_mli: the multi-looked grd image with approached target resolution
+      - **grd**: the ground range detected SAR intensity image
+      - **grd_mli**: the multi-looked grd image with approached target resolution
       - specific to normalization method 2:
       
-        + pix_ellip_sigma0: ellipsoid-based pixel area
-        + pix_area_sigma0: actual illuminated area as obtained from integrating DEM-facets (command pixel_area)
-        + pix_fine: refined pixel area normalization factor (pix_ellip_sigma0 / pix_area_sigma0)
-        + grd_mli_pan: the pixel area normalized MLI (grd_mli * pix_fine)
+        + **pix_ellip_sigma0**: ellipsoid-based pixel area
+        + **pix_area_sigma0**: actual illuminated area as obtained from integrating DEM-facets (command pixel_area)
+        + **pix_fine**: refined pixel area normalization factor (pix_ellip_sigma0 / pix_area_sigma0)
+        + **grd_mli_pan**: the pixel area normalized MLI (grd_mli * pix_fine)
      
     * images in map geometry
      
-      - dem_seg_geo: dem subsetted to the extent of the intersect between input DEM and SAR image
-      - (u_geo): zenith angle of surface normal vector n (angle between z and n)
-      - (v_geo): orientation angle of n (between x and projection of n in xy plane)
-      - inc_geo: local incidence angle (between surface normal and look vector)
-      - (psi_geo): projection angle (between surface normal and image plane normal)
-      - pix_geo: pixel area normalization factor (command gc_map)
-      - ls_map_geo: layover and shadow map (in map projection)
-      - (sim_sar_geo): simulated SAR backscatter image
+      - **dem_seg_geo**: dem subsetted to the extent of the intersect between input DEM and SAR image
+      - (**u_geo**): zenith angle of surface normal vector n (angle between z and n)
+      - (**v_geo**): orientation angle of n (between x and projection of n in xy plane)
+      - **inc_geo**: local incidence angle (between surface normal and look vector)
+      - (**psi_geo**): projection angle (between surface normal and image plane normal)
+      - **pix_geo**: pixel area normalization factor (command gc_map)
+      - **ls_map_geo**: layover and shadow map (in map projection)
+      - (**sim_sar_geo**): simulated SAR backscatter image
      
     * additional files
      
-      - lut_init: initial geocoding lookup table
+      - **lut_init**: initial geocoding lookup table
      
     * files specific to SAR simulation cross-correlation geocoding
      
-      - lut_fine: refined geocoding lookup table
-      - diffpar: ISP offset/interferogram parameter file
-      - offs: offset estimates (fcomplex)
-      - coffs: culled range and azimuth offset estimates (fcomplex)
-      - coffsets: culled offset estimates and cross correlation values (text format)
-      - ccp: cross-correlation of each patch (0.0->1.0) (float)
+      - **lut_fine**: refined geocoding lookup table
+      - **diffpar**: ISP offset/interferogram parameter file
+      - **offs**: offset estimates (fcomplex)
+      - **coffs**: culled range and azimuth offset estimates (fcomplex)
+      - **coffsets**: culled offset estimates and cross correlation values (text format)
+      - **ccp**: cross-correlation of each patch (0.0->1.0) (float)
     
     """
     if normalization_method == 2 and func_interp != 2:
