@@ -34,7 +34,7 @@ version = '0.7'
 # The full version, including alpha/beta/rc tags.
 release = '0.7'
 
-autodoc_mock_imports = ['osgeo', 'spatialist']
+autodoc_mock_imports = ['osgeo']
 
 # If your documentation needs a minimal Sphinx version, state it here.
 needs_sphinx = '1.6'
