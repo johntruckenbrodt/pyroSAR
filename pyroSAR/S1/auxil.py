@@ -1,6 +1,6 @@
 ##############################################################
 # general utilities for Sentinel-1
-# John Truckenbrodt 2016-2018
+# John Truckenbrodt 2016-2019
 ##############################################################
 import sys
 
@@ -77,6 +77,7 @@ class OSV(object):
     osvdir: str
         the directory to write the orbit files to
     """
+    
     def __init__(self, osvdir):
         self.remote_poe = 'https://qc.sentinel1.eo.esa.int/aux_poeorb/'
         self.remote_res = 'https://qc.sentinel1.eo.esa.int/aux_resorb/'
@@ -92,13 +93,13 @@ class OSV(object):
             self.sslcontext = ssl._create_unverified_context()
         else:
             raise RuntimeError('this functionality requires Python Version >=2.7.9')
-
+    
     def __enter__(self):
         return self
-
+    
     def __exit__(self, exc_type, exc_val, exc_tb):
         return
-
+    
     def _init_dir(self):
         """
         create directories if they don't exist yet
@@ -106,7 +107,7 @@ class OSV(object):
         for dir in [self.outdir_poe, self.outdir_res]:
             if not os.path.isdir(dir):
                 os.makedirs(dir)
-
+    
     def _typeEvaluate(self, osvtype):
         """
         evaluate the 'osvtype' method argument and return the corresponding remote repository and local directory
@@ -127,7 +128,7 @@ class OSV(object):
             return self.remote_poe, self.outdir_poe
         else:
             return self.remote_res, self.outdir_res
-
+    
     def catch(self, osvtype='POE', start=None, stop=None):
         """
         check a server for files
@@ -161,10 +162,10 @@ class OSV(object):
             date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S').strftime('%Y-%m-%d')
         else:
             date_stop = time.strftime('%Y-%m-%d')
-
+        
         # pattern for scanning urlopen response for links to OSV files
         pattern_url = 'http.*{}'.format(self.pattern)
-
+        
         # append the time frame to the query dictionary
         query['validity_start'] = '{0}..{1}'.format(date_start, date_stop)
         print('searching for new {} files'.format(osvtype))
@@ -197,7 +198,7 @@ class OSV(object):
         if osvtype == 'RES':
             files = [x for x in files if self.date(x, 'stop') > self.maxdate('POE', 'stop')]
         return files
-
+    
     def date(self, file, datetype):
         """
         extract a date from an OSV file name
@@ -213,7 +214,7 @@ class OSV(object):
             a time stamp in the format YYYYmmddTHHMMSS
         """
         return re.match(self.pattern_fine, os.path.basename(file)).group(datetype)
-
+    
     def clean_res(self):
         """
         delete all RES files for whose date a POE file exists
@@ -223,7 +224,7 @@ class OSV(object):
         print('deleting {0} RES files'.format(len(deprecated)))
         for item in deprecated:
             os.remove(item)
-
+    
     def getLocals(self, osvtype='POE'):
         """
         get a list of local files of specific type
@@ -240,7 +241,7 @@ class OSV(object):
         """
         address, directory = self._typeEvaluate(osvtype)
         return finder(directory, [self.pattern], regex=True)
-
+    
     def maxdate(self, osvtype='POE', datetype='stop'):
         """
         return the latest date of locally existing POE/RES files
@@ -260,7 +261,7 @@ class OSV(object):
         address, directory = self._typeEvaluate(osvtype)
         files = finder(directory, [self.pattern], regex=True)
         return max([self.date(x, datetype) for x in files]) if len(files) > 0 else None
-
+    
     def mindate(self, osvtype='POE', datetype='start'):
         """
         return the earliest date of locally existing POE/RES files
@@ -280,7 +281,7 @@ class OSV(object):
         address, directory = self._typeEvaluate(osvtype)
         files = finder(directory, [self.pattern], regex=True)
         return min([self.date(x, datetype) for x in files]) if len(files) > 0 else None
-
+    
     def match(self, timestamp, osvtype='POE'):
         """
         return the corresponding OSV file for the provided time stamp.
@@ -317,7 +318,7 @@ class OSV(object):
             if not best:
                 best = self.match(timestamp, 'RES')
             return best
-
+    
     def retrieve(self, files):
         """
         download a list of remote files into the respective subdirectories, i.e. POEORB or RESORB
@@ -341,7 +342,7 @@ class OSV(object):
                 with open(os.path.join(outdir, os.path.basename(item)), 'wb') as outfile:
                     outfile.write(infile.read())
                 infile.close()
-
+    
     def sortByDate(self, files, datetype='start'):
         """
         sort a list of OSV files by a specific date type
@@ -359,11 +360,11 @@ class OSV(object):
             the input OSV files sorted by the defined date
         """
         return sorted(files, key=lambda x: self.date(x, datetype))
-
+    
     def update(self, update_res=True):
         """
         Caution! This method is intended for downloading all available POE files and all RES files for whose
-        time span no POE file yet exists.
+        time span no POE file yet exists locally.
         This will be a data volume of several GB and is particularly suited for multi-node SAR processing where not
         all nodes might have internet access and thus all files have to be downloaded before starting the processing.
 
@@ -397,7 +398,7 @@ class OSV(object):
         self.retrieve(files_poe)
         if update_res:
             print('---------------------------------------------------------')
-            files_res = self.catch('RES', start=self.maxdate('RES', 'start'))
+            files_res = self.catch('RES', start=self.maxdate('POE', 'start'))
             self.retrieve(files_res)
             self.clean_res()
 
@@ -409,7 +410,7 @@ def removeGRDBorderNoise(scene):
     Reference:
         Masking "No-value" Pixels on GRD Products generated by the Sentinel-1 ESA IPF' (issue 1, June 2015; issue 2.1 Jan 29 2018)
         available online under https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/document-library
-    
+
     Parameters
     ----------
     scene: ~pyroSAR.drivers.SAFE
@@ -421,9 +422,9 @@ def removeGRDBorderNoise(scene):
     """
     if scene.compression is not None:
         raise RuntimeError('scene is not yet unpacked')
-
+    
     blocksize = 2000
-
+    
     # compute noise scaling factor
     if scene.meta['IPF_version'] >= 2.9:
         print('border noise removal not necessary for IPF version {}'.format(scene.meta['IPF_version']))
@@ -440,30 +441,30 @@ def removeGRDBorderNoise(scene):
             scalingFactor = knoise * adn * adn
     else:
         scalingFactor = 1
-
+    
     # read noise vectors from corresponding annotation xml
     noisefile = scene.getFileObj(scene.findfiles('noise-s1[ab]-[ie]w-grd-(?:hh|vv)')[0])
     noisetree = ET.fromstring(noisefile.read())
     noisefile.close()
     noiseVectors = noisetree.findall('.//noiseVector')
-
+    
     # define boundaries of image subsets to be masked (4x the first lines/samples of the image boundaries)
     subsets = [(0, 0, blocksize, scene.lines),
                (0, 0, scene.samples, blocksize),
                (scene.samples - blocksize, 0, scene.samples, scene.lines),
                (0, scene.lines - blocksize, scene.samples, scene.lines)]
-
+    
     # extract column indices of noise vectors
     yi = np.array([int(x.find('line').text) for x in noiseVectors])
-
+    
     # create links to the tif files for a master co-polarization and all other polarizations as slaves
     master = scene.findfiles('s1.*(?:vv|hh).*tiff')[0]
     ras_master = gdal.Open(master, GA_Update)
     ras_slaves = [gdal.Open(x, GA_Update) for x in scene.findfiles('s1.*tiff') if x != master]
-
+    
     outband_master = ras_master.GetRasterBand(1)
     outband_slaves = [x.GetRasterBand(1) for x in ras_slaves]
-
+    
     # iterate over the four image subsets
     for subset in subsets:
         print(subset)
@@ -484,21 +485,21 @@ def removeGRDBorderNoise(scene):
             yi_t = yi[(ymin <= yi) & (yi <= ymax)] - ymin
             # interpolate values along columns
             noise_interp[:, i] = np.interp(range(0, ydiff), yi_t, noise_interp[:, i][yi_t])
-    
+        
         # read subset of image to array and subtract interpolated noise (denoising)
         mat_master = outband_master.ReadAsArray(*[xmin, ymin, xdiff, ydiff])
         denoisedBlock = mat_master.astype(float) ** 2 - noise_interp * scalingFactor
         # mask out all pixels with a value below 0.5 in the denoised block or 30 in the original block
         denoisedBlock[(denoisedBlock < 0.5) | (mat_master < 30)] = 0
         denoisedBlock = np.sqrt(denoisedBlock)
-    
+        
         # mask out negative values
         def helper1(x):
             return len(x) - np.argmax(x > 0)
-    
+        
         def helper2(x):
             return len(x) - np.argmax(x[::-1] > 0)
-    
+        
         if subset == (0, 0, blocksize, scene.lines):
             border = np.apply_along_axis(helper1, 1, denoisedBlock)
             border = blocksize - np.array(ls.reduce(border))
@@ -523,7 +524,7 @@ def removeGRDBorderNoise(scene):
             for j in range(0, xdiff):
                 denoisedBlock[:border[j], j] = 0
                 denoisedBlock[border[j]:, j] = 1
-    
+        
         mat_master[denoisedBlock == 0] = 0
         # write modified array back to original file
         outband_master.WriteArray(mat_master, xmin, ymin)
