@@ -378,7 +378,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=2,
             func_interp=0, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
-            cleanup=True, normalization_method=2):
+            cleanup=True, normalization_method=2, export_extra=None):
     """
     general function for geocoding SAR images with GAMMA
     
@@ -429,13 +429,21 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         the topographic normalization approach to be used
          * 1: first geocoding, then terrain flattening
          * 2: first terrain flattening, then geocoding; see `Small 2011 <https://doi.org/10.1109/Tgrs.2011.2120616>`_
+    export_extra: list or None
+        a list of image file IDs to be exported to outdir
+         * format is GeoTiff if the file is geocoded and ENVI otherwise. Non-geocoded images can be converted via Gamma
+           command data2tiff yet the output was found impossible to read with GIS software
+         * scaling of SAR image products is applied as defined by parameter `scaling`
+         * see Notes for ID options
     
     Returns
     -------
     
     Note
     ----
-    intermediate output files (named <master_MLI>_<suffix>):
+    | intermediate output files
+    | named <scene identifier>_<ID>, e.g. `S1A__IW___A_20141012T162337_inc_geo`
+    | IDs in brackets are only written if selected by `export_extra`
     
     * images in range-Doppler geometry
      
@@ -472,6 +480,13 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
       - **coffsets**: culled offset estimates and cross correlation values (text format)
       - **ccp**: cross-correlation of each patch (0.0->1.0) (float)
     
+    Examples
+    --------
+    geocode a Sentinel-1 scene and export the local incidence angle map with it
+    
+    >>> from pyroSAR.gamma import geocode
+    >>> filename = 'S1A_IW_GRDH_1SDV_20141012T162337_20141012T162402_002799_00326F_8197.zip'
+    >>> geocode(scene=filename, dem='demfile', outdir='outdir', targetres=20, scaling='db', export_extra='inc_geo')
     """
     if normalization_method == 2 and func_interp != 2:
         raise RuntimeError('parameter func_interp must be set to 2 if normalization_method is set to 2; '
@@ -538,12 +553,15 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     images = [x for x in scene.getGammaImages(scene.scene) if x.endswith('_grd') or x.endswith('_slc_cal')]
     
+    products = list(images)
+    
     print('multilooking..')
     for image in images:
         multilook(infile=image, outfile=image + '_mli', targetres=targetres,
                   logpath=path_log, outdir=scene.scene, shellscript=shellscript)
     
     images = [x + '_mli' for x in images]
+    products.extend(images)
     
     master = images[0]
     
@@ -556,6 +574,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     # if sarSimCC:
     #     n.appreciate(['ccp', 'lut_fine'])
+    
+    n.appreciate(export_extra)
     
     ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
     
@@ -581,7 +601,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                    'shellscript': shellscript,
                    'outdir': scene.scene}
     
-    print('SAR image simulation from DEM..')
+    print('creating DEM products..')
     if master_par.image_geometry == 'GROUND_RANGE':
         gc_map_args.update({'GRD_par': master + '.par'})
         diff.gc_map_grd(**gc_map_args)
@@ -646,6 +666,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                             outdir=scene.scene,
                             shellscript=shellscript)
             par2hdr(n.dem_seg_geo + '.par', image + '_{}.hdr'.format(method_suffix))
+            products.extend([image + '_geo', image + '_geo_pan'])
     ######################################################################
     # normalization and backward geocoding approach 2 ####################
     ######################################################################
@@ -727,40 +748,71 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                             outdir=scene.scene,
                             shellscript=shellscript)
             par2hdr(n.dem_seg_geo + '.par', image + '_{}.hdr'.format(method_suffix))
+            products.extend([image + '_pan', image + '_pan_geo'])
     else:
         raise RuntimeError('unknown option for normalization_method')
     ######################################################################
     print('conversion to (dB and) geotiff..')
-    for image in images:
-        for scale in scaling:
-            if scale == 'db':
-                nodata_out = nodata[1]
-                lat.linear_to_dB(data_in=image + '_{}'.format(method_suffix),
-                                 data_out=image + '_{}_db'.format(method_suffix),
-                                 width=sim_width,
-                                 inverse_flag=0,
-                                 null_value=nodata_out,
-                                 logpath=path_log,
-                                 outdir=scene.scene,
-                                 shellscript=shellscript)
-                par2hdr(n.dem_seg_geo + '.par', image + '_{}_db.hdr'.format(method_suffix))
+    
+    def exporter(data_in, outdir, scale='linear', dtype=2, nodata_new=None):
+        if scale == 'db':
+            nodata_out = nodata[1]
+            if re.search('_geo', os.path.basename(data_in)):
+                width = sim_width
+                refpar = n.dem_seg_geo + '.par'
             else:
-                nodata_out = nodata[0]
-            suffix = {'linear': '', 'db': '_db'}[scale]
-            infile = image + '_{0}{1}'.format(method_suffix, suffix)
-            outfile = os.path.join(outdir, os.path.basename(image) + '_{0}{1}.tif'.format(method_suffix, suffix))
+                width = master_par.range_samples
+                refpar = master + '.par'
+            lat.linear_to_dB(data_in=data_in,
+                             data_out=data_in + '_db',
+                             width=width,
+                             inverse_flag=0,
+                             null_value=nodata_out,
+                             logpath=path_log,
+                             outdir=scene.scene,
+                             shellscript=shellscript)
+            par2hdr(refpar, data_in + '_db.hdr')
+            data_in += '_db'
+        else:
+            nodata_out = nodata[0] if nodata_new is None else nodata_new
+        if re.search('_geo', os.path.basename(data_in)):
+            outfile = os.path.join(outdir, os.path.basename(data_in) + '.tif')
             disp.data2geotiff(DEM_par=n.dem_seg_geo + '.par',
-                              data=infile,
-                              type=2,
+                              data=data_in,
+                              type=dtype,
                               GeoTIFF=outfile,
                               nodata=nodata_out,
                               logpath=path_log,
                               outdir=scene.scene,
                               shellscript=shellscript)
+        else:
+            outfile = os.path.join(outdir, os.path.basename(data_in))
+            shutil.copyfile(data_in, outfile)
+            shutil.copyfile(data_in + '.hdr', outfile + '.hdr')
+    
+    for image in images:
+        for scale in scaling:
+            exporter(image + '_{}'.format(method_suffix), outdir, scale, dtype=2)
     
     if scene.sensor in ['S1A', 'S1B']:
         shutil.copyfile(os.path.join(scene.scene, 'manifest.safe'),
                         os.path.join(outdir, scene.outname_base() + '_manifest.safe'))
+    
+    if export_extra is not None:
+        print('exporting extra products..')
+        for key in export_extra:
+            product_match = [x for x in products if x.endswith(key)]
+            if len(product_match) > 0:
+                for product in product_match:
+                    for scale in scaling:
+                        exporter(product, outdir, scale, dtype=2)
+            elif n.isfile(key) and key not in ['lut_init']:
+                filename = n[key]
+                dtype = 5 if key == 'ls_map_geo' else 2
+                nodata_new = 0 if key == 'ls_map_geo' else -99
+                exporter(filename, outdir, dtype=dtype, nodata_new=nodata_new)
+            else:
+                print('cannot not export file {}'.format(key))
     
     if cleanup:
         print('cleaning up temporary files..')
