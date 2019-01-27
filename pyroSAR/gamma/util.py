@@ -551,11 +551,11 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     # appreciated files will be written
     # depreciated files will be set to '-' in the GAMMA function call and are thus not written
     n = Namespace(scene.scene, scene.outname_base())
-    n.appreciate(['dem_seg_geo', 'lut_init', 'lut_fine', 'pix_geo', 'ccp', 'inc_geo', 'ls_map_geo'])
+    n.appreciate(['dem_seg_geo', 'lut_init', 'pix_geo', 'inc_geo', 'ls_map_geo'])
     n.depreciate(['sim_sar_geo', 'u_geo', 'v_geo', 'psi_geo'])
     
     # if sarSimCC:
-    #     n.appreciate(['ls_map_geo'])
+    #     n.appreciate(['ccp', 'lut_fine'])
     
     ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
     
@@ -594,7 +594,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         if n.isappreciated(item):
             mods = {'data_type': 1} if item == 'ls_map_geo' else None
             par2hdr(n.dem_seg_geo + '.par', n.get(item) + '.hdr', mods)
-            
+    
     sim_width = ISPPar(n.dem_seg_geo + '.par').width
     
     if sarSimCC:
@@ -757,6 +757,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                               logpath=path_log,
                               outdir=scene.scene,
                               shellscript=shellscript)
+    
     if scene.sensor in ['S1A', 'S1B']:
         shutil.copyfile(os.path.join(scene.scene, 'manifest.safe'),
                         os.path.join(outdir, scene.outname_base() + '_manifest.safe'))
