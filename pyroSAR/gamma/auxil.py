@@ -296,6 +296,9 @@ class Namespace(object):
         self.__outdir = directory
         self.__reg = []
     
+    def __getitem__(self, item):
+        return getattr(self, item.replace('.', '_'))
+    
     def appreciate(self, keys):
         for key in keys:
             setattr(self, key.replace('.', '_'), os.path.join(self.__outdir, self.__base + '_' + key))
@@ -325,6 +328,9 @@ class Namespace(object):
             if self.get(key) != '-':
                 return True
         return False
+    
+    def isfile(self, key):
+        return hasattr(self, key) and os.path.isfile(getattr(self, key))
     
     def get(self, key):
         return getattr(self, key)
