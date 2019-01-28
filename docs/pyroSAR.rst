@@ -64,13 +64,14 @@ SRTM tools
 ----------
 
 .. automodule:: pyroSAR.gamma.srtm
-    :members: dempar, fill, hgt, hgt_collect, makeSRTM, mosaic, swap
+    :members: dem_autocreate, dempar, fill, hgt, hgt_collect, makeSRTM, mosaic, swap
     :undoc-members:
     :show-inheritance:
 
     .. autosummary::
         :nosignatures:
 
+        dem_autocreate
         dempar
         fill
         hgt
@@ -146,6 +147,14 @@ Sentinel-1 Tools
 
 .. automodule:: pyroSAR.S1.auxil
     :members: OSV, removeGRDBorderNoise
+    :undoc-members:
+    :show-inheritance:
+
+Auxiliary Data Tools
+====================
+
+.. automodule:: pyroSAR.auxdata
+    :members: dem_autoload
     :undoc-members:
     :show-inheritance:
 

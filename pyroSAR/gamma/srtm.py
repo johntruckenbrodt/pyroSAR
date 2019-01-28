@@ -24,6 +24,7 @@ from spatialist import raster, gdal_translate, gdalbuildvrt, gdalwarp
 from spatialist.ancillary import finder
 from spatialist.envi import HDRobject
 
+from ..auxdata import dem_autoload
 from ..drivers import ID
 from . import ISPPar, UTM, slc_corners, par2hdr
 try:
@@ -140,6 +141,101 @@ def transform(infile, outfile, posting=90):
                    DEM2=outfile,
                    bflg=1)
     par2hdr(outfile + '.par', outfile + '.hdr')
+
+
+def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, username=None, password=None):
+    """
+    | automatically create a DEM in Gamma format for a defined spatial geometry
+    | the following steps will be performed:
+
+    - collect all tiles overlapping with the geometry
+
+      * if they don't yet exist locally they will automatically be downloaded
+      * the tiles will be downloaded into the SNAP auxdata directory structure, e.g. $HOME/.snap/auxdata/dem/SRTM 3Sec
+
+    - create a mosaic GeoTiff of the same spatial extent as the input geometry plus a defined buffer using gdalwarp
+    - subtract the EGM96-WGS84 Geoid-Ellipsoid difference and convert the result to Gamma format using Gamma command srtm2dem
+    
+      * this correction is not done for TanDEM-X data, which contains ellipsoid heights; see `here <https://geoservice.dlr.de/web/dataguide/tdm90>`_
+
+    Parameters
+    ----------
+    geometry: spatialist.vector.Vector
+        a vector geometry delimiting the output DEM size; CRS must be WGS84 LatLon (EPSG 4326)
+    demType: str
+        the type of DEM to be used; see :func:`~pyroSAR.auxdata.dem_autoload` for options
+    outfile: str
+        the name of the final DEM file
+    buffer: float
+        a buffer in degrees to create around the geometry
+    logpath: str
+        a directory to write Gamma logfiles to
+    username: str or None
+        (optional) the user name for services requiring registration; see :func:`~pyroSAR.auxdata.dem_autoload`
+    password: str or None
+        (optional) the password for the registration account
+
+    Returns
+    -------
+
+    """
+    if os.path.isfile(outfile):
+        print('outfile already exists')
+        return
+    
+    tmpdir = outfile + '__tmp'
+    os.makedirs(tmpdir)
+    
+    try:
+        if logpath is not None and not os.path.isdir(logpath):
+            os.makedirs(logpath)
+        
+        vrt = os.path.join(tmpdir, 'dem.vrt')
+        dem = os.path.join(tmpdir, 'dem.tif')
+        
+        print('collecting DEM tiles')
+        vrt = dem_autoload([geometry], demType, vrt=vrt, username=username, password=password)
+        
+        ext = geometry.extent
+        
+        ext['xmin'] -= buffer
+        ext['ymin'] -= buffer
+        ext['xmax'] += buffer
+        ext['ymax'] += buffer
+        
+        print('creating mosaic')
+        gdalwarp(vrt, dem, {'format': 'GTiff',
+                            'outputBounds': (ext['xmin'], ext['ymin'], ext['xmax'], ext['ymax'])})
+        
+        outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
+        
+        # The heights of the TanDEM-X DEM products are ellipsoidal heights, all others are EGM96 Geoid heights
+        # Gamma works only with Ellipsoid heights and the offset needs to be corrected
+        if demType == 'TDX90m':
+            gflg = 0
+            message = 'conversion to Gamma format'
+        else:
+            gflg =2
+            message = 'geoid correction and conversion to Gamma format'
+
+        print(message)
+        
+        diff.srtm2dem(SRTM_DEM=dem,
+                      DEM=outfile_tmp,
+                      DEM_par=outfile_tmp + '.par',
+                      gflg=gflg,
+                      geoid='-',
+                      logpath=logpath,
+                      outdir=tmpdir)
+        par2hdr(outfile_tmp + '.par', outfile_tmp + '.hdr')
+        
+        for suffix in ['', '.par', '.hdr']:
+            shutil.copyfile(outfile_tmp + suffix, outfile + suffix)
+        
+    except RuntimeError as e:
+        raise e
+    finally:
+        shutil.rmtree(tmpdir)
 
 
 def dempar(dem, logpath=None):

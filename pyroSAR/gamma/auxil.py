@@ -96,6 +96,9 @@ class ISPPar(object):
                 setattr(self, key, value)
         finally:
             par_file.close()
+
+        if hasattr(self, 'date'):
+            self.date = '{}-{:02d}-{:02d}T{:02d}:{:02d}:{:02f}'.format(*self.date)
     
     def __enter__(self):
         return self
@@ -109,13 +112,19 @@ class ISPPar(object):
                                                       sep=(maxlen - len(key)) * ' ',
                                                       value=getattr(self, key)) for key in self.keys])
     
-    def envidict(self):
+    def envidict(self, nodata=None):
         """
         export relevant metadata to a ENVI HDR file compliant format
+        
+        Parameters
+        ----------
+        nodata: str or None
+            a no data value to write to the HDR file via attribute 'data ignore value'
         
         Returns
         -------
         dict
+            a dictionary containing attributes translated to ENVI HDR naming
         """
         out = dict(bands=1,
                    header_offset=0,
@@ -125,16 +134,22 @@ class ISPPar(object):
                    byte_order=1,
                    wavelength_units='Unknown')
         
+        if hasattr(self, 'date'):
+            out['acquisition_time'] = self.date + 'Z'
+        
         out['samples'] = getattr(self, union(['width', 'range_samples', 'samples'], self.keys)[0])
         out['lines'] = getattr(self, union(['nlines', 'azimuth_lines', 'lines'], self.keys)[0])
         
         dtypes_lookup = {'FCOMPLEX': 6, 'FLOAT': 4, 'REAL*4': 4, 'INTEGER*2': 2, 'SHORT': 12}
         dtype = getattr(self, union(['data_format', 'image_format'], self.keys)[0])
         
-        if dtype == 'SCOMPLEX':
-            raise TypeError('unsupported data type: SCOMPLEX (2x16 bit complex)')
+        if dtype not in dtypes_lookup.keys():
+            raise TypeError('unsupported data type: {}'.format(dtype))
         
         out['data_type'] = dtypes_lookup[dtype]
+        
+        if nodata is not None:
+            out['data_ignore_value'] = nodata
         
         if out['data_type'] == 6:
             out['complex_function'] = 'Power'
@@ -152,11 +167,11 @@ class ISPPar(object):
                                    str(abs(float(self.post_lon))), str(abs(float(self.post_lat))),
                                    'WGS-84', 'units=Degrees']
             else:
-                raise RuntimeError('unsupported projection')
+                raise RuntimeError('unsupported projection: {}'.format(self.DEM_projection))
         return out
 
 
-def par2hdr(parfile, hdrfile, modifications=None):
+def par2hdr(parfile, hdrfile, modifications=None, nodata=None):
     """
     Create an ENVI HDR file from a Gamma PAR file
     
@@ -168,6 +183,8 @@ def par2hdr(parfile, hdrfile, modifications=None):
         the ENVI HDR file
     modifications: dict or None
         a dictionary containing value deviations to write to the HDR file
+    nodata: str or None
+        a no data value to write to the HDR file via attribute 'data ignore value'
 
     Returns
     -------
@@ -186,7 +203,7 @@ def par2hdr(parfile, hdrfile, modifications=None):
     """
     
     with ISPPar(parfile) as par:
-        items = par.envidict()
+        items = par.envidict(nodata)
         if modifications is not None:
             items.update(modifications)
         hdr(items, hdrfile)

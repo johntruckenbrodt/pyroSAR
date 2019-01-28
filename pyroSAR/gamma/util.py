@@ -495,8 +495,6 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     scene = scene if isinstance(scene, ID) else identify(scene)
     
-    shellscript = os.path.join(outdir, scene.outname_base() + '_commands.sh')
-    
     if scene.sensor not in ['S1A', 'S1B']:
         raise IOError('this method is currently only available for Sentinel-1. Please stay tuned...')
     
@@ -526,6 +524,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     else:
         scene.scene = os.path.join(tempdir, os.path.basename(scene.file))
         os.makedirs(scene.scene)
+    
+    shellscript = os.path.join(scene.scene, scene.outname_base() + '_commands.sh')
     
     path_log = os.path.join(scene.scene, 'logfiles')
     if not os.path.isdir(path_log):
@@ -786,6 +786,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                               logpath=path_log,
                               outdir=scene.scene,
                               shellscript=shellscript)
+        
         else:
             outfile = os.path.join(outdir, os.path.basename(data_in))
             shutil.copyfile(data_in, outfile)
@@ -814,6 +815,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                 exporter(filename, outdir, dtype=dtype, nodata_new=nodata_new)
             else:
                 print('cannot not export file {}'.format(key))
+
+    shutil.copyfile(shellscript, os.path.join(outdir, os.path.basename(shellscript)))
     
     if cleanup:
         print('cleaning up temporary files..')
