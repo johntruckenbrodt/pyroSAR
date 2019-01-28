@@ -358,7 +358,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
     # read parameter file entries int object
     with ISPPar(images[0] + '.par') as par:
         # extract acquisition time stamp
-        timestamp = datetime(*map(int, par.date)).strftime('%Y%m%dT%H%M%S')
+        timestamp = datetime.strptime(par.date, '%Y-%m-%dT%H:%M:%S.%f').strftime('%Y%m%dT%H%M%S')
     
     # find an OSV file matching the time stamp and defined OSV type(s)
     with OSV(osvdir) as osv:
@@ -815,7 +815,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                 exporter(filename, outdir, dtype=dtype, nodata_new=nodata_new)
             else:
                 print('cannot not export file {}'.format(key))
-
+    
     shutil.copyfile(shellscript, os.path.join(outdir, os.path.basename(shellscript)))
     
     if cleanup:
