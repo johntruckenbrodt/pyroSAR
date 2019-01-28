@@ -442,7 +442,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     Note
     ----
     | intermediate output files
-    | named <scene identifier>_<ID>, e.g. `S1A__IW___A_20141012T162337_inc_geo`
+    | DEM products are named <scene identifier>_<ID>, e.g. `S1A__IW___A_20141012T162337_inc_geo`
+    | SAR products will additionally contain the polarization, e.g. `S1A__IW___A_20141012T162337_VV_grd_mli`
     | IDs in brackets are only written if selected by `export_extra`
     
     * images in range-Doppler geometry
@@ -486,7 +487,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     >>> from pyroSAR.gamma import geocode
     >>> filename = 'S1A_IW_GRDH_1SDV_20141012T162337_20141012T162402_002799_00326F_8197.zip'
-    >>> geocode(scene=filename, dem='demfile', outdir='outdir', targetres=20, scaling='db', export_extra='inc_geo')
+    >>> geocode(scene=filename, dem='demfile', outdir='outdir', targetres=20, scaling='db', export_extra=['inc_geo'])
     """
     if normalization_method == 2 and func_interp != 2:
         raise RuntimeError('parameter func_interp must be set to 2 if normalization_method is set to 2; '
