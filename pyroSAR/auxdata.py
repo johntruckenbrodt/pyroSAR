@@ -105,7 +105,7 @@ class DEMHandler:
         files = list(set(filenames))
         locals = []
         for file in files:
-            infile = os.path.join(url, file)
+            infile = '{}/{}'.format(url, file)
             outfile = os.path.join(outdir, file)
             if not os.path.isfile(outfile):
                 try:
