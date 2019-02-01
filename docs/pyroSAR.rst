@@ -43,7 +43,7 @@ GAMMA Processing
 ================
 
 .. automodule:: pyroSAR.gamma
-    :members: geocode, convert2gamma, ISPPar, process, ovs, S1_deburst, correctOSV, multilook
+    :members: geocode, convert2gamma, ISPPar, process, ovs, S1_deburst, correctOSV, multilook, par2hdr
     :undoc-members:
     :show-inheritance:
 
@@ -58,6 +58,7 @@ GAMMA Processing
         ovs
         process
         S1_deburst
+        par2hdr
 
 SRTM tools
 ----------

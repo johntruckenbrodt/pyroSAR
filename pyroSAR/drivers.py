@@ -178,7 +178,7 @@ class ID(object):
             return bbox(self.getCorners(), self.projection)
         else:
             bbox(self.getCorners(), self.projection, outname=outname, format='ESRI Shapefile',
-                         overwrite=overwrite)
+                 overwrite=overwrite)
     
     @property
     def compression(self):
@@ -368,7 +368,7 @@ class ID(object):
                 raise IOError(
                     'directory missing; please provide directory to function or define object attribute "gammadir"')
         return [x for x in finder(directory, [self.outname_base()], regex=True) if
-                not re.search('\.(?:par|hdr|aux\.xml|swp)$', x)]
+                not re.search('\.(?:par|hdr|aux\.xml|swp|sh)$', x)]
     
     def getHGT(self):
         """

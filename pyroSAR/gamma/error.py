@@ -43,7 +43,8 @@ def gammaErrorHandler(out, err):
                    'no OPOD state vector found with the required start time!': RuntimeError,
                    'gc_map operates only with slant range geometry, image geometry in SLC_par: GROUND_RANGE': RuntimeError,
                    'OPOD state vector data ends before start of the state vector time window': RuntimeError,
-                   'non-zero exit status': RuntimeError}
+                   'non-zero exit status': RuntimeError,
+                   'unsupported DEM projection': RuntimeError}
 
     # check if the error message is known and throw the mapped error from knownErrors accordingly.
     # Otherwise throw an GammaUnknownError.
