@@ -337,7 +337,7 @@ class OSV(object):
             downloads = [x for x in files
                          if re.search('{}ORB'.format(type), x) and
                          not os.path.isfile(os.path.join(outdir, os.path.basename(x)))]
-            print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
+            # print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
             for remote in downloads:
                 local = os.path.join(outdir, os.path.basename(remote))
                 infile = urlopen(remote, context=self.sslcontext)

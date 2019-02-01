@@ -171,7 +171,7 @@ class ISPPar(object):
         return out
 
 
-def par2hdr(parfile, hdrfile, nodata=None):
+def par2hdr(parfile, hdrfile, modifications=None, nodata=None):
     """
     Create an ENVI HDR file from a Gamma PAR file
     
@@ -181,15 +181,32 @@ def par2hdr(parfile, hdrfile, nodata=None):
         the Gamma parfile
     hdrfile: str
         the ENVI HDR file
+    modifications: dict or None
+        a dictionary containing value deviations to write to the HDR file
     nodata: str or None
         a no data value to write to the HDR file via attribute 'data ignore value'
 
     Returns
     -------
-
+    
+    Examples
+    --------
+    >>> from pyroSAR.gamma.auxil import par2hdr
+    >>> par2hdr('dem_seg.par', 'inc.hdr')
+    # write a HDR file for byte data based on a parfile of float data
+    >>> par2hdr('dem_seg.par', 'ls_map.hdr', modifications={'data_type': 1})
+    
+    See Also
+    --------
+    :class:`spatialist.envi.HDRobject`
+    :func:`spatialist.envi.hdr`
     """
+    
     with ISPPar(parfile) as par:
-        hdr(par.envidict(nodata), hdrfile)
+        items = par.envidict(nodata)
+        if modifications is not None:
+            items.update(modifications)
+        hdr(items, hdrfile)
 
 
 class UTM(object):
@@ -296,6 +313,9 @@ class Namespace(object):
         self.__outdir = directory
         self.__reg = []
     
+    def __getitem__(self, item):
+        return getattr(self, item.replace('.', '_'))
+    
     def appreciate(self, keys):
         for key in keys:
             setattr(self, key.replace('.', '_'), os.path.join(self.__outdir, self.__base + '_' + key))
@@ -325,6 +345,9 @@ class Namespace(object):
             if self.get(key) != '-':
                 return True
         return False
+    
+    def isfile(self, key):
+        return hasattr(self, key) and os.path.isfile(getattr(self, key))
     
     def get(self, key):
         return getattr(self, key)
