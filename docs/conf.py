@@ -34,7 +34,7 @@ version = '0.7'
 # The full version, including alpha/beta/rc tags.
 release = '0.7'
 
-autodoc_mock_imports = ['osgeo']
+autodoc_mock_imports = ['osgeo', 'sqlite3']
 
 # If your documentation needs a minimal Sphinx version, state it here.
 needs_sphinx = '1.6'
