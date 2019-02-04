@@ -43,7 +43,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
     vrt: str or None
         an optional GDAL VRT file created from the obtained DEM tiles
-    buffer: int or str
+    buffer: int or float
         a buffer in degrees to add around the individual geometries
     username: str or None
         (optional) the user name for services requiring registration
@@ -190,7 +190,7 @@ class DEMHandler:
         ----------
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
-        buffer: int or str
+        buffer: int or float
             a buffer in degrees to add around the individual geometries
         
         Returns
@@ -234,7 +234,7 @@ class DEMHandler:
         ----------
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
-        buffer: int or str
+        buffer: int or float
             a buffer in degrees to add around the individual geometries
         
         Returns
@@ -283,7 +283,7 @@ class DEMHandler:
         ----------
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
-        buffer: int or str
+        buffer: int or float
             a buffer in degrees to add around the individual geometries
         
         Returns
@@ -320,7 +320,7 @@ class DEMHandler:
             the user password
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
-        buffer: int or str
+        buffer: int or float
             a buffer in degrees to add around the individual geometries
 
         Returns
