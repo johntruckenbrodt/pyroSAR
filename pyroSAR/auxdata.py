@@ -163,6 +163,12 @@ class DEMHandler:
         outdir = os.path.join(self.auxdatapath, 'dem', 'AW3D30')
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
+
+        def index(x, y):
+            return '{}{:03d}{}{:03d}'.format('S' if y < 0 else 'N', abs(y),
+                                             'W' if x < 0 else 'E', abs(x))
+        
+        files = []
         for geo in self.geometries:
             corners = geo.extent
             xmin = int(corners['xmin'] // 5)
@@ -170,20 +176,17 @@ class DEMHandler:
             ymin = int(corners['ymin'] // 5)
             ymax = int(corners['ymax'] // 5)
             
-            def index(x, y):
-                return '{}{:03d}{}{:03d}'.format('S' if y < 0 else 'N', abs(y),
-                                                 'W' if x < 0 else 'E', abs(x))
-            
-            files = []
             for x in range(xmin, xmax + 1):
                 for y in range(ymin, ymax + 1):
-                    files.append('{}_{}.tar.gz'.format(index(x * 5, y * 5), index(x * 5 + 5, y * 5 + 5)))
-            locals = self.__retrieve(url, files, outdir)
-            if vrt is not None:
-                locals = ['/vsitar/' + x for x in dissolve([finder(x, ['*DSM.tif']) for x in locals])]
-                gdalbuildvrt(src=locals, dst=vrt)
-                return vrt
-            return locals
+                    files.append('{}_{}.tar.gz'.format(index(x * 5, y * 5),
+                                                       index(x * 5 + 5, y * 5 + 5)))
+        
+        locals = self.__retrieve(url, files, outdir)
+        if vrt is not None:
+            locals = ['/vsitar/' + x for x in dissolve([finder(x, ['*DSM.tif']) for x in locals])]
+            gdalbuildvrt(src=locals, dst=vrt)
+            return vrt
+        return locals
     
     def srtm_1sec_hgt(self, vrt=None):
         """
@@ -280,6 +283,7 @@ class DEMHandler:
         url = 'tandemx-90m.dlr.de'
         outdir = os.path.join(self.auxdatapath, 'dem', 'TDX90m')
         
+        remotes = []
         for geo in self.geometries:
             corners = geo.extent
             lat = range(int(float(corners['ymin']) // 1), int(float(corners['ymax']) // 1) + 1)
@@ -292,16 +296,15 @@ class DEMHandler:
             lon_id = [str(x).zfill(3 + len(str(x)) - len(str(x).strip('-'))) for x in lon]
             lon_id = [x.replace('-', 'W') if '-' in x else 'E' + x for x in lon_id]
             
-            remotes = []
             for x in lon_id:
                 for y in lat_id:
                     xr = int(x[1:]) // 10 * 10
                     remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
                                    .format(x=x, xr=xr, y=y, hem=x[0]))
             
-            locals = self.__retrieve_ftp(url, remotes, outdir, username=username, password=password)
-            if vrt is not None:
-                locals = ['/vsizip/' + finder(x, ['*_DEM.tif'])[0] for x in locals]
-                gdalbuildvrt(src=locals, dst=vrt)
-                return vrt
-            return locals
+        locals = self.__retrieve_ftp(url, remotes, outdir, username=username, password=password)
+        if vrt is not None:
+            locals = ['/vsizip/' + finder(x, ['*_DEM.tif'])[0] for x in locals]
+            gdalbuildvrt(src=locals, dst=vrt)
+            return vrt
+        return locals
