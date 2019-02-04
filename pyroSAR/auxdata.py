@@ -14,7 +14,7 @@ from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt
 
 
-def dem_autoload(geometries, demType, vrt=None, username=None, password=None):
+def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None):
     """
     obtain all relevant DEM tiles for selected geometries
 
@@ -44,6 +44,8 @@ def dem_autoload(geometries, demType, vrt=None, username=None, password=None):
 
     vrt: str or None
         an optional GDAL VRT file created from the obtained DEM tiles
+    buffer: int or str
+        a buffer in degrees to add around the individual geometries
     username: str or None
         (optional) the user name for services requiring registration
     password: str or None
@@ -56,17 +58,18 @@ def dem_autoload(geometries, demType, vrt=None, username=None, password=None):
     """
     with DEMHandler(geometries) as handler:
         if demType == 'AW3D30':
-            return handler.aw3d30(vrt)
+            return handler.aw3d30(vrt, buffer)
         elif demType == 'SRTM 1Sec HGT':
-            return handler.srtm_1sec_hgt(vrt)
+            return handler.srtm_1sec_hgt(vrt, buffer)
         elif demType == 'SRTM 3Sec':
-            return handler.srtm_3sec(vrt)
+            return handler.srtm_3sec(vrt, buffer)
         elif demType == 'TDX90m':
             return handler.tdx90m(username=username,
                                   password=password,
-                                  vrt=vrt)
+                                  vrt=vrt,
+                                  buffer=buffer)
         else:
-            raise RuntimeError('demType unknown')
+            raise RuntimeError('demType unknown: {}'.format(demType))
 
 
 class DEMHandler:
@@ -100,7 +103,17 @@ class DEMHandler:
     def __exit__(self, exc_type, exc_val, exc_tb):
         return
     
-    def __commonextent(self):
+    @staticmethod
+    def __applybuffer(extent, buffer):
+        ext = dict(extent)
+        if buffer is not None:
+            ext['xmin'] -= buffer
+            ext['xmax'] += buffer
+            ext['ymin'] -= buffer
+            ext['ymax'] += buffer
+        return ext
+    
+    def __commonextent(self, buffer=None):
         ext_new = {}
         for geo in self.geometries:
             if len(ext_new.keys()) == 0:
@@ -112,6 +125,7 @@ class DEMHandler:
                 for key in ['xmax', 'ymax']:
                     if geo.extent[key] > ext_new[key]:
                         ext_new[key] = geo.extent[key]
+        ext_new = self.__applybuffer(ext_new, buffer)
         return ext_new
     
     @staticmethod
@@ -124,6 +138,8 @@ class DEMHandler:
     @staticmethod
     def __retrieve(url, filenames, outdir):
         files = list(set(filenames))
+        if not os.path.isdir(outdir):
+            os.makedirs(outdir)
         locals = []
         for file in files:
             infile = '{}/{}'.format(url, file)
@@ -166,7 +182,7 @@ class DEMHandler:
         ftps.close()
         return locals
     
-    def aw3d30(self, vrt=None):
+    def aw3d30(self, vrt=None, buffer=None):
         """
         obtain ALOS Global Digital Surface Model "ALOS World 3D - 30m (AW3D30)"
         
@@ -174,7 +190,9 @@ class DEMHandler:
         ----------
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
-
+        buffer: int or str
+            a buffer in degrees to add around the individual geometries
+        
         Returns
         -------
         list or str
@@ -182,8 +200,6 @@ class DEMHandler:
         """
         url = 'ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804'
         outdir = os.path.join(self.auxdatapath, 'dem', 'AW3D30')
-        if not os.path.isdir(outdir):
-            os.makedirs(outdir)
         
         def index(x, y):
             return '{}{:03d}{}{:03d}'.format('S' if y < 0 else 'N', abs(y),
@@ -191,7 +207,7 @@ class DEMHandler:
         
         files = []
         for geo in self.geometries:
-            corners = geo.extent
+            corners = self.__applybuffer(geo.extent, buffer)
             xmin = int(corners['xmin'] // 5)
             xmax = int(corners['xmax'] // 5)
             ymin = int(corners['ymin'] // 5)
@@ -205,11 +221,11 @@ class DEMHandler:
         locals = self.__retrieve(url, files, outdir)
         if vrt is not None:
             self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*DSM.tif',
-                            vsi='/vsitar/', extent=self.__commonextent())
+                            vsi='/vsitar/', extent=self.__commonextent(buffer))
             return vrt
         return locals
     
-    def srtm_1sec_hgt(self, vrt=None):
+    def srtm_1sec_hgt(self, vrt=None, buffer=None):
         """
         obtain SRTM 1arcsec DEM tiles in HGT format
         
@@ -217,7 +233,9 @@ class DEMHandler:
         ----------
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
-
+        buffer: int or str
+            a buffer in degrees to add around the individual geometries
+        
         Returns
         -------
         list or str
@@ -229,11 +247,13 @@ class DEMHandler:
         files = []
         
         for geo in self.geometries:
-            corners = geo.extent
+            corners = self.__applybuffer(geo.extent, buffer)
             
             # generate sequence of integer coordinates marking the tie points of the overlapping hgt tiles
-            lat = range(int(float(corners['ymin']) // 1), int(float(corners['ymax']) // 1) + 1)
-            lon = range(int(float(corners['xmin']) // 1), int(float(corners['xmax']) // 1) + 1)
+            lat = range(int(float(corners['ymin']) // 1),
+                        int(float(corners['ymax']) // 1) + 1)
+            lon = range(int(float(corners['xmin']) // 1),
+                        int(float(corners['xmax']) // 1) + 1)
             
             # convert coordinates to string with leading zeros and hemisphere identification letter
             lat = [str(x).zfill(2 + len(str(x)) - len(str(x).strip('-'))) for x in lat]
@@ -249,11 +269,11 @@ class DEMHandler:
         
         if vrt is not None:
             self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*.hgt',
-                            vsi='/vsizip/', extent=self.__commonextent())
+                            vsi='/vsizip/', extent=self.__commonextent(buffer))
             return vrt
         return locals
     
-    def srtm_3sec(self, vrt=None):
+    def srtm_3sec(self, vrt=None, buffer=None):
         """
         obtain SRTM 3arcsec DEM tiles in GeoTiff format
         
@@ -261,7 +281,9 @@ class DEMHandler:
         ----------
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
-
+        buffer: int or str
+            a buffer in degrees to add around the individual geometries
+        
         Returns
         -------
         list or str
@@ -271,18 +293,18 @@ class DEMHandler:
         outdir = os.path.join(self.auxdatapath, 'dem', 'SRTM 3Sec')
         files = []
         for geo in self.geometries:
-            corners = geo.extent
+            corners = self.__applybuffer(geo.extent, buffer)
             x_id = [int((corners[x] + 180) // 5) + 1 for x in ['xmin', 'xmax']]
             y_id = [int((60 - corners[x]) // 5) + 1 for x in ['ymin', 'ymax']]
             files.extend(['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in x_id for y in y_id])
         locals = self.__retrieve(url, files, outdir)
         if vrt is not None:
             self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*.tif',
-                            vsi='/vsizip/', extent=self.__commonextent())
+                            vsi='/vsizip/', extent=self.__commonextent(buffer))
             return vrt
         return locals
     
-    def tdx90m(self, username, password, vrt=None):
+    def tdx90m(self, username, password, vrt=None, buffer=None):
         """
         | obtain TanDEM-X 90 m DEM tiles in GeoTiff format
         | registration via DLR is necessary, see https://geoservice.dlr.de/web/dataguide/tdm90
@@ -295,6 +317,8 @@ class DEMHandler:
             the user password
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
+        buffer: int or str
+            a buffer in degrees to add around the individual geometries
 
         Returns
         -------
@@ -306,9 +330,11 @@ class DEMHandler:
         
         remotes = []
         for geo in self.geometries:
-            corners = geo.extent
-            lat = range(int(float(corners['ymin']) // 1), int(float(corners['ymax']) // 1) + 1)
-            lon = range(int(float(corners['xmin']) // 1), int(float(corners['xmax']) // 1) + 1)
+            corners = self.__applybuffer(geo.extent, buffer)
+            lat = range(int(float(corners['ymin']) // 1),
+                        int(float(corners['ymax']) // 1) + 1)
+            lon = range(int(float(corners['xmin']) // 1),
+                        int(float(corners['xmax']) // 1) + 1)
             
             # convert coordinates to string with leading zeros and hemisphere identification letter
             lat_id = [str(x).zfill(2 + len(str(x)) - len(str(x).strip('-'))) for x in lat]
@@ -326,6 +352,6 @@ class DEMHandler:
         locals = self.__retrieve_ftp(url, remotes, outdir, username=username, password=password)
         if vrt is not None:
             self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*_DEM.tif',
-                            vsi='/vsizip/', extent=self.__commonextent())
+                            vsi='/vsizip/', extent=self.__commonextent(buffer))
             return vrt
         return locals
