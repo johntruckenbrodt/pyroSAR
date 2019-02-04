@@ -9,7 +9,6 @@ else:
     from urllib2 import urlopen, HTTPError
 
 from .snap import ExamineSnap
-
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt
 
@@ -129,11 +128,12 @@ class DEMHandler:
         return ext_new
     
     @staticmethod
-    def __buildvrt(archives, vrtfile, pattern, vsi, extent):
+    def __buildvrt(archives, vrtfile, pattern, vsi, extent, nodata):
         locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in archives])]
         gdalbuildvrt(src=locals, dst=vrtfile,
                      options={'outputBounds': (extent['xmin'], extent['ymin'],
-                                               extent['xmax'], extent['ymax'])})
+                                               extent['xmax'], extent['ymax']),
+                              'srcNodata': nodata})
     
     @staticmethod
     def __retrieve(url, filenames, outdir):
@@ -221,7 +221,8 @@ class DEMHandler:
         locals = self.__retrieve(url, files, outdir)
         if vrt is not None:
             self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*DSM.tif',
-                            vsi='/vsitar/', extent=self.__commonextent(buffer))
+                            vsi='/vsitar/', extent=self.__commonextent(buffer),
+                            nodata=-9999)
             return vrt
         return locals
     
@@ -269,7 +270,8 @@ class DEMHandler:
         
         if vrt is not None:
             self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*.hgt',
-                            vsi='/vsizip/', extent=self.__commonextent(buffer))
+                            vsi='/vsizip/', extent=self.__commonextent(buffer),
+                            nodata=-32768.0)
             return vrt
         return locals
     
@@ -300,7 +302,8 @@ class DEMHandler:
         locals = self.__retrieve(url, files, outdir)
         if vrt is not None:
             self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*.tif',
-                            vsi='/vsizip/', extent=self.__commonextent(buffer))
+                            vsi='/vsizip/', extent=self.__commonextent(buffer),
+                            nodata=-32768.0)
             return vrt
         return locals
     
@@ -352,6 +355,7 @@ class DEMHandler:
         locals = self.__retrieve_ftp(url, remotes, outdir, username=username, password=password)
         if vrt is not None:
             self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*_DEM.tif',
-                            vsi='/vsizip/', extent=self.__commonextent(buffer))
+                            vsi='/vsizip/', extent=self.__commonextent(buffer),
+                            nodata=-32767.0)
             return vrt
         return locals
