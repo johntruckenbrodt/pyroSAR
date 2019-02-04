@@ -100,6 +100,27 @@ class DEMHandler:
     def __exit__(self, exc_type, exc_val, exc_tb):
         return
     
+    def __commonextent(self):
+        ext_new = {}
+        for geo in self.geometries:
+            if len(ext_new.keys()) == 0:
+                ext_new = geo.extent
+            else:
+                for key in ['xmin', 'ymin']:
+                    if geo.extent[key] < ext_new[key]:
+                        ext_new[key] = geo.extent[key]
+                for key in ['xmax', 'ymax']:
+                    if geo.extent[key] > ext_new[key]:
+                        ext_new[key] = geo.extent[key]
+        return ext_new
+    
+    @staticmethod
+    def __buildvrt(archives, vrtfile, pattern, vsi, extent):
+        locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in archives])]
+        gdalbuildvrt(src=locals, dst=vrtfile,
+                     options={'outputBounds': (extent['xmin'], extent['ymin'],
+                                               extent['xmax'], extent['ymax'])})
+    
     @staticmethod
     def __retrieve(url, filenames, outdir):
         files = list(set(filenames))
@@ -163,7 +184,7 @@ class DEMHandler:
         outdir = os.path.join(self.auxdatapath, 'dem', 'AW3D30')
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
-
+        
         def index(x, y):
             return '{}{:03d}{}{:03d}'.format('S' if y < 0 else 'N', abs(y),
                                              'W' if x < 0 else 'E', abs(x))
@@ -183,8 +204,8 @@ class DEMHandler:
         
         locals = self.__retrieve(url, files, outdir)
         if vrt is not None:
-            locals = ['/vsitar/' + x for x in dissolve([finder(x, ['*DSM.tif']) for x in locals])]
-            gdalbuildvrt(src=locals, dst=vrt)
+            self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*DSM.tif',
+                            vsi='/vsitar/', extent=self.__commonextent())
             return vrt
         return locals
     
@@ -227,8 +248,8 @@ class DEMHandler:
         locals = self.__retrieve(url, files, outdir)
         
         if vrt is not None:
-            locals = ['/vsizip/' + finder(x, ['*.hgt'])[0] for x in locals]
-            gdalbuildvrt(src=locals, dst=vrt)
+            self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*.hgt',
+                            vsi='/vsizip/', extent=self.__commonextent())
             return vrt
         return locals
     
@@ -256,8 +277,8 @@ class DEMHandler:
             files.extend(['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in x_id for y in y_id])
         locals = self.__retrieve(url, files, outdir)
         if vrt is not None:
-            locals = ['/vsizip/' + finder(x, ['*.tif'])[0] for x in locals]
-            gdalbuildvrt(src=locals, dst=vrt)
+            self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*.tif',
+                            vsi='/vsizip/', extent=self.__commonextent())
             return vrt
         return locals
     
@@ -301,10 +322,10 @@ class DEMHandler:
                     xr = int(x[1:]) // 10 * 10
                     remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
                                    .format(x=x, xr=xr, y=y, hem=x[0]))
-            
+        
         locals = self.__retrieve_ftp(url, remotes, outdir, username=username, password=password)
         if vrt is not None:
-            locals = ['/vsizip/' + finder(x, ['*_DEM.tif'])[0] for x in locals]
-            gdalbuildvrt(src=locals, dst=vrt)
+            self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*_DEM.tif',
+                            vsi='/vsizip/', extent=self.__commonextent())
             return vrt
         return locals
