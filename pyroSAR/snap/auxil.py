@@ -384,7 +384,9 @@ class ExamineSnap(object):
             self.properties = auxdata_properties
             return
         
-        warnings.warn('SNAP could not be identified')
+        warnings.warn('SNAP could not be identified. If you have installed it please add the path to the SNAP '
+                      'executables (bin subdirectory) to the PATH environment. '
+                      'E.g. in the Linux .bashrc file add the following line:\nexport PATH=$PATH:path/to/snap/bin"')
     
     def __read_config(self):
         """

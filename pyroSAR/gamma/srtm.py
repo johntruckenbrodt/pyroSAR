@@ -194,18 +194,10 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
         dem = os.path.join(tmpdir, 'dem.tif')
         
         print('collecting DEM tiles')
-        vrt = dem_autoload([geometry], demType, vrt=vrt, username=username, password=password)
-        
-        ext = geometry.extent
-        
-        ext['xmin'] -= buffer
-        ext['ymin'] -= buffer
-        ext['xmax'] += buffer
-        ext['ymax'] += buffer
+        vrt = dem_autoload([geometry], demType, vrt=vrt, username=username, password=password, buffer=buffer)
         
         print('creating mosaic')
-        gdalwarp(vrt, dem, {'format': 'GTiff',
-                            'outputBounds': (ext['xmin'], ext['ymin'], ext['xmax'], ext['ymax'])})
+        gdalwarp(vrt, dem, {'format': 'GTiff'})
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
