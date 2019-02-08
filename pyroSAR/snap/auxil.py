@@ -261,8 +261,12 @@ def gpt(xmlfile):
                             'format': 'GTiff',
                             'noData': 0}
         for item in finder(outname, ['*.img']):
-            pol = re.search('[HV]{2}', item).group()
-            name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
+            if re.search('Angle', item):
+                base = os.path.splitext(os.path.basename(item))[0]
+                name_new = outname.replace(suffix, '{0}.tif'.format(base))
+            else:
+                pol = re.search('[HV]{2}', item).group()
+                name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
             gdal_translate(item, name_new, translateoptions)
         shutil.rmtree(outname)
     elif format == 'GeoTiff-BigTIFF':
