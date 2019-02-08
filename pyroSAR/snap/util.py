@@ -1,6 +1,6 @@
 ####################################################################
 # Convenience functions for SAR image batch processing with ESA SNAP
-# John Truckenbrodt, 2016-2018
+# John Truckenbrodt, 2016-2019
 ####################################################################
 import os
 
@@ -12,7 +12,8 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BoderNoise=True, offset=None, externalDEMFile=None,
-            externalDEMNoDataValue=None, externalDEMApplyEGM=True, basename_extensions=None, test=False):
+            externalDEMNoDataValue=None, externalDEMApplyEGM=True, basename_extensions=None, test=False,
+            export_extra=None):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -53,6 +54,11 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     test: bool, optional
         If set to True the workflow xml file is only written and not executed. Default is False.
+    export_extra: list or None
+        a list of image file IDs to be exported to outdir: the following IDs are currently supported:
+         * incidenceAngleFromEllipsoid
+         * localIncidenceAngle
+         * projectedLocalIncidenceAngle
 
     Note
     ----
@@ -103,7 +109,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     else:
         raise RuntimeError('polarizations must be of type str or list')
     
-    format = 'GeoTiff-BigTIFF' if len(polarizations) == 1 else 'ENVI'
+    format = 'GeoTiff-BigTIFF' if len(polarizations) == 1 and export_extra is None else 'ENVI'
     # print(polarizations)
     # print(format)
     
@@ -229,7 +235,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         #print('--- create bbox')
         with bbox(ext, shp.srs) as bounds:
             # print('--- intersect')
-            print(shapefile.srs)
             inter = intersect(id.bbox(), bounds)
             if not inter:
                 raise RuntimeError('no bounding box intersection between shapefile and scene')
@@ -273,6 +278,17 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     write = workflow.find('.//node[@id="Write"]')
     write.find('.//parameters/file').text = outname
     write.find('.//parameters/formatName').text = format
+    ############################################
+    ############################################
+    if export_extra is not None:
+        write = parse_node('Write')
+        insert_node(workflow, write, before=tc.attrib['id'])
+        write.attrib['id'] = 'Write (2)'
+        write.find('.//parameters/file').text = outname
+        write.find('.//parameters/formatName').text = format
+        for item in export_extra:
+            key = 'save{}{}'.format(item[0].upper(), item[1:])
+            tc.find('.//parameters/{}'.format(key)).text = 'true'
     ############################################
     ############################################
     # select DEM type
