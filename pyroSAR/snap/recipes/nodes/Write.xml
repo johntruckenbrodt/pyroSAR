@@ -1,0 +1,10 @@
+<node id="Write">
+<operator>Write</operator>
+<sources>
+  <sourceProduct refid="LinearToFromdB"/>
+</sources>
+<parameters class="com.bc.ceres.binding.dom.XppDomElement">
+  <file/>
+  <formatName/>
+</parameters>
+</node>
