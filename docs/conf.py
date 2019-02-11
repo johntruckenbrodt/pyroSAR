@@ -30,9 +30,9 @@ sys.path.insert(0, os.path.abspath('..'))
 # built documents.
 #
 # The short X.Y version.
-version = '0.7'
+version = '0.8'
 # The full version, including alpha/beta/rc tags.
-release = '0.7'
+release = '0.8'
 
 autodoc_mock_imports = ['osgeo', 'sqlite3']
 
