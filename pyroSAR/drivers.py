@@ -278,7 +278,7 @@ class ID(object):
         dict
             the metadata attributes
         """
-        files = self.findfiles('(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)')
+        files = self.findfiles(r'(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)')
         
         if len(files) == 1:
             prefix = {'zip': '/vsizip/', 'tar': '/vsitar/', None: ''}[self.compression]
@@ -368,7 +368,7 @@ class ID(object):
                 raise IOError(
                     'directory missing; please provide directory to function or define object attribute "gammadir"')
         return [x for x in finder(directory, [self.outname_base()], regex=True) if
-                not re.search('\.(?:par|hdr|aux\.xml|swp|sh)$', x)]
+                not re.search(r'\.(?:par|hdr|aux\.xml|swp|sh)$', x)]
     
     def getHGT(self):
         """
@@ -638,7 +638,7 @@ class CEOS_ERS(ID):
     
     def unpack(self, directory, overwrite=False):
         if self.sensor in ['ERS1', 'ERS2']:
-            base_file = re.sub('\.PS$', '', os.path.basename(self.file))
+            base_file = re.sub(r'\.PS$', '', os.path.basename(self.file))
             base_dir = os.path.basename(directory.strip('/'))
             
             outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
@@ -810,7 +810,7 @@ class CEOS_PSR(ID):
             return {}
         text = summary_file.getvalue().decode('utf-8').strip()
         summary_file.close()
-        summary = ast.literal_eval('{"' + re.sub('\s*=', '":', text).replace('\n', ',"') + '}')
+        summary = ast.literal_eval('{"' + re.sub(r'\s*=', '":', text).replace('\n', ',"') + '}')
         for x, y in summary.items():
             summary[x] = parse_literal(y)
         return summary
@@ -839,8 +839,8 @@ class CEOS_PSR(ID):
             try:
                 start_string = re.search('Img_SceneStartDateTime[ ="0-9:.]*', led).group()
                 stop_string = re.search('Img_SceneEndDateTime[ ="0-9:.]*', led).group()
-                meta['start'] = self.parse_date(re.search('\d+\s[\d:.]+', start_string).group())
-                meta['stop'] = self.parse_date(re.search('\d+\s[\d:.]+', stop_string).group())
+                meta['start'] = self.parse_date(re.search(r'\d+\s[\d:.]+', start_string).group())
+                meta['stop'] = self.parse_date(re.search(r'\d+\s[\d:.]+', stop_string).group())
             except AttributeError:
                 raise IndexError('start and stop time stamps cannot be extracted; see file {}'
                                  .format(self.led_filename))
@@ -1123,7 +1123,7 @@ class ESA(ID):
         return meta
     
     def unpack(self, directory, overwrite=False):
-        base_file = os.path.basename(self.file).strip('\.zip|\.tar(?:\.gz|)')
+        base_file = os.path.basename(self.file).strip(r'\.zip|\.tar(?:\.gz|)')
         base_dir = os.path.basename(directory.strip('/'))
         
         outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
@@ -1966,7 +1966,7 @@ def getFileObj(scene, filename):
     ~io.BytesIO
         a file object
     """
-    membername = filename.replace(scene, '').strip('\/')
+    membername = filename.replace(scene, '').strip(r'\/')
     
     if not os.path.exists(scene):
         raise RuntimeError('scene does not exist')

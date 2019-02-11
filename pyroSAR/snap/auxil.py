@@ -94,7 +94,7 @@ def write_recipe(recipe, outfile):
 
 def getOrbitContentVersions(contentVersion):
     return dict(
-        [re.split('\s*=\s*', x.strip('\r')) for x in contentVersion.read().split('\n') if re.search('^[0-9]{4}', x)])
+        [re.split(r'\s*=\s*', x.strip('\r')) for x in contentVersion.read().split('\n') if re.search('^[0-9]{4}', x)])
 
 
 class GetAuxdata:
