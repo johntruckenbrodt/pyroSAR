@@ -145,7 +145,7 @@ Within each function, the command name and all parameters are passed to function
 Sentinel-1 Tools
 ================
 
-.. automodule:: pyroSAR.S1.auxil
+.. automodule:: pyroSAR.S1
     :members: OSV, removeGRDBorderNoise
     :undoc-members:
     :show-inheritance:
