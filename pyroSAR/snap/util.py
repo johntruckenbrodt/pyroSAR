@@ -11,9 +11,9 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
-            geocoding_type='Range-Doppler', removeS1BoderNoise=True, offset=None, externalDEMFile=None,
-            externalDEMNoDataValue=None, externalDEMApplyEGM=True, basename_extensions=None, test=False,
-            export_extra=None):
+            geocoding_type='Range-Doppler', removeS1BoderNoise=True, offset=None,
+            externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
+            basename_extensions=None, test=False, export_extra=None):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -55,18 +55,26 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     test: bool, optional
         If set to True the workflow xml file is only written and not executed. Default is False.
     export_extra: list or None
-        a list of image file IDs to be exported to outdir: the following IDs are currently supported:
+        a list of image file IDs to be exported to outdir. The following IDs are currently supported:
          * incidenceAngleFromEllipsoid
          * localIncidenceAngle
          * projectedLocalIncidenceAngle
 
     Note
     ----
-    If only one polarization is selected the results are directly written to GeoTiff.
+    If only one polarization is selected and not extra products are defined the results are directly written to GeoTiff.
     Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTiff files
-    (one for each polarization).
+    (one for each polarization/extra product).
     If GeoTiff would directly be selected as output format for multiple polarizations then a multilayer GeoTiff
     is written by SNAP which is considered an unfavorable format
+    
+    Examples
+    --------
+    geocode a Sentinel-1 scene and export the local incidence angle map with it
+    
+    >>> from pyroSAR.snap import geocode
+    >>> filename = 'S1A_IW_GRDH_1SDV_20141012T162337_20141012T162402_002799_00326F_8197.zip'
+    >>> geocode(infile=filename, outdir='outdir', tr=20, scaling='dB', export_extra=['localIncidenceAngle'])
 
     See Also
     --------
