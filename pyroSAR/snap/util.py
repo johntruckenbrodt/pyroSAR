@@ -1,6 +1,6 @@
 ####################################################################
 # Convenience functions for SAR image batch processing with ESA SNAP
-# John Truckenbrodt, 2016-2018
+# John Truckenbrodt, 2016-2019
 ####################################################################
 import os
 
@@ -215,7 +215,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # print('-- configuring Subset Node')
     if shapefile:
         # print('--- read')
-        shp = shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
+        shp = shapefile.clone() if isinstance(shapefile, Vector) else Vector(shapefile)
         # reproject the geometry to WGS 84 latlon
         # print('--- reproject')
         shp.reproject(4326)
@@ -226,7 +226,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ext['ymin'] -= buffer
         ext['xmax'] += buffer
         ext['ymax'] += buffer
-        #print('--- create bbox')
+        # print('--- create bbox')
         with bbox(ext, shp.srs) as bounds:
             # print('--- intersect')
             print(shapefile.srs)
