@@ -282,7 +282,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     if export_extra is not None:
         write = parse_node('Write')
-        insert_node(workflow, write, before=tc.attrib['id'])
+        insert_node(workflow, write, before=tc.attrib['id'], resetSuccessorSource=False)
         write.attrib['id'] = 'Write (2)'
         write.find('.//parameters/file').text = outname
         write.find('.//parameters/formatName').text = format
