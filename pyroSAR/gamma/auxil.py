@@ -212,6 +212,17 @@ def par2hdr(parfile, hdrfile, modifications=None, nodata=None):
 class UTM(object):
     """
     convert a gamma parameter file corner coordinate from EQA to UTM
+    
+    Parameters
+    ----------
+    parfile: str
+        the Gamma parameter file to read the coordinate from
+    
+    Example
+    -------
+    
+    >>> from pyroSAR.gamma import UTM
+    >>> print(UTM('gamma.par').zone)
     """
     
     def __init__(self, parfile):
