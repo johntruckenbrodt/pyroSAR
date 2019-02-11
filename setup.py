@@ -31,7 +31,7 @@ setup(name='pyroSAR',
                         'pathos>=0.2',
                         'numpy',
                         'scoop',
-                        'spatialist==0.2.7',
+                        'spatialist==0.2.8',
                         'pyyaml'],
       extras_require={
           'docs': ['sphinx'],
