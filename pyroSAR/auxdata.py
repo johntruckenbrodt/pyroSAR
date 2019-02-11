@@ -54,6 +54,23 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
     -------
     list or str
         the names of the obtained files or the name of the VRT file
+    
+    Examples
+    --------
+    download all SRTM 1 arcsec DEMs overlapping with a Sentinel-1 scene and mosaic them to a single GeoTiff file
+    
+    >>> from pyroSAR import identify
+    >>> from pyroSAR.auxdata import dem_autoload
+    >>> from spatialist import gdalwarp
+    # identify the SAR scene
+    >>> scene = identify('S1A_IW_GRDH_1SDV_20141012T162337_20141012T162402_002799_00326F_8197.zip')
+    # extract the bounding box as spatialist.Vector object
+    >>> bbox = scene.bbox()
+    # download the tiles and virtually combine them in an in-memory VRT file subsetted to the extent of the SAR scene
+    >>> vrt = dem_autoload(geometries=[bbox], demType='SRTM 1Sec HGT', vrt='/vsimem/srtm1.vrt', buffer=0.01)
+    # write the final GeoTiff file
+    >>> outname = scene.outname_base() + 'srtm1.tif'
+    >>> gdalwarp(src=vrt, dst='', options={'format': 'GTiff'})
     """
     with DEMHandler(geometries) as handler:
         if demType == 'AW3D30':
