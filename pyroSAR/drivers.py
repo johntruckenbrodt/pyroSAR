@@ -1420,7 +1420,7 @@ class Archive(object):
      * have not been processed to directory `outdir` before
 
     >>> from pyroSAR import Archive
-    >>> from pyroSAR.spatial import Vector
+    >>> from spatialist import Vector
     >>> archive = Archive('/path/to/dbfile.db')
     >>> site = Vector('/path/to/site.shp')
     >>> outdir = '/path/to/processed/results'
