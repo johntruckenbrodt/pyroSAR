@@ -1280,6 +1280,9 @@ class SAFE(ID):
                                  for dim in ['range', 'azimuth']])
         meta['samples'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfSamples').text)
         meta['lines'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfLines').text)
+        heading = float(ann_tree.find('.//platformHeading').text)
+        meta['heading'] = heading if heading > 0 else heading + 360
+        meta['incidence'] = float(ann_tree.find('.//incidenceAngleMidSwath').text)
         
         return meta
     
