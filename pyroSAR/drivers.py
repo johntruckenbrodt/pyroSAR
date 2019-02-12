@@ -1,6 +1,6 @@
 ##############################################################
 # Reading and Organizing system for SAR images
-# John Truckenbrodt, Felix Cremer 2016-2018
+# John Truckenbrodt, Felix Cremer 2016-2019
 ##############################################################
 
 """
@@ -1176,22 +1176,13 @@ class SAFE(ID):
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
             raise IOError('folder does not match S1 scene naming convention')
         
-        # scan the manifest.safe file and add selected attributes to a meta dictionary
+        # scan the metadata XML files file and add selected attributes to a meta dictionary
         self.meta = self.scanMetadata()
         self.meta['projection'] = 'GEOGCS["WGS 84",' \
                                   'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
                                   'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
                                   'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
                                   'AUTHORITY["EPSG","4326"]]'
-        
-        annotations = self.findfiles(self.pattern_ds)
-        ann_xml = self.getFileObj(annotations[0])
-        ann_tree = ET.fromstring(ann_xml.read())
-        ann_xml.close()
-        self.meta['spacing'] = tuple(
-            [float(ann_tree.find('.//{}PixelSpacing'.format(dim)).text) for dim in ['range', 'azimuth']])
-        self.meta['samples'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfSamples').text)
-        self.meta['lines'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfLines').text)
         
         # register the standardized meta attributes as object attributes
         super(SAFE, self).__init__(self.meta)
@@ -1247,10 +1238,10 @@ class SAFE(ID):
                 osv.retrieve(files)
     
     def scanMetadata(self):
-        manifest = self.getFileObj(self.findfiles('manifest.safe')[0]).getvalue()
+        with self.getFileObj(self.findfiles('manifest.safe')[0]) as input:
+            manifest = input.getvalue()
         namespaces = getNamespaces(manifest)
         tree = ET.fromstring(manifest)
-        # manifest.close()
         
         meta = dict()
         meta['acquisition_mode'] = tree.find('.//s1sarl1:mode', namespaces).text
@@ -1280,6 +1271,15 @@ class SAFE(ID):
         meta['IPF_version'] = float(tree.find('.//safe:software', namespaces).attrib['version'])
         meta['sliceNumber'] = int(tree.find('.//s1sarl1:sliceNumber', namespaces).text)
         meta['totalSlices'] = int(tree.find('.//s1sarl1:totalSlices', namespaces).text)
+        
+        annotations = self.findfiles(self.pattern_ds)
+        ann_xml = self.getFileObj(annotations[0])
+        ann_tree = ET.fromstring(ann_xml.read())
+        ann_xml.close()
+        meta['spacing'] = tuple([float(ann_tree.find('.//{}PixelSpacing'.format(dim)).text)
+                                 for dim in ['range', 'azimuth']])
+        meta['samples'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfSamples').text)
+        meta['lines'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfLines').text)
         
         return meta
     
