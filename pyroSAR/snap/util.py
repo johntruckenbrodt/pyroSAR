@@ -59,6 +59,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          * incidenceAngleFromEllipsoid
          * localIncidenceAngle
          * projectedLocalIncidenceAngle
+         * DEM
 
     Note
     ----
