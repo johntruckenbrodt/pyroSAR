@@ -267,7 +267,8 @@ def gpt(xmlfile):
                 pol = re.search('[HV]{2}', item).group()
                 name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
             else:
-                base = os.path.splitext(os.path.basename(item))[0]
+                base = os.path.splitext(os.path.basename(item))[0]\
+                    .replace('elevation', 'DEM')
                 name_new = outname.replace(suffix, '{0}.tif'.format(base))
             gdal_translate(item, name_new, translateoptions)
         shutil.rmtree(outname)
