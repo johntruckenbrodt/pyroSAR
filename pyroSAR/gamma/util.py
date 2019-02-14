@@ -493,8 +493,13 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         raise RuntimeError('parameter func_interp must be set to 2 if normalization_method is set to 2; '
                            'see documentation of Gamma command pixel_area')
     
-    scene = scene if isinstance(scene, ID) else identify(scene)
-    
+    if isinstance(scene, ID):
+        scene = identify(scene.scene)
+    elif isinstance(scene, str):
+        scene = identify(scene)
+    else:
+        raise RuntimeError("'scene' must be of type str or pyroSAR.ID")
+        
     if scene.sensor not in ['S1A', 'S1B']:
         raise IOError('this method is currently only available for Sentinel-1. Please stay tuned...')
     
