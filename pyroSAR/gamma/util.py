@@ -506,6 +506,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if sarSimCC:
         raise IOError('geocoding with cross correlation offset refinement is still in the making. Please stay tuned...')
     
+    if export_extra is not None and not isinstance(export_extra, list):
+        raise TypeError("parameter 'export_extra' must either be None or a list")
+    
     for dir in [tempdir, outdir]:
         if not os.path.isdir(dir):
             os.makedirs(dir)
@@ -581,7 +584,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     # if sarSimCC:
     #     n.appreciate(['ccp', 'lut_fine'])
     
-    n.appreciate(export_extra)
+    if export_extra is not None:
+        n.appreciate(export_extra)
     
     ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
     
