@@ -24,8 +24,6 @@ if sys.version_info >= (3, 0):
 else:
     from urllib2 import URLError
 
-from osgeo import ogr
-
 from spatialist import haversine
 from spatialist.ancillary import union, finder
 
@@ -37,8 +35,6 @@ try:
     from .api import diff, disp, isp, lat
 except ImportError:
     pass
-
-ogr.UseExceptions()
 
 
 def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscript=None):
