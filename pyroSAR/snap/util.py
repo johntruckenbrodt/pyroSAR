@@ -74,8 +74,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     geocode a Sentinel-1 scene and export the local incidence angle map with it
     
     >>> from pyroSAR.snap import geocode
-    >>> filename = 'S1A_IW_GRDH_1SDV_20141012T162337_20141012T162402_002799_00326F_8197.zip'
-    >>> geocode(infile=filename, outdir='outdir', tr=20, scaling='dB', export_extra=['localIncidenceAngle'])
+    >>> filename = 'S1A_IW_GRDH_1SDV_20180829T170656_20180829T170721_023464_028DE0_F7BD.zip'
+    >>> geocode(infile=filename, outdir='outdir', tr=20, scaling='dB',
+    >>>         export_extra=['DEM', 'localIncidenceAngle'], t_srs=4326)
 
     See Also
     --------

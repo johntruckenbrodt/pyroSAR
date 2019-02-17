@@ -65,6 +65,30 @@ def identify(scene):
     -------
     a subclass object of :class:`~pyroSAR.drivers.ID`
         a pyroSAR metadata handler
+    
+    Examples
+    --------
+
+    >>> from pyroSAR import identify
+    >>> filename = 'S1A_IW_GRDH_1SDV_20180829T170656_20180829T170721_023464_028DE0_F7BD.zip'
+    >>> scene = identify(filename)
+    >>> print(scene)
+    pyroSAR ID object of type SAFE
+    acquisition_mode: IW
+    cycleNumber: 148
+    frameNumber: 167392
+    lines: 16703
+    orbit: A
+    orbitNumber_abs: 23464
+    orbitNumber_rel: 117
+    polarizations: ['VV', 'VH']
+    product: GRD
+    projection: +proj=longlat +datum=WGS84 +no_defs
+    samples: 26056
+    sensor: S1A
+    spacing: (10.0, 10.0)
+    start: 20180829T170656
+    stop: 20180829T170721
     """
     if not os.path.exists(scene):
         raise OSError("No such file or directory: '{}'".format(scene))
@@ -1416,6 +1440,16 @@ class Archive(object):
 
     Examples
     ----------
+    Ingest all Sentinel-1 scenes in a directory and its sub-directories into the database:
+    
+    >>> from pyroSAR import Archive, identify
+    >>> from spatialist.ancillary import finder
+    >>> dbfile = '/.../scenelist.db'
+    >>> archive_s1 = '/.../sentinel1/GRD'
+    >>> scenes_s1 = finder(archive_s1, ['^S1[AB].*\.zip'], regex=True, recursive=True)
+    >>> with Archive(dbfile) as archive:
+    >>>     archive.insert(scenes_s1)
+    
     select all Sentinel-1 A/B scenes stored in the database, which
      * overlap with a test site
      * were acquired in Ground-Range-Detected (GRD) Interferometric Wide Swath (IW) mode before 2018
@@ -1428,13 +1462,9 @@ class Archive(object):
     >>> site = Vector('/path/to/site.shp')
     >>> outdir = '/path/to/processed/results'
     >>> maxdate = '20171231T235959'
-    >>> selection_proc = archive.select(vectorobject=site,
-    >>>                                 processdir=outdir,
-    >>>                                 maxdate=maxdate,
-    >>>                                 sensor=('S1A', 'S1B'),
-    >>>                                 product='GRD',
-    >>>                                 acquisition_mode='IW',
-    >>>                                 vv=1)
+    >>> selection_proc = archive.select(vectorobject=site, processdir=outdir,
+    >>>                                 maxdate=maxdate, sensor=('S1A', 'S1B'),
+    >>>                                 product='GRD', acquisition_mode='IW', vv=1)
     >>> archive.close()
 
     Alternatively, the `with` statement can be used.
@@ -1443,7 +1473,7 @@ class Archive(object):
     >>> from pyroSAR import identify, Archive
     >>> scene = identify('S1A_IW_SLC__1SDV_20150330T170734_20150330T170801_005264_006A6C_DA69.zip')
     >>> with Archive('/path/to/dbfile.db') as archive:
-    >>>     print(archive.is_registered(scene))
+    >>>     print(archive.is_registered(scene.scene))
     """
     
     def __init__(self, dbfile, custom_fields=None):
