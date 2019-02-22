@@ -229,6 +229,11 @@ def gpt(xmlfile):
     outdir = os.path.dirname(outname)
     format = write.find('.//parameters/formatName').text
     infile = workflow.find('.//node[@id="Read"]/parameters/file').text
+    dem_name = workflow.find('.//demName').text
+    if dem_name == 'External DEM':
+        dem_nodata = float(workflow.find('.//externalDEMNoDataValue').text)
+    else:
+        dem_nodata = 0
     
     if format == 'GeoTiff-BigTIFF':
         cmd = [gpt_exec,
@@ -260,16 +265,17 @@ def gpt(xmlfile):
         # print('- converting to GTiff')
         suffix = parse_suffix(workflow)
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
-                            'format': 'GTiff',
-                            'noData': 0}
+                            'format': 'GTiff'}
         for item in finder(outname, ['*.img']):
             if re.search('[HV]{2}', item):
                 pol = re.search('[HV]{2}', item).group()
                 name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
             else:
-                base = os.path.splitext(os.path.basename(item))[0]\
+                base = os.path.splitext(os.path.basename(item))[0] \
                     .replace('elevation', 'DEM')
                 name_new = outname.replace(suffix, '{0}.tif'.format(base))
+            nodata = dem_nodata if re.search('elevation', item) else 0
+            translateoptions['noData'] = nodata
             gdal_translate(item, name_new, translateoptions)
         shutil.rmtree(outname)
     # by default the nodata value is not registered in the GTiff metadata
