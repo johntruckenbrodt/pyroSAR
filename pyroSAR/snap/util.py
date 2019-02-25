@@ -11,7 +11,7 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
-            geocoding_type='Range-Doppler', removeS1BoderNoise=True, offset=None,
+            geocoding_type='Range-Doppler', removeS1BoderNoise=True, removeS1ThermalNoise=True, offset=None,
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
             basename_extensions=None, test=False, export_extra=None):
     """
@@ -40,6 +40,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         The type of geocoding applied; can be either 'Range-Doppler' (default) or 'SAR simulation cross correlation'
     removeS1BoderNoise: bool, optional
         Enables removal of S1 GRD border noise (default).
+    removeS1ThermalNoise: bool, optional
+        Enables removal of S1 thermal noise (default).
     offset: tuple, optional
         A tuple defining offsets for left, right, top and bottom in pixels, e.g. (100, 100, 0, 0); this variable is
         overridden if a shapefile is defined. Default is None.
@@ -143,6 +145,13 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if id.sensor in ['S1A', 'S1B'] and removeS1BoderNoise:
         insert_node(workflow, parse_node('Remove-GRD-Border-Noise'), before='Read')
         bn = workflow.find('.//node[@id="Remove-GRD-Border-Noise"]')
+        bn.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
+    ############################################
+    # ThermalNoiseRemoval node configuration
+    # print('-- configuring ThermalNoiseRemoval Node')
+    if id.sensor in ['S1A', 'S1B'] and removeS1ThermalNoise:
+        insert_node(workflow, parse_node('ThermalNoiseRemoval'), before='Read')
+        bn = workflow.find('.//node[@id="ThermalNoiseRemoval"]')
         bn.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
     ############################################
     # orbit file application node configuration
