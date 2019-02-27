@@ -1,6 +1,6 @@
 ##############################################################
 # ancillary routines for software pyroSAR
-# John Truckenbrodt 2014-2018
+# John Truckenbrodt 2014-2019
 ##############################################################
 """
 This script gathers central functions and classes for general pyroSAR applications.
@@ -10,10 +10,6 @@ import re
 from datetime import datetime
 from ._dev_config import product_pattern
 
-try:
-    import pathos.multiprocessing as mp
-except ImportError:
-    pass
 
 from spatialist.ancillary import finder
 
@@ -124,11 +120,12 @@ def parse_datasetname(name, parse_date=False):
     Examples
     --------
     >>> meta = parse_datasetname('S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
-    >>> print(list(meta.keys()))
-    ['sensor', 'acquisition_mode', 'orbit', 'start', 'extensions', 'polarization', 'proc_steps']
+    >>> print(sorted(meta.keys()))
+    ['acquisition_mode', 'extensions', 'filename', 'orbit',
+    'outname_base', 'polarization', 'proc_steps', 'sensor', 'start']
     """
     
-    filename = os.path.realpath(name)
+    filename = os.path.abspath(name) if os.path.isfile(name) else name
     
     match = re.match(re.compile(product_pattern), filename)
     if not match:
@@ -136,10 +133,7 @@ def parse_datasetname(name, parse_date=False):
     out = match.groupdict()
     if out['extensions'] == '':
         out['extensions'] = None
-    if len(out['proc_steps']) > 0:
-        out['proc_steps'] = out['proc_steps'].split('_')
-    else:
-        out['proc_steps'] = None
+    out['proc_steps'] = out['proc_steps'].split('_')
     if parse_date:
         out['start'] = datetime.strptime(out['start'], '%Y%m%dT%H%M%S')
     out['filename'] = filename
@@ -161,7 +155,7 @@ def find_datasets(directory, recursive=False, **kwargs):
         Multiple allowed options can be provided in tuples, e.g. `sensor=('S1A', 'S1B')`.
         Any types other than tuples require an exact match, e.g. `proc_steps=['grd', 'mli', 'geo', 'norm', 'db']`
         will be matched if only these processing steps are contained in the product name in this exact order.
-        See function :func:`parse_productname` for options.
+        See function :func:`parse_datasetname` for options.
     
     Returns
     -------

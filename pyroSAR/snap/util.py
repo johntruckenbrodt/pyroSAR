@@ -1,6 +1,6 @@
 ####################################################################
 # Convenience functions for SAR image batch processing with ESA SNAP
-# John Truckenbrodt, 2016-2018
+# John Truckenbrodt, 2016-2019
 ####################################################################
 import os
 
@@ -11,8 +11,9 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
-            geocoding_type='Range-Doppler', removeS1BoderNoise=True, offset=None, externalDEMFile=None,
-            externalDEMNoDataValue=None, externalDEMApplyEGM=True, basename_extensions=None, test=False):
+            geocoding_type='Range-Doppler', removeS1BoderNoise=True, removeS1ThermalNoise=True, offset=None,
+            externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
+            basename_extensions=None, test=False, export_extra=None):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -39,6 +40,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         The type of geocoding applied; can be either 'Range-Doppler' (default) or 'SAR simulation cross correlation'
     removeS1BoderNoise: bool, optional
         Enables removal of S1 GRD border noise (default).
+    removeS1ThermalNoise: bool, optional
+        Enables removal of S1 thermal noise (default).
     offset: tuple, optional
         A tuple defining offsets for left, right, top and bottom in pixels, e.g. (100, 100, 0, 0); this variable is
         overridden if a shapefile is defined. Default is None.
@@ -53,14 +56,29 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     test: bool, optional
         If set to True the workflow xml file is only written and not executed. Default is False.
+    export_extra: list or None
+        a list of image file IDs to be exported to outdir. The following IDs are currently supported:
+         * incidenceAngleFromEllipsoid
+         * localIncidenceAngle
+         * projectedLocalIncidenceAngle
+         * DEM
 
     Note
     ----
-    If only one polarization is selected the results are directly written to GeoTiff.
+    If only one polarization is selected and not extra products are defined the results are directly written to GeoTiff.
     Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTiff files
-    (one for each polarization).
+    (one for each polarization/extra product).
     If GeoTiff would directly be selected as output format for multiple polarizations then a multilayer GeoTiff
     is written by SNAP which is considered an unfavorable format
+    
+    Examples
+    --------
+    geocode a Sentinel-1 scene and export the local incidence angle map with it
+    
+    >>> from pyroSAR.snap import geocode
+    >>> filename = 'S1A_IW_GRDH_1SDV_20180829T170656_20180829T170721_023464_028DE0_F7BD.zip'
+    >>> geocode(infile=filename, outdir='outdir', tr=20, scaling='dB',
+    >>>         export_extra=['DEM', 'localIncidenceAngle'], t_srs=4326)
 
     See Also
     --------
@@ -103,7 +121,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     else:
         raise RuntimeError('polarizations must be of type str or list')
     
-    format = 'GeoTiff-BigTIFF' if len(polarizations) == 1 else 'ENVI'
+    format = 'GeoTiff-BigTIFF' if len(polarizations) == 1 and export_extra is None else 'ENVI'
     # print(polarizations)
     # print(format)
     
@@ -127,6 +145,13 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if id.sensor in ['S1A', 'S1B'] and removeS1BoderNoise:
         insert_node(workflow, parse_node('Remove-GRD-Border-Noise'), before='Read')
         bn = workflow.find('.//node[@id="Remove-GRD-Border-Noise"]')
+        bn.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
+    ############################################
+    # ThermalNoiseRemoval node configuration
+    # print('-- configuring ThermalNoiseRemoval Node')
+    if id.sensor in ['S1A', 'S1B'] and removeS1ThermalNoise:
+        insert_node(workflow, parse_node('ThermalNoiseRemoval'), before='Read')
+        bn = workflow.find('.//node[@id="ThermalNoiseRemoval"]')
         bn.find('.//parameters/selectedPolarisations').text = ','.join(polarizations)
     ############################################
     # orbit file application node configuration
@@ -215,7 +240,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # print('-- configuring Subset Node')
     if shapefile:
         # print('--- read')
-        shp = shapefile if isinstance(shapefile, Vector) else Vector(shapefile)
+        shp = shapefile.clone() if isinstance(shapefile, Vector) else Vector(shapefile)
         # reproject the geometry to WGS 84 latlon
         # print('--- reproject')
         shp.reproject(4326)
@@ -226,10 +251,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ext['ymin'] -= buffer
         ext['xmax'] += buffer
         ext['ymax'] += buffer
-        #print('--- create bbox')
+        # print('--- create bbox')
         with bbox(ext, shp.srs) as bounds:
             # print('--- intersect')
-            print(shapefile.srs)
             inter = intersect(id.bbox(), bounds)
             if not inter:
                 raise RuntimeError('no bounding box intersection between shapefile and scene')
@@ -273,6 +297,17 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     write = workflow.find('.//node[@id="Write"]')
     write.find('.//parameters/file').text = outname
     write.find('.//parameters/formatName').text = format
+    ############################################
+    ############################################
+    if export_extra is not None:
+        write = parse_node('Write')
+        insert_node(workflow, write, before=tc.attrib['id'], resetSuccessorSource=False)
+        write.attrib['id'] = 'Write (2)'
+        write.find('.//parameters/file').text = outname
+        write.find('.//parameters/formatName').text = format
+        for item in export_extra:
+            key = 'save{}{}'.format(item[0].upper(), item[1:])
+            tc.find('.//parameters/{}'.format(key)).text = 'true'
     ############################################
     ############################################
     # select DEM type

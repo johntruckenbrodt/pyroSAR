@@ -212,26 +212,40 @@ def par2hdr(parfile, hdrfile, modifications=None, nodata=None):
 class UTM(object):
     """
     convert a gamma parameter file corner coordinate from EQA to UTM
+    
+    Parameters
+    ----------
+    parfile: str
+        the Gamma parameter file to read the coordinate from
+    
+    Example
+    -------
+    
+    >>> from pyroSAR.gamma import UTM
+    >>> print(UTM('gamma.par').zone)
     """
     
     def __init__(self, parfile):
         par = ISPPar(parfile)
-        inlist = [str(x) for x in ['WGS84', 1, 'EQA', par.corner_lon, par.corner_lat, '', 'WGS84', 1, 'UTM', '']]
-        proc = sp.Popen(['coord_trans'], stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True,
-                        shell=False).communicate(''.join([x + '\n' for x in inlist]))
-        proc = [x for x in filter(None, proc[0].split('\n')) if ':' in x]
-        self.index = []
-        for item in proc:
-            entry = item.split(': ')
-            entry = [entry[0].replace(' ', '_'), entry[1].split()]
-            if len(entry[1]) > 1:
-                setattr(self, entry[0], entry[1])
-            else:
-                setattr(self, entry[0], entry[1][0])
-            self.index.append(entry[0])
-            if 'UTM' in entry[0]:
-                self.zone, self.northing, self.easting = entry[1]
-                self.index = list(set(self.index + ['zone', 'northing', 'easting']))
+        inlist = ['WGS84', 1, 'EQA', par.corner_lon, par.corner_lat, '', 'WGS84', 1, 'UTM', '']
+        inlist = map(str, inlist)
+        proc = sp.Popen(['coord_trans'], stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE,
+                        universal_newlines=True, shell=False)
+        out, err = proc.communicate(''.join([x + '\n' for x in inlist]))
+        out = [x for x in filter(None, out.split('\n')) if ':' in x]
+        
+        self.meta = dict()
+        for line in out:
+            key, value = re.split(r'\s*:\s*', line)
+            value = value.split()
+            value = map(parse_literal, value) if len(value) > 1 else value[0]
+            self.meta[key] = value
+        try:
+            self.zone, self.northing, self.easting, self.altitude = \
+                self.meta['UTM zone/northing/easting/altitude (m)']
+        except KeyError:
+            self.zone, self.northing, self.easting = \
+                self.meta['UTM zone/northing/easting (m)']
 
 
 def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True, shellscript=None):

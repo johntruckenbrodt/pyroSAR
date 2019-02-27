@@ -1,0 +1,11 @@
+<node id="ThermalNoiseRemoval">
+    <operator>ThermalNoiseRemoval</operator>
+    <sources>
+        <sourceProduct refid="Read"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+        <selectedPolarisations/>
+        <removeThermalNoise>true</removeThermalNoise>
+        <reIntroduceThermalNoise>false</reIntroduceThermalNoise>
+    </parameters>
+</node>

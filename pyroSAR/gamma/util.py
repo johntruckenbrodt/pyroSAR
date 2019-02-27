@@ -24,8 +24,6 @@ if sys.version_info >= (3, 0):
 else:
     from urllib2 import URLError
 
-from osgeo import ogr
-
 from spatialist import haversine
 from spatialist.ancillary import union, finder
 
@@ -37,8 +35,6 @@ try:
     from .api import diff, disp, isp, lat
 except ImportError:
     pass
-
-ogr.UseExceptions()
 
 
 def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscript=None):
@@ -486,20 +482,29 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     geocode a Sentinel-1 scene and export the local incidence angle map with it
     
     >>> from pyroSAR.gamma import geocode
-    >>> filename = 'S1A_IW_GRDH_1SDV_20141012T162337_20141012T162402_002799_00326F_8197.zip'
-    >>> geocode(scene=filename, dem='demfile', outdir='outdir', targetres=20, scaling='db', export_extra=['inc_geo'])
+    >>> filename = 'S1A_IW_GRDH_1SDV_20180829T170656_20180829T170721_023464_028DE0_F7BD.zip'
+    >>> geocode(scene=filename, dem='demfile', outdir='outdir', targetres=20, scaling='db',
+    >>>         export_extra=['dem_seg_geo', 'inc_geo', 'ls_map_geo'])
     """
     if normalization_method == 2 and func_interp != 2:
         raise RuntimeError('parameter func_interp must be set to 2 if normalization_method is set to 2; '
                            'see documentation of Gamma command pixel_area')
     
-    scene = scene if isinstance(scene, ID) else identify(scene)
-    
+    if isinstance(scene, ID):
+        scene = identify(scene.scene)
+    elif isinstance(scene, str):
+        scene = identify(scene)
+    else:
+        raise RuntimeError("'scene' must be of type str or pyroSAR.ID")
+        
     if scene.sensor not in ['S1A', 'S1B']:
         raise IOError('this method is currently only available for Sentinel-1. Please stay tuned...')
     
     if sarSimCC:
         raise IOError('geocoding with cross correlation offset refinement is still in the making. Please stay tuned...')
+    
+    if export_extra is not None and not isinstance(export_extra, list):
+        raise TypeError("parameter 'export_extra' must either be None or a list")
     
     for dir in [tempdir, outdir]:
         if not os.path.isdir(dir):
@@ -576,7 +581,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     # if sarSimCC:
     #     n.appreciate(['ccp', 'lut_fine'])
     
-    n.appreciate(export_extra)
+    if export_extra is not None:
+        n.appreciate(export_extra)
     
     ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
     

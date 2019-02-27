@@ -1,6 +1,6 @@
 ##############################################################
 # Reading and Organizing system for SAR images
-# John Truckenbrodt, Felix Cremer 2016-2018
+# John Truckenbrodt, Felix Cremer 2016-2019
 ##############################################################
 
 """
@@ -65,6 +65,30 @@ def identify(scene):
     -------
     a subclass object of :class:`~pyroSAR.drivers.ID`
         a pyroSAR metadata handler
+    
+    Examples
+    --------
+
+    >>> from pyroSAR import identify
+    >>> filename = 'S1A_IW_GRDH_1SDV_20180829T170656_20180829T170721_023464_028DE0_F7BD.zip'
+    >>> scene = identify(filename)
+    >>> print(scene)
+    pyroSAR ID object of type SAFE
+    acquisition_mode: IW
+    cycleNumber: 148
+    frameNumber: 167392
+    lines: 16703
+    orbit: A
+    orbitNumber_abs: 23464
+    orbitNumber_rel: 117
+    polarizations: ['VV', 'VH']
+    product: GRD
+    projection: +proj=longlat +datum=WGS84 +no_defs
+    samples: 26056
+    sensor: S1A
+    spacing: (10.0, 10.0)
+    start: 20180829T170656
+    stop: 20180829T170721
     """
     if not os.path.exists(scene):
         raise OSError("No such file or directory: '{}'".format(scene))
@@ -278,7 +302,7 @@ class ID(object):
         dict
             the metadata attributes
         """
-        files = self.findfiles('(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)')
+        files = self.findfiles(r'(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)')
         
         if len(files) == 1:
             prefix = {'zip': '/vsizip/', 'tar': '/vsitar/', None: ''}[self.compression]
@@ -368,7 +392,7 @@ class ID(object):
                 raise IOError(
                     'directory missing; please provide directory to function or define object attribute "gammadir"')
         return [x for x in finder(directory, [self.outname_base()], regex=True) if
-                not re.search('\.(?:par|hdr|aux\.xml|swp|sh)$', x)]
+                not re.search(r'\.(?:par|hdr|aux\.xml|swp|sh)$', x)]
     
     def getHGT(self):
         """
@@ -638,7 +662,7 @@ class CEOS_ERS(ID):
     
     def unpack(self, directory, overwrite=False):
         if self.sensor in ['ERS1', 'ERS2']:
-            base_file = re.sub('\.PS$', '', os.path.basename(self.file))
+            base_file = re.sub(r'\.PS$', '', os.path.basename(self.file))
             base_dir = os.path.basename(directory.strip('/'))
             
             outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
@@ -810,7 +834,7 @@ class CEOS_PSR(ID):
             return {}
         text = summary_file.getvalue().decode('utf-8').strip()
         summary_file.close()
-        summary = ast.literal_eval('{"' + re.sub('\s*=', '":', text).replace('\n', ',"') + '}')
+        summary = ast.literal_eval('{"' + re.sub(r'\s*=', '":', text).replace('\n', ',"') + '}')
         for x, y in summary.items():
             summary[x] = parse_literal(y)
         return summary
@@ -839,8 +863,8 @@ class CEOS_PSR(ID):
             try:
                 start_string = re.search('Img_SceneStartDateTime[ ="0-9:.]*', led).group()
                 stop_string = re.search('Img_SceneEndDateTime[ ="0-9:.]*', led).group()
-                meta['start'] = self.parse_date(re.search('\d+\s[\d:.]+', start_string).group())
-                meta['stop'] = self.parse_date(re.search('\d+\s[\d:.]+', stop_string).group())
+                meta['start'] = self.parse_date(re.search(r'\d+\s[\d:.]+', start_string).group())
+                meta['stop'] = self.parse_date(re.search(r'\d+\s[\d:.]+', stop_string).group())
             except AttributeError:
                 raise IndexError('start and stop time stamps cannot be extracted; see file {}'
                                  .format(self.led_filename))
@@ -1123,7 +1147,7 @@ class ESA(ID):
         return meta
     
     def unpack(self, directory, overwrite=False):
-        base_file = os.path.basename(self.file).strip('\.zip|\.tar(?:\.gz|)')
+        base_file = os.path.basename(self.file).strip(r'\.zip|\.tar(?:\.gz|)')
         base_dir = os.path.basename(directory.strip('/'))
         
         outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
@@ -1176,22 +1200,13 @@ class SAFE(ID):
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
             raise IOError('folder does not match S1 scene naming convention')
         
-        # scan the manifest.safe file and add selected attributes to a meta dictionary
+        # scan the metadata XML files file and add selected attributes to a meta dictionary
         self.meta = self.scanMetadata()
         self.meta['projection'] = 'GEOGCS["WGS 84",' \
                                   'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
                                   'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
                                   'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
                                   'AUTHORITY["EPSG","4326"]]'
-        
-        annotations = self.findfiles(self.pattern_ds)
-        ann_xml = self.getFileObj(annotations[0])
-        ann_tree = ET.fromstring(ann_xml.read())
-        ann_xml.close()
-        self.meta['spacing'] = tuple(
-            [float(ann_tree.find('.//{}PixelSpacing'.format(dim)).text) for dim in ['range', 'azimuth']])
-        self.meta['samples'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfSamples').text)
-        self.meta['lines'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfLines').text)
         
         # register the standardized meta attributes as object attributes
         super(SAFE, self).__init__(self.meta)
@@ -1247,10 +1262,10 @@ class SAFE(ID):
                 osv.retrieve(files)
     
     def scanMetadata(self):
-        manifest = self.getFileObj(self.findfiles('manifest.safe')[0]).getvalue()
+        with self.getFileObj(self.findfiles('manifest.safe')[0]) as input:
+            manifest = input.getvalue()
         namespaces = getNamespaces(manifest)
         tree = ET.fromstring(manifest)
-        # manifest.close()
         
         meta = dict()
         meta['acquisition_mode'] = tree.find('.//s1sarl1:mode', namespaces).text
@@ -1280,6 +1295,18 @@ class SAFE(ID):
         meta['IPF_version'] = float(tree.find('.//safe:software', namespaces).attrib['version'])
         meta['sliceNumber'] = int(tree.find('.//s1sarl1:sliceNumber', namespaces).text)
         meta['totalSlices'] = int(tree.find('.//s1sarl1:totalSlices', namespaces).text)
+        
+        annotations = self.findfiles(self.pattern_ds)
+        ann_xml = self.getFileObj(annotations[0])
+        ann_tree = ET.fromstring(ann_xml.read())
+        ann_xml.close()
+        meta['spacing'] = tuple([float(ann_tree.find('.//{}PixelSpacing'.format(dim)).text)
+                                 for dim in ['range', 'azimuth']])
+        meta['samples'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfSamples').text)
+        meta['lines'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfLines').text)
+        heading = float(ann_tree.find('.//platformHeading').text)
+        meta['heading'] = heading if heading > 0 else heading + 360
+        meta['incidence'] = float(ann_tree.find('.//incidenceAngleMidSwath').text)
         
         return meta
     
@@ -1413,6 +1440,16 @@ class Archive(object):
 
     Examples
     ----------
+    Ingest all Sentinel-1 scenes in a directory and its sub-directories into the database:
+    
+    >>> from pyroSAR import Archive, identify
+    >>> from spatialist.ancillary import finder
+    >>> dbfile = '/.../scenelist.db'
+    >>> archive_s1 = '/.../sentinel1/GRD'
+    >>> scenes_s1 = finder(archive_s1, ['^S1[AB].*\.zip'], regex=True, recursive=True)
+    >>> with Archive(dbfile) as archive:
+    >>>     archive.insert(scenes_s1)
+    
     select all Sentinel-1 A/B scenes stored in the database, which
      * overlap with a test site
      * were acquired in Ground-Range-Detected (GRD) Interferometric Wide Swath (IW) mode before 2018
@@ -1420,18 +1457,14 @@ class Archive(object):
      * have not been processed to directory `outdir` before
 
     >>> from pyroSAR import Archive
-    >>> from pyroSAR.spatial import Vector
+    >>> from spatialist import Vector
     >>> archive = Archive('/path/to/dbfile.db')
     >>> site = Vector('/path/to/site.shp')
     >>> outdir = '/path/to/processed/results'
     >>> maxdate = '20171231T235959'
-    >>> selection_proc = archive.select(vectorobject=site,
-    >>>                                 processdir=outdir,
-    >>>                                 maxdate=maxdate,
-    >>>                                 sensor=('S1A', 'S1B'),
-    >>>                                 product='GRD',
-    >>>                                 acquisition_mode='IW',
-    >>>                                 vv=1)
+    >>> selection_proc = archive.select(vectorobject=site, processdir=outdir,
+    >>>                                 maxdate=maxdate, sensor=('S1A', 'S1B'),
+    >>>                                 product='GRD', acquisition_mode='IW', vv=1)
     >>> archive.close()
 
     Alternatively, the `with` statement can be used.
@@ -1440,7 +1473,7 @@ class Archive(object):
     >>> from pyroSAR import identify, Archive
     >>> scene = identify('S1A_IW_SLC__1SDV_20150330T170734_20150330T170801_005264_006A6C_DA69.zip')
     >>> with Archive('/path/to/dbfile.db') as archive:
-    >>>     print(archive.is_registered(scene))
+    >>>     print(archive.is_registered(scene.scene))
     """
     
     def __init__(self, dbfile, custom_fields=None):
@@ -1966,7 +1999,7 @@ def getFileObj(scene, filename):
     ~io.BytesIO
         a file object
     """
-    membername = filename.replace(scene, '').strip('\/')
+    membername = filename.replace(scene, '').strip(r'\/')
     
     if not os.path.exists(scene):
         raise RuntimeError('scene does not exist')

@@ -43,7 +43,7 @@ GAMMA Processing
 ================
 
 .. automodule:: pyroSAR.gamma
-    :members: geocode, convert2gamma, ISPPar, process, ovs, S1_deburst, correctOSV, multilook, par2hdr
+    :members: geocode, convert2gamma, ISPPar, process, ovs, S1_deburst, correctOSV, multilook, par2hdr, UTM
     :undoc-members:
     :show-inheritance:
 
@@ -56,9 +56,10 @@ GAMMA Processing
         ISPPar
         multilook
         ovs
+        par2hdr
         process
         S1_deburst
-        par2hdr
+        UTM
 
 SRTM tools
 ----------
@@ -145,7 +146,7 @@ Within each function, the command name and all parameters are passed to function
 Sentinel-1 Tools
 ================
 
-.. automodule:: pyroSAR.S1.auxil
+.. automodule:: pyroSAR.S1
     :members: OSV, removeGRDBorderNoise
     :undoc-members:
     :show-inheritance:

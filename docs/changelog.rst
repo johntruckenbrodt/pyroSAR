@@ -84,3 +84,38 @@ general
 - make use of parsed command functions internally
 - enable passing `logpath`, `outdir` and `shellscript` to all parsed functions via additional parameters for other
   convenience functions
+
+0.8 / 2019-02-11
+----------------
+
+Auxiliary Data Handling
+***********************
+
+- new module auxdata with function :func:`pyroSAR.auxdata.dem_autoload` to automatically download tiles of
+  different DEM types overlapping with given geometries
+- class :class:`pyroSAR.S1.OSV`: reduced search time for new RES orbit state vector files;
+  included more meaningful status messages
+
+GAMMA API
+*********
+
+- new function :func:`pyroSAR.gamma.srtm.dem_autocreate` to automatically create DEMs in Gamma format from the output
+  of function :func:`pyroSAR.auxdata.dem_autoload`
+- improved writing of ENVI HDR files from class :class:`pyroSAR.gamma.ISPPar`
+- class :class:`pyroSAR.gamma.UTM`: improved to work with newer Gamma versions
+- function :func:`pyroSAR.gamma.geocode`:
+
+  + improved documentation
+  + clarified code for better readability
+  + more consistent naming scheme for all temporarily written files
+  + export temporarily written files (e.g. local incidence angle) via new parameter `export_extra`
+  + additional parametrization tests to ensure best processing result
+  + changed default of parameter `func_interp` to 2 to work best with default of parameter `normalization_method`
+    (see documentation of Gamma command pixel_area)
+
+SNAP API
+********
+
+- function :func:`pyroSAR.snap.util.geocode`:
+
+  + export temporarily written files (e.g. local incidence angle) via new parameter `export_extra`

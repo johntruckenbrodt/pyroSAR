@@ -55,7 +55,7 @@ def parse_suffix(workflow):
     return suffix
 
 
-def insert_node(workflow, node, before=None, after=None):
+def insert_node(workflow, node, before=None, after=None, resetSuccessorSource=True):
     if before and not after:
         predecessor = workflow.find('.//node[@id="{}"]'.format(before))
         position = list(workflow).index(predecessor) + 1
@@ -64,9 +64,10 @@ def insert_node(workflow, node, before=None, after=None):
         # set the source product for the new node
         newnode.find('.//sources/sourceProduct').attrib['refid'] = predecessor.attrib['id']
         # set the source product for the node after the new node
-        successor = workflow[position + 1]
-        if successor.tag == 'node':
-            successor.find('.//sources/sourceProduct').attrib['refid'] = newnode.attrib['id']
+        if resetSuccessorSource:
+            successor = workflow[position + 1]
+            if successor.tag == 'node':
+                successor.find('.//sources/sourceProduct').attrib['refid'] = newnode.attrib['id']
     elif after and not before:
         successor = workflow.find('.//node[@id="{}"]'.format(after))
         position = list(workflow).index(successor)
@@ -77,7 +78,8 @@ def insert_node(workflow, node, before=None, after=None):
         source_id = predecessor.attrib['id'] if predecessor.tag == 'node' else None
         newnode.find('.//sources/sourceProduct').attrib['refid'] = source_id
         # set the source product for the node after the new node
-        successor.find('.//sources/sourceProduct').attrib['refid'] = newnode.attrib['id']
+        if resetSuccessorSource:
+            successor.find('.//sources/sourceProduct').attrib['refid'] = newnode.attrib['id']
     else:
         raise RuntimeError('cannot insert node if both before and after are set')
 
@@ -92,7 +94,7 @@ def write_recipe(recipe, outfile):
 
 def getOrbitContentVersions(contentVersion):
     return dict(
-        [re.split('\s*=\s*', x.strip('\r')) for x in contentVersion.read().split('\n') if re.search('^[0-9]{4}', x)])
+        [re.split(r'\s*=\s*', x.strip('\r')) for x in contentVersion.read().split('\n') if re.search('^[0-9]{4}', x)])
 
 
 class GetAuxdata:
@@ -227,6 +229,11 @@ def gpt(xmlfile):
     outdir = os.path.dirname(outname)
     format = write.find('.//parameters/formatName').text
     infile = workflow.find('.//node[@id="Read"]/parameters/file').text
+    dem_name = workflow.find('.//demName').text
+    if dem_name == 'External DEM':
+        dem_nodata = float(workflow.find('.//externalDEMNoDataValue').text)
+    else:
+        dem_nodata = 0
     
     if format == 'GeoTiff-BigTIFF':
         cmd = [gpt_exec,
@@ -258,13 +265,20 @@ def gpt(xmlfile):
         # print('- converting to GTiff')
         suffix = parse_suffix(workflow)
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
-                            'format': 'GTiff',
-                            'noData': 0}
+                            'format': 'GTiff'}
         for item in finder(outname, ['*.img']):
-            pol = re.search('[HV]{2}', item).group()
-            name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
+            if re.search('[HV]{2}', item):
+                pol = re.search('[HV]{2}', item).group()
+                name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
+            else:
+                base = os.path.splitext(os.path.basename(item))[0] \
+                    .replace('elevation', 'DEM')
+                name_new = outname.replace(suffix, '{0}.tif'.format(base))
+            nodata = dem_nodata if re.search('elevation', item) else 0
+            translateoptions['noData'] = nodata
             gdal_translate(item, name_new, translateoptions)
         shutil.rmtree(outname)
+    # by default the nodata value is not registered in the GTiff metadata
     elif format == 'GeoTiff-BigTIFF':
         ras = gdal.Open(outname + '.tif', GA_Update)
         for i in range(1, ras.RasterCount + 1):

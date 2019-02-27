@@ -83,12 +83,12 @@ class OSV(object):
         self.remote_res = 'https://qc.sentinel1.eo.esa.int/aux_resorb/'
         self.outdir_poe = os.path.join(osvdir, 'POEORB')
         self.outdir_res = os.path.join(osvdir, 'RESORB')
-        self.pattern = 'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
-        self.pattern_fine = 'S1[AB]_OPER_AUX_' \
-                            '(?P<type>(?:POE|RES)ORB)_OPOD_' \
-                            '(?P<publish>[0-9]{8}T[0-9]{6})_V' \
-                            '(?P<start>[0-9]{8}T[0-9]{6})_' \
-                            '(?P<stop>[0-9]{8}T[0-9]{6})\.EOF'
+        self.pattern = r'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
+        self.pattern_fine = r'S1[AB]_OPER_AUX_' \
+                            r'(?P<type>(?:POE|RES)ORB)_OPOD_' \
+                            r'(?P<publish>[0-9]{8}T[0-9]{6})_V' \
+                            r'(?P<start>[0-9]{8}T[0-9]{6})_' \
+                            r'(?P<stop>[0-9]{8}T[0-9]{6})\.EOF'
         if sys.version_info >= (2, 7, 9):
             self.sslcontext = ssl._create_unverified_context()
         else:
