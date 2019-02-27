@@ -1297,9 +1297,9 @@ class SAFE(ID):
         meta['totalSlices'] = int(tree.find('.//s1sarl1:totalSlices', namespaces).text)
         
         annotations = self.findfiles(self.pattern_ds)
-        ann_xml = self.getFileObj(annotations[0])
-        ann_tree = ET.fromstring(ann_xml.read())
-        ann_xml.close()
+        with self.getFileObj(annotations[0]) as ann_xml:
+            ann_tree = ET.fromstring(ann_xml.read())
+        
         meta['spacing'] = tuple([float(ann_tree.find('.//{}PixelSpacing'.format(dim)).text)
                                  for dim in ['range', 'azimuth']])
         meta['samples'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfSamples').text)
@@ -1307,6 +1307,7 @@ class SAFE(ID):
         heading = float(ann_tree.find('.//platformHeading').text)
         meta['heading'] = heading if heading > 0 else heading + 360
         meta['incidence'] = float(ann_tree.find('.//incidenceAngleMidSwath').text)
+        meta['image_geometry'] = ann_tree.find('.//projection').text
         
         return meta
     
