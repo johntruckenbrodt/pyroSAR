@@ -199,6 +199,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     ############################################
     # Multilook node configuration
+    if id.sensor not in ['S1A', 'S1B']:
+        raise RuntimeError('This function is currently limited to Sentinel-1')
+    
     ml_az = int(math.floor(tr / id.spacing[1]))
     if id.meta['image_geometry'] == 'Ground Range':
         ml_rg = ml_az
@@ -207,9 +210,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ml_rg = int(math.floor(tr / spacing_gr))
     
     if ml_az > 1 or ml_rg > 1:
-        if id.sensor not in ['S1A', 'S1B']:
-            raise RuntimeError('This workflow requires multilooking, '
-                               'which is currently only supported for Sentinel-1')
         insert_node(workflow, parse_node('Multilook'), after=tf.attrib['id'])
         ml = workflow.find('.//node[@id="Multilook"]')
         ml.find('.//parameters/sourceBands').text = bands_beta
