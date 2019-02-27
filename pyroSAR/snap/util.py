@@ -3,7 +3,7 @@
 # John Truckenbrodt, 2016-2019
 ####################################################################
 import os
-
+import math
 import pyroSAR
 from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt
 
@@ -197,6 +197,24 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     else:
         raise RuntimeError('geocode_type not recognized')
     
+    ############################################
+    # Multilook node configuration
+    ml_az = int(math.floor(tr / id.spacing[1]))
+    if id.meta['image_geometry'] == 'Ground Range':
+        ml_rg = ml_az
+    else:
+        spacing_gr = id.spacing[0] / math.sin(math.radians(id.meta['incidence']))
+        ml_rg = int(math.floor(tr / spacing_gr))
+    
+    if ml_az > 1 or ml_rg > 1:
+        if id.sensor not in ['S1A', 'S1B']:
+            raise RuntimeError('This workflow requires multilooking, '
+                               'which is currently only supported for Sentinel-1')
+        insert_node(workflow, parse_node('Multilook'), after=tf.attrib['id'])
+        ml = workflow.find('.//node[@id="Multilook"]')
+        ml.find('.//parameters/sourceBands').text = bands_beta
+        ml.find('.//parameters/nAzLooks').text = str(ml_az)
+        ml.find('.//parameters/nRgLooks').text = str(ml_rg)
     ############################################
     # specify spatial resolution and coordinate reference system of the output dataset
     # print('-- configuring CRS')
