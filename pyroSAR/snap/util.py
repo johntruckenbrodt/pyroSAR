@@ -199,14 +199,18 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     ############################################
     # Multilook node configuration
-    if id.sensor not in ['S1A', 'S1B']:
-        raise RuntimeError('This function is currently limited to Sentinel-1')
+    
+    try:
+        image_geometry = id.meta['image_geometry']
+        incidence = id.meta['incidence']
+    except KeyError:
+        raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
     
     ml_az = int(math.floor(tr / id.spacing[1]))
-    if id.meta['image_geometry'] == 'Ground Range':
+    if image_geometry == 'Ground Range':
         ml_rg = ml_az
     else:
-        spacing_gr = id.spacing[0] / math.sin(math.radians(id.meta['incidence']))
+        spacing_gr = id.spacing[0] / math.sin(math.radians(incidence))
         ml_rg = int(math.floor(tr / spacing_gr))
     
     if ml_az > 1 or ml_rg > 1:
