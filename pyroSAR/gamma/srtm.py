@@ -17,16 +17,18 @@ else:
 
 import os
 import re
+import inspect
 import shutil
 import zipfile as zf
 
-from spatialist import raster, gdal_translate, gdalbuildvrt, gdalwarp
+from spatialist import raster, gdal_translate, gdalbuildvrt, gdalwarp, crsConvert
 from spatialist.ancillary import finder
 from spatialist.envi import HDRobject
 
 from ..auxdata import dem_autoload
 from ..drivers import ID
 from . import ISPPar, UTM, slc_corners, par2hdr
+from .auxil import ExamineGamma
 
 try:
     from .api import diff, disp, isp
@@ -144,7 +146,8 @@ def transform(infile, outfile, posting=90):
     par2hdr(outfile + '.par', outfile + '.hdr')
 
 
-def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, username=None, password=None):
+def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None, logpath=None, username=None,
+                   password=None):
     """
     | automatically create a DEM in Gamma format for a defined spatial geometry
     | the following steps will be performed:
@@ -173,6 +176,12 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
         the name of the final DEM file
     buffer: float
         a buffer in degrees to create around the geometry
+    t_srs: int, str or osr.SpatialReference
+        A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
+        See function :func:`spatialist.auxil.crsConvert()` for details.
+        Default: `4326 <http://spatialreference.org/ref/epsg/4326/>`_.
+    tr: tuple
+        the target resoultion as (xres, yres)
     logpath: str
         a directory to write Gamma logfiles to
     username: str or None
@@ -185,6 +194,19 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
     -------
 
     """
+    
+    epsg = crsConvert(t_srs, 'epsg') if t_srs != 4326 else t_srs
+    
+    if epsg != 4326:
+        args = inspect.getfullargspec(diff.create_dem_par).args
+        if 'EPSG' not in args:
+            raise RuntimeError('using a different CRS than 4326 is currently not supported for this version of Gamma')
+        if 'dem_import' not in dir(diff):
+            raise RuntimeError('using a different CRS than 4326 currently requires command dem_import, '
+                               'which is not part of this version of Gamma')
+        if tr is None:
+            raise RuntimeError('tr needs to be defined if t_srs is not 4326')
+    
     if os.path.isfile(outfile):
         print('outfile already exists')
         return
@@ -203,13 +225,25 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
         vrt = dem_autoload([geometry], demType, vrt=vrt, username=username,
                            password=password, buffer=buffer)
         
-        print('creating mosaic')
-        gdalwarp(vrt, dem, {'format': 'GTiff'})
+        with raster.Raster(vrt) as ras:
+            nodata = ras.nodata
+        
+        message = 'creating mosaic'
+        gdalwarp_args = {'format': 'GTiff', 'multithread': True,
+                         'srcNodata': nodata, 'dstNodata': nodata}
+        if epsg != 4326:
+            gdalwarp_args.update({'dstSRS': crsConvert(epsg, 'wkt'),
+                                  'xRes': tr[0],
+                                  'yRes': tr[1]})
+        message += ' and reprojecting to EPSG:{}'.format(epsg)
+        print(message)
+        gdalwarp(vrt, dem, gdalwarp_args)
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
         # The heights of the TanDEM-X DEM products are ellipsoidal heights, all others are EGM96 Geoid heights
         # Gamma works only with Ellipsoid heights and the offset needs to be corrected
+        # note: starting from GDAL 2.2 the conversion can be done directly in GDAL; see docs of gdalwarp
         if demType == 'TDX90m':
             gflg = 0
             message = 'conversion to Gamma format'
@@ -219,13 +253,33 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
         
         print(message)
         
-        diff.srtm2dem(SRTM_DEM=dem,
-                      DEM=outfile_tmp,
-                      DEM_par=outfile_tmp + '.par',
-                      gflg=gflg,
-                      geoid='-',
-                      logpath=logpath,
-                      outdir=tmpdir)
+        if epsg == 4326:
+            # old approach for backwards compatibility
+            diff.srtm2dem(SRTM_DEM=dem,
+                          DEM=outfile_tmp,
+                          DEM_par=outfile_tmp + '.par',
+                          gflg=gflg,
+                          geoid='-',
+                          logpath=logpath,
+                          outdir=tmpdir)
+        else:
+            # new approach enabling an arbitrary target CRS
+            diff.create_dem_par(DEM_par=outfile_tmp + '.par',
+                                inlist=[''] * 9,
+                                EPSG=epsg)
+            dem_import_pars = {'input_DEM': dem,
+                               'DEM': outfile_tmp,
+                               'DEM_par': outfile_tmp + '.par',
+                               'input_type': 0,  # GeoTIFF / GDAL supported raster format (default)
+                               'priority': 1}  # input DEM parameters have priority (default)
+            if gflg == 2:
+                home = ExamineGamma().home
+                egm96 = os.path.join(home, 'DIFF', 'scripts', 'egm96.dem')
+                dem_import_pars['geoid'] = egm96
+                dem_import_pars['geoid_par'] = egm96 + '_par'
+            
+            diff.dem_import(**dem_import_pars)
+        
         par2hdr(outfile_tmp + '.par', outfile_tmp + '.hdr')
         
         for suffix in ['', '.par', '.hdr']:
