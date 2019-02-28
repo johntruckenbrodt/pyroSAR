@@ -27,6 +27,7 @@ from spatialist.envi import HDRobject
 from ..auxdata import dem_autoload
 from ..drivers import ID
 from . import ISPPar, UTM, slc_corners, par2hdr
+
 try:
     from .api import diff, disp, isp
 except ImportError:
@@ -36,7 +37,7 @@ except ImportError:
 def fill(dem, dem_out, logpath=None, replace=False):
     """
     interpolate missing values in the SRTM DEM (value -32768)
-    
+
     Parameters
     ----------
     dem: str
@@ -151,12 +152,16 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
     - collect all tiles overlapping with the geometry
 
       * if they don't yet exist locally they will automatically be downloaded
-      * the tiles will be downloaded into the SNAP auxdata directory structure, e.g. $HOME/.snap/auxdata/dem/SRTM 3Sec
+      * the tiles will be downloaded into the SNAP auxdata directory structure,
+        e.g. ``$HOME/.snap/auxdata/dem/SRTM 3Sec``
 
-    - create a mosaic GeoTiff of the same spatial extent as the input geometry plus a defined buffer using gdalwarp
-    - subtract the EGM96-WGS84 Geoid-Ellipsoid difference and convert the result to Gamma format using Gamma command srtm2dem
-    
-      * this correction is not done for TanDEM-X data, which contains ellipsoid heights; see `here <https://geoservice.dlr.de/web/dataguide/tdm90>`_
+    - create a mosaic GeoTiff of the same spatial extent as the input geometry
+      plus a defined buffer using ``gdalwarp``
+    - subtract the EGM96-WGS84 Geoid-Ellipsoid difference and convert the result
+      to Gamma format using Gamma command ``srtm2dem``
+
+      * this correction is not done for TanDEM-X data, which contains ellipsoid
+        heights; see `here <https://geoservice.dlr.de/web/dataguide/tdm90>`_
 
     Parameters
     ----------
@@ -171,7 +176,8 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
     logpath: str
         a directory to write Gamma logfiles to
     username: str or None
-        (optional) the user name for services requiring registration; see :func:`~pyroSAR.auxdata.dem_autoload`
+        (optional) the user name for services requiring registration;
+        see :func:`~pyroSAR.auxdata.dem_autoload`
     password: str or None
         (optional) the password for the registration account
 
@@ -194,7 +200,8 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
         dem = os.path.join(tmpdir, 'dem.tif')
         
         print('collecting DEM tiles')
-        vrt = dem_autoload([geometry], demType, vrt=vrt, username=username, password=password, buffer=buffer)
+        vrt = dem_autoload([geometry], demType, vrt=vrt, username=username,
+                           password=password, buffer=buffer)
         
         print('creating mosaic')
         gdalwarp(vrt, dem, {'format': 'GTiff'})
@@ -207,9 +214,9 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
             gflg = 0
             message = 'conversion to Gamma format'
         else:
-            gflg =2
+            gflg = 2
             message = 'geoid correction and conversion to Gamma format'
-
+        
         print(message)
         
         diff.srtm2dem(SRTM_DEM=dem,
@@ -223,7 +230,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
         
         for suffix in ['', '.par', '.hdr']:
             shutil.copyfile(outfile_tmp + suffix, outfile + suffix)
-        
+    
     except RuntimeError as e:
         raise e
     finally:
@@ -233,9 +240,9 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
 def dempar(dem, logpath=None):
     """
     create GAMMA parameter text files for DEM files
-    
+
     currently only EQA and UTM projections with WGS84 ellipsoid are supported
-    
+
     Parameters
     ----------
     dem: str
@@ -276,10 +283,11 @@ def dempar(dem, logpath=None):
     if projection == 'UTM':
         zone = rast.proj4args['zone']
         falsenorthing = 10000000. if rast.geo['ymin'] < 0 else 0
-        parlist = [projection, ellipsoid, 1, zone, falsenorthing, os.path.basename(dem), dtype, 0, 1, rast.cols,
-                   rast.rows, posting, latlon]
+        parlist = [projection, ellipsoid, 1, zone, falsenorthing, os.path.basename(dem),
+                   dtype, 0, 1, rast.cols, rast.rows, posting, latlon]
     else:
-        parlist = [projection, ellipsoid, 1, os.path.basename(dem), dtype, 0, 1, rast.cols, rast.rows, posting, latlon]
+        parlist = [projection, ellipsoid, 1, os.path.basename(dem), dtype,
+                   0, 1, rast.cols, rast.rows, posting, latlon]
     
     # execute GAMMA command
     diff.create_dem_par(DEM_par=os.path.splitext(dem)[0] + '.par',
@@ -291,7 +299,7 @@ def dempar(dem, logpath=None):
 def swap(data, outname):
     """
     byte swapping from small to big endian (as required by GAMMA)
-    
+
     Parameters
     ----------
     data: str
@@ -324,7 +332,7 @@ def swap(data, outname):
 def mosaic(demlist, outname, byteorder=1, gammapar=True):
     """
     mosaicing of multiple DEMs
-    
+
     Parameters
     ----------
     demlist: list
@@ -333,10 +341,10 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
         the name of the final mosaic file
     byteorder: {0, 1}
         the byte order of the mosaic
-        
+
         - 0: small endian
         - 1: big endian
-        
+
     gammapar: bool
         create a Gamma parameter file for the mosaic?
 
@@ -367,17 +375,21 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
 def hgt(parfiles):
     """
     concatenate hgt file names overlapping with multiple SAR scenes
-    
-    - this list is read for corner coordinates of which the next integer lower left latitude and longitude is computed
-    - hgt files are supplied in 1 degree equiangular format named e.g. N16W094.hgt (with pattern [NS][0-9]{2}[EW][0-9]{3}.hgt
-    - For north and east hemisphere the respective absolute latitude and longitude values are smaller than the lower left coordinate of the SAR image
-    - west and south coordinates are negative and hence the nearest lower left integer absolute value is going to be larger
-    
+
+    - this list is read for corner coordinates of which the next integer
+      lower left latitude and longitude is computed
+    - hgt files are supplied in 1 degree equiangular format named e.g.
+      N16W094.hgt (with pattern [NS][0-9]{2}[EW][0-9]{3}.hgt
+    - For north and east hemisphere the respective absolute latitude and longitude
+      values are smaller than the lower left coordinate of the SAR image
+    - west and south coordinates are negative and hence the nearest lower left
+      integer absolute value is going to be larger
+
     Parameters
     ----------
     parfiles: list of str or pyroSAR.ID
         a list of Gamma parameter files or pyroSAR ID objects
-    
+
     Returns
     -------
     list
@@ -414,15 +426,15 @@ def hgt(parfiles):
 def makeSRTM(scenes, srtmdir, outname):
     """
     Create a DEM in Gamma format from SRTM tiles
-    
+
     - coordinates are read to determine the required DEM extent and select the necessary hgt tiles
     - mosaics SRTM DEM tiles, converts them to Gamma format and subtracts offset to WGS84 ellipsoid
-    
+
     intended for SRTM products downloaded from:
-    
+
     - USGS: https://gdex.cr.usgs.gov/gdex/
     - CGIAR: http://srtm.csi.cgiar.org
-    
+
     Parameters
     ----------
     scenes: list of str or pyroSAR.ID
@@ -475,7 +487,7 @@ def makeSRTM(scenes, srtmdir, outname):
 def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
     """
     automatic downloading and unpacking of srtm tiles
-    
+
     Parameters
     ----------
     parfiles: list of str or pyroSAR.ID
