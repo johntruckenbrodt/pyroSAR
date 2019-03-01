@@ -271,9 +271,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
                                 EPSG=epsg)
             dem_import_pars = {'input_DEM': dem,
                                'DEM': outfile_tmp,
-                               'DEM_par': outfile_tmp + '.par',
-                               'input_type': 0,  # GeoTIFF / GDAL supported raster format (default)
-                               'priority': 1}  # input DEM parameters have priority (default)
+                               'DEM_par': outfile_tmp + '.par'}
             if gflg == 2:
                 home = ExamineGamma().home
                 egm96 = os.path.join(home, 'DIFF', 'scripts', 'egm96.dem')
