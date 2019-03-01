@@ -180,8 +180,10 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default: `4326 <http://spatialreference.org/ref/epsg/4326/>`_.
-    tr: tuple
-        the target resoultion as (xres, yres)
+    tr: tuple or None
+        the target resolution as (xres, yres) in units of ``t_srs``; if ``t_srs`` is kept at its default value of 4326,
+        ``tr`` does not need to be defined and the original resolution is preserved;
+        in all other cases the default of None is rejected
     logpath: str
         a directory to write Gamma logfiles to
     username: str or None
@@ -280,7 +282,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
             
             diff.dem_import(**dem_import_pars)
         
-        par2hdr(outfile_tmp + '.par', outfile_tmp + '.hdr')
+        par2hdr(outfile_tmp + '.par', outfile_tmp + '.hdr', nodata=0)
         
         for suffix in ['', '.par', '.hdr']:
             shutil.copyfile(outfile_tmp + suffix, outfile + suffix)
