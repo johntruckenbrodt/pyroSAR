@@ -30,6 +30,7 @@ from spatialist.ancillary import union, finder
 from ..S1 import OSV
 from ..drivers import ID, CEOS_ERS, CEOS_PSR, ESA, SAFE, TSX, identify
 from . import ISPPar, Namespace, par2hdr
+from ..ancillary import multilook_factors
 
 try:
     from .api import diff, disp, isp, lat
@@ -496,7 +497,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         scene = identify(scene)
     else:
         raise RuntimeError("'scene' must be of type str or pyroSAR.ID")
-        
+    
     if scene.sensor not in ['S1A', 'S1B']:
         raise IOError('this method is currently only available for Sentinel-1. Please stay tuned...')
     
@@ -900,19 +901,12 @@ def multilook(infile, outfile, targetres, logpath=None, outdir=None, shellscript
     # read the input parameter file
     par = ISPPar(infile + '.par')
     
-    # compute the range looks
-    if par.image_geometry == 'SLANT_RANGE':
-        # compute the ground range resolution
-        groundRangePS = par.range_pixel_spacing / (math.sin(math.radians(par.incidence_angle)))
-        rlks = int(round(float(targetres) / groundRangePS))
-    else:
-        rlks = int(round(float(targetres) / par.range_pixel_spacing))
-    # compute the azimuth looks
-    azlks = int(round(float(targetres) / par.azimuth_pixel_spacing))
-    
-    # set the look factors to 1 if they were computed to be 0
-    rlks = rlks if rlks > 0 else 1
-    azlks = azlks if azlks > 0 else 1
+    rlks, azlks = multilook_factors(sp_rg=par.range_pixel_spacing,
+                                    sp_az=par.azimuth_pixel_spacing,
+                                    tr_rg=targetres,
+                                    tr_az=targetres,
+                                    geometry=par.image_geometry,
+                                    incidence=par.incidence_angle)
     
     pars = {'rlks': rlks,
             'azlks': azlks,
