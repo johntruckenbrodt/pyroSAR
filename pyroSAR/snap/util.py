@@ -267,6 +267,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         # print('--- reproject')
         shp.reproject(4326)
         ext = shp.extent
+        shp.close()
         # add an extra buffer of 0.01 degrees
         buffer = 0.01
         ext['xmin'] -= buffer
@@ -274,7 +275,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ext['xmax'] += buffer
         ext['ymax'] += buffer
         # print('--- create bbox')
-        with bbox(ext, shp.srs) as bounds:
+        with bbox(ext, 4326) as bounds:
             # print('--- intersect')
             inter = intersect(id.bbox(), bounds)
             if not inter:
@@ -283,8 +284,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             inter.close()
             # print('--- get wkt')
             wkt = bounds.convert2wkt()[0]
-        if isinstance(shapefile, str):
-            shp.close()
+        
         # print('--- parse XML node')
         subset = parse_node('Subset')
         # print('--- insert node')
