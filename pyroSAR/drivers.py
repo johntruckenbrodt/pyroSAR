@@ -1307,7 +1307,7 @@ class SAFE(ID):
         heading = float(ann_tree.find('.//platformHeading').text)
         meta['heading'] = heading if heading > 0 else heading + 360
         meta['incidence'] = float(ann_tree.find('.//incidenceAngleMidSwath').text)
-        meta['image_geometry'] = ann_tree.find('.//projection').text
+        meta['image_geometry'] = ann_tree.find('.//projection').text.replace(' ', '_').upper()
         
         return meta
     
