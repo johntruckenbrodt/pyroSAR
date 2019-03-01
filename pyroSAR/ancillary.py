@@ -7,6 +7,7 @@ This script gathers central functions and classes for general pyroSAR applicatio
 """
 import os
 import re
+import math
 from datetime import datetime
 from ._dev_config import product_pattern
 
@@ -78,6 +79,47 @@ def groupbyTime(images, function, time):
             groups.append([item])
             group = groups[-1]
     return [x[0] if len(x) == 1 else x for x in groups]
+
+
+def multilook_factors(sp_rg, sp_az, tr_rg, tr_az, geometry, incidence):
+    """
+    compute multilooking factors to approximate a target ground range resolution
+    
+    Parameters
+    ----------
+    sp_rg: int or float
+        the range pixel spacing
+    sp_az: int or float
+        the azimuth pixel spacing
+    tr_rg: int or float
+        the range target resolution
+    tr_az: int or float
+        the azimuth target resolution
+    geometry: str
+        the imaging geometry; either 'SLANT_RANGE' or 'GROUND_RANGE'
+    incidence: int or float
+        the angle of incidence
+
+    Returns
+    -------
+    tuple
+        the multilooking factors as (rangelooks, azimuthlooks)
+    """
+    if geometry == 'SLANT_RANGE':
+        # compute the ground range resolution
+        groundRangePS = sp_rg / (math.sin(math.radians(incidence)))
+        rlks = int(math.floor(float(tr_rg) / groundRangePS))
+    elif geometry == 'GROUND_RANGE':
+        rlks = int(math.floor(float(tr_rg) / sp_rg))
+    else:
+        raise ValueError("parameter 'geometry' must be either 'SLANT_RANGE' or 'GROUND_RANGE'")
+    # compute the azimuth looks
+    azlks = int(math.floor(float(tr_az) / sp_az))
+    
+    # set the look factors to 1 if they were computed to be 0
+    rlks = rlks if rlks > 0 else 1
+    azlks = azlks if azlks > 0 else 1
+    return rlks, azlks
 
 
 def seconds(filename):
