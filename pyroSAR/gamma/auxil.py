@@ -118,7 +118,7 @@ class ISPPar(object):
         
         Parameters
         ----------
-        nodata: str or None
+        nodata: int, float or None
             a no data value to write to the HDR file via attribute 'data ignore value'
         
         Returns
@@ -183,7 +183,7 @@ def par2hdr(parfile, hdrfile, modifications=None, nodata=None):
         the ENVI HDR file
     modifications: dict or None
         a dictionary containing value deviations to write to the HDR file
-    nodata: str or None
+    nodata: int, float or None
         a no data value to write to the HDR file via attribute 'data ignore value'
 
     Returns
