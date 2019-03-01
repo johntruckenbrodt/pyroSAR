@@ -3,8 +3,8 @@
 # John Truckenbrodt, 2016-2019
 ####################################################################
 import os
-import math
 import pyroSAR
+from ..ancillary import multilook_factors
 from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
@@ -206,19 +206,19 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     except KeyError:
         raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
     
-    ml_az = int(math.floor(tr / id.spacing[1]))
-    if image_geometry == 'Ground Range':
-        ml_rg = ml_az
-    else:
-        spacing_gr = id.spacing[0] / math.sin(math.radians(incidence))
-        ml_rg = int(math.floor(tr / spacing_gr))
+    rlks, azlks = multilook_factors(sp_rg=id.spacing[0],
+                                    sp_az=id.spacing[1],
+                                    tr_rg=tr,
+                                    tr_az=tr,
+                                    geometry=image_geometry,
+                                    incidence=incidence)
     
-    if ml_az > 1 or ml_rg > 1:
+    if azlks > 1 or rlks > 1:
         insert_node(workflow, parse_node('Multilook'), after=tf.attrib['id'])
         ml = workflow.find('.//node[@id="Multilook"]')
         ml.find('.//parameters/sourceBands').text = bands_beta
-        ml.find('.//parameters/nAzLooks').text = str(ml_az)
-        ml.find('.//parameters/nRgLooks').text = str(ml_rg)
+        ml.find('.//parameters/nAzLooks').text = str(azlks)
+        ml.find('.//parameters/nRgLooks').text = str(rlks)
     ############################################
     # specify spatial resolution and coordinate reference system of the output dataset
     # print('-- configuring CRS')
