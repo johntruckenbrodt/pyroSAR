@@ -398,7 +398,7 @@ class DEMHandler:
         list or str
             the names of the obtained files or the name of the VRT file
         """
-        url = 'http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF'
+        url = 'http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/tiff'
         outdir = os.path.join(self.auxdatapath, 'dem', 'SRTM 3Sec')
         files = []
         for geo in self.geometries:
