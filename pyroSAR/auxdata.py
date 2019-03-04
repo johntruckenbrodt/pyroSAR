@@ -9,8 +9,9 @@ else:
     from urllib2 import urlopen, HTTPError
 
 from .snap import ExamineSnap
+from spatialist import Raster
 from spatialist.ancillary import dissolve, finder
-from spatialist.auxil import gdalbuildvrt, crsConvert
+from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None):
@@ -80,6 +81,12 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         # write the final GeoTiff file
         outname = scene.outname_base() + 'srtm1.tif'
         gdalwarp(src=vrt, dst=outname, options={'format': 'GTiff'})
+        
+        # alternatively use function dem_create and warp the DEM to UTM
+        # including conversion from geoid to ellipsoid heights
+        from pyroSAR.auxdata import dem_create
+        outname = scene.outname_base() + 'srtm1_ellp.tif'
+        dem_create(src=vrt, dst=outname, t_srs=32632, tr=(30, 30), geoid_convert=True, geoid='EGM96')
     """
     with DEMHandler(geometries) as handler:
         if demType == 'AW3D30':
@@ -95,6 +102,69 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                                   buffer=buffer)
         else:
             raise RuntimeError('demType unknown: {}'.format(demType))
+
+
+def dem_create(src, dst, t_srs=None, tr=None, geoid_convert=False, geoid='EGM96'):
+    """
+    create a new DEM GeoTiff file and optionally convert heights from geoid to ellipsoid
+    
+    Parameters
+    ----------
+    src: str
+        the input dataset, e.g. a VRT from function :func:`dem_autoload`
+    dst: str
+        the output dataset
+    t_srs: None, int, str or osr.SpatialReference
+        A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
+        See function :func:`spatialist.auxil.crsConvert()` for details.
+        Default (None): use the crs of ``src``.
+    tr: None or tuple
+        the target resolution as (xres, yres)
+    geoid_convert: bool
+        convert geoid heights?
+    geoid: str
+        the geoid model to be corrected, only used if ``geoid_convert == True``; current options:
+         * 'EGM96'
+
+    Returns
+    -------
+
+    """
+    
+    with Raster(src) as ras:
+        nodata = ras.nodata
+        epsg_in = ras.epsg
+        if t_srs is None:
+            epsg_out = epsg_in
+        else:
+            epsg_out = crsConvert(t_srs, 'epsg')
+    
+    gdalwarp_args = {'format': 'GTiff', 'multithread': True,
+                     'srcNodata': nodata, 'dstNodata': nodata,
+                     'srcSRS': 'EPSG:{}'.format(epsg_in),
+                     'dstSRS': 'EPSG:{}'.format(epsg_out)}
+    if tr is not None:
+        gdalwarp_args.update({'xRes': tr[0],
+                              'yRes': tr[1]})
+    
+    if geoid_convert:
+        if geoid == 'EGM96':
+            gdalwarp_args['srcSRS'] += '+5773'
+        else:
+            raise RuntimeError('geoid model not yet supported')
+    
+    try:
+        gdalwarp(src, dst, gdalwarp_args)
+    except RuntimeError as e:
+        errstr = str(e)
+        if 'Cannot open egm96_15.gtx' in errstr:
+            addition = '\nplease refer to the following site for instructions ' \
+                       'on how to use the file egm96_15.gtx:\n' \
+                       'https://gis.stackexchange.com/questions/258532/' \
+                       'noaa-vdatum-gdal-variable-paths-for-linux-ubuntu'
+            raise RuntimeError(errstr + addition)
+        else:
+            raise e
 
 
 class DEMHandler:
