@@ -10,7 +10,7 @@ else:
 
 from .snap import ExamineSnap
 from spatialist.ancillary import dissolve, finder
-from spatialist.auxil import gdalbuildvrt
+from spatialist.auxil import gdalbuildvrt, crsConvert
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None):
@@ -154,12 +154,15 @@ class DEMHandler:
         return ext_new
     
     @staticmethod
-    def __buildvrt(archives, vrtfile, pattern, vsi, extent, nodata):
+    def __buildvrt(archives, vrtfile, pattern, vsi, extent, nodata, srs=None):
         locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in archives])]
+        opts = {'outputBounds': (extent['xmin'], extent['ymin'],
+                                 extent['xmax'], extent['ymax']),
+                'srcNodata': nodata}
+        if srs is not None:
+            opts['outputSRS'] = crsConvert(srs, 'wkt')
         gdalbuildvrt(src=locals, dst=vrtfile,
-                     options={'outputBounds': (extent['xmin'], extent['ymin'],
-                                               extent['xmax'], extent['ymax']),
-                              'srcNodata': nodata})
+                     options=opts)
     
     @staticmethod
     def __retrieve(url, filenames, outdir):
