@@ -8,6 +8,8 @@ if sys.version_info >= (3, 0):
 else:
     from urllib2 import urlopen, HTTPError
 
+from osgeo import gdal
+
 from .snap import ExamineSnap
 from spatialist import Raster
 from spatialist.ancillary import dissolve, finder
@@ -134,10 +136,11 @@ def dem_create(src, dst, t_srs=None, tr=None, geoid_convert=False, geoid='EGM96'
     with Raster(src) as ras:
         nodata = ras.nodata
         epsg_in = ras.epsg
-        if t_srs is None:
-            epsg_out = epsg_in
-        else:
-            epsg_out = crsConvert(t_srs, 'epsg')
+    
+    if t_srs is None:
+        epsg_out = epsg_in
+    else:
+        epsg_out = crsConvert(t_srs, 'epsg')
     
     gdalwarp_args = {'format': 'GTiff', 'multithread': True,
                      'srcNodata': nodata, 'dstNodata': nodata,
@@ -148,6 +151,9 @@ def dem_create(src, dst, t_srs=None, tr=None, geoid_convert=False, geoid='EGM96'
                               'yRes': tr[1]})
     
     if geoid_convert:
+        if gdal.__version__ < '2.2':
+            raise RuntimeError('geoid conversion requires GDAL >= 2.2;'
+                               'see documentation of gdalwarp')
         if geoid == 'EGM96':
             gdalwarp_args['srcSRS'] += '+5773'
         else:
