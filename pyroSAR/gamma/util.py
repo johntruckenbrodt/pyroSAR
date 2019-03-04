@@ -15,7 +15,6 @@ Testing and suggestions on improvements are very welcome.
 import os
 import re
 import sys
-import math
 import shutil
 from datetime import datetime
 
@@ -657,16 +656,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                         outdir=scene.scene,
                         shellscript=shellscript)
             par2hdr(n.dem_seg_geo + '.par', image + '_geo_pan.hdr')
-            lat.lin_comb(files=[image + '_geo_pan'],
-                         constant=0,
-                         factors=[math.cos(math.radians(master_par.incidence_angle))],
-                         f_out=image + '_geo_pan_flat',
-                         width=sim_width,
-                         logpath=path_log,
-                         outdir=scene.scene,
-                         shellscript=shellscript)
-            par2hdr(n.dem_seg_geo + '.par', image + '_geo_pan_flat.hdr')
-            lat.sigma2gamma(pwr1=image + '_geo_pan_flat',
+            lat.sigma2gamma(pwr1=image + '_geo_pan',
                             inc=n.inc_geo,
                             gamma=image + '_{}'.format(method_suffix),
                             width=sim_width,
@@ -739,16 +729,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                               outdir=scene.scene,
                               shellscript=shellscript)
             par2hdr(n.dem_seg_geo + '.par', image + '_pan_geo.hdr')
-            lat.lin_comb(files=[image + '_pan_geo'],
-                         constant=0,
-                         factors=[math.cos(math.radians(master_par.incidence_angle))],
-                         f_out=image + '_pan_geo_flat',
-                         width=sim_width,
-                         logpath=path_log,
-                         outdir=scene.scene,
-                         shellscript=shellscript)
-            par2hdr(n.dem_seg_geo + '.par', image + '_pan_geo_flat.hdr')
-            lat.sigma2gamma(pwr1=image + '_pan_geo_flat',
+            lat.sigma2gamma(pwr1=image + '_pan_geo',
                             inc=n.inc_geo,
                             gamma=image + '_{}'.format(method_suffix),
                             width=sim_width,
