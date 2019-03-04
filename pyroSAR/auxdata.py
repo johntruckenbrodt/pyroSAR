@@ -156,6 +156,8 @@ def dem_create(src, dst, t_srs=None, tr=None, geoid_convert=False, geoid='EGM96'
     try:
         gdalwarp(src, dst, gdalwarp_args)
     except RuntimeError as e:
+        if os.path.isfile(dst):
+            os.remove(dst)
         errstr = str(e)
         if 'Cannot open egm96_15.gtx' in errstr:
             addition = '\nplease refer to the following site for instructions ' \
