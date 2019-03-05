@@ -17,7 +17,6 @@ else:
 
 import os
 import re
-import inspect
 import shutil
 import zipfile as zf
 
@@ -28,7 +27,7 @@ from spatialist.envi import HDRobject
 from ..auxdata import dem_autoload
 from ..drivers import ID
 from . import ISPPar, UTM, slc_corners, par2hdr
-from .auxil import ExamineGamma
+from .auxil import ExamineGamma, hasarg
 
 try:
     from .api import diff, disp, isp
@@ -204,8 +203,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
     epsg = crsConvert(t_srs, 'epsg') if t_srs != 4326 else t_srs
     
     if epsg != 4326:
-        args = inspect.getfullargspec(diff.create_dem_par).args
-        if 'EPSG' not in args:
+        if not hasarg(diff.create_dem_par, 'EPSG'):
             raise RuntimeError('using a different CRS than 4326 is currently not supported for this version of Gamma')
         if 'dem_import' not in dir(diff):
             raise RuntimeError('using a different CRS than 4326 currently requires command dem_import, '
