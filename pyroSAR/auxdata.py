@@ -8,9 +8,12 @@ if sys.version_info >= (3, 0):
 else:
     from urllib2 import urlopen, HTTPError
 
+from osgeo import gdal
+
 from .snap import ExamineSnap
+from spatialist import Raster
 from spatialist.ancillary import dissolve, finder
-from spatialist.auxil import gdalbuildvrt
+from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None):
@@ -80,6 +83,12 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         # write the final GeoTiff file
         outname = scene.outname_base() + 'srtm1.tif'
         gdalwarp(src=vrt, dst=outname, options={'format': 'GTiff'})
+        
+        # alternatively use function dem_create and warp the DEM to UTM
+        # including conversion from geoid to ellipsoid heights
+        from pyroSAR.auxdata import dem_create
+        outname = scene.outname_base() + 'srtm1_ellp.tif'
+        dem_create(src=vrt, dst=outname, t_srs=32632, tr=(30, 30), geoid_convert=True, geoid='EGM96')
     """
     with DEMHandler(geometries) as handler:
         if demType == 'AW3D30':
@@ -95,6 +104,75 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                                   buffer=buffer)
         else:
             raise RuntimeError('demType unknown: {}'.format(demType))
+
+
+def dem_create(src, dst, t_srs=None, tr=None, geoid_convert=False, geoid='EGM96'):
+    """
+    create a new DEM GeoTiff file and optionally convert heights from geoid to ellipsoid
+    
+    Parameters
+    ----------
+    src: str
+        the input dataset, e.g. a VRT from function :func:`dem_autoload`
+    dst: str
+        the output dataset
+    t_srs: None, int, str or osr.SpatialReference
+        A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
+        See function :func:`spatialist.auxil.crsConvert()` for details.
+        Default (None): use the crs of ``src``.
+    tr: None or tuple
+        the target resolution as (xres, yres)
+    geoid_convert: bool
+        convert geoid heights?
+    geoid: str
+        the geoid model to be corrected, only used if ``geoid_convert == True``; current options:
+         * 'EGM96'
+
+    Returns
+    -------
+
+    """
+    
+    with Raster(src) as ras:
+        nodata = ras.nodata
+        epsg_in = ras.epsg
+    
+    if t_srs is None:
+        epsg_out = epsg_in
+    else:
+        epsg_out = crsConvert(t_srs, 'epsg')
+    
+    gdalwarp_args = {'format': 'GTiff', 'multithread': True,
+                     'srcNodata': nodata, 'dstNodata': nodata,
+                     'srcSRS': 'EPSG:{}'.format(epsg_in),
+                     'dstSRS': 'EPSG:{}'.format(epsg_out)}
+    if tr is not None:
+        gdalwarp_args.update({'xRes': tr[0],
+                              'yRes': tr[1]})
+    
+    if geoid_convert:
+        if gdal.__version__ < '2.2':
+            raise RuntimeError('geoid conversion requires GDAL >= 2.2;'
+                               'see documentation of gdalwarp')
+        if geoid == 'EGM96':
+            gdalwarp_args['srcSRS'] += '+5773'
+        else:
+            raise RuntimeError('geoid model not yet supported')
+    
+    try:
+        gdalwarp(src, dst, gdalwarp_args)
+    except RuntimeError as e:
+        if os.path.isfile(dst):
+            os.remove(dst)
+        errstr = str(e)
+        if 'Cannot open egm96_15.gtx' in errstr:
+            addition = '\nplease refer to the following site for instructions ' \
+                       'on how to use the file egm96_15.gtx:\n' \
+                       'https://gis.stackexchange.com/questions/258532/' \
+                       'noaa-vdatum-gdal-variable-paths-for-linux-ubuntu'
+            raise RuntimeError(errstr + addition)
+        else:
+            raise e
 
 
 class DEMHandler:
@@ -154,12 +232,15 @@ class DEMHandler:
         return ext_new
     
     @staticmethod
-    def __buildvrt(archives, vrtfile, pattern, vsi, extent, nodata):
+    def __buildvrt(archives, vrtfile, pattern, vsi, extent, nodata, srs=None):
         locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in archives])]
+        opts = {'outputBounds': (extent['xmin'], extent['ymin'],
+                                 extent['xmax'], extent['ymax']),
+                'srcNodata': nodata}
+        if srs is not None:
+            opts['outputSRS'] = crsConvert(srs, 'wkt')
         gdalbuildvrt(src=locals, dst=vrtfile,
-                     options={'outputBounds': (extent['xmin'], extent['ymin'],
-                                               extent['xmax'], extent['ymax']),
-                              'srcNodata': nodata})
+                     options=opts)
     
     @staticmethod
     def __retrieve(url, filenames, outdir):
@@ -317,7 +398,7 @@ class DEMHandler:
         list or str
             the names of the obtained files or the name of the VRT file
         """
-        url = 'http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF'
+        url = 'http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/tiff'
         outdir = os.path.join(self.auxdatapath, 'dem', 'SRTM 3Sec')
         files = []
         for geo in self.geometries:

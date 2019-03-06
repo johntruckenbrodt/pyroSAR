@@ -155,7 +155,7 @@ Auxiliary Data Tools
 ====================
 
 .. automodule:: pyroSAR.auxdata
-    :members: dem_autoload
+    :members: dem_autoload, dem_create
     :undoc-members:
     :show-inheritance:
 
