@@ -258,52 +258,22 @@ def gpt(xmlfile):
     wrapper for ESA SNAP Graph Processing Tool GPT
     input is a readily formatted workflow xml file as created by function geocode in module snap.util
     """
-    try:
-        gpt_exec = ExamineSnap().gpt
-    except AttributeError:
-        raise RuntimeError('could not find SNAP GPT executable')
     
     with open(xmlfile, 'r') as infile:
         workflow = ET.fromstring(infile.read())
     write = workflow.find('.//node[@id="Write"]')
     outname = write.find('.//parameters/file').text
-    outdir = os.path.dirname(outname)
     format = write.find('.//parameters/formatName').text
-    infile = workflow.find('.//node[@id="Read"]/parameters/file').text
     dem_name = workflow.find('.//demName').text
     if dem_name == 'External DEM':
         dem_nodata = float(workflow.find('.//externalDEMNoDataValue').text)
     else:
         dem_nodata = 0
     
-    if format == 'GeoTiff-BigTIFF':
-        cmd = [gpt_exec,
-               # '-Dsnap.dataio.reader.tileWidth=*',
-               # '-Dsnap.dataio.reader.tileHeight=1',
-               '-Dsnap.dataio.bigtiff.tiling.width=256',
-               '-Dsnap.dataio.bigtiff.tiling.height=256',
-               # '-Dsnap.dataio.bigtiff.compression.type=LZW',
-               # '-Dsnap.dataio.bigtiff.compression.quality=0.75',
-               xmlfile]
-    else:
-        cmd = [gpt_exec, xmlfile]
-    # print('- processing workflow {}'.format(os.path.basename(xmlfile)))
-    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-    out, err = proc.communicate()
-    out = out.decode('utf-8') if isinstance(out, bytes) else out
-    err = err.decode('utf-8') if isinstance(err, bytes) else err
-    if proc.returncode != 0:
-        if os.path.isfile(outname + '.tif'):
-            os.remove(outname + '.tif')
-        elif os.path.isdir(outname):
-            shutil.rmtree(outname)
-        print(out + err)
-        print('failed: {}'.format(os.path.basename(infile)))
-        err_match = re.search('Error: (.*)\n', out + err)
-        errmessage = err_match.group(1) if err_match else err
-        raise RuntimeError(errmessage)
+    execute(xmlfile)
+    
     if format == 'ENVI':
-        # print('- converting to GTiff')
+        print('converting to GTiff')
         suffix = parse_suffix(workflow)
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
@@ -325,6 +295,7 @@ def gpt(xmlfile):
         for i in range(1, ras.RasterCount + 1):
             ras.GetRasterBand(i).SetNoDataValue(0)
         ras = None
+    print('done')
 
 
 class ExamineSnap(object):
