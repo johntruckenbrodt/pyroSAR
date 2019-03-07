@@ -253,7 +253,7 @@ def execute(xmlfile):
         raise RuntimeError(errmessage)
 
 
-def gpt(xmlfile):
+def gpt(xmlfile, groups=None):
     """
     wrapper for ESA SNAP Graph Processing Tool GPT
     input is a readily formatted workflow xml file as created by function geocode in module snap.util
@@ -269,8 +269,14 @@ def gpt(xmlfile):
         dem_nodata = float(workflow.find('.//externalDEMNoDataValue').text)
     else:
         dem_nodata = 0
-    
-    execute(xmlfile)
+    print('executing node sequence{}..'.format('s' if groups is not None else ''))
+    if groups is not None:
+        subs = split(xmlfile, groups)
+        for sub in subs:
+            print(os.path.basename(os.path.splitext(sub)[0]))
+            execute(sub)
+    else:
+        execute(xmlfile)
     
     if format == 'ENVI':
         print('converting to GTiff')
