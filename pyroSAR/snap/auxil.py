@@ -214,6 +214,45 @@ def getAuxdata(datasets, scenes):
             print('not implemented yet')
 
 
+def execute(xmlfile):
+    with open(xmlfile, 'r') as infile:
+        workflow = ET.fromstring(infile.read())
+    write = workflow.find('.//node[@id="Write"]')
+    outname = write.find('.//parameters/file').text
+    infile = workflow.find('.//node[@id="Read"]/parameters/file').text
+    try:
+        gpt_exec = ExamineSnap().gpt
+    except AttributeError:
+        raise RuntimeError('could not find SNAP GPT executable')
+    
+    if format == 'GeoTiff-BigTIFF':
+        cmd = [gpt_exec,
+               # '-Dsnap.dataio.reader.tileWidth=*',
+               # '-Dsnap.dataio.reader.tileHeight=1',
+               '-Dsnap.dataio.bigtiff.tiling.width=256',
+               '-Dsnap.dataio.bigtiff.tiling.height=256',
+               # '-Dsnap.dataio.bigtiff.compression.type=LZW',
+               # '-Dsnap.dataio.bigtiff.compression.quality=0.75',
+               xmlfile]
+    else:
+        cmd = [gpt_exec, xmlfile]
+    # print('- processing workflow {}'.format(os.path.basename(xmlfile)))
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+    out, err = proc.communicate()
+    out = out.decode('utf-8') if isinstance(out, bytes) else out
+    err = err.decode('utf-8') if isinstance(err, bytes) else err
+    if proc.returncode != 0:
+        if os.path.isfile(outname + '.tif'):
+            os.remove(outname + '.tif')
+        elif os.path.isdir(outname):
+            shutil.rmtree(outname)
+        print(out + err)
+        print('failed: {}'.format(os.path.basename(infile)))
+        err_match = re.search('Error: (.*)\n', out + err)
+        errmessage = err_match.group(1) if err_match else err
+        raise RuntimeError(errmessage)
+
+
 def gpt(xmlfile):
     """
     wrapper for ESA SNAP Graph Processing Tool GPT
