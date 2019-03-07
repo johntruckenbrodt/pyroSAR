@@ -55,7 +55,7 @@ def parse_suffix(workflow):
     return suffix
 
 
-def insert_node(workflow, node, before=None, after=None, resetSuccessorSource=True):
+def insert_node(workflow, node, before=None, after=None, resetSuccessorSource=True, void=True):
     if before and not after:
         predecessor = workflow.find('.//node[@id="{}"]'.format(before))
         position = list(workflow).index(predecessor) + 1
@@ -82,6 +82,8 @@ def insert_node(workflow, node, before=None, after=None, resetSuccessorSource=Tr
             successor.find('.//sources/sourceProduct').attrib['refid'] = newnode.attrib['id']
     else:
         raise RuntimeError('cannot insert node if both before and after are set')
+    if not void:
+        return node
 
 
 def write_recipe(recipe, outfile):
