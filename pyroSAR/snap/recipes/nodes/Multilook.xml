@@ -1,0 +1,13 @@
+<node id="Multilook">
+    <operator>Multilook</operator>
+    <sources>
+        <sourceProduct refid="Calibration"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+        <sourceBands/>
+        <nRgLooks/>
+        <nAzLooks/>
+        <outputIntensity>true</outputIntensity>
+        <grSquarePixel>true</grSquarePixel>
+    </parameters>
+</node>

@@ -15,7 +15,6 @@ Testing and suggestions on improvements are very welcome.
 import os
 import re
 import sys
-import math
 import shutil
 from datetime import datetime
 
@@ -30,6 +29,8 @@ from spatialist.ancillary import union, finder
 from ..S1 import OSV
 from ..drivers import ID, CEOS_ERS, CEOS_PSR, ESA, SAFE, TSX, identify
 from . import ISPPar, Namespace, par2hdr
+from .auxil import hasarg
+from ..ancillary import multilook_factors
 
 try:
     from .api import diff, disp, isp, lat
@@ -496,7 +497,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         scene = identify(scene)
     else:
         raise RuntimeError("'scene' must be of type str or pyroSAR.ID")
-        
+    
     if scene.sensor not in ['S1A', 'S1B']:
         raise IOError('this method is currently only available for Sentinel-1. Please stay tuned...')
     
@@ -656,16 +657,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                         outdir=scene.scene,
                         shellscript=shellscript)
             par2hdr(n.dem_seg_geo + '.par', image + '_geo_pan.hdr')
-            lat.lin_comb(files=[image + '_geo_pan'],
-                         constant=0,
-                         factors=[math.cos(math.radians(master_par.incidence_angle))],
-                         f_out=image + '_geo_pan_flat',
-                         width=sim_width,
-                         logpath=path_log,
-                         outdir=scene.scene,
-                         shellscript=shellscript)
-            par2hdr(n.dem_seg_geo + '.par', image + '_geo_pan_flat.hdr')
-            lat.sigma2gamma(pwr1=image + '_geo_pan_flat',
+            lat.sigma2gamma(pwr1=image + '_geo_pan',
                             inc=n.inc_geo,
                             gamma=image + '_{}'.format(method_suffix),
                             width=sim_width,
@@ -679,42 +671,58 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     ######################################################################
     elif normalization_method == 2:
         method_suffix = 'norm_geo'
-        n.appreciate(['pix_area_sigma0', 'pix_ellip_sigma0', 'pix_fine'])
-        # actual illuminated area as obtained from integrating DEM-facets (pix_area_sigma0 | pix_area_gamma0)
-        diff.pixel_area(MLI_par=master + '.par',
-                        DEM_par=n.dem_seg_geo + '.par',
-                        DEM=n.dem_seg_geo,
-                        lookup_table=lut_final,
-                        ls_map=n.ls_map_geo,
-                        inc_map=n.inc_geo,
-                        pix_sigma0=n.pix_area_sigma0,
-                        logpath=path_log,
-                        outdir=scene.scene,
-                        shellscript=shellscript)
-        par2hdr(master + '.par', n.pix_area_sigma0 + '.hdr')
-        # ellipsoid-based pixel area (ellip_pix_sigma0)
-        isp.radcal_MLI(MLI=master,
-                       MLI_par=master + '.par',
-                       OFF_par='-',
-                       CMLI=master + '_cal',
-                       refarea_flag=1,  # calculate sigma0, scale area by sin(inc_ang)/sin(ref_inc_ang)
-                       pix_area=n.pix_ellip_sigma0,
-                       logpath=path_log,
-                       outdir=scene.scene,
-                       shellscript=shellscript)
-        par2hdr(master + '.par', n.pix_ellip_sigma0 + '.hdr')
-        par2hdr(master + '.par', master + '_cal.hdr')
-        # ratio of ellipsoid based pixel area and DEM-facet pixel area
-        lat.ratio(d1=n.pix_ellip_sigma0,
-                  d2=n.pix_area_sigma0,
-                  ratio=n.pix_fine,
-                  width=master_par.range_samples,
-                  bx=1,
-                  by=1,
-                  logpath=path_log,
-                  outdir=scene.scene,
-                  shellscript=shellscript)
-        par2hdr(master + '.par', n.pix_fine + '.hdr')
+        # newer versions of Gamma enable creating the ratio of ellipsoid based
+        # pixel area and DEM-facet pixel area directly with command pixel_area
+        if hasarg(diff.pixel_area, 'sigma0_ratio'):
+            n.appreciate(['pix_fine'])
+            diff.pixel_area(MLI_par=master + '.par',
+                            DEM_par=n.dem_seg_geo + '.par',
+                            DEM=n.dem_seg_geo,
+                            lookup_table=lut_final,
+                            ls_map=n.ls_map_geo,
+                            inc_map=n.inc_geo,
+                            sigma0_ratio=n.pix_fine,
+                            logpath=path_log,
+                            outdir=scene.scene,
+                            shellscript=shellscript)
+            par2hdr(master + '.par', n.pix_fine + '.hdr')
+        else:
+            n.appreciate(['pix_area_sigma0', 'pix_ellip_sigma0', 'pix_fine'])
+            # actual illuminated area as obtained from integrating DEM-facets (pix_area_sigma0 | pix_area_gamma0)
+            diff.pixel_area(MLI_par=master + '.par',
+                            DEM_par=n.dem_seg_geo + '.par',
+                            DEM=n.dem_seg_geo,
+                            lookup_table=lut_final,
+                            ls_map=n.ls_map_geo,
+                            inc_map=n.inc_geo,
+                            pix_sigma0=n.pix_area_sigma0,
+                            logpath=path_log,
+                            outdir=scene.scene,
+                            shellscript=shellscript)
+            par2hdr(master + '.par', n.pix_area_sigma0 + '.hdr')
+            # ellipsoid-based pixel area (ellip_pix_sigma0)
+            isp.radcal_MLI(MLI=master,
+                           MLI_par=master + '.par',
+                           OFF_par='-',
+                           CMLI=master + '_cal',
+                           refarea_flag=1,  # calculate sigma0, scale area by sin(inc_ang)/sin(ref_inc_ang)
+                           pix_area=n.pix_ellip_sigma0,
+                           logpath=path_log,
+                           outdir=scene.scene,
+                           shellscript=shellscript)
+            par2hdr(master + '.par', n.pix_ellip_sigma0 + '.hdr')
+            par2hdr(master + '.par', master + '_cal.hdr')
+            # ratio of ellipsoid based pixel area and DEM-facet pixel area
+            lat.ratio(d1=n.pix_ellip_sigma0,
+                      d2=n.pix_area_sigma0,
+                      ratio=n.pix_fine,
+                      width=master_par.range_samples,
+                      bx=1,
+                      by=1,
+                      logpath=path_log,
+                      outdir=scene.scene,
+                      shellscript=shellscript)
+            par2hdr(master + '.par', n.pix_fine + '.hdr')
         for image in images:
             # sigma0 = MLI * ellip_pix_sigma0 / pix_area_sigma0
             # gamma0 = MLI * ellip_pix_sigma0 / pix_area_gamma0
@@ -738,16 +746,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                               outdir=scene.scene,
                               shellscript=shellscript)
             par2hdr(n.dem_seg_geo + '.par', image + '_pan_geo.hdr')
-            lat.lin_comb(files=[image + '_pan_geo'],
-                         constant=0,
-                         factors=[math.cos(math.radians(master_par.incidence_angle))],
-                         f_out=image + '_pan_geo_flat',
-                         width=sim_width,
-                         logpath=path_log,
-                         outdir=scene.scene,
-                         shellscript=shellscript)
-            par2hdr(n.dem_seg_geo + '.par', image + '_pan_geo_flat.hdr')
-            lat.sigma2gamma(pwr1=image + '_pan_geo_flat',
+            lat.sigma2gamma(pwr1=image + '_pan_geo',
                             inc=n.inc_geo,
                             gamma=image + '_{}'.format(method_suffix),
                             width=sim_width,
@@ -900,19 +899,12 @@ def multilook(infile, outfile, targetres, logpath=None, outdir=None, shellscript
     # read the input parameter file
     par = ISPPar(infile + '.par')
     
-    # compute the range looks
-    if par.image_geometry == 'SLANT_RANGE':
-        # compute the ground range resolution
-        groundRangePS = par.range_pixel_spacing / (math.sin(math.radians(par.incidence_angle)))
-        rlks = int(round(float(targetres) / groundRangePS))
-    else:
-        rlks = int(round(float(targetres) / par.range_pixel_spacing))
-    # compute the azimuth looks
-    azlks = int(round(float(targetres) / par.azimuth_pixel_spacing))
-    
-    # set the look factors to 1 if they were computed to be 0
-    rlks = rlks if rlks > 0 else 1
-    azlks = azlks if azlks > 0 else 1
+    rlks, azlks = multilook_factors(sp_rg=par.range_pixel_spacing,
+                                    sp_az=par.azimuth_pixel_spacing,
+                                    tr_rg=targetres,
+                                    tr_az=targetres,
+                                    geometry=par.image_geometry,
+                                    incidence=par.incidence_angle)
     
     pars = {'rlks': rlks,
             'azlks': azlks,

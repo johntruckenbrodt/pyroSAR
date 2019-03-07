@@ -6,6 +6,7 @@ import math
 import os
 import re
 import json
+import inspect
 import subprocess as sp
 from datetime import datetime
 
@@ -118,7 +119,7 @@ class ISPPar(object):
         
         Parameters
         ----------
-        nodata: str or None
+        nodata: int, float or None
             a no data value to write to the HDR file via attribute 'data ignore value'
         
         Returns
@@ -183,7 +184,7 @@ def par2hdr(parfile, hdrfile, modifications=None, nodata=None):
         the ENVI HDR file
     modifications: dict or None
         a dictionary containing value deviations to write to the HDR file
-    nodata: str or None
+    nodata: int, float or None
         a no data value to write to the HDR file via attribute 'data ignore value'
 
     Returns
@@ -296,6 +297,25 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
     gammaErrorHandler(out, err)
     if not void:
         return out, err
+
+
+def hasarg(func, arg):
+    """
+    simple check whether a function takes a parameter as input
+    
+    Parameters
+    ----------
+    func: function
+        the function to be ckecked
+    arg: str
+        the argument name to be found
+
+    Returns
+    -------
+    bool
+        does the function take this as argument?
+    """
+    return arg in inspect.getfullargspec(func).args
 
 
 class Spacing(object):

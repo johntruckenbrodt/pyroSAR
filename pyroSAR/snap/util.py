@@ -3,8 +3,8 @@
 # John Truckenbrodt, 2016-2019
 ####################################################################
 import os
-
 import pyroSAR
+from ..ancillary import multilook_factors
 from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
@@ -197,6 +197,28 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     else:
         raise RuntimeError('geocode_type not recognized')
     
+    ############################################
+    # Multilook node configuration
+    
+    try:
+        image_geometry = id.meta['image_geometry']
+        incidence = id.meta['incidence']
+    except KeyError:
+        raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
+    
+    rlks, azlks = multilook_factors(sp_rg=id.spacing[0],
+                                    sp_az=id.spacing[1],
+                                    tr_rg=tr,
+                                    tr_az=tr,
+                                    geometry=image_geometry,
+                                    incidence=incidence)
+    
+    if azlks > 1 or rlks > 1:
+        insert_node(workflow, parse_node('Multilook'), after=tf.attrib['id'])
+        ml = workflow.find('.//node[@id="Multilook"]')
+        ml.find('.//parameters/sourceBands').text = bands_beta
+        ml.find('.//parameters/nAzLooks').text = str(azlks)
+        ml.find('.//parameters/nRgLooks').text = str(rlks)
     ############################################
     # specify spatial resolution and coordinate reference system of the output dataset
     # print('-- configuring CRS')

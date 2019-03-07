@@ -20,13 +20,15 @@ import re
 import shutil
 import zipfile as zf
 
-from spatialist import raster, gdal_translate, gdalbuildvrt, gdalwarp
+from spatialist import raster, gdal_translate, gdalbuildvrt, gdalwarp, crsConvert
 from spatialist.ancillary import finder
 from spatialist.envi import HDRobject
 
 from ..auxdata import dem_autoload
 from ..drivers import ID
 from . import ISPPar, UTM, slc_corners, par2hdr
+from .auxil import ExamineGamma, hasarg
+
 try:
     from .api import diff, disp, isp
 except ImportError:
@@ -36,7 +38,7 @@ except ImportError:
 def fill(dem, dem_out, logpath=None, replace=False):
     """
     interpolate missing values in the SRTM DEM (value -32768)
-    
+
     Parameters
     ----------
     dem: str
@@ -143,7 +145,8 @@ def transform(infile, outfile, posting=90):
     par2hdr(outfile + '.par', outfile + '.hdr')
 
 
-def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, username=None, password=None):
+def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None, logpath=None, username=None,
+                   password=None):
     """
     | automatically create a DEM in Gamma format for a defined spatial geometry
     | the following steps will be performed:
@@ -151,12 +154,20 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
     - collect all tiles overlapping with the geometry
 
       * if they don't yet exist locally they will automatically be downloaded
-      * the tiles will be downloaded into the SNAP auxdata directory structure, e.g. $HOME/.snap/auxdata/dem/SRTM 3Sec
+      * the tiles will be downloaded into the SNAP auxdata directory structure,
+        e.g. ``$HOME/.snap/auxdata/dem/SRTM 3Sec``
 
-    - create a mosaic GeoTiff of the same spatial extent as the input geometry plus a defined buffer using gdalwarp
-    - subtract the EGM96-WGS84 Geoid-Ellipsoid difference and convert the result to Gamma format using Gamma command srtm2dem
+    - create a mosaic GeoTiff of the same spatial extent as the input geometry
+      plus a defined buffer using ``gdalwarp``
+    - subtract the EGM96-WGS84 Geoid-Ellipsoid difference and convert the result
+      to Gamma format using Gamma command ``srtm2dem``
     
-      * this correction is not done for TanDEM-X data, which contains ellipsoid heights; see `here <https://geoservice.dlr.de/web/dataguide/tdm90>`_
+      * this correction is not done for TanDEM-X data, which contains ellipsoid
+        heights; see `here <https://geoservice.dlr.de/web/dataguide/tdm90>`_
+    
+    - if the command ``create_dem_par`` accepts a parameter EPSG and the command ``dem_import`` exists,
+      an arbitrary CRS can be defined via parameter ``t_srs``. In this case and if parameter ``t_srs`` is not kept at
+      its default of 4326, conversion to Gamma format is done with command ``dem_import`` instead of ``srtm2dem``
 
     Parameters
     ----------
@@ -168,10 +179,19 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
         the name of the final DEM file
     buffer: float
         a buffer in degrees to create around the geometry
+    t_srs: int, str or osr.SpatialReference
+        A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
+        See function :func:`spatialist.auxil.crsConvert()` for details.
+        Default: `4326 <http://spatialreference.org/ref/epsg/4326/>`_.
+    tr: tuple or None
+        the target resolution as (xres, yres) in units of ``t_srs``; if ``t_srs`` is kept at its default value of 4326,
+        ``tr`` does not need to be defined and the original resolution is preserved;
+        in all other cases the default of None is rejected
     logpath: str
         a directory to write Gamma logfiles to
     username: str or None
-        (optional) the user name for services requiring registration; see :func:`~pyroSAR.auxdata.dem_autoload`
+        (optional) the user name for services requiring registration;
+        see :func:`~pyroSAR.auxdata.dem_autoload`
     password: str or None
         (optional) the password for the registration account
 
@@ -179,6 +199,18 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
     -------
 
     """
+    
+    epsg = crsConvert(t_srs, 'epsg') if t_srs != 4326 else t_srs
+    
+    if epsg != 4326:
+        if not hasarg(diff.create_dem_par, 'EPSG'):
+            raise RuntimeError('using a different CRS than 4326 is currently not supported for this version of Gamma')
+        if 'dem_import' not in dir(diff):
+            raise RuntimeError('using a different CRS than 4326 currently requires command dem_import, '
+                               'which is not part of this version of Gamma')
+        if tr is None:
+            raise RuntimeError('tr needs to be defined if t_srs is not 4326')
+    
     if os.path.isfile(outfile):
         print('outfile already exists')
         return
@@ -194,36 +226,67 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
         dem = os.path.join(tmpdir, 'dem.tif')
         
         print('collecting DEM tiles')
-        vrt = dem_autoload([geometry], demType, vrt=vrt, username=username, password=password, buffer=buffer)
+        vrt = dem_autoload([geometry], demType, vrt=vrt, username=username,
+                           password=password, buffer=buffer)
         
-        print('creating mosaic')
-        gdalwarp(vrt, dem, {'format': 'GTiff'})
+        with raster.Raster(vrt) as ras:
+            nodata = ras.nodata
+        
+        message = 'creating mosaic'
+        gdalwarp_args = {'format': 'GTiff', 'multithread': True,
+                         'srcNodata': nodata, 'dstNodata': nodata}
+        if epsg != 4326:
+            gdalwarp_args.update({'dstSRS': crsConvert(epsg, 'wkt'),
+                                  'xRes': tr[0],
+                                  'yRes': tr[1]})
+        message += ' and reprojecting to EPSG:{}'.format(epsg)
+        print(message)
+        gdalwarp(vrt, dem, gdalwarp_args)
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
         # The heights of the TanDEM-X DEM products are ellipsoidal heights, all others are EGM96 Geoid heights
         # Gamma works only with Ellipsoid heights and the offset needs to be corrected
+        # note: starting from GDAL 2.2 the conversion can be done directly in GDAL; see docs of gdalwarp
         if demType == 'TDX90m':
             gflg = 0
             message = 'conversion to Gamma format'
         else:
-            gflg =2
+            gflg = 2
             message = 'geoid correction and conversion to Gamma format'
-
+        
         print(message)
         
-        diff.srtm2dem(SRTM_DEM=dem,
-                      DEM=outfile_tmp,
-                      DEM_par=outfile_tmp + '.par',
-                      gflg=gflg,
-                      geoid='-',
-                      logpath=logpath,
-                      outdir=tmpdir)
-        par2hdr(outfile_tmp + '.par', outfile_tmp + '.hdr')
+        if epsg == 4326:
+            # old approach for backwards compatibility
+            diff.srtm2dem(SRTM_DEM=dem,
+                          DEM=outfile_tmp,
+                          DEM_par=outfile_tmp + '.par',
+                          gflg=gflg,
+                          geoid='-',
+                          logpath=logpath,
+                          outdir=tmpdir)
+        else:
+            # new approach enabling an arbitrary target CRS
+            diff.create_dem_par(DEM_par=outfile_tmp + '.par',
+                                inlist=[''] * 9,
+                                EPSG=epsg)
+            dem_import_pars = {'input_DEM': dem,
+                               'DEM': outfile_tmp,
+                               'DEM_par': outfile_tmp + '.par'}
+            if gflg == 2:
+                home = ExamineGamma().home
+                egm96 = os.path.join(home, 'DIFF', 'scripts', 'egm96.dem')
+                dem_import_pars['geoid'] = egm96
+                dem_import_pars['geoid_par'] = egm96 + '_par'
+            
+            diff.dem_import(**dem_import_pars)
+        
+        par2hdr(outfile_tmp + '.par', outfile_tmp + '.hdr', nodata=0)
         
         for suffix in ['', '.par', '.hdr']:
             shutil.copyfile(outfile_tmp + suffix, outfile + suffix)
-        
+    
     except RuntimeError as e:
         raise e
     finally:
@@ -233,9 +296,9 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, logpath=None, userna
 def dempar(dem, logpath=None):
     """
     create GAMMA parameter text files for DEM files
-    
+
     currently only EQA and UTM projections with WGS84 ellipsoid are supported
-    
+
     Parameters
     ----------
     dem: str
@@ -276,10 +339,11 @@ def dempar(dem, logpath=None):
     if projection == 'UTM':
         zone = rast.proj4args['zone']
         falsenorthing = 10000000. if rast.geo['ymin'] < 0 else 0
-        parlist = [projection, ellipsoid, 1, zone, falsenorthing, os.path.basename(dem), dtype, 0, 1, rast.cols,
-                   rast.rows, posting, latlon]
+        parlist = [projection, ellipsoid, 1, zone, falsenorthing, os.path.basename(dem),
+                   dtype, 0, 1, rast.cols, rast.rows, posting, latlon]
     else:
-        parlist = [projection, ellipsoid, 1, os.path.basename(dem), dtype, 0, 1, rast.cols, rast.rows, posting, latlon]
+        parlist = [projection, ellipsoid, 1, os.path.basename(dem), dtype,
+                   0, 1, rast.cols, rast.rows, posting, latlon]
     
     # execute GAMMA command
     diff.create_dem_par(DEM_par=os.path.splitext(dem)[0] + '.par',
@@ -291,7 +355,7 @@ def dempar(dem, logpath=None):
 def swap(data, outname):
     """
     byte swapping from small to big endian (as required by GAMMA)
-    
+
     Parameters
     ----------
     data: str
@@ -324,7 +388,7 @@ def swap(data, outname):
 def mosaic(demlist, outname, byteorder=1, gammapar=True):
     """
     mosaicing of multiple DEMs
-    
+
     Parameters
     ----------
     demlist: list
@@ -333,10 +397,10 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
         the name of the final mosaic file
     byteorder: {0, 1}
         the byte order of the mosaic
-        
+
         - 0: small endian
         - 1: big endian
-        
+
     gammapar: bool
         create a Gamma parameter file for the mosaic?
 
@@ -367,17 +431,21 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
 def hgt(parfiles):
     """
     concatenate hgt file names overlapping with multiple SAR scenes
-    
-    - this list is read for corner coordinates of which the next integer lower left latitude and longitude is computed
-    - hgt files are supplied in 1 degree equiangular format named e.g. N16W094.hgt (with pattern [NS][0-9]{2}[EW][0-9]{3}.hgt
-    - For north and east hemisphere the respective absolute latitude and longitude values are smaller than the lower left coordinate of the SAR image
-    - west and south coordinates are negative and hence the nearest lower left integer absolute value is going to be larger
-    
+
+    - this list is read for corner coordinates of which the next integer
+      lower left latitude and longitude is computed
+    - hgt files are supplied in 1 degree equiangular format named e.g.
+      N16W094.hgt (with pattern [NS][0-9]{2}[EW][0-9]{3}.hgt
+    - For north and east hemisphere the respective absolute latitude and longitude
+      values are smaller than the lower left coordinate of the SAR image
+    - west and south coordinates are negative and hence the nearest lower left
+      integer absolute value is going to be larger
+
     Parameters
     ----------
     parfiles: list of str or pyroSAR.ID
         a list of Gamma parameter files or pyroSAR ID objects
-    
+
     Returns
     -------
     list
@@ -414,15 +482,15 @@ def hgt(parfiles):
 def makeSRTM(scenes, srtmdir, outname):
     """
     Create a DEM in Gamma format from SRTM tiles
-    
+
     - coordinates are read to determine the required DEM extent and select the necessary hgt tiles
     - mosaics SRTM DEM tiles, converts them to Gamma format and subtracts offset to WGS84 ellipsoid
-    
+
     intended for SRTM products downloaded from:
-    
+
     - USGS: https://gdex.cr.usgs.gov/gdex/
     - CGIAR: http://srtm.csi.cgiar.org
-    
+
     Parameters
     ----------
     scenes: list of str or pyroSAR.ID
@@ -475,7 +543,7 @@ def makeSRTM(scenes, srtmdir, outname):
 def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
     """
     automatic downloading and unpacking of srtm tiles
-    
+
     Parameters
     ----------
     parfiles: list of str or pyroSAR.ID
