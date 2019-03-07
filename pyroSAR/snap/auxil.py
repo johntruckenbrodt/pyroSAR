@@ -283,7 +283,7 @@ def gpt(xmlfile, groups=None):
         suffix = parse_suffix(workflow)
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
-        for item in finder(outname, ['*.img']):
+        for item in finder(outname, ['*.img'], recursive=False):
             if re.search('[HV]{2}', item):
                 pol = re.search('[HV]{2}', item).group()
                 name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
