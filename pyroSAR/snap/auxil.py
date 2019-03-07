@@ -81,7 +81,7 @@ def insert_node(workflow, node, before=None, after=None, resetSuccessorSource=Tr
         if resetSuccessorSource:
             successor.find('.//sources/sourceProduct').attrib['refid'] = newnode.attrib['id']
     else:
-        raise RuntimeError('cannot insert node if both before and after are set')
+        workflow.insert(len(workflow) - 1, node)
     if not void:
         return node
 
