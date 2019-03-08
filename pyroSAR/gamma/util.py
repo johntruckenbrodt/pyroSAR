@@ -639,7 +639,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         for image in images:
             diff.geocode_back(data_in=image,
                               width_in=master_par.range_samples,
-                              gc_map=lut_final,
+                              lookup_table=lut_final,
                               data_out=image + '_geo',
                               width_out=sim_width,
                               interp_mode=func_geoback,
@@ -738,7 +738,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
             par2hdr(master + '.par', image + '_pan.hdr')
             diff.geocode_back(data_in=image + '_pan',
                               width_in=master_par.range_samples,
-                              gc_map=lut_final,
+                              lookup_table=lut_final,
                               data_out=image + '_pan_geo',
                               width_out=sim_width,
                               interp_mode=func_geoback,
