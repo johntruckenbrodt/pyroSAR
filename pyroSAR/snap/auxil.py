@@ -55,7 +55,7 @@ def parse_suffix(workflow):
     return suffix
 
 
-def insert_node(workflow, node, before=None, after=None, resetSuccessorSource=True):
+def insert_node(workflow, node, before=None, after=None, resetSuccessorSource=True, void=True):
     if before and not after:
         predecessor = workflow.find('.//node[@id="{}"]'.format(before))
         position = list(workflow).index(predecessor) + 1
@@ -81,7 +81,9 @@ def insert_node(workflow, node, before=None, after=None, resetSuccessorSource=Tr
         if resetSuccessorSource:
             successor.find('.//sources/sourceProduct').attrib['refid'] = newnode.attrib['id']
     else:
-        raise RuntimeError('cannot insert node if both before and after are set')
+        workflow.insert(len(workflow) - 1, node)
+    if not void:
+        return node
 
 
 def write_recipe(recipe, outfile):
@@ -212,28 +214,16 @@ def getAuxdata(datasets, scenes):
             print('not implemented yet')
 
 
-def gpt(xmlfile):
-    """
-    wrapper for ESA SNAP Graph Processing Tool GPT
-    input is a readily formatted workflow xml file as created by function geocode in module snap.util
-    """
-    try:
-        gpt_exec = ExamineSnap().gpt
-    except AttributeError:
-        raise RuntimeError('could not find SNAP GPT executable')
-    
+def execute(xmlfile):
     with open(xmlfile, 'r') as infile:
         workflow = ET.fromstring(infile.read())
     write = workflow.find('.//node[@id="Write"]')
     outname = write.find('.//parameters/file').text
-    outdir = os.path.dirname(outname)
-    format = write.find('.//parameters/formatName').text
     infile = workflow.find('.//node[@id="Read"]/parameters/file').text
-    dem_name = workflow.find('.//demName').text
-    if dem_name == 'External DEM':
-        dem_nodata = float(workflow.find('.//externalDEMNoDataValue').text)
-    else:
-        dem_nodata = 0
+    try:
+        gpt_exec = ExamineSnap().gpt
+    except AttributeError:
+        raise RuntimeError('could not find SNAP GPT executable')
     
     if format == 'GeoTiff-BigTIFF':
         cmd = [gpt_exec,
@@ -261,12 +251,39 @@ def gpt(xmlfile):
         err_match = re.search('Error: (.*)\n', out + err)
         errmessage = err_match.group(1) if err_match else err
         raise RuntimeError(errmessage)
+
+
+def gpt(xmlfile, groups=None):
+    """
+    wrapper for ESA SNAP Graph Processing Tool GPT
+    input is a readily formatted workflow xml file as created by function geocode in module snap.util
+    """
+    
+    with open(xmlfile, 'r') as infile:
+        workflow = ET.fromstring(infile.read())
+    write = workflow.find('.//node[@id="Write"]')
+    outname = write.find('.//parameters/file').text
+    format = write.find('.//parameters/formatName').text
+    dem_name = workflow.find('.//demName').text
+    if dem_name == 'External DEM':
+        dem_nodata = float(workflow.find('.//externalDEMNoDataValue').text)
+    else:
+        dem_nodata = 0
+    print('executing node sequence{}..'.format('s' if groups is not None else ''))
+    if groups is not None:
+        subs = split(xmlfile, groups)
+        for sub in subs:
+            print(os.path.basename(os.path.splitext(sub)[0]))
+            execute(sub)
+    else:
+        execute(xmlfile)
+    
     if format == 'ENVI':
-        # print('- converting to GTiff')
+        print('converting to GTiff')
         suffix = parse_suffix(workflow)
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
-        for item in finder(outname, ['*.img']):
+        for item in finder(outname, ['*.img'], recursive=False):
             if re.search('[HV]{2}', item):
                 pol = re.search('[HV]{2}', item).group()
                 name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
@@ -284,6 +301,7 @@ def gpt(xmlfile):
         for i in range(1, ras.RasterCount + 1):
             ras.GetRasterBand(i).SetNoDataValue(0)
         ras = None
+    print('done')
 
 
 class ExamineSnap(object):
@@ -499,3 +517,95 @@ class ExamineSnap(object):
                         .replace('\\', '/')
                     if not key in self.snap_properties.keys() or self.snap_properties[key] != value:
                         self.snap_properties[key] = value
+
+
+def is_consistent(nodes):
+    """
+    check whether all nodes take either no source node or on that is in the list
+    
+    Parameters
+    ----------
+    nodes: list of ET.Element
+        a group of nodes
+    Returns
+    -------
+    bool
+        is the list of nodes consistent
+    """
+    ids = [x.attrib['id'] for x in nodes]
+    check = []
+    for node in nodes:
+        source = node.find('.//sources/sourceProduct')
+        if source is None or source.attrib['refid'] in ids:
+            check.append(True)
+        else:
+            check.append(False)
+    return all(check)
+
+
+def split(xmlfile, groups):
+    """
+    split a workflow file into groups and write them to separate workflows including source and write target linking.
+    The new workflows are written to a sub-directory 'temp' of the target directory defined in the input's 'Write' node.
+    Each new workflow is parametrized with a Read and Write node if they don't already exist. Temporary outputs are
+    written to BEAM-DIMAP files named after the workflow suffix sequence.
+    
+    Parameters
+    ----------
+    xmlfile: str
+        the workflow to be split
+    groups: list
+        a list of lists each containing IDs for individual nodes
+
+    Returns
+    -------
+
+    """
+    with open(xmlfile, 'r') as infile:
+        workflow = ET.fromstring(infile.read())
+    write = workflow.find('.//node[@id="Write"]')
+    out = write.find('.//parameters/file').text
+    tmp = os.path.join(out, 'temp')
+    if not os.path.isdir(tmp):
+        os.makedirs(tmp)
+    
+    outlist = []
+    prod_tmp = []
+    for position, group in enumerate(groups):
+        new = parse_recipe('blank')
+        nodes = [workflow.find('.//node[@id="{}"]'.format(x)) for x in group]
+        if nodes[0].find('.//operator').text != 'Read':
+            insert_node(new, parse_node('Read'))
+        else:
+            insert_node(new, nodes[0])
+            del nodes[0]
+        
+        read = new.find('.//node[@id="Read"]')
+        for i, node in enumerate(nodes):
+            if i == 0:
+                insert_node(new, node, before=read.attrib['id'])
+            else:
+                insert_node(new, node)
+        
+        nodes = new.findall('node')
+        operators = [node.find('.//operator').text for node in nodes]
+        suffix = parse_suffix(new)
+        if operators[-1] != 'Write':
+            write = insert_node(new, parse_node('Write'), before=nodes[-1].attrib['id'], void=False)
+            tmp_out = os.path.join(tmp, suffix + '.dim')
+            prod_tmp.append(tmp_out)
+            write.find('.//parameters/file').text = tmp_out
+            write.find('.//parameters/formatName').text = 'BEAM-DIMAP'
+            operators.append('Write')
+        
+        if position != 0:
+            read = new.find('.//node[@id="Read"]')
+            read.find('.//parameters/file').text = prod_tmp[position - 1]
+            read.find('.//parameters/formatName').text = 'BEAM-DIMAP'
+        
+        if not is_consistent(nodes):
+            raise RuntimeError('inconsistent group:\n {}'.format('-'.format(group)))
+        outname = os.path.join(tmp, suffix + '.xml')
+        write_recipe(new, outname)
+        outlist.append(outname)
+    return outlist
