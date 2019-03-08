@@ -675,12 +675,14 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         # pixel area and DEM-facet pixel area directly with command pixel_area
         if hasarg(diff.pixel_area, 'sigma0_ratio'):
             n.appreciate(['pix_fine'])
+            n.depreciate(['pix_area_sigma0'])
             diff.pixel_area(MLI_par=master + '.par',
                             DEM_par=n.dem_seg_geo + '.par',
                             DEM=n.dem_seg_geo,
                             lookup_table=lut_final,
                             ls_map=n.ls_map_geo,
                             inc_map=n.inc_geo,
+                            pix_sigma0=n.pix_area_sigma0,
                             sigma0_ratio=n.pix_fine,
                             logpath=path_log,
                             outdir=scene.scene,
