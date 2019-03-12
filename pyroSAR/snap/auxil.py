@@ -598,7 +598,7 @@ def split(xmlfile, groups):
         suffix = parse_suffix(new)
         if operators[-1] != 'Write':
             write = insert_node(new, parse_node('Write'), before=nodes[-1].attrib['id'], void=False)
-            tmp_out = os.path.join(tmp, suffix + '.dim')
+            tmp_out = os.path.join(tmp, 'tmp{}.dim'.format(position))
             prod_tmp.append(tmp_out)
             prod_tmp_format.append('BEAM-DIMAP')
             write.find('.//parameters/file').text = tmp_out
@@ -610,7 +610,7 @@ def split(xmlfile, groups):
         
         if not is_consistent(nodes):
             raise RuntimeError('inconsistent group:\n {}'.format('-'.format(group)))
-        outname = os.path.join(tmp, suffix + '.xml')
+        outname = os.path.join(tmp, 'tmp{}.xml'.format(position))
         write_recipe(new, outname)
         outlist.append(outname)
     return outlist
@@ -643,5 +643,5 @@ def groupbyWorkers(xmlfile, n=2):
     workers_groups = [workers_id[i:i + n] for i in range(0, len(workers), n)]
     splits = [nodes_id.index(x[0]) for x in workers_groups] + [len(nodes_id)]
     splits[0] = 0
-    nodes_id_split = [nodes_id[splits[x]:splits[x+1]] for x in range(0, len(splits) - 1)]
+    nodes_id_split = [nodes_id[splits[x]:splits[x + 1]] for x in range(0, len(splits) - 1)]
     return nodes_id_split
