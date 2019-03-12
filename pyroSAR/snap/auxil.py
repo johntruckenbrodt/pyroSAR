@@ -571,16 +571,20 @@ def split(xmlfile, groups):
     
     outlist = []
     prod_tmp = []
+    prod_tmp_format = []
     for position, group in enumerate(groups):
         new = parse_recipe('blank')
         nodes = [workflow.find('.//node[@id="{}"]'.format(x)) for x in group]
         if nodes[0].find('.//operator').text != 'Read':
-            insert_node(new, parse_node('Read'))
+            read = insert_node(new, parse_node('Read'), void=False)
         else:
-            insert_node(new, nodes[0])
+            read = insert_node(new, nodes[0], void=False)
             del nodes[0]
         
-        read = new.find('.//node[@id="Read"]')
+        if position != 0:
+            read.find('.//parameters/file').text = prod_tmp[-1]
+            read.find('.//parameters/formatName').text = prod_tmp_format[-1]
+        
         for i, node in enumerate(nodes):
             if i == 0:
                 insert_node(new, node, before=read.attrib['id'])
@@ -594,14 +598,13 @@ def split(xmlfile, groups):
             write = insert_node(new, parse_node('Write'), before=nodes[-1].attrib['id'], void=False)
             tmp_out = os.path.join(tmp, suffix + '.dim')
             prod_tmp.append(tmp_out)
+            prod_tmp_format.append('BEAM-DIMAP')
             write.find('.//parameters/file').text = tmp_out
             write.find('.//parameters/formatName').text = 'BEAM-DIMAP'
             operators.append('Write')
-        
-        if position != 0:
-            read = new.find('.//node[@id="Read"]')
-            read.find('.//parameters/file').text = prod_tmp[position - 1]
-            read.find('.//parameters/formatName').text = 'BEAM-DIMAP'
+        else:
+            prod_tmp.append(nodes[-1].find('.//parameters/file').text)
+            prod_tmp_format.append(nodes[-1].find('.//parameters/formatName').text)
         
         if not is_consistent(nodes):
             raise RuntimeError('inconsistent group:\n {}'.format('-'.format(group)))
