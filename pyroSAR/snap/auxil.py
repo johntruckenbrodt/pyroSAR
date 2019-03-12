@@ -220,6 +220,9 @@ def execute(xmlfile):
     write = workflow.find('.//node[@id="Write"]')
     outname = write.find('.//parameters/file').text
     infile = workflow.find('.//node[@id="Read"]/parameters/file').text
+    nodes = workflow.findall('node')
+    workers = [x.attrib['id'] for x in nodes if x.find('.//operator').text not in ['Read', 'Write']]
+    print('_'.join(workers))
     try:
         gpt_exec = ExamineSnap().gpt
     except AttributeError:
@@ -273,7 +276,6 @@ def gpt(xmlfile, groups=None):
     if groups is not None:
         subs = split(xmlfile, groups)
         for sub in subs:
-            print(os.path.basename(os.path.splitext(sub)[0]))
             execute(sub)
     else:
         execute(xmlfile)
