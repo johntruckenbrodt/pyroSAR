@@ -612,3 +612,34 @@ def split(xmlfile, groups):
         write_recipe(new, outname)
         outlist.append(outname)
     return outlist
+
+
+def groupbyWorkers(xmlfile, n=2):
+    """
+    split SNAP workflow into groups containing a maximum defined number of operators
+    
+    Parameters
+    ----------
+    xmlfile: str
+        the SNAP xml workflow
+    n: int
+        the maximum number of worker nodes in each group; Read and Write are excluded
+
+    Returns
+    -------
+    list
+        a list of lists each containing the IDs of all nodes belonging to the groups including Read and Write nodes;
+        this list can e.g. be passed to function :func:`split` to split the workflow into new sub-workflow files based
+        on the newly created groups
+    """
+    with open(xmlfile, 'r') as infile:
+        workflow = ET.fromstring(infile.read())
+    nodes = workflow.findall('node')
+    nodes_id = [x.attrib['id'] for x in nodes]
+    workers = [x for x in nodes if x.find('.//operator').text not in ['Read', 'Write']]
+    workers_id = [x.attrib['id'] for x in workers]
+    workers_groups = [workers_id[i:i + n] for i in range(0, len(workers), n)]
+    splits = [nodes_id.index(x[0]) for x in workers_groups] + [len(nodes_id)]
+    splits[0] = 0
+    nodes_id_split = [nodes_id[splits[x]:splits[x+1]] for x in range(0, len(splits) - 1)]
+    return nodes_id_split
