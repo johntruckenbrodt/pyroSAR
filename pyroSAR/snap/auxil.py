@@ -220,6 +220,9 @@ def execute(xmlfile):
     write = workflow.find('.//node[@id="Write"]')
     outname = write.find('.//parameters/file').text
     infile = workflow.find('.//node[@id="Read"]/parameters/file').text
+    nodes = workflow.findall('node')
+    workers = [x.attrib['id'] for x in nodes if x.find('.//operator').text not in ['Read', 'Write']]
+    print('_'.join(workers))
     try:
         gpt_exec = ExamineSnap().gpt
     except AttributeError:
@@ -273,7 +276,6 @@ def gpt(xmlfile, groups=None):
     if groups is not None:
         subs = split(xmlfile, groups)
         for sub in subs:
-            print(os.path.basename(os.path.splitext(sub)[0]))
             execute(sub)
     else:
         execute(xmlfile)
@@ -571,16 +573,20 @@ def split(xmlfile, groups):
     
     outlist = []
     prod_tmp = []
+    prod_tmp_format = []
     for position, group in enumerate(groups):
         new = parse_recipe('blank')
         nodes = [workflow.find('.//node[@id="{}"]'.format(x)) for x in group]
         if nodes[0].find('.//operator').text != 'Read':
-            insert_node(new, parse_node('Read'))
+            read = insert_node(new, parse_node('Read'), void=False)
         else:
-            insert_node(new, nodes[0])
+            read = insert_node(new, nodes[0], void=False)
             del nodes[0]
         
-        read = new.find('.//node[@id="Read"]')
+        if position != 0:
+            read.find('.//parameters/file').text = prod_tmp[-1]
+            read.find('.//parameters/formatName').text = prod_tmp_format[-1]
+        
         for i, node in enumerate(nodes):
             if i == 0:
                 insert_node(new, node, before=read.attrib['id'])
@@ -592,20 +598,50 @@ def split(xmlfile, groups):
         suffix = parse_suffix(new)
         if operators[-1] != 'Write':
             write = insert_node(new, parse_node('Write'), before=nodes[-1].attrib['id'], void=False)
-            tmp_out = os.path.join(tmp, suffix + '.dim')
+            tmp_out = os.path.join(tmp, 'tmp{}.dim'.format(position))
             prod_tmp.append(tmp_out)
+            prod_tmp_format.append('BEAM-DIMAP')
             write.find('.//parameters/file').text = tmp_out
             write.find('.//parameters/formatName').text = 'BEAM-DIMAP'
             operators.append('Write')
-        
-        if position != 0:
-            read = new.find('.//node[@id="Read"]')
-            read.find('.//parameters/file').text = prod_tmp[position - 1]
-            read.find('.//parameters/formatName').text = 'BEAM-DIMAP'
+        else:
+            prod_tmp.append(nodes[-1].find('.//parameters/file').text)
+            prod_tmp_format.append(nodes[-1].find('.//parameters/formatName').text)
         
         if not is_consistent(nodes):
             raise RuntimeError('inconsistent group:\n {}'.format('-'.format(group)))
-        outname = os.path.join(tmp, suffix + '.xml')
+        outname = os.path.join(tmp, 'tmp{}.xml'.format(position))
         write_recipe(new, outname)
         outlist.append(outname)
     return outlist
+
+
+def groupbyWorkers(xmlfile, n=2):
+    """
+    split SNAP workflow into groups containing a maximum defined number of operators
+    
+    Parameters
+    ----------
+    xmlfile: str
+        the SNAP xml workflow
+    n: int
+        the maximum number of worker nodes in each group; Read and Write are excluded
+
+    Returns
+    -------
+    list
+        a list of lists each containing the IDs of all nodes belonging to the groups including Read and Write nodes;
+        this list can e.g. be passed to function :func:`split` to split the workflow into new sub-workflow files based
+        on the newly created groups
+    """
+    with open(xmlfile, 'r') as infile:
+        workflow = ET.fromstring(infile.read())
+    nodes = workflow.findall('node')
+    nodes_id = [x.attrib['id'] for x in nodes]
+    workers = [x for x in nodes if x.find('.//operator').text not in ['Read', 'Write']]
+    workers_id = [x.attrib['id'] for x in workers]
+    workers_groups = [workers_id[i:i + n] for i in range(0, len(workers), n)]
+    splits = [nodes_id.index(x[0]) for x in workers_groups] + [len(nodes_id)]
+    splits[0] = 0
+    nodes_id_split = [nodes_id[splits[x]:splits[x + 1]] for x in range(0, len(splits) - 1)]
+    return nodes_id_split

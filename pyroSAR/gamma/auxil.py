@@ -6,6 +6,8 @@ import math
 import os
 import re
 import json
+import string
+import codecs
 import inspect
 import subprocess as sp
 from datetime import datetime
@@ -66,7 +68,15 @@ class ISPPar(object):
         
         try:
             par_file.readline()  # Skip header line
-            for line in par_file:
+            content = par_file.read().split('\n')
+        except UnicodeDecodeError:
+            par_file = codecs.open(filename, 'r', encoding='utf-8', errors='ignore')
+            content = par_file.read()
+            printable = set(string.printable)
+            content = filter(lambda x: x in printable, content)
+            content = ''.join(list(content)).split('\n')
+        try:
+            for line in content:
                 match = ISPPar._re_kv_pair.match(line)
                 if not match:
                     continue  # Skip malformed lines with no key-value pairs

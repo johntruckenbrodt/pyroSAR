@@ -67,6 +67,8 @@ def parse_command(command, indent='    '):
                        'DORIS_vec': [('SLC_PAR', 'SLC_par')],
                        'gc_map_fd': [('fdtab', 'fd_tab')],
                        'gc_map_grd': [('<MLI_par>', '<GRD_par>')],
+                       'geocode_back': [('<gc_map>', '<lookup_table>'),
+                                        ('\n  gc_map ', '\n  lookup_table ')],
                        'GRD_to_SR': [('SLC_par', 'MLI_par')],
                        'haalpha': [('<alpha> <entropy>', '<alpha2> <entropy>'),
                                    ('alpha       (output)', 'alpha2      (output)')],
@@ -103,7 +105,7 @@ def parse_command(command, indent='    '):
                        'mk_pol2rec_2d': [('data_tab', 'DIFF_tab'),
                                          ('<type> <rmli>', '<type>')],
                        'mk_rasdt_all': [('RMLI_image', 'MLI'),
-                                         ('MLI_image', 'MLI')],
+                                        ('MLI_image', 'MLI')],
                        'mk_rasmph_all': [('RMLI_image', 'MLI'),
                                          ('MLI_image', 'MLI')],
                        'mk_unw_2d': [('unw_mask1', 'unw_mask')],
@@ -208,7 +210,7 @@ def parse_command(command, indent='    '):
     
     appends = {'SLC_interp_S1_TOPS': ['mode', 'order'],
                'SLC_interp_map': ['mode', 'order']}
-
+    
     if command_base in appends.keys():
         for var in appends[command_base]:
             arg_opt_raw.append(var)

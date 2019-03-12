@@ -5,7 +5,7 @@
 import os
 import pyroSAR
 from ..ancillary import multilook_factors
-from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt
+from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt, groupbyWorkers
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
@@ -13,7 +13,7 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BoderNoise=True, removeS1ThermalNoise=True, offset=None,
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
-            basename_extensions=None, test=False, export_extra=None):
+            basename_extensions=None, test=False, export_extra=None, groupsize=2):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -62,6 +62,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          * localIncidenceAngle
          * projectedLocalIncidenceAngle
          * DEM
+    groupsize: int
+        the number of workers executed together in one gpt call
 
     Note
     ----
@@ -370,16 +372,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     write_recipe(workflow, outname + '_proc')
     
-    ids = [x.attrib['id'] for x in workflow.findall('node')]
-    id_tf = ids.index('Terrain-Flattening')
-    id_tc = ids.index(tc.attrib['id'])
-    groups = [ids[:id_tf],
-              ids[id_tf:id_tc],
-              ids[id_tc:]]
-    
     # execute the newly written workflow
     if not test:
         try:
-            gpt(outname + '_proc.xml', groups)
+            groups = groupbyWorkers(outname + '_proc.xml', groupsize)
+            gpt(outname + '_proc.xml', groups=groups)
         except RuntimeError:
             os.remove(outname + '_proc.xml')

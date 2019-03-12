@@ -1,6 +1,6 @@
 ##############################################################
 # interface for translating GAMMA errors messages into Python error types
-# John Truckenbrodt 2015-2017
+# John Truckenbrodt 2015-2019
 ##############################################################
 
 import re
@@ -16,18 +16,18 @@ def gammaErrorHandler(out, err):
     Raises: IOError | ValueError | RuntimeError | None
 
     """
-
+    
     # scan stdout and stdin messages for lines starting with 'ERROR'
     messages = out.split('\n') if out else []
     messages.extend(err.strip().split('\n'))
     errormessages = [x for x in messages if x.startswith('ERROR')]
-
+    
     # registry of known gamma error messages and corresponding Python error types
     # do not change the Python error types of specific messages! This will change the behavior of several functions
     # in case no error is to be thrown define None as error type
     knownErrors = {'image data formats differ': IOError,
                    'cannot open': IOError,
-                   'no coverage of SAR image by DEM \(in (?:latitude/northing|longitude/easting)\)': IOError,
+                   r'no coverage of SAR image by DEM (?:\(in (?:latitude/northing|longitude/easting)\)|)': RuntimeError,
                    'libgdal.so.1: no version information available': None,
                    'line outside of image': ValueError,
                    'no offsets found above SNR threshold': ValueError,
@@ -45,7 +45,7 @@ def gammaErrorHandler(out, err):
                    'OPOD state vector data ends before start of the state vector time window': RuntimeError,
                    'non-zero exit status': RuntimeError,
                    'unsupported DEM projection': RuntimeError}
-
+    
     # check if the error message is known and throw the mapped error from knownErrors accordingly.
     # Otherwise throw an GammaUnknownError.
     # The actual message is passed to the error and thus visible for backtracing
@@ -68,5 +68,6 @@ class GammaUnknownError(Exception):
     into the known errors of function gammaErrorHandler.
     If this error occurs the message should be included in function gammaErrorHandler.
     """
+    
     def __init__(self, errormessage):
         Exception.__init__(self, errormessage)
