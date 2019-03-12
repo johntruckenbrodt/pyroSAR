@@ -5,7 +5,7 @@
 import os
 import pyroSAR
 from ..ancillary import multilook_factors
-from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt
+from .auxil import parse_recipe, parse_suffix, write_recipe, parse_node, insert_node, gpt, groupbyWorkers
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
@@ -370,16 +370,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     write_recipe(workflow, outname + '_proc')
     
-    ids = [x.attrib['id'] for x in workflow.findall('node')]
-    id_tf = ids.index('Terrain-Flattening')
-    id_tc = ids.index(tc.attrib['id'])
-    groups = [ids[:id_tf],
-              ids[id_tf:id_tc],
-              ids[id_tc:]]
-    
     # execute the newly written workflow
     if not test:
         try:
-            gpt(outname + '_proc.xml', groups)
+            groups = groupbyWorkers(outname + '_proc.xml', 2)
+            gpt(outname + '_proc.xml', groups=groups)
         except RuntimeError:
             os.remove(outname + '_proc.xml')
