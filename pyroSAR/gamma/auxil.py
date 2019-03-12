@@ -291,16 +291,22 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
     else:
         log = os.path.join(logpath, os.path.basename(cmd[0]) + '.log') if logpath else None
     if shellscript is not None:
+        if not os.path.isfile(shellscript):
+            with open(shellscript, 'w') as init:
+                pass
         line = ' '.join([str(x) for x in dissolve(cmd)])
         if inlist is not None:
             line += ' <<< $"{}"'.format('\n'.join([str(x) for x in inlist]) + '\n')
-        with open(shellscript, 'a+') as sh:
+        with open(shellscript, 'r+') as sh:
             if outdir is not None:
-                first = sh.read(1)
-                if not first:
+                content = sh.read()
+                sh.seek(0)
+                is_new = re.search('this script was created automatically by pyroSAR', content) is None
+                if is_new:
                     ts = datetime.now().strftime('%a %b %d %H:%M:%S %Y')
                     sh.write('# this script was created automatically by pyroSAR on {}\n\n'.format(ts))
                     sh.write('export base={}\n\n'.format(outdir))
+                    sh.write(content)
                 line = line.replace(outdir, '$base')
             sh.write(line + '\n\n')
     out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False, errorpass=True)
