@@ -215,6 +215,22 @@ def getAuxdata(datasets, scenes):
 
 
 def execute(xmlfile):
+    """
+    execute SNAP workflows via the Graph Processing Tool gpt
+    
+    Parameters
+    ----------
+    xmlfile: str
+        the name of the workflow XML file
+
+    Returns
+    -------
+    
+    Raises
+    ------
+    RuntimeError
+    """
+    # read the file and extract some information
     with open(xmlfile, 'r') as infile:
         workflow = ET.fromstring(infile.read())
     write = workflow.find('.//node[@id="Write"]')
@@ -223,11 +239,12 @@ def execute(xmlfile):
     nodes = workflow.findall('node')
     workers = [x.attrib['id'] for x in nodes if x.find('.//operator').text not in ['Read', 'Write']]
     print('_'.join(workers))
+    # try to find the GPT executable
     try:
         gpt_exec = ExamineSnap().gpt
     except AttributeError:
         raise RuntimeError('could not find SNAP GPT executable')
-    
+    # create the list of arguments to be passed to the subprocess module calling GPT
     if format == 'GeoTiff-BigTIFF':
         cmd = [gpt_exec,
                # '-Dsnap.dataio.reader.tileWidth=*',
@@ -239,11 +256,12 @@ def execute(xmlfile):
                xmlfile]
     else:
         cmd = [gpt_exec, xmlfile]
-    # print('- processing workflow {}'.format(os.path.basename(xmlfile)))
+    # execute the workflow
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     out, err = proc.communicate()
     out = out.decode('utf-8') if isinstance(out, bytes) else out
     err = err.decode('utf-8') if isinstance(err, bytes) else err
+    # delete intermediate files if an error occured
     if proc.returncode != 0:
         if os.path.isfile(outname + '.tif'):
             os.remove(outname + '.tif')
@@ -258,8 +276,19 @@ def execute(xmlfile):
 
 def gpt(xmlfile, groups=None):
     """
-    wrapper for ESA SNAP Graph Processing Tool GPT
-    input is a readily formatted workflow xml file as created by function geocode in module snap.util
+    wrapper for ESA SNAP's Graph Processing Tool GPT.
+    Input is a readily formatted workflow xml file as created by function :func:`snap.util.geocode`
+    
+    Parameters
+    ----------
+    xmlfile: str
+        the name of the workflow XML file
+    groups: list
+        a list of lists each containing IDs for individual nodes
+
+    Returns
+    -------
+
     """
     
     with open(xmlfile, 'r') as infile:
