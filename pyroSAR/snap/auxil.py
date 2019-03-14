@@ -674,3 +674,144 @@ def groupbyWorkers(xmlfile, n=2):
     splits[0] = 0
     nodes_id_split = [nodes_id[splits[x]:splits[x + 1]] for x in range(0, len(splits) - 1)]
     return nodes_id_split
+
+
+class Workflow(object):
+    def __init__(self, xmlfile):
+        with open(xmlfile, 'r') as infile:
+            self.tree = ET.fromstring(infile.read())
+    
+    def __getitem__(self, item):
+        return Node(self.tree.find('.//node[@id="{}"]'.format(item)))
+    
+    def __str__(self):
+        rough_string = ET.tostring(self.tree, 'utf-8')
+        reparsed = minidom.parseString(rough_string)
+        return reparsed.toprettyxml(indent='\t', newl='')
+    
+    def index(self, node):
+        return list(self.tree).index(node.element)
+    
+    def insert_node(self, node, before=None, after=None, resetSuccessorSource=True, void=True):
+        if before and not after:
+            predecessor = self[before]
+            position = self.index(predecessor) + 1
+            self.tree.insert(position, node.element)
+            newnode = Node(self.tree[position])
+            # set the source product for the new node
+            newnode.source = predecessor.id
+            # set the source product for the node after the new node
+            if resetSuccessorSource:
+                successor = self.tree[position + 1]
+                if successor.tag == 'node':
+                    Node(successor).source = newnode.id
+        elif after and not before:
+            successor = self[after]
+            position = self.index(successor)
+            self.tree.insert(position, node.element)
+            newnode = Node(self.tree[position])
+            # set the source product for the new node
+            predecessor = self.tree[position - 1]
+            source_id = predecessor.attrib['id'] if predecessor.tag == 'node' else None
+            newnode.source = source_id
+            # set the source product for the node after the new node
+            if resetSuccessorSource:
+                successor.source = newnode.id
+        else:
+            self.tree.insert(len(self.tree) - 1, node.element)
+        if not void:
+            return node
+    
+    def nodes(self):
+        return [Node(x) for x in self.tree.findall('node')]
+    
+    @property
+    def suffix(self):
+        nodes = self.tree.findall('node')
+        suffix = '_'.join(filter(None, [LOOKUP.snap.suffix[x] for x in [y.attrib['id'] for y in nodes]]))
+        return suffix
+    
+    def write(self, outfile):
+        outfile = outfile if outfile.endswith('.xml') else outfile + '.xml'
+        with open(outfile, 'w') as out:
+            out.write(self.__str__())
+
+
+class Node(object):
+    def __init__(self, element):
+        if not isinstance(element, ET.Element):
+            raise TypeError('element must be of type xml.etree.ElementTree.Element')
+        self.element = element
+    
+    def __str__(self):
+        rough_string = ET.tostring(self.element, 'utf-8')
+        reparsed = minidom.parseString(rough_string)
+        return reparsed.toprettyxml(indent='\t', newl='')
+    
+    @property
+    def id(self):
+        return self.element.attrib['id']
+    
+    @id.setter
+    def id(self, value):
+        self.element.attrib['id'] = value
+    
+    @property
+    def operator(self):
+        return self.element.find('.//operator').text
+    
+    @property
+    def parameters(self):
+        params = self.element.find('.//parameters')
+        return Par(params)
+    
+    @property
+    def source(self):
+        source = self.element.find('.//sources/sourceProduct')
+        if source is not None:
+            source = source.attrib['refid']
+        return source
+    
+    @source.setter
+    def source(self, value):
+        source = self.element.find('.//sources/sourceProduct')
+        if source is not None:
+            source.attrib['refid'] = value
+        else:
+            raise RuntimeError('cannot set source on {} node'.format(self.operator))
+
+
+class Par(object):
+    def __init__(self, element):
+        self.__element = element
+    
+    def __getitem__(self, item):
+        if item not in self.keys():
+            raise KeyError('key {} does not exist'.format(item))
+        return self.__element.find('.//{}'.format(item)).text
+    
+    def __setitem__(self, key, value):
+        if key not in self.keys():
+            raise KeyError('key {} does not exist'.format(key))
+        if isinstance(value, bool):
+            strval = str(value).lower()
+        elif isinstance(value, list):
+            strval = ','.join(map(str, value))
+        else:
+            strval = str(value)
+        self.__element.find('.//{}'.format(key)).text = strval
+    
+    def __repr__(self):
+        return str(self.dict())
+    
+    def dict(self):
+        return dict(self.items())
+    
+    def items(self):
+        return list(zip(self.keys(), self.values()))
+    
+    def keys(self):
+        return [x.tag for x in self.__element.findall('./')]
+    
+    def values(self):
+        return [x.text for x in self.__element.findall('./')]
