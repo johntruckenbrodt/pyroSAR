@@ -62,11 +62,20 @@ class Test_geocode_opts():
     
     def test_shp(self, tmpdir, testdata):
         scene = testdata['s1']
+        ext = {'xmin': 12, 'xmax': 13, 'ymin': 53, 'ymax': 54}
+        with bbox(ext, 4326) as new:
+            with pytest.raises(RuntimeError):
+                geocode(scene, str(tmpdir), shapefile=new, test=True)
+        
         with identify(scene).bbox() as box:
             ext = box.extent
         ext['xmax'] -= 1
         with bbox(ext, 4326) as new:
             geocode(scene, str(tmpdir), shapefile=new, test=True)
+    
+    def test_offset(self, tmpdir, testdata):
+        scene = testdata['s1']
+        geocode(scene, str(tmpdir), offset=(100, 100, 0, 0), test=True)
     
     def test_export_extra(self, tmpdir, testdata):
         scene = testdata['s1']
@@ -78,5 +87,7 @@ class Test_geocode_opts():
     
     def test_externalDEM(self, tmpdir, testdata):
         scene = testdata['s1']
+        dem_dummy = testdata['tif']
         with pytest.raises(RuntimeError):
             geocode(scene, str(tmpdir), externalDEMFile='foobar', test=True)
+        geocode(scene, str(tmpdir), externalDEMFile=dem_dummy, test=True)
