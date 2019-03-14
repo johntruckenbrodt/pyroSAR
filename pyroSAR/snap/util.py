@@ -170,7 +170,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # calibration node configuration
     # print('-- configuring Calibration Node')
     cal = workflow['Calibration']
-    cal.parameters['selectedPolarisations'] = ','.join(polarizations)
+    cal.parameters['selectedPolarisations'] = polarizations
     cal.parameters['sourceBands'] = bands_int
     ############################################
     # terrain flattening node configuration
@@ -290,7 +290,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         subset = parse_node('Subset')
         # print('--- insert node')
         workflow.insert_node(subset, before='Read')
-        subset.parameters['region'] = ','.join(map(str, [0, 0, id.samples, id.lines]))
+        subset.parameters['region'] = [0, 0, id.samples, id.lines]
         subset.parameters['geoRegion'] = wkt
     ############################################
     # (optionally) configure subset node for pixel offsets
@@ -301,7 +301,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         # left, right, top and bottom offset in pixels
         l, r, t, b = offset
         
-        subset_values = ','.join(map(str, [l, t, id.samples - l - r, id.lines - t - b]))
+        subset_values = [l, t, id.samples - l - r, id.lines - t - b]
         subset.parameters['region'] = subset_values
         subset.parameters['geoRegion'] = ''
     ############################################
