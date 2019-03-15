@@ -34,64 +34,56 @@ from spatialist.ancillary import dissolve, finder
 
 
 def parse_recipe(name):
+    """
+    parse a SNAP recipe
+    
+    Parameters
+    ----------
+    name: str
+        the name of the recipe; current options:
+         * `blank`: a workflow without any nodes
+         * `geocode`: a basic workflow containing Read, Apply-Orbit-File, Calibration, Terrain-Flattening and Write nodes
+
+    Returns
+    -------
+    Workflow
+        the parsed recipe
+    
+    Examples
+    --------
+    >>> from pyroSAR.snap.auxil import parse_recipe
+    >>> workflow = parse_recipe('geocode')
+    """
     name = name if name.endswith('.xml') else name + '.xml'
     absname = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'recipes', name)
-    with open(absname, 'r') as workflow:
-        tree = ET.fromstring(workflow.read())
-    return tree
+    return Workflow(absname)
 
 
 def parse_node(name):
+    """
+    parse a XML node recipe
+    
+    Parameters
+    ----------
+    name: str
+        the name of the processing node, e.g. Terrain-Correction
+
+    Returns
+    -------
+    Node
+        the parsed node
+    
+    Examples
+    --------
+    >>> ml = parse_node('ThermalNoiseRemoval')
+    >>> print(ml.parameters)
+    {'selectedPolarisations': None, 'removeThermalNoise': 'true', 'reIntroduceThermalNoise': 'false'}
+    """
     name = name if name.endswith('.xml') else name + '.xml'
     absname = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'recipes', 'nodes', name)
     with open(absname, 'r') as workflow:
-        tree = ET.fromstring(workflow.read())
-    return tree
-
-
-def parse_suffix(workflow):
-    nodes = workflow.findall('node')
-    suffix = '_'.join(filter(None, [LOOKUP.snap.suffix[x] for x in [y.attrib['id'] for y in nodes]]))
-    return suffix
-
-
-def insert_node(workflow, node, before=None, after=None, resetSuccessorSource=True, void=True):
-    if before and not after:
-        predecessor = workflow.find('.//node[@id="{}"]'.format(before))
-        position = list(workflow).index(predecessor) + 1
-        workflow.insert(position, node)
-        newnode = workflow[position]
-        # set the source product for the new node
-        newnode.find('.//sources/sourceProduct').attrib['refid'] = predecessor.attrib['id']
-        # set the source product for the node after the new node
-        if resetSuccessorSource:
-            successor = workflow[position + 1]
-            if successor.tag == 'node':
-                successor.find('.//sources/sourceProduct').attrib['refid'] = newnode.attrib['id']
-    elif after and not before:
-        successor = workflow.find('.//node[@id="{}"]'.format(after))
-        position = list(workflow).index(successor)
-        workflow.insert(position, node)
-        newnode = workflow[position]
-        # set the source product for the new node
-        predecessor = workflow[position - 1]
-        source_id = predecessor.attrib['id'] if predecessor.tag == 'node' else None
-        newnode.find('.//sources/sourceProduct').attrib['refid'] = source_id
-        # set the source product for the node after the new node
-        if resetSuccessorSource:
-            successor.find('.//sources/sourceProduct').attrib['refid'] = newnode.attrib['id']
-    else:
-        workflow.insert(len(workflow) - 1, node)
-    if not void:
-        return node
-
-
-def write_recipe(recipe, outfile):
-    outfile = outfile if outfile.endswith('.xml') else outfile + '.xml'
-    rough_string = ET.tostring(recipe, 'utf-8')
-    reparsed = minidom.parseString(rough_string)
-    with open(outfile, 'w') as out:
-        out.write(reparsed.toprettyxml(indent='\t', newl=''))
+        element = ET.fromstring(workflow.read())
+    return Node(element)
 
 
 def getOrbitContentVersions(contentVersion):
@@ -216,7 +208,11 @@ def getAuxdata(datasets, scenes):
 
 def execute(xmlfile):
     """
-    execute SNAP workflows via the Graph Processing Tool gpt
+    execute SNAP workflows via the Graph Processing Tool gpt.
+    This function merely calls gpt with some additional command
+    line arguments and raises a RuntimeError on fail. This
+    function is used internally by function :func:`gpt`, which
+    should be used instead.
     
     Parameters
     ----------
@@ -231,13 +227,12 @@ def execute(xmlfile):
     RuntimeError
     """
     # read the file and extract some information
-    with open(xmlfile, 'r') as infile:
-        workflow = ET.fromstring(infile.read())
-    write = workflow.find('.//node[@id="Write"]')
-    outname = write.find('.//parameters/file').text
-    infile = workflow.find('.//node[@id="Read"]/parameters/file').text
-    nodes = workflow.findall('node')
-    workers = [x.attrib['id'] for x in nodes if x.find('.//operator').text not in ['Read', 'Write']]
+    workflow = Workflow(xmlfile)
+    write = workflow['Write']
+    outname = write.parameters['file']
+    infile = workflow['Read'].parameters['file']
+    nodes = workflow.nodes()
+    workers = [x.id for x in nodes if x.operator not in ['Read', 'Write']]
     print('_'.join(workers))
     # try to find the GPT executable
     try:
@@ -277,7 +272,13 @@ def execute(xmlfile):
 def gpt(xmlfile, groups=None):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
-    Input is a readily formatted workflow xml file as created by function :func:`snap.util.geocode`
+    Input is a readily formatted workflow XML file as
+    created by function :func:`~pyroSAR.snap.util.geocode`.
+    Additional to calling GPT, this function will
+    
+     * execute the workflow in groups as defined by `groups`
+     * encode a nodata value into the output file if the format is GeoTiff-BigTIFF
+     * convert output files to GeoTiff if the output format is ENVI
     
     Parameters
     ----------
@@ -291,14 +292,13 @@ def gpt(xmlfile, groups=None):
 
     """
     
-    with open(xmlfile, 'r') as infile:
-        workflow = ET.fromstring(infile.read())
-    write = workflow.find('.//node[@id="Write"]')
-    outname = write.find('.//parameters/file').text
-    format = write.find('.//parameters/formatName').text
-    dem_name = workflow.find('.//demName').text
+    workflow = Workflow(xmlfile)
+    write = workflow['Write']
+    outname = write.parameters['file']
+    format = write.parameters['formatName']
+    dem_name = workflow.tree.find('.//demName').text
     if dem_name == 'External DEM':
-        dem_nodata = float(workflow.find('.//externalDEMNoDataValue').text)
+        dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
     else:
         dem_nodata = 0
     print('executing node sequence{}..'.format('s' if groups is not None else ''))
@@ -311,7 +311,7 @@ def gpt(xmlfile, groups=None):
     
     if format == 'ENVI':
         print('converting to GTiff')
-        suffix = parse_suffix(workflow)
+        suffix = workflow.suffix
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
         for item in finder(outname, ['*.img'], recursive=False):
@@ -552,22 +552,22 @@ class ExamineSnap(object):
 
 def is_consistent(nodes):
     """
-    check whether all nodes take either no source node or on that is in the list
+    check whether all nodes take either no source node or one that is in the list
     
     Parameters
     ----------
-    nodes: list of ET.Element
+    nodes: list of Node
         a group of nodes
     Returns
     -------
     bool
         is the list of nodes consistent
     """
-    ids = [x.attrib['id'] for x in nodes]
+    ids = [x.id for x in nodes]
     check = []
     for node in nodes:
-        source = node.find('.//sources/sourceProduct')
-        if source is None or source.attrib['refid'] in ids:
+        source = node.source
+        if source is None or source in ids:
             check.append(True)
         else:
             check.append(False)
@@ -592,10 +592,9 @@ def split(xmlfile, groups):
     -------
 
     """
-    with open(xmlfile, 'r') as infile:
-        workflow = ET.fromstring(infile.read())
-    write = workflow.find('.//node[@id="Write"]')
-    out = write.find('.//parameters/file').text
+    workflow = Workflow(xmlfile)
+    write = workflow['Write']
+    out = write.parameters['file']
     tmp = os.path.join(out, 'temp')
     if not os.path.isdir(tmp):
         os.makedirs(tmp)
@@ -605,42 +604,42 @@ def split(xmlfile, groups):
     prod_tmp_format = []
     for position, group in enumerate(groups):
         new = parse_recipe('blank')
-        nodes = [workflow.find('.//node[@id="{}"]'.format(x)) for x in group]
-        if nodes[0].find('.//operator').text != 'Read':
-            read = insert_node(new, parse_node('Read'), void=False)
+        nodes = [workflow[x] for x in group]
+        if nodes[0].operator != 'Read':
+            read = new.insert_node(parse_node('Read'), void=False)
         else:
-            read = insert_node(new, nodes[0], void=False)
+            read = new.insert_node(nodes[0], void=False)
             del nodes[0]
         
         if position != 0:
-            read.find('.//parameters/file').text = prod_tmp[-1]
-            read.find('.//parameters/formatName').text = prod_tmp_format[-1]
+            read.parameters['file'] = prod_tmp[-1]
+            read.parameters['formatName'] = prod_tmp_format[-1]
         
         for i, node in enumerate(nodes):
             if i == 0:
-                insert_node(new, node, before=read.attrib['id'])
+                new.insert_node(node, before=read.id)
             else:
-                insert_node(new, node)
+                new.insert_node(node)
         
-        nodes = new.findall('node')
-        operators = [node.find('.//operator').text for node in nodes]
-        suffix = parse_suffix(new)
+        nodes = new.nodes()
+        operators = [node.operator for node in nodes]
         if operators[-1] != 'Write':
-            write = insert_node(new, parse_node('Write'), before=nodes[-1].attrib['id'], void=False)
+            write = parse_node('Write')
+            new.insert_node(write, before=nodes[-1].id)
             tmp_out = os.path.join(tmp, 'tmp{}.dim'.format(position))
             prod_tmp.append(tmp_out)
             prod_tmp_format.append('BEAM-DIMAP')
-            write.find('.//parameters/file').text = tmp_out
-            write.find('.//parameters/formatName').text = 'BEAM-DIMAP'
+            write.parameters['file'] = tmp_out
+            write.parameters['formatName'] = 'BEAM-DIMAP'
             operators.append('Write')
         else:
-            prod_tmp.append(nodes[-1].find('.//parameters/file').text)
-            prod_tmp_format.append(nodes[-1].find('.//parameters/formatName').text)
+            prod_tmp.append(nodes[-1].parameters['file'])
+            prod_tmp_format.append(nodes[-1].parameters['formatName'])
         
         if not is_consistent(nodes):
             raise RuntimeError('inconsistent group:\n {}'.format('-'.format(group)))
         outname = os.path.join(tmp, 'tmp{}.xml'.format(position))
-        write_recipe(new, outname)
+        new.write(outname)
         outlist.append(outname)
     return outlist
 
@@ -663,14 +662,294 @@ def groupbyWorkers(xmlfile, n=2):
         this list can e.g. be passed to function :func:`split` to split the workflow into new sub-workflow files based
         on the newly created groups
     """
-    with open(xmlfile, 'r') as infile:
-        workflow = ET.fromstring(infile.read())
-    nodes = workflow.findall('node')
-    nodes_id = [x.attrib['id'] for x in nodes]
-    workers = [x for x in nodes if x.find('.//operator').text not in ['Read', 'Write']]
-    workers_id = [x.attrib['id'] for x in workers]
+    workflow = Workflow(xmlfile)
+    nodes = workflow.nodes()
+    nodes_id = [x.id for x in nodes]
+    workers = [x for x in nodes if x.operator not in ['Read', 'Write']]
+    workers_id = [x.id for x in workers]
     workers_groups = [workers_id[i:i + n] for i in range(0, len(workers), n)]
     splits = [nodes_id.index(x[0]) for x in workers_groups] + [len(nodes_id)]
     splits[0] = 0
     nodes_id_split = [nodes_id[splits[x]:splits[x + 1]] for x in range(0, len(splits) - 1)]
     return nodes_id_split
+
+
+class Workflow(object):
+    """
+    Class for convenient handling of SNAP XML workflows
+    
+    Parameters
+    ----------
+    xmlfile: str
+        the workflow XML file
+    """
+    def __init__(self, xmlfile):
+        with open(xmlfile, 'r') as infile:
+            self.tree = ET.fromstring(infile.read())
+    
+    def __getitem__(self, item):
+        return Node(self.tree.find('.//node[@id="{}"]'.format(item)))
+    
+    def __str__(self):
+        rough_string = ET.tostring(self.tree, 'utf-8')
+        reparsed = minidom.parseString(rough_string)
+        return reparsed.toprettyxml(indent='\t', newl='')
+    
+    def index(self, node):
+        """
+        
+        Parameters
+        ----------
+        node: Node
+            a node in the workflow
+
+        Returns
+        -------
+        int
+            the index position of the node in the workflow
+        """
+        return list(self.tree).index(node.element)
+    
+    def insert_node(self, node, before=None, after=None, resetSuccessorSource=True, void=True):
+        """
+        insert a node into the workflow including setting its source to its predecessor
+        and setting its ID as source of the successor.
+        
+        Parameters
+        ----------
+        node: Node
+            the node to be inserted
+        before: str
+            the ID of the node before the newly inserted node
+        after: str
+            the ID of the node before the newly inserted node
+        resetSuccessorSource: bool
+            reset the source of the successor node to the ID of the newly inserted node?
+        void: bool
+            if false, the function returns the node
+
+        Returns
+        -------
+        Node or None
+            the new node or None, depending on arguement `void`
+        """
+        if before and not after:
+            predecessor = self[before]
+            position = self.index(predecessor) + 1
+            self.tree.insert(position, node.element)
+            newnode = Node(self.tree[position])
+            # set the source product for the new node
+            newnode.source = predecessor.id
+            # set the source product for the node after the new node
+            if resetSuccessorSource:
+                successor = self.tree[position + 1]
+                if successor.tag == 'node':
+                    Node(successor).source = newnode.id
+        elif after and not before:
+            successor = self[after]
+            position = self.index(successor)
+            self.tree.insert(position, node.element)
+            newnode = Node(self.tree[position])
+            # set the source product for the new node
+            predecessor = self.tree[position - 1]
+            source_id = predecessor.attrib['id'] if predecessor.tag == 'node' else None
+            newnode.source = source_id
+            # set the source product for the node after the new node
+            if resetSuccessorSource:
+                successor.source = newnode.id
+        else:
+            self.tree.insert(len(self.tree) - 1, node.element)
+        if not void:
+            return node
+    
+    def nodes(self):
+        """
+        
+        Returns
+        -------
+        list
+            the list of :class:`Node` objects in the workflow
+        """
+        return [Node(x) for x in self.tree.findall('node')]
+    
+    @property
+    def suffix(self):
+        """
+        
+        Returns
+        -------
+        str
+            a file suffix created from the order of which the nodes will be executed
+        """
+        nodes = self.tree.findall('node')
+        suffix = '_'.join(filter(None, [LOOKUP.snap.suffix[x] for x in [y.attrib['id'] for y in nodes]]))
+        return suffix
+    
+    def write(self, outfile):
+        """
+        write the workflow to an XML file
+        
+        Parameters
+        ----------
+        outfile: str
+            the name of the file to write
+
+        Returns
+        -------
+
+        """
+        outfile = outfile if outfile.endswith('.xml') else outfile + '.xml'
+        with open(outfile, 'w') as out:
+            out.write(self.__str__())
+
+
+class Node(object):
+    """
+    class for handling of SNAP workflow processing nodes
+    
+    Parameters
+    ----------
+    element: ~xml.etree.ElementTree.Element
+        the node XML element
+    """
+    def __init__(self, element):
+        if not isinstance(element, ET.Element):
+            raise TypeError('element must be of type xml.etree.ElementTree.Element')
+        self.element = element
+    
+    def __str__(self):
+        rough_string = ET.tostring(self.element, 'utf-8')
+        reparsed = minidom.parseString(rough_string)
+        return reparsed.toprettyxml(indent='\t', newl='')
+    
+    @property
+    def id(self):
+        """
+        
+        Returns
+        -------
+        str
+            the node ID
+        """
+        return self.element.attrib['id']
+    
+    @id.setter
+    def id(self, value):
+        self.element.attrib['id'] = value
+    
+    @property
+    def operator(self):
+        """
+        
+        Returns
+        -------
+        str
+            the name of the node's processing operator
+        """
+        return self.element.find('.//operator').text
+    
+    @property
+    def parameters(self):
+        """
+        
+        Returns
+        -------
+        Par
+            the processing parameters of the node
+        """
+        params = self.element.find('.//parameters')
+        return Par(params)
+    
+    @property
+    def source(self):
+        """
+        
+        Returns
+        -------
+        str
+            the ID of the source node
+        """
+        source = self.element.find('.//sources/sourceProduct')
+        if source is not None:
+            source = source.attrib['refid']
+        return source
+    
+    @source.setter
+    def source(self, value):
+        source = self.element.find('.//sources/sourceProduct')
+        if source is not None:
+            source.attrib['refid'] = value
+        else:
+            raise RuntimeError('cannot set source on {} node'.format(self.operator))
+
+
+class Par(object):
+    """
+    class for handling processing node parameters
+    
+    Parameters
+    ----------
+    element: ~xml.etree.ElementTree.Element
+        the node parameter XML element
+    """
+    def __init__(self, element):
+        self.__element = element
+    
+    def __getitem__(self, item):
+        if item not in self.keys():
+            raise KeyError('key {} does not exist'.format(item))
+        return self.__element.find('.//{}'.format(item)).text
+    
+    def __setitem__(self, key, value):
+        if key not in self.keys():
+            raise KeyError('key {} does not exist'.format(key))
+        if isinstance(value, bool):
+            strval = str(value).lower()
+        elif isinstance(value, list):
+            strval = ','.join(map(str, value))
+        else:
+            strval = str(value)
+        self.__element.find('.//{}'.format(key)).text = strval
+    
+    def __repr__(self):
+        return str(self.dict())
+    
+    def dict(self):
+        """
+        
+        Returns
+        -------
+        dict
+            the parameters as a dictionary
+        """
+        return dict(self.items())
+    
+    def items(self):
+        """
+        
+        Returns
+        -------
+        list
+            the parameters as (key, value) as from :meth:`dict.items()`
+        """
+        return list(zip(self.keys(), self.values()))
+    
+    def keys(self):
+        """
+        
+        Returns
+        -------
+        list
+            the parameter names as from :meth:`dict.keys()`
+        """
+        return [x.tag for x in self.__element.findall('./')]
+    
+    def values(self):
+        """
+        
+        Returns
+        -------
+        list
+            the parameter values as from :meth:`dict.values()`
+        """
+        return [x.text for x in self.__element.findall('./')]
