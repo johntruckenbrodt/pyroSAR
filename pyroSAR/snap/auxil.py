@@ -34,12 +34,51 @@ from spatialist.ancillary import dissolve, finder
 
 
 def parse_recipe(name):
+    """
+    parse a SNAP recipe
+    
+    Parameters
+    ----------
+    name: str
+        the name of the recipe; current options:
+         * `blank`: a workflow without any nodes
+         * `geocode`: a basic workflow containing Read, Apply-Orbit-File, Calibration, Terrain-Flattening and Write nodes
+
+    Returns
+    -------
+    Workflow
+        the parsed recipe
+    
+    Examples
+    --------
+    >>> from pyroSAR.snap.auxil import parse_recipe
+    >>> workflow = parse_recipe('geocode')
+    """
     name = name if name.endswith('.xml') else name + '.xml'
     absname = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'recipes', name)
     return Workflow(absname)
 
 
 def parse_node(name):
+    """
+    parse a XML node recipe
+    
+    Parameters
+    ----------
+    name: str
+        the name of the processing node, e.g. Terrain-Correction
+
+    Returns
+    -------
+    Node
+        the parsed node
+    
+    Examples
+    --------
+    >>> ml = parse_node('ThermalNoiseRemoval')
+    >>> print(ml.parameters)
+    {'selectedPolarisations': None, 'removeThermalNoise': 'true', 'reIntroduceThermalNoise': 'false'}
+    """
     name = name if name.endswith('.xml') else name + '.xml'
     absname = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'recipes', 'nodes', name)
     with open(absname, 'r') as workflow:
@@ -169,7 +208,11 @@ def getAuxdata(datasets, scenes):
 
 def execute(xmlfile):
     """
-    execute SNAP workflows via the Graph Processing Tool gpt
+    execute SNAP workflows via the Graph Processing Tool gpt.
+    This function merely calls gpt with some additional command
+    line arguments and raises a RuntimeError on fail. This
+    function is used internally by function :func:`gpt`, which
+    should be used instead.
     
     Parameters
     ----------
@@ -229,7 +272,13 @@ def execute(xmlfile):
 def gpt(xmlfile, groups=None):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
-    Input is a readily formatted workflow xml file as created by function :func:`snap.util.geocode`
+    Input is a readily formatted workflow XML file as
+    created by function :func:`~pyroSAR.snap.util.geocode`.
+    Additional to calling GPT, this function will
+    
+     * execute the workflow in groups as defined by `groups`
+     * encode a nodata value into the output file if the format is GeoTiff-BigTIFF
+     * convert output files to GeoTiff if the output format is ENVI
     
     Parameters
     ----------
@@ -503,7 +552,7 @@ class ExamineSnap(object):
 
 def is_consistent(nodes):
     """
-    check whether all nodes take either no source node or on that is in the list
+    check whether all nodes take either no source node or one that is in the list
     
     Parameters
     ----------
@@ -626,6 +675,14 @@ def groupbyWorkers(xmlfile, n=2):
 
 
 class Workflow(object):
+    """
+    Class for convenient handling of SNAP XML workflows
+    
+    Parameters
+    ----------
+    xmlfile: str
+        the workflow XML file
+    """
     def __init__(self, xmlfile):
         with open(xmlfile, 'r') as infile:
             self.tree = ET.fromstring(infile.read())
@@ -639,9 +696,43 @@ class Workflow(object):
         return reparsed.toprettyxml(indent='\t', newl='')
     
     def index(self, node):
+        """
+        
+        Parameters
+        ----------
+        node: Node
+            a node in the workflow
+
+        Returns
+        -------
+        int
+            the index position of the node in the workflow
+        """
         return list(self.tree).index(node.element)
     
     def insert_node(self, node, before=None, after=None, resetSuccessorSource=True, void=True):
+        """
+        insert a node into the workflow including setting its source to its predecessor
+        and setting its ID as source of the successor.
+        
+        Parameters
+        ----------
+        node: Node
+            the node to be inserted
+        before: str
+            the ID of the node before the newly inserted node
+        after: str
+            the ID of the node before the newly inserted node
+        resetSuccessorSource: bool
+            reset the source of the successor node to the ID of the newly inserted node?
+        void: bool
+            if false, the function returns the node
+
+        Returns
+        -------
+        Node or None
+            the new node or None, depending on arguement `void`
+        """
         if before and not after:
             predecessor = self[before]
             position = self.index(predecessor) + 1
@@ -672,21 +763,55 @@ class Workflow(object):
             return node
     
     def nodes(self):
+        """
+        
+        Returns
+        -------
+        list
+            the list of :class:`Node` objects in the workflow
+        """
         return [Node(x) for x in self.tree.findall('node')]
     
     @property
     def suffix(self):
+        """
+        
+        Returns
+        -------
+        str
+            a file suffix created from the order of which the nodes will be executed
+        """
         nodes = self.tree.findall('node')
         suffix = '_'.join(filter(None, [LOOKUP.snap.suffix[x] for x in [y.attrib['id'] for y in nodes]]))
         return suffix
     
     def write(self, outfile):
+        """
+        write the workflow to an XML file
+        
+        Parameters
+        ----------
+        outfile: str
+            the name of the file to write
+
+        Returns
+        -------
+
+        """
         outfile = outfile if outfile.endswith('.xml') else outfile + '.xml'
         with open(outfile, 'w') as out:
             out.write(self.__str__())
 
 
 class Node(object):
+    """
+    class for handling of SNAP workflow processing nodes
+    
+    Parameters
+    ----------
+    element: ~xml.etree.ElementTree.Element
+        the node XML element
+    """
     def __init__(self, element):
         if not isinstance(element, ET.Element):
             raise TypeError('element must be of type xml.etree.ElementTree.Element')
@@ -699,6 +824,13 @@ class Node(object):
     
     @property
     def id(self):
+        """
+        
+        Returns
+        -------
+        str
+            the node ID
+        """
         return self.element.attrib['id']
     
     @id.setter
@@ -707,15 +839,36 @@ class Node(object):
     
     @property
     def operator(self):
+        """
+        
+        Returns
+        -------
+        str
+            the name of the node's processing operator
+        """
         return self.element.find('.//operator').text
     
     @property
     def parameters(self):
+        """
+        
+        Returns
+        -------
+        Par
+            the processing parameters of the node
+        """
         params = self.element.find('.//parameters')
         return Par(params)
     
     @property
     def source(self):
+        """
+        
+        Returns
+        -------
+        str
+            the ID of the source node
+        """
         source = self.element.find('.//sources/sourceProduct')
         if source is not None:
             source = source.attrib['refid']
@@ -731,6 +884,14 @@ class Node(object):
 
 
 class Par(object):
+    """
+    class for handling processing node parameters
+    
+    Parameters
+    ----------
+    element: ~xml.etree.ElementTree.Element
+        the node parameter XML element
+    """
     def __init__(self, element):
         self.__element = element
     
@@ -754,13 +915,41 @@ class Par(object):
         return str(self.dict())
     
     def dict(self):
+        """
+        
+        Returns
+        -------
+        dict
+            the parameters as a dictionary
+        """
         return dict(self.items())
     
     def items(self):
+        """
+        
+        Returns
+        -------
+        list
+            the parameters as (key, value) as from :meth:`dict.items()`
+        """
         return list(zip(self.keys(), self.values()))
     
     def keys(self):
+        """
+        
+        Returns
+        -------
+        list
+            the parameter names as from :meth:`dict.keys()`
+        """
         return [x.tag for x in self.__element.findall('./')]
     
     def values(self):
+        """
+        
+        Returns
+        -------
+        list
+            the parameter values as from :meth:`dict.values()`
+        """
         return [x.text for x in self.__element.findall('./')]
