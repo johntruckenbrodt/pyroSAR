@@ -94,11 +94,6 @@ def write_recipe(recipe, outfile):
         out.write(reparsed.toprettyxml(indent='\t', newl=''))
 
 
-def getOrbitContentVersions(contentVersion):
-    return dict(
-        [re.split(r'\s*=\s*', x.strip('\r')) for x in contentVersion.read().split('\n') if re.search('^[0-9]{4}', x)])
-
-
 class GetAuxdata:
     def __init__(self, datasets, scenes):
         self.datasets = datasets
@@ -120,6 +115,11 @@ class GetAuxdata:
 #                     list(set(dissolve([scene.getHGT() for scene in self.scenes])))]
 
 def getAuxdata(datasets, scenes):
+    def getOrbitContentVersions(contentVersion):
+        content = contentVersion.read().split('\n')
+        items = [re.split(r'\s*=\s*', x.strip('\r')) for x in content if re.search('^[0-9]{4}', x)]
+        return dict(items)
+    
     auxDataPath = os.path.join(expanduser("~"), '.snap/auxdata')
     
     scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
