@@ -94,26 +94,6 @@ def write_recipe(recipe, outfile):
         out.write(reparsed.toprettyxml(indent='\t', newl=''))
 
 
-class GetAuxdata:
-    def __init__(self, datasets, scenes):
-        self.datasets = datasets
-        self.scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
-        self.sensors = list(set([scene.sensor for scene in scenes]))
-        
-        try:
-            self.auxDataPath = os.path.join(os.environ['HOME'], '.snap/auxdata')
-        except KeyError:
-            self.auxDataPath = os.path.join(os.environ['USERPROFILE'], '.snap/auxdata')
-    
-    def srtm_1sec_hgt(self):
-        pass
-        # Wird nicht benutzt?
-
-
-#        for dataset in self.datasets:
-#            files = [x.replace('hgt', 'SRTMGL1.hgt.zip') for x in
-#                     list(set(dissolve([scene.getHGT() for scene in self.scenes])))]
-
 def getAuxdata(datasets, scenes):
     def getOrbitContentVersions(contentVersion):
         content = contentVersion.read().split('\n')
