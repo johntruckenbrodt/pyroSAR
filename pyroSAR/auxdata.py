@@ -256,7 +256,7 @@ class DEMHandler:
         else:
             raise ValueError('unknown demType: {}'.format(demType))
         
-        return remotes
+        return sorted(remotes)
     
     def __commonextent(self, buffer=None):
         ext_new = {}
@@ -304,7 +304,7 @@ class DEMHandler:
                 input.close()
             if os.path.isfile(outfile):
                 locals.append(outfile)
-        return locals
+        return sorted(locals)
     
     @staticmethod
     def __retrieve_ftp(url, filenames, outdir, username, password):
@@ -332,7 +332,7 @@ class DEMHandler:
             if os.path.isfile(product_local):
                 locals.append(product_local)
         ftps.close()
-        return locals
+        return sorted(locals)
     
     @property
     def config(self):
