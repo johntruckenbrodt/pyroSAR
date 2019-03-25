@@ -35,7 +35,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
           * url: https://step.esa.int/auxdata/dem/SRTMGL1
 
-        - 'SRTM 3sec'
+        - 'SRTM 3Sec'
 
           * url: http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF
         
@@ -91,19 +91,11 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         dem_create(src=vrt, dst=outname, t_srs=32632, tr=(30, 30), geoid_convert=True, geoid='EGM96')
     """
     with DEMHandler(geometries) as handler:
-        if demType == 'AW3D30':
-            return handler.aw3d30(vrt, buffer)
-        elif demType == 'SRTM 1Sec HGT':
-            return handler.srtm_1sec_hgt(vrt, buffer)
-        elif demType == 'SRTM 3Sec':
-            return handler.srtm_3sec(vrt, buffer)
-        elif demType == 'TDX90m':
-            return handler.tdx90m(username=username,
-                                  password=password,
-                                  vrt=vrt,
-                                  buffer=buffer)
-        else:
-            raise RuntimeError('demType unknown: {}'.format(demType))
+        return handler.load(demType=demType,
+                            username=username,
+                            password=password,
+                            vrt=vrt,
+                            buffer=buffer)
 
 
 def dem_create(src, dst, t_srs=None, tr=None, geoid_convert=False, geoid='EGM96'):
