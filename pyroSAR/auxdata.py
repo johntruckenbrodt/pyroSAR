@@ -320,7 +320,10 @@ class DEMHandler:
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
         ftps = ftplib.FTP_TLS(url)
-        ftps.login(username, password)  # login anonymously before securing control channel
+        try:
+            ftps.login(username, password)  # login anonymously before securing control channel
+        except ftplib.error_perm as e:
+            raise RuntimeError(str(e))
         ftps.prot_p()  # switch to secure data connection.. IMPORTANT! Otherwise, only the user and password is encrypted and not all the file data.
         
         locals = []
