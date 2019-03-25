@@ -342,180 +342,73 @@ class DEMHandler:
         ftps.close()
         return locals
     
-    def aw3d30(self, vrt=None, buffer=None):
+    @property
+    def config(self):
+        return {
+            'AW3D30': {'url': 'ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804',
+                       'nodata': -9999,
+                       'vsi': '/vsitar/',
+                       'pattern': '*DSM.tif'},
+            'SRTM 1Sec HGT': {'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
+                              'nodata': -32768.0,
+                              'vsi': '/vsizip/',
+                              'pattern': '*.hgt'},
+            'SRTM 3Sec': {'url': 'http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/tiff',
+                          'nodata': -32768.0,
+                          'vsi': '/vsizip/',
+                          'pattern': '*.tif'},
+            'TDX90m': {'url': 'tandemx-90m.dlr.de',
+                       'nodata': -32767.0,
+                       'vsi': '/vsizip/',
+                       'pattern': '*_DEM.tif'}
+        }
+    
+    def load(self, demType, vrt=None, buffer=None, username=None, password=None):
         """
-        obtain ALOS Global Digital Surface Model "ALOS World 3D - 30m (AW3D30)"
+        obtain DEM tiles for the given geometries
         
         Parameters
         ----------
+        demType: str
+            the type fo DEM to be used
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
         buffer: int or float
             a buffer in degrees to add around the individual geometries
-        
-        Returns
-        -------
-        list or str
-            the names of the obtained files or the name of the VRT file
-        """
-        url = 'ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804'
-        outdir = os.path.join(self.auxdatapath, 'dem', 'AW3D30')
-        
-        def index(x, y):
-            return '{}{:03d}{}{:03d}'.format('S' if y < 0 else 'N', abs(y),
-                                             'W' if x < 0 else 'E', abs(x))
-        
-        files = []
-        for geo in self.geometries:
-            corners = self.__applybuffer(geo.extent, buffer)
-            xmin = int(corners['xmin'] // 5)
-            xmax = int(corners['xmax'] // 5)
-            ymin = int(corners['ymin'] // 5)
-            ymax = int(corners['ymax'] // 5)
-            
-            for x in range(xmin, xmax + 1):
-                for y in range(ymin, ymax + 1):
-                    files.append('{}_{}.tar.gz'.format(index(x * 5, y * 5),
-                                                       index(x * 5 + 5, y * 5 + 5)))
-        
-        locals = self.__retrieve(url, files, outdir)
-        if vrt is not None:
-            self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*DSM.tif',
-                            vsi='/vsitar/', extent=self.__commonextent(buffer),
-                            nodata=-9999)
-            return vrt
-        return locals
-    
-    def srtm_1sec_hgt(self, vrt=None, buffer=None):
-        """
-        obtain SRTM 1arcsec DEM tiles in HGT format
-        
-        Parameters
-        ----------
-        vrt: str or None
-            an optional GDAL VRT file created from the obtained DEM tiles
-        buffer: int or float
-            a buffer in degrees to add around the individual geometries
-        
-        Returns
-        -------
-        list or str
-            the names of the obtained files or the name of the VRT file
-        """
-        url = 'https://step.esa.int/auxdata/dem/SRTMGL1'
-        outdir = os.path.join(self.auxdatapath, 'dem', 'SRTM 1Sec HGT')
-        
-        files = []
-        
-        for geo in self.geometries:
-            corners = self.__applybuffer(geo.extent, buffer)
-            
-            # generate sequence of integer coordinates marking the tie points of the overlapping hgt tiles
-            lat = range(int(float(corners['ymin']) // 1),
-                        int(float(corners['ymax']) // 1) + 1)
-            lon = range(int(float(corners['xmin']) // 1),
-                        int(float(corners['xmax']) // 1) + 1)
-            
-            # convert coordinates to string with leading zeros and hemisphere identification letter
-            lat = [str(x).zfill(2 + len(str(x)) - len(str(x).strip('-'))) for x in lat]
-            lat = [x.replace('-', 'S') if '-' in x else 'N' + x for x in lat]
-            
-            lon = [str(x).zfill(3 + len(str(x)) - len(str(x).strip('-'))) for x in lon]
-            lon = [x.replace('-', 'W') if '-' in x else 'E' + x for x in lon]
-            
-            # concatenate all formatted latitudes and longitudes with each other as final product
-            files.extend([x + y + '.SRTMGL1.hgt.zip' for x in lat for y in lon])
-        
-        locals = self.__retrieve(url, files, outdir)
-        
-        if vrt is not None:
-            self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*.hgt',
-                            vsi='/vsizip/', extent=self.__commonextent(buffer),
-                            nodata=-32768.0)
-            return vrt
-        return locals
-    
-    def srtm_3sec(self, vrt=None, buffer=None):
-        """
-        obtain SRTM 3arcsec DEM tiles in GeoTiff format
-        
-        Parameters
-        ----------
-        vrt: str or None
-            an optional GDAL VRT file created from the obtained DEM tiles
-        buffer: int or float
-            a buffer in degrees to add around the individual geometries
-        
-        Returns
-        -------
-        list or str
-            the names of the obtained files or the name of the VRT file
-        """
-        url = 'http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/tiff'
-        outdir = os.path.join(self.auxdatapath, 'dem', 'SRTM 3Sec')
-        files = []
-        for geo in self.geometries:
-            corners = self.__applybuffer(geo.extent, buffer)
-            x_id = [int((corners[x] + 180) // 5) + 1 for x in ['xmin', 'xmax']]
-            y_id = [int((60 - corners[x]) // 5) + 1 for x in ['ymin', 'ymax']]
-            files.extend(['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in x_id for y in y_id])
-        locals = self.__retrieve(url, files, outdir)
-        if vrt is not None:
-            self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*.tif',
-                            vsi='/vsizip/', extent=self.__commonextent(buffer),
-                            nodata=-32768.0)
-            return vrt
-        return locals
-    
-    def tdx90m(self, username, password, vrt=None, buffer=None):
-        """
-        | obtain TanDEM-X 90 m DEM tiles in GeoTiff format
-        | registration via DLR is necessary, see https://geoservice.dlr.de/web/dataguide/tdm90
-        
-        Parameters
-        ----------
         username: str
-            the DLR user name
+            the download account user name
         password: str
-            the user password
-        vrt: str or None
-            an optional GDAL VRT file created from the obtained DEM tiles
-        buffer: int or float
-            a buffer in degrees to add around the individual geometries
+            the download account password
 
         Returns
         -------
         list or str
             the names of the obtained files or the name of the VRT file
         """
-        url = 'tandemx-90m.dlr.de'
-        outdir = os.path.join(self.auxdatapath, 'dem', 'TDX90m')
+        keys = self.config.keys()
+        if demType not in keys:
+            raise RuntimeError("demType '{}' is not supported\n  "
+                               "possible options: '{}'"
+                               .format(demType, "', '".join(keys)))
+        
+        outdir = os.path.join(self.auxdatapath, 'dem', demType)
         
         remotes = []
         for geo in self.geometries:
             corners = self.__applybuffer(geo.extent, buffer)
-            lat = range(int(float(corners['ymin']) // 1),
-                        int(float(corners['ymax']) // 1) + 1)
-            lon = range(int(float(corners['xmin']) // 1),
-                        int(float(corners['xmax']) // 1) + 1)
-            
-            # convert coordinates to string with leading zeros and hemisphere identification letter
-            lat_id = [str(x).zfill(2 + len(str(x)) - len(str(x).strip('-'))) for x in lat]
-            lat_id = [x.replace('-', 'S') if '-' in x else 'N' + x for x in lat_id]
-            
-            lon_id = [str(x).zfill(3 + len(str(x)) - len(str(x).strip('-'))) for x in lon]
-            lon_id = [x.replace('-', 'W') if '-' in x else 'E' + x for x in lon_id]
-            
-            for x in lon_id:
-                for y in lat_id:
-                    xr = int(x[1:]) // 10 * 10
-                    remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
-                                   .format(x=x, xr=xr, y=y, hem=x[0]))
+            remotes.extend(self.remote_ids(corners, demType=demType))
         
-        locals = self.__retrieve_ftp(url, remotes, outdir, username=username, password=password)
+        if demType == 'TDX90m':
+            locals = self.__retrieve_ftp(self.config[demType]['url'], remotes, outdir,
+                                         username=username, password=password)
+        else:
+            locals = self.__retrieve(self.config[demType]['url'], remotes, outdir)
+        
         if vrt is not None:
-            self.__buildvrt(archives=locals, vrtfile=vrt, pattern='*_DEM.tif',
-                            vsi='/vsizip/', extent=self.__commonextent(buffer),
-                            nodata=-32767.0)
+            self.__buildvrt(archives=locals, vrtfile=vrt,
+                            pattern=self.config[demType]['pattern'],
+                            vsi=self.config[demType]['vsi'],
+                            extent=self.__commonextent(buffer),
+                            nodata=self.config[demType]['nodata'])
             return vrt
         return locals
