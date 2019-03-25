@@ -216,6 +216,56 @@ class DEMHandler:
             ext['ymax'] += buffer
         return ext
     
+    @staticmethod
+    def remote_ids(extent, demType):
+        if demType in ['SRTM 1Sec HGT', 'TDX90m']:
+            # generate sequence of integer coordinates marking the tie points of the overlapping tiles
+            lat = range(int(float(extent['ymin']) // 1),
+                        int(float(extent['ymax']) // 1) + 1)
+            lon = range(int(float(extent['xmin']) // 1),
+                        int(float(extent['xmax']) // 1) + 1)
+            
+            # convert coordinates to string with leading zeros and hemisphere identification letter
+            lat = [str(x).zfill(2 + len(str(x)) - len(str(x).strip('-'))) for x in lat]
+            lat = [x.replace('-', 'S') if '-' in x else 'N' + x for x in lat]
+            
+            lon = [str(x).zfill(3 + len(str(x)) - len(str(x).strip('-'))) for x in lon]
+            lon = [x.replace('-', 'W') if '-' in x else 'E' + x for x in lon]
+            if demType == 'SRTM 1Sec HGT':
+                remotes = [x + y + '.SRTMGL1.hgt.zip' for x in lat for y in lon]
+            else:
+                remotes = []
+                for x in lon:
+                    for y in lat:
+                        xr = int(x[1:]) // 10 * 10
+                        remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
+                                       .format(x=x, xr=xr, y=y, hem=x[0]))
+        elif demType == 'AW3D30':
+            def index(x, y):
+                return '{}{:03d}{}{:03d}'.format('S' if y < 0 else 'N', abs(y),
+                                                 'W' if x < 0 else 'E', abs(x))
+            
+            remotes = []
+            lat = range(int(float(extent['ymin']) // 5),
+                        int(float(extent['ymax']) // 5) + 1)
+            lon = range(int(float(extent['xmin']) // 5),
+                        int(float(extent['xmax']) // 5) + 1)
+            for x in lon:
+                for y in lat:
+                    remotes.append('{}_{}.tar.gz'.format(index(x * 5, y * 5),
+                                                         index(x * 5 + 5, y * 5 + 5)))
+        elif demType == 'SRTM 3Sec':
+            lat = range(int((60 - float(extent['ymin'])) // 5) + 1,
+                        int((60 - float(extent['ymax'])) // 5) + 2)
+            lon = range(int((float(extent['xmin']) + 180) // 5) + 1,
+                        int((float(extent['xmax']) + 180) // 5) + 2)
+            
+            remotes = ['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in lon for y in lat]
+        else:
+            raise ValueError('unknown demType: {}'.format(demType))
+        
+        return remotes
+    
     def __commonextent(self, buffer=None):
         ext_new = {}
         for geo in self.geometries:
