@@ -28,7 +28,12 @@ def test_handler():
 
 def test_autoload(tmpdir):
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
-        files = dem_autoload([box], 'SRTM 1Sec HGT')
-        assert len(files) == 1
+        for type in ['AW3D30', 'SRTM 1Sec HGT', 'SRTM 3Sec']:
+            files = dem_autoload([box], type)
+            assert len(files) == 1
         with pytest.raises(RuntimeError):
             files = dem_autoload([box], 'TDX90m')
+        with pytest.raises(RuntimeError):
+            dem_autoload([box], 'AW3D30', product='foobar')
+        files = dem_autoload([box], 'AW3D30', product='stk')
+        assert len(files) == 1
