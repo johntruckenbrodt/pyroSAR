@@ -24,7 +24,7 @@ from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 
 
-def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None):
+def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
     """
     obtain all relevant DEM tiles for selected geometries
 
@@ -60,7 +60,36 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         (optional) the user name for services requiring registration
     password: str or None
         (optional) the password for the registration account
-
+    
+            product: str
+            the sub-product to extract from the DEM product
+             * 'AW3D30'
+             
+              - 'dem': the actual Digital Elevation Model
+              - 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
+                low correlation mask, Sea mask, Information of elevation dataset used
+                for the void-filling processing)
+              - 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
+              
+             * 'SRTM 1Sec HGT'
+             
+              - 'dem': the actual Digital Elevation Model
+              
+             * 'SRTM 3Sec'
+             
+              - 'dem': the actual Digital Elevation Model
+              
+             * 'TDX90m'
+             
+              - 'dem': the actual Digital Elevation Model
+              - 'am2': Amplitude Mosaic representing the minimum value
+              - 'amp': Amplitude Mosaic representing the mean value
+              - 'com': Consistency Mask
+              - 'cov': Coverage Map
+              - 'hem': Height Error Map
+              - 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
+              - 'wam': Water Indication Mask
+    
     Returns
     -------
     list or str
@@ -103,7 +132,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             username=username,
                             password=password,
                             vrt=vrt,
-                            buffer=buffer)
+                            buffer=buffer,
+                            product=product)
 
 
 def dem_create(src, dst, t_srs=None, tr=None, geoid_convert=False, geoid='EGM96'):
