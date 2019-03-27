@@ -39,6 +39,14 @@ SNAP Processing
     :undoc-members:
     :show-inheritance:
 
+Workflow Parsing
+----------------
+
+.. automodule:: pyroSAR.snap.auxil
+    :members: gpt, parse_node, parse_recipe, Workflow, Node, Par
+    :undoc-members:
+    :show-inheritance:
+
 GAMMA Processing
 ================
 
