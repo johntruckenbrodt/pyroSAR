@@ -348,22 +348,35 @@ class DEMHandler:
             'AW3D30': {'url': 'ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804',
                        'nodata': -9999,
                        'vsi': '/vsitar/',
-                       'pattern': '*DSM.tif'},
+                       'pattern': {'dem': '*DSM.tif',
+                                   'msk': '*MSK.tif',
+                                   'stk': '*STK.tif'}
+                       },
             'SRTM 1Sec HGT': {'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
                               'nodata': -32768.0,
                               'vsi': '/vsizip/',
-                              'pattern': '*.hgt'},
+                              'pattern': {'dem': '*.hgt'}
+                              },
             'SRTM 3Sec': {'url': 'http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/tiff',
                           'nodata': -32768.0,
                           'vsi': '/vsizip/',
-                          'pattern': '*.tif'},
+                          'pattern': {'dem': 'srtm*.tif'}
+                          },
             'TDX90m': {'url': 'tandemx-90m.dlr.de',
                        'nodata': -32767.0,
                        'vsi': '/vsizip/',
-                       'pattern': '*_DEM.tif'}
+                       'pattern': {'dem': '*_DEM.tif',
+                                   'am2': '*_AM2.tif',
+                                   'amp': '*_AMP.tif',
+                                   'com': '*_COM.tif',
+                                   'cov': '*_COV.tif',
+                                   'hem': '*_HEM.tif',
+                                   'lsm': '*_LSM.tif',
+                                   'wam': '*_WAM.tif'}
+                       }
         }
     
-    def load(self, demType, vrt=None, buffer=None, username=None, password=None):
+    def load(self, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
         """
         obtain DEM tiles for the given geometries
         
@@ -379,6 +392,34 @@ class DEMHandler:
             the download account user name
         password: str
             the download account password
+        product: str
+            the sub-product to extract from the DEM product
+             * 'AW3D30'
+             
+              - 'dem': the actual Digital Elevation Model
+              - 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
+                low correlation mask, Sea mask, Information of elevation dataset used
+                for the void-filling processing)
+              - 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
+              
+             * 'SRTM 1Sec HGT'
+             
+              - 'dem': the actual Digital Elevation Model
+              
+             * 'SRTM 3Sec'
+             
+              - 'dem': the actual Digital Elevation Model
+              
+             * 'TDX90m'
+             
+              - 'dem': the actual Digital Elevation Model
+              - 'am2': Amplitude Mosaic representing the minimum value
+              - 'amp': Amplitude Mosaic representing the mean value
+              - 'com': Consistency Mask
+              - 'cov': Coverage Map
+              - 'hem': Height Error Map
+              - 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
+              - 'wam': Water Indication Mask
 
         Returns
         -------
@@ -390,6 +431,11 @@ class DEMHandler:
             raise RuntimeError("demType '{}' is not supported\n  "
                                "possible options: '{}'"
                                .format(demType, "', '".join(keys)))
+        
+        products = self.config[demType]['pattern'].keys()
+        if product not in products:
+            raise RuntimeError("product '{0}' not available for demType '{1}'\n"
+                               "  options: '{2}'".format(product, demType, "', '".join(products)))
         
         outdir = os.path.join(self.auxdatapath, 'dem', demType)
         
@@ -404,12 +450,17 @@ class DEMHandler:
         else:
             locals = self.__retrieve(self.config[demType]['url'], remotes, outdir)
         
+        if product == 'DEM':
+            nodata = self.config[demType]['nodata']
+        else:
+            nodata = None
+        
         if vrt is not None:
             self.__buildvrt(archives=locals, vrtfile=vrt,
-                            pattern=self.config[demType]['pattern'],
+                            pattern=self.config[demType]['pattern'][product],
                             vsi=self.config[demType]['vsi'],
                             extent=self.__commonextent(buffer),
-                            nodata=self.config[demType]['nodata'])
+                            nodata=nodata)
             return vrt
         return locals
 
