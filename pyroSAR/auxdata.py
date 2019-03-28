@@ -461,29 +461,34 @@ class DEMHandler:
                         step)
             return lat, lon
         
+        def index(x=None, y=None, nx=3, ny=3):
+            if x is not None:
+                xf = '{ew}{x:0{nx}d}'.format(ew='W' if x < 0 else 'E', x=abs(x), nx=nx)
+            else:
+                xf = ''
+            if y is not None:
+                yf = '{ns}{y:0{ny}d}'.format(ns='S' if y < 0 else 'N', y=abs(y), ny=ny)
+            else:
+                yf = ''
+            out = yf + xf
+            return out
+        
         if demType in ['SRTM 1Sec HGT', 'TDX90m']:
             lat, lon = intrange(extent, step=1)
             
-            # convert coordinates to string with leading zeros and hemisphere identification letter
-            lat = [str(x).zfill(2 + len(str(x)) - len(str(x).strip('-'))) for x in lat]
-            lat = [x.replace('-', 'S') if '-' in x else 'N' + x for x in lat]
-            
-            lon = [str(x).zfill(3 + len(str(x)) - len(str(x).strip('-'))) for x in lon]
-            lon = [x.replace('-', 'W') if '-' in x else 'E' + x for x in lon]
             if demType == 'SRTM 1Sec HGT':
-                remotes = [x + y + '.SRTMGL1.hgt.zip' for x in lat for y in lon]
+                remotes = ['{}.SRTMGL1.hgt.zip'.format(index(x, y, nx=3, ny=2))
+                           for x in lon for y in lat]
             else:
                 remotes = []
                 for x in lon:
+                    xr = abs(x) // 10 * 10
                     for y in lat:
-                        xr = int(x[1:]) // 10 * 10
+                        xf = index(x=x, nx=3)
+                        yf = index(y=y, ny=2)
                         remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
-                                       .format(x=x, xr=xr, y=y, hem=x[0]))
+                                       .format(x=xf, xr=xr, y=yf, hem=xf[0]))
         elif demType == 'AW3D30':
-            def index(x, y):
-                return '{}{:03d}{}{:03d}'.format('S' if y < 0 else 'N', abs(y),
-                                                 'W' if x < 0 else 'E', abs(x))
-            
             remotes = []
             lat, lon = intrange(extent, step=1)
             for x in lon:
