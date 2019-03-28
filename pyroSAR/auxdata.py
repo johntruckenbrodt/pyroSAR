@@ -285,7 +285,7 @@ class DEMHandler:
         locals = []
         for file in files:
             infile = '{}/{}'.format(url, file)
-            outfile = os.path.join(outdir, file)
+            outfile = os.path.join(outdir, os.path.basename(file))
             if not os.path.isfile(outfile):
                 try:
                     input = urlopen(infile)
@@ -488,8 +488,10 @@ class DEMHandler:
             lat, lon = intrange(extent, step=1)
             for x in lon:
                 for y in lat:
-                    remotes.append('{}_{}.tar.gz'.format(index(x * 5, y * 5),
-                                                         index(x * 5 + 5, y * 5 + 5)))
+                    remotes.append(
+                        '{}/{}.tar.gz'.format(index(x // 5 * 5, y // 5 * 5),
+                                              index(x, y)))
+        
         elif demType == 'SRTM 3Sec':
             lat = range(int((60 - float(extent['ymin'])) // 5) + 1,
                         int((60 - float(extent['ymax'])) // 5) + 2)
