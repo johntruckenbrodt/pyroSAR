@@ -1,3 +1,4 @@
+import os
 import pytest
 from pyroSAR.auxdata import dem_autoload, DEMHandler
 
@@ -23,6 +24,13 @@ def test_handler(auxdata_dem_cases):
 
 
 def test_autoload(tmpdir, auxdata_dem_cases):
+    # delete all target files to test downloading them again
+    home = os.path.expanduser('~')
+    demdir = os.path.join(home, '.snap', 'auxdata', 'dem')
+    locals = [os.path.join(demdir, x, os.path.basename(y[0])) for x, y in auxdata_dem_cases]
+    for item in locals:
+        if os.path.isfile(item):
+            os.remove(item)
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
         for type in ['AW3D30', 'SRTM 1Sec HGT', 'SRTM 3Sec']:
             files = dem_autoload([box], type)
