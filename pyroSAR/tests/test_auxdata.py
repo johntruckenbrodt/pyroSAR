@@ -32,9 +32,13 @@ def test_autoload(tmpdir, auxdata_dem_cases):
         if os.path.isfile(item):
             os.remove(item)
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
-        for type in ['AW3D30', 'SRTM 1Sec HGT', 'SRTM 3Sec']:
-            files = dem_autoload([box], type)
-            assert len(files) == 1
+        # if the following is run in a loop, it is not possible to see which demType failed
+        files = dem_autoload([box], 'AW3D30')
+        assert len(files) == 1
+        files = dem_autoload([box], 'SRTM 1Sec HGT')
+        assert len(files) == 1
+        files = dem_autoload([box], 'SRTM 3Sec')
+        assert len(files) == 1
         with pytest.raises(RuntimeError):
             files = dem_autoload([box], 'TDX90m')
         with pytest.raises(RuntimeError):
