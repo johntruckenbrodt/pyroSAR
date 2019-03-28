@@ -13,7 +13,7 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BoderNoise=True, removeS1ThermalNoise=True, offset=None,
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
-            basename_extensions=None, test=False, export_extra=None, groupsize=2):
+            basename_extensions=None, test=False, export_extra=None, groupsize=2, cleanup=True):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -64,6 +64,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          * DEM
     groupsize: int
         the number of workers executed together in one gpt call
+    cleanup: bool
+        should all files written to the temporary directory during function execution be deleted after processing?
 
     Note
     ----
@@ -378,6 +380,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if not test:
         try:
             groups = groupbyWorkers(outname + '_proc.xml', groupsize)
-            gpt(outname + '_proc.xml', groups=groups)
+            gpt(outname + '_proc.xml', groups=groups, cleanup=cleanup)
         except RuntimeError:
-            os.remove(outname + '_proc.xml')
+            if cleanup:
+                os.remove(outname + '_proc.xml')

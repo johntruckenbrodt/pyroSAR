@@ -73,7 +73,7 @@ def parse_node(name):
     return Node(element)
 
 
-def execute(xmlfile):
+def execute(xmlfile, cleanup=True):
     """
     execute SNAP workflows via the Graph Processing Tool gpt.
     This function merely calls gpt with some additional command
@@ -85,7 +85,9 @@ def execute(xmlfile):
     ----------
     xmlfile: str
         the name of the workflow XML file
-
+    cleanup: bool
+        should all files written to the temporary directory during function execution be deleted after processing?
+    
     Returns
     -------
     
@@ -100,7 +102,7 @@ def execute(xmlfile):
     infile = workflow['Read'].parameters['file']
     nodes = workflow.nodes()
     workers = [x.id for x in nodes if x.operator not in ['Read', 'Write']]
-    print('_'.join(workers))
+    print(' -> '.join(workers))
     # try to find the GPT executable
     try:
         gpt_exec = ExamineSnap().gpt
@@ -123,12 +125,13 @@ def execute(xmlfile):
     out, err = proc.communicate()
     out = out.decode('utf-8') if isinstance(out, bytes) else out
     err = err.decode('utf-8') if isinstance(err, bytes) else err
-    # delete intermediate files if an error occured
+    # delete intermediate files if an error occurred
     if proc.returncode != 0:
-        if os.path.isfile(outname + '.tif'):
-            os.remove(outname + '.tif')
-        elif os.path.isdir(outname):
-            shutil.rmtree(outname)
+        if cleanup:
+            if os.path.isfile(outname + '.tif'):
+                os.remove(outname + '.tif')
+            elif os.path.isdir(outname):
+                shutil.rmtree(outname)
         print(out + err)
         print('failed: {}'.format(os.path.basename(infile)))
         err_match = re.search('Error: (.*)\n', out + err)
@@ -136,7 +139,7 @@ def execute(xmlfile):
         raise RuntimeError(errmessage)
 
 
-def gpt(xmlfile, groups=None):
+def gpt(xmlfile, groups=None, cleanup=True):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
     Input is a readily formatted workflow XML file as
@@ -153,7 +156,9 @@ def gpt(xmlfile, groups=None):
         the name of the workflow XML file
     groups: list
         a list of lists each containing IDs for individual nodes
-
+    cleanup: bool
+        should all files written to the temporary directory during function execution be deleted after processing?
+    
     Returns
     -------
 
@@ -172,9 +177,9 @@ def gpt(xmlfile, groups=None):
     if groups is not None:
         subs = split(xmlfile, groups)
         for sub in subs:
-            execute(sub)
+            execute(sub, cleanup=cleanup)
     else:
-        execute(xmlfile)
+        execute(xmlfile, cleanup=cleanup)
     
     if format == 'ENVI':
         print('converting to GTiff')
@@ -192,7 +197,8 @@ def gpt(xmlfile, groups=None):
             nodata = dem_nodata if re.search('elevation', item) else 0
             translateoptions['noData'] = nodata
             gdal_translate(item, name_new, translateoptions)
-        shutil.rmtree(outname)
+        if cleanup:
+            shutil.rmtree(outname)
     # by default the nodata value is not registered in the GTiff metadata
     elif format == 'GeoTiff-BigTIFF':
         ras = gdal.Open(outname + '.tif', GA_Update)
