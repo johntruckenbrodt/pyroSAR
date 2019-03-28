@@ -4,14 +4,10 @@ from pyroSAR.auxdata import dem_autoload, DEMHandler
 from spatialist import bbox
 
 
-def test_handler():
+def test_handler(auxdata_dem_cases):
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51.1, 'ymax': 51.5}, crs=4326) as box:
         with DEMHandler([box]) as handler:
-            cases = [('AW3D30', ['N050E010/N051E011.tar.gz']),
-                     ('SRTM 1Sec HGT', ['N51E011.SRTMGL1.hgt.zip']),
-                     ('SRTM 3Sec', ['srtm_39_02.zip']),
-                     ('TDX90m', ['90mdem/DEM/N51/E010/TDM1_DEM__30_N51E011.zip'])]
-            for demType, reference in cases:
+            for demType, reference in auxdata_dem_cases:
                 result = handler.remote_ids(demType=demType, extent=box.extent)
                 assert result == reference
     
@@ -26,7 +22,7 @@ def test_handler():
                 assert result == reference
 
 
-def test_autoload(tmpdir):
+def test_autoload(tmpdir, auxdata_dem_cases):
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
         for type in ['AW3D30', 'SRTM 1Sec HGT', 'SRTM 3Sec']:
             files = dem_autoload([box], type)
