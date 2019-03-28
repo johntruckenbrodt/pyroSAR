@@ -365,7 +365,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     for node in workflow.nodes():
         for key, value in dempar.items():
-            if hasattr(node.parameters, key):
+            if key in node.parameters.keys():
                 node.parameters[key] = value
     ############################################
     ############################################
