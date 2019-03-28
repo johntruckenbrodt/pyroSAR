@@ -451,12 +451,18 @@ class DEMHandler:
     
     @staticmethod
     def remote_ids(extent, demType):
+        # generate sequence of integer coordinates marking the tie points of the individual tiles
+        def intrange(extent, step):
+            lat = range(int(float(extent['ymin']) // step) * step,
+                        (int(float(extent['ymax']) // step) + 1) * step,
+                        step)
+            lon = range(int(float(extent['xmin']) // step) * step,
+                        (int(float(extent['xmax']) // step) + 1) * step,
+                        step)
+            return lat, lon
+        
         if demType in ['SRTM 1Sec HGT', 'TDX90m']:
-            # generate sequence of integer coordinates marking the tie points of the overlapping tiles
-            lat = range(int(float(extent['ymin']) // 1),
-                        int(float(extent['ymax']) // 1) + 1)
-            lon = range(int(float(extent['xmin']) // 1),
-                        int(float(extent['xmax']) // 1) + 1)
+            lat, lon = intrange(extent, step=1)
             
             # convert coordinates to string with leading zeros and hemisphere identification letter
             lat = [str(x).zfill(2 + len(str(x)) - len(str(x).strip('-'))) for x in lat]
@@ -479,10 +485,7 @@ class DEMHandler:
                                                  'W' if x < 0 else 'E', abs(x))
             
             remotes = []
-            lat = range(int(float(extent['ymin']) // 5),
-                        int(float(extent['ymax']) // 5) + 1)
-            lon = range(int(float(extent['xmin']) // 5),
-                        int(float(extent['xmax']) // 5) + 1)
+            lat, lon = intrange(extent, step=1)
             for x in lon:
                 for y in lat:
                     remotes.append('{}_{}.tar.gz'.format(index(x * 5, y * 5),
