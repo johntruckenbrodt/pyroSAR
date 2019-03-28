@@ -31,11 +31,12 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
     Parameters
     ----------
     geometries: list
-        a list of :class:`spatialist.vector.Vector` geometries to obtain DEM data for; CRS must be WGS84 LatLon (EPSG 4326)
+        a list of :class:`spatialist.vector.Vector` geometries to obtain DEM data for;
+        CRS must be WGS84 LatLon (EPSG 4326)
     demType: str
-        the type fo DEM to be used; current options:
+        the type of DEM to be used; current options:
 
-        - 'AW3D30' (ALOS Global Digital Surface Model "ALOS World 3D - 30m (AW3D30)")
+        - 'AW3D30' (ALOS Global Digital Surface Model "ALOS World 3D - 30m")
 
           * url: ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804
 
@@ -60,35 +61,36 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         (optional) the user name for services requiring registration
     password: str or None
         (optional) the password for the registration account
-    
-            product: str
-            the sub-product to extract from the DEM product
-             * 'AW3D30'
-             
-              - 'dem': the actual Digital Elevation Model
-              - 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
-                low correlation mask, Sea mask, Information of elevation dataset used
-                for the void-filling processing)
-              - 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
-              
-             * 'SRTM 1Sec HGT'
-             
-              - 'dem': the actual Digital Elevation Model
-              
-             * 'SRTM 3Sec'
-             
-              - 'dem': the actual Digital Elevation Model
-              
-             * 'TDX90m'
-             
-              - 'dem': the actual Digital Elevation Model
-              - 'am2': Amplitude Mosaic representing the minimum value
-              - 'amp': Amplitude Mosaic representing the mean value
-              - 'com': Consistency Mask
-              - 'cov': Coverage Map
-              - 'hem': Height Error Map
-              - 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
-              - 'wam': Water Indication Mask
+    product: str
+        the sub-product to extract from the DEM product.
+        The following options are available for the respective DEM types:
+        
+        - 'AW3D30'
+         
+          * 'dem': the actual Digital Elevation Model
+          * 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
+            low correlation mask, Sea mask, Information of elevation dataset used
+            for the void-filling processing)
+          * 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
+          
+        - 'SRTM 1Sec HGT'
+         
+          * 'dem': the actual Digital Elevation Model
+          
+        - 'SRTM 3Sec'
+         
+          * 'dem': the actual Digital Elevation Model
+          
+        - 'TDX90m'
+         
+          * 'dem': the actual Digital Elevation Model
+          * 'am2': Amplitude Mosaic representing the minimum value
+          * 'amp': Amplitude Mosaic representing the mean value
+          * 'com': Consistency Mask
+          * 'cov': Coverage Map
+          * 'hem': Height Error Map
+          * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
+          * 'wam': Water Indication Mask
     
     Returns
     -------
