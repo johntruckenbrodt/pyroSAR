@@ -545,7 +545,6 @@ def groupbyWorkers(xmlfile, n=2):
     readers_id = [x.id for x in workflow['operator=Read']]
     writers_id = [x.id for x in workflow['operator=Write']]
     workers_groups = [workers_id[i:i + n] for i in range(0, len(workers_id), n)]
-    print(workers_groups)
     nodes_groups = []
     for group in workers_groups:
         newgroup = []
