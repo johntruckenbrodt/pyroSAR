@@ -27,8 +27,6 @@ addons:
 
 python:
   - '3.5'
-  - '3.6'
-  - '3.7'
 
 virtualenv:
   system_site_packages: true
@@ -41,6 +39,7 @@ before_install:
 install:
   - pip install -r requirements-dev.txt
   - pip install coveralls coverage
+  - pip install --upgrade six
   - python setup.py install
 
 #before_script:
