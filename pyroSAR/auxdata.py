@@ -304,27 +304,35 @@ class DEMHandler:
         files = list(set(filenames))
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
-        ftps = ftplib.FTP_TLS(url)
-        try:
-            ftps.login(username, password)  # login anonymously before securing control channel
-        except ftplib.error_perm as e:
-            raise RuntimeError(str(e))
-        ftps.prot_p()  # switch to secure data connection.. IMPORTANT! Otherwise, only the user and password is encrypted and not all the file data.
-        
+        pattern = r'(ftp(?:es|))://([a-z0-9.\-]*)[/]*((?:[a-zA-Z0-9/_]*|))'
+        protocol, url, path = re.search(pattern, url).groups()
+        if protocol == 'ftpes':
+            ftp = ftplib.FTP_TLS(url)
+            try:
+                ftp.login(username, password)  # login anonymously before securing control channel
+            except ftplib.error_perm as e:
+                raise RuntimeError(str(e))
+            ftp.prot_p()  # switch to secure data connection.. IMPORTANT! Otherwise, only the user and password is encrypted and not all the file data.
+        else:
+            ftp = ftplib.FTP(url)
+            ftp.login()
+        if path != '':
+            ftp.cwd(path)
         locals = []
         for product_remote in files:
             product_local = os.path.join(outdir, os.path.basename(product_remote))
             if not os.path.isfile(product_local):
                 try:
-                    targetlist = ftps.nlst(product_remote)
+                    targetlist = ftp.nlst(product_remote)
                 except ftplib.error_temp:
                     continue
-                print('ftpes://{}/{} -->> {}'.format(url, product_remote, product_local))
+                address = '{}://{}/{}{}'.format(protocol, url, path + '/' if path != '' else '', product_remote)
+                print('{} -->> {}'.format(address, product_local))
                 with open(product_local, 'wb') as myfile:
-                    ftps.retrbinary('RETR {}'.format(product_remote), myfile.write)
+                    ftp.retrbinary('RETR {}'.format(product_remote), myfile.write)
             if os.path.isfile(product_local):
                 locals.append(product_local)
-        ftps.close()
+        ftp.close()
         return sorted(locals)
     
     @property
@@ -347,7 +355,7 @@ class DEMHandler:
                           'vsi': '/vsizip/',
                           'pattern': {'dem': 'srtm*.tif'}
                           },
-            'TDX90m': {'url': 'tandemx-90m.dlr.de',
+            'TDX90m': {'url': 'ftpes://tandemx-90m.dlr.de',
                        'nodata': -32767.0,
                        'vsi': '/vsizip/',
                        'pattern': {'dem': '*_DEM.tif',
