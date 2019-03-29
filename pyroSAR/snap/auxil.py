@@ -537,14 +537,24 @@ def groupbyWorkers(xmlfile, n=2):
     """
     workflow = Workflow(xmlfile)
     nodes = workflow.nodes()
-    nodes_id = [x.id for x in nodes]
-    workers = [x for x in nodes if x.operator not in ['Read', 'Write']]
-    workers_id = [x.id for x in workers]
-    workers_groups = [workers_id[i:i + n] for i in range(0, len(workers), n)]
-    splits = [nodes_id.index(x[0]) for x in workers_groups] + [len(nodes_id)]
-    splits[0] = 0
-    nodes_id_split = [nodes_id[splits[x]:splits[x + 1]] for x in range(0, len(splits) - 1)]
-    return nodes_id_split
+    workers_id = [x.id for x in nodes if x.operator not in ['Read', 'Write']]
+    readers_id = [x.id for x in workflow['operator=Read']]
+    writers_id = [x.id for x in workflow['operator=Write']]
+    workers_groups = [workers_id[i:i + n] for i in range(0, len(workers_id), n)]
+    print(workers_groups)
+    nodes_groups = []
+    for group in workers_groups:
+        newgroup = []
+        for worker in group:
+            newgroup.append(worker)
+            source = workflow[worker].source
+            if source in readers_id:
+                newgroup.insert(group.index(worker), source)
+            for writer in writers_id:
+                if workflow[writer].source == worker:
+                    newgroup.append(writer)
+        nodes_groups.append(newgroup)
+    return nodes_groups
 
 
 class Workflow(object):
