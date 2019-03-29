@@ -496,7 +496,10 @@ def split(xmlfile, groups):
         
         nodes = new.nodes()
         operators = [node.operator for node in nodes]
-        if operators[-1] != 'Write':
+        writers = new['operator=Write']
+        formats = [write.parameters['formatName'] for write in writers]
+        if (position < len(groups) - 1 and 'BEAM-DIMAP' not in formats) \
+                or (operators[-1] != 'Write'):
             write = parse_node('Write')
             new.insert_node(write, before=nodes[-1].id)
             tmp_out = os.path.join(tmp, 'tmp{}.dim'.format(position))
@@ -508,9 +511,10 @@ def split(xmlfile, groups):
         else:
             prod_tmp.append(nodes[-1].parameters['file'])
             prod_tmp_format.append(nodes[-1].parameters['formatName'])
-        
+        nodes = new.nodes()
         if not is_consistent(nodes):
-            raise RuntimeError('inconsistent group:\n {}'.format('-'.format(group)))
+            message = 'inconsistent group:\n {}'.format(' -> '.join(group))
+            raise RuntimeError(message)
         outname = os.path.join(tmp, 'tmp{}.xml'.format(position))
         new.write(outname)
         outlist.append(outname)
