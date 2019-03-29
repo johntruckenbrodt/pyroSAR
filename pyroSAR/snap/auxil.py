@@ -632,6 +632,7 @@ class Workflow(object):
                 successor.source = newnode.id
         else:
             self.tree.insert(len(self.tree) - 1, node.element)
+        self.refresh_ids()
         if not void:
             return node
     
