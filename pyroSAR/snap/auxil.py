@@ -645,6 +645,17 @@ class Workflow(object):
         """
         return [Node(x) for x in self.tree.findall('node')]
     
+    def refresh_ids(self):
+        counter = {}
+        for node in self.nodes():
+            operator = node.operator
+            if operator not in counter.keys():
+                counter[operator] = 1
+                node.id = operator
+            else:
+                counter[operator] += 1
+                node.id = '{} ({})'.format(operator, counter[operator])
+                
     @property
     def suffix(self):
         """
