@@ -41,6 +41,7 @@ before_install:
   - export PATH=$PATH:/opt/snap/bin
 
 install:
+  - pip install --ignore-installed six # install six inside the venv since the system version is too old
   - pip install -r requirements-dev.txt
   - pip install coveralls coverage
   - python setup.py install
