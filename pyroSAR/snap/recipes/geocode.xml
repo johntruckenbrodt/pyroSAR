@@ -16,7 +16,7 @@
         <parameters class="com.bc.ceres.binding.dom.XppDomElement">
             <orbitType>Sentinel Precise (Auto Download)</orbitType>
             <polyDegree>3</polyDegree>
-            <continueOnFail>true</continueOnFail>
+            <continueOnFail>false</continueOnFail>
         </parameters>
     </node>
     <node id="Calibration">
@@ -46,13 +46,13 @@
         <parameters class="com.bc.ceres.binding.dom.XppDomElement">
             <sourceBands>Beta0_VH,Beta0_VV</sourceBands>
             <demName>SRTM 1Sec HGT</demName>
-            <demResamplingMethod>BICUBIC_INTERPOLATION</demResamplingMethod>
+            <demResamplingMethod>BILINEAR_INTERPOLATION</demResamplingMethod>
             <externalDEMFile/>
             <externalDEMNoDataValue>0.0</externalDEMNoDataValue>
             <outputSimulatedImage>false</outputSimulatedImage>
             <additionalOverlap>0.1</additionalOverlap>
             <oversamplingMultiple>1.5</oversamplingMultiple>
-            <reGridMethod>false</reGridMethod>
+            <reGridMethod>true</reGridMethod>
         </parameters>
     </node>
     <node id="Write">

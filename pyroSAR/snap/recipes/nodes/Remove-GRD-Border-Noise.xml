@@ -5,7 +5,7 @@
     </sources>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
         <selectedPolarisations>VV</selectedPolarisations>
-        <borderLimit>1000</borderLimit>
+        <borderLimit>500</borderLimit>
         <trimThreshold>0.5</trimThreshold>
     </parameters>
 </node>
