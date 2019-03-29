@@ -615,31 +615,60 @@ class Workflow(object):
         """
         if before and not after:
             predecessor = self[before]
+            # print('inserting node {} after {}'.format(node.id, predecessor.id))
             position = self.index(predecessor) + 1
             self.tree.insert(position, node.element)
             newnode = Node(self.tree[position])
+            # print('new node id: {}'.format(newnode.id))
             # set the source product for the new node
-            newnode.source = predecessor.id
+            source_id = before
+            while True:
+                if self[source_id].operator == 'Write':
+                    source_id = self[source_id].source
+                else:
+                    # print('setting source of new node to {}'.format(self[source_id].id))
+                    newnode.source = self[source_id].id
+                    break
             # set the source product for the node after the new node
             if resetSuccessorSource:
-                successor = self.tree[position + 1]
-                if successor.tag == 'node':
-                    Node(successor).source = newnode.id
+                try:
+                    successor = self[position]
+                    # print('resetting source of successor {} to {}'.format(successor.id, newnode.id))
+                    successor.source = newnode.id
+                except IndexError:
+                    pass
+            # else:
+            #     print('no source resetting required')
         elif after and not before:
             successor = self[after]
+            # print('inserting node {} before {}'.format(node.id, successor.id))
             position = self.index(successor)
             self.tree.insert(position, node.element)
             newnode = Node(self.tree[position])
+            # print('new node id: {}'.format(newnode.id))
             # set the source product for the new node
-            predecessor = self.tree[position - 1]
-            source_id = predecessor.attrib['id'] if predecessor.tag == 'node' else None
-            newnode.source = source_id
+            try:
+                predecessor = self[position - 2]
+                source_id = predecessor.id
+                while True:
+                    if self[source_id].operator == 'Write':
+                        source_id = self[source_id].source
+                    else:
+                        # print('setting source of new node to {}'.format(self[source_id].id))
+                        newnode.source = self[source_id].id
+                        break
+            except IndexError:
+                newnode.source = None
             # set the source product for the node after the new node
             if resetSuccessorSource:
+                # print('resetting source of successor {} to {}'.format(successor.id, newnode.id))
                 successor.source = newnode.id
+            # else:
+                # print('no source resetting required')
         else:
             self.tree.insert(len(self.tree) - 1, node.element)
         self.refresh_ids()
+        # print([x.id for x in self.nodes()])
         if not void:
             return node
     
