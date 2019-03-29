@@ -437,7 +437,7 @@ class DEMHandler:
             corners = self.__applybuffer(geo.extent, buffer)
             remotes.extend(self.remote_ids(corners, demType=demType))
         
-        if demType == 'TDX90m':
+        if demType in ['AW3D30', 'TDX90m']:
             locals = self.__retrieve_ftp(self.config[demType]['url'], remotes, outdir,
                                          username=username, password=password)
         else:
