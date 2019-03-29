@@ -780,6 +780,8 @@ class Par(object):
             strval = str(value).lower()
         elif isinstance(value, list):
             strval = ','.join(map(str, value))
+        elif value is None:
+            strval = value
         else:
             strval = str(value)
         self.__element.find('.//{}'.format(key)).text = strval
