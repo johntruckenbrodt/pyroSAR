@@ -23,7 +23,7 @@ def test_handler(auxdata_dem_cases):
                 assert result == reference
 
 
-def test_autoload(tmpdir, auxdata_dem_cases):
+def test_autoload(auxdata_dem_cases):
     # delete all target files to test downloading them again
     home = os.path.expanduser('~')
     demdir = os.path.join(home, '.snap', 'auxdata', 'dem')
