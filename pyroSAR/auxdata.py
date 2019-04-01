@@ -443,7 +443,7 @@ class DEMHandler:
         else:
             locals = self.__retrieve(self.config[demType]['url'], remotes, outdir)
         
-        if product == 'DEM':
+        if product == 'dem':
             nodata = self.config[demType]['nodata']
         else:
             nodata = None
