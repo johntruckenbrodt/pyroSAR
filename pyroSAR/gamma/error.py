@@ -27,7 +27,7 @@ def gammaErrorHandler(out, err):
     # in case no error is to be thrown define None as error type
     knownErrors = {'image data formats differ': IOError,
                    'cannot open': IOError,
-                   r'no coverage of SAR image by DEM (?:\(in (?:latitude/northing|longitude/easting)\)|)': RuntimeError,
+                   r'no coverage of SAR image by DEM(?: \(in (?:latitude/northing|longitude/easting)\)|)': RuntimeError,
                    'libgdal.so.1: no version information available': None,
                    'line outside of image': ValueError,
                    'no offsets found above SNR threshold': ValueError,
