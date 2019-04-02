@@ -308,6 +308,7 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
                     sh.write('export base={}\n\n'.format(outdir))
                     sh.write(content)
                 line = line.replace(outdir, '$base')
+            sh.seek(0, 2)  # set pointer to the end of the file
             sh.write(line + '\n\n')
     out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False, errorpass=True)
     gammaErrorHandler(out, err)
