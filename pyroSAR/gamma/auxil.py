@@ -423,10 +423,10 @@ def slc_corners(parfile):
     for line in out.split('\n'):
         if line.startswith('min. latitude'):
             pts['ymin'], pts['ymax'] = [float(x) for x in
-                                        re.findall('[0-9]+\.[0-9]+', line)]
+                                        re.findall(r'[0-9]+\.[0-9]+', line)]
         elif line.startswith('min. longitude'):
             pts['xmin'], pts['xmax'] = [float(x) for x in
-                                        re.findall('[0-9]+\.[0-9]+', line)]
+                                        re.findall(r'[0-9]+\.[0-9]+', line)]
     return pts
 
 
