@@ -762,7 +762,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     ######################################################################
     print('conversion to (dB and) geotiff..')
     
-    def exporter(data_in, outdir, scale='linear', dtype=2, nodata_new=None):
+    def exporter(data_in, outdir, scale='linear', dtype=2, nodata=None):
         if scale == 'db':
             nodata_out = nodata[1]
             if re.search('_geo', os.path.basename(data_in)):
@@ -782,7 +782,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
             par2hdr(refpar, data_in + '_db.hdr')
             data_in += '_db'
         else:
-            nodata_out = nodata[0] if nodata_new is None else nodata_new
+            nodata_out = nodata[0] if nodata is None else nodata
         if re.search('_geo', os.path.basename(data_in)):
             outfile = os.path.join(outdir, os.path.basename(data_in) + '.tif')
             disp.data2geotiff(DEM_par=n.dem_seg_geo + '.par',
@@ -810,16 +810,18 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if export_extra is not None:
         print('exporting extra products..')
         for key in export_extra:
+            # SAR image products
             product_match = [x for x in products if x.endswith(key)]
             if len(product_match) > 0:
                 for product in product_match:
                     for scale in scaling:
                         exporter(product, outdir, scale, dtype=2)
+            # ancillary (DEM) products
             elif n.isfile(key) and key not in ['lut_init']:
                 filename = n[key]
                 dtype = 5 if key == 'ls_map_geo' else 2
-                nodata_new = 0 if key == 'ls_map_geo' else -99
-                exporter(filename, outdir, dtype=dtype, nodata_new=nodata_new)
+                nodata = 0
+                exporter(filename, outdir, dtype=dtype, nodata=nodata)
             else:
                 print('cannot not export file {}'.format(key))
     
