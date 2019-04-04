@@ -486,6 +486,11 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     >>> filename = 'S1A_IW_GRDH_1SDV_20180829T170656_20180829T170721_023464_028DE0_F7BD.zip'
     >>> geocode(scene=filename, dem='demfile', outdir='outdir', targetres=20, scaling='db',
     >>>         export_extra=['dem_seg_geo', 'inc_geo', 'ls_map_geo'])
+    
+    .. figure:: gamma_geocode.png
+        :align: center
+        
+        Workflow diagram for function geocode
     """
     if normalization_method == 2 and func_interp != 2:
         raise RuntimeError('parameter func_interp must be set to 2 if normalization_method is set to 2; '
