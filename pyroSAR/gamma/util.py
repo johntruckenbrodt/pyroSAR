@@ -801,7 +801,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     for image in images:
         for scale in scaling:
-            exporter(image + '_{}'.format(method_suffix), outdir, scale, dtype=2)
+            exporter(image + '_{}'.format(method_suffix), outdir, scale, dtype=2,
+                     nodata=dict(zip(('linear', 'db'), nodata))[scale])
     
     if scene.sensor in ['S1A', 'S1B']:
         shutil.copyfile(os.path.join(scene.scene, 'manifest.safe'),
