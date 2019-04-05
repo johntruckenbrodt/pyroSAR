@@ -165,17 +165,23 @@ class ISPPar(object):
         if out['data_type'] == 6:
             out['complex_function'] = 'Power'
         # projections = ['AEAC', 'EQA', 'LCC', 'LCC2', 'OMCH', 'PC', 'PS', 'SCH', 'TM', 'UTM']
+        # the corner coordinates are shifted by 1/2 pixel to the Northeast since GAMMA pixel
+        # coordinates are defined for the pixel center while in ENVI it is the upper left
         if hasattr(self, 'DEM_projection'):
             if self.DEM_projection == 'UTM':
                 hem = 'North' if float(self.false_northing) == 0 else 'South'
                 out['map_info'] = ['UTM', '1.0000', '1.0000',
-                                   self.corner_east, self.corner_north,
-                                   str(abs(float(self.post_east))), str(abs(float(self.post_north))),
+                                   self.corner_east - (abs(self.post_east) / 2),
+                                   self.corner_north + (abs(self.post_north) / 2),
+                                   str(abs(float(self.post_east))),
+                                   str(abs(float(self.post_north))),
                                    self.projection_zone, hem, 'WGS-84', 'units=Meters']
             elif self.DEM_projection == 'EQA':
                 out['map_info'] = ['Geographic Lat/Lon', '1.0000', '1.0000',
-                                   self.corner_lon, self.corner_lat,
-                                   str(abs(float(self.post_lon))), str(abs(float(self.post_lat))),
+                                   self.corner_lon - (abs(self.post_lon) / 2),
+                                   self.corner_lat + (abs(self.post_lat) / 2),
+                                   str(abs(float(self.post_lon))),
+                                   str(abs(float(self.post_lat))),
                                    'WGS-84', 'units=Degrees']
             else:
                 raise RuntimeError('unsupported projection: {}'.format(self.DEM_projection))
