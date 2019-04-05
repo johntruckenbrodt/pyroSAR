@@ -24,7 +24,7 @@ from spatialist import raster, gdal_translate, gdalbuildvrt, gdalwarp, crsConver
 from spatialist.ancillary import finder
 from spatialist.envi import HDRobject
 
-from ..auxdata import dem_autoload
+from ..auxdata import dem_autoload, dem_create
 from ..drivers import ID
 from . import ISPPar, UTM, slc_corners, par2hdr
 from .auxil import ExamineGamma, hasarg
@@ -229,19 +229,11 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
         vrt = dem_autoload([geometry], demType, vrt=vrt, username=username,
                            password=password, buffer=buffer)
         
-        with raster.Raster(vrt) as ras:
-            nodata = ras.nodata
-        
         message = 'creating mosaic'
-        gdalwarp_args = {'format': 'GTiff', 'multithread': True,
-                         'srcNodata': nodata, 'dstNodata': nodata}
         if epsg != 4326:
-            gdalwarp_args.update({'dstSRS': crsConvert(epsg, 'wkt'),
-                                  'xRes': tr[0],
-                                  'yRes': tr[1]})
-        message += ' and reprojecting to EPSG:{}'.format(epsg)
+            message += ' and reprojecting to EPSG:{}'.format(epsg)
         print(message)
-        gdalwarp(vrt, dem, gdalwarp_args)
+        dem_create(vrt, dem, t_srs=epsg, tr=tr)
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
