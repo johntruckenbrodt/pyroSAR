@@ -145,8 +145,8 @@ def transform(infile, outfile, posting=90):
     par2hdr(outfile + '.par', outfile + '.hdr')
 
 
-def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None, logpath=None, username=None,
-                   password=None):
+def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None, logpath=None,
+                   username=None, password=None, geoid_mode='gamma'):
     """
     | automatically create a DEM in Gamma format for a defined spatial geometry
     | the following steps will be performed:
@@ -194,6 +194,10 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
         see :func:`~pyroSAR.auxdata.dem_autoload`
     password: str or None
         (optional) the password for the registration account
+    geoid_mode: str
+        the software to be used for converting geoid to ellipsoid heights; options:
+         - 'gamma'
+         - 'gdal'
 
     Returns
     -------
@@ -229,19 +233,24 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
         vrt = dem_autoload([geometry], demType, vrt=vrt, username=username,
                            password=password, buffer=buffer)
         
-        dem_create(vrt, dem, t_srs=epsg, tr=tr)
-        
-        outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
-        
         # The heights of the TanDEM-X DEM products are ellipsoidal heights, all others are EGM96 Geoid heights
         # Gamma works only with Ellipsoid heights and the offset needs to be corrected
-        # note: starting from GDAL 2.2 the conversion can be done directly in GDAL; see docs of gdalwarp
-        if demType == 'TDX90m':
-            gflg = 0
-            message = 'conversion to Gamma format'
-        else:
-            gflg = 2
+        # starting from GDAL 2.2 the conversion can be done directly in GDAL; see docs of gdalwarp
+        gflg = 0
+        gdal_geoid = False
+        message = 'conversion to Gamma format'
+        if demType != 'TDX90m':
             message = 'geoid correction and conversion to Gamma format'
+            if geoid_mode == 'gdal':
+                gdal_geoid = True
+            elif geoid_mode == 'gamma':
+                gflg = 2
+            else:
+                raise RuntimeError("'geoid_mode' not supported")
+        
+        dem_create(vrt, dem, t_srs=epsg, tr=tr, geoid_convert=gdal_geoid)
+        
+        outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
         print(message)
         
