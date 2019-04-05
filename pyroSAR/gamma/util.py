@@ -767,9 +767,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     ######################################################################
     print('conversion to (dB and) geotiff..')
     
-    def exporter(data_in, outdir, scale='linear', dtype=2, nodata=None):
+    def exporter(data_in, outdir, nodata, scale='linear', dtype=2):
         if scale == 'db':
-            nodata_out = nodata[1]
             if re.search('_geo', os.path.basename(data_in)):
                 width = sim_width
                 refpar = n.dem_seg_geo + '.par'
@@ -780,21 +779,19 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                              data_out=data_in + '_db',
                              width=width,
                              inverse_flag=0,
-                             null_value=nodata_out,
+                             null_value=nodata,
                              logpath=path_log,
                              outdir=scene.scene,
                              shellscript=shellscript)
             par2hdr(refpar, data_in + '_db.hdr')
             data_in += '_db'
-        else:
-            nodata_out = nodata[0] if nodata is None else nodata
         if re.search('_geo', os.path.basename(data_in)):
             outfile = os.path.join(outdir, os.path.basename(data_in) + '.tif')
             disp.data2geotiff(DEM_par=n.dem_seg_geo + '.par',
                               data=data_in,
                               type=dtype,
                               GeoTIFF=outfile,
-                              nodata=nodata_out,
+                              nodata=nodata,
                               logpath=path_log,
                               outdir=scene.scene,
                               shellscript=shellscript)
@@ -806,8 +803,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     for image in images:
         for scale in scaling:
-            exporter(image + '_{}'.format(method_suffix), outdir, scale, dtype=2,
-                     nodata=dict(zip(('linear', 'db'), nodata))[scale])
+            exporter(data_in=image + '_{}'.format(method_suffix), scale=scale, dtype=2,
+                     nodata=dict(zip(('linear', 'db'), nodata))[scale], outdir=outdir)
     
     if scene.sensor in ['S1A', 'S1B']:
         shutil.copyfile(os.path.join(scene.scene, 'manifest.safe'),
@@ -821,7 +818,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
             if len(product_match) > 0:
                 for product in product_match:
                     for scale in scaling:
-                        exporter(product, outdir, scale, dtype=2)
+                        exporter(data_in=product, outdir=outdir, scale=scale, dtype=2,
+                                 nodata=dict(zip(('linear', 'db'), nodata))[scale])
             # ancillary (DEM) products
             elif n.isfile(key) and key not in ['lut_init']:
                 filename = n[key]
