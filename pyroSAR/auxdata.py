@@ -192,6 +192,11 @@ def dem_create(src, dst, t_srs=None, tr=None, geoid_convert=False, geoid='EGM96'
             raise RuntimeError('geoid model not yet supported')
     
     try:
+        message = 'creating mosaic'
+        crs = gdalwarp_args['dstSRS']
+        if crs != 'EPSG:4326':
+            message += ' and reprojecting to {}'.format(crs)
+        print(message)
         gdalwarp(src, dst, gdalwarp_args)
     except RuntimeError as e:
         if os.path.isfile(dst):

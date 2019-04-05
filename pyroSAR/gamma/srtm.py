@@ -229,10 +229,6 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
         vrt = dem_autoload([geometry], demType, vrt=vrt, username=username,
                            password=password, buffer=buffer)
         
-        message = 'creating mosaic'
-        if epsg != 4326:
-            message += ' and reprojecting to EPSG:{}'.format(epsg)
-        print(message)
         dem_create(vrt, dem, t_srs=epsg, tr=tr)
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
