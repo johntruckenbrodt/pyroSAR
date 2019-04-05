@@ -69,10 +69,10 @@ GAMMA Processing
         S1_deburst
         UTM
 
-SRTM tools
-----------
+DEM tools
+---------
 
-.. automodule:: pyroSAR.gamma.srtm
+.. automodule:: pyroSAR.gamma.dem
     :members: dem_autocreate, dempar, fill, hgt, hgt_collect, makeSRTM, mosaic, swap
     :undoc-members:
     :show-inheritance:

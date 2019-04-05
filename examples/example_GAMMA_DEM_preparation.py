@@ -7,7 +7,7 @@ import os
 import shutil
 
 from pyroSAR import gamma
-from pyroSAR.gamma import srtm, par2hdr
+from pyroSAR.gamma import dem, par2hdr
 from spatialist import vector
 
 from spatialist.ancillary import run
@@ -64,7 +64,7 @@ def main():
     
     # optional: transform DEM to UTM projection
     # the UTM zone is automatically computed for the center of the DEM file
-    srtm.transform(outname, outname + '_utm', posting=20)
+    dem.transform(outname, outname + '_utm', posting=20)
 
 
 if __name__ == '__main__':
