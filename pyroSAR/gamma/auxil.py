@@ -310,7 +310,16 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
                 line = line.replace(outdir, '$base')
             sh.seek(0, 2)  # set pointer to the end of the file
             sh.write(line + '\n\n')
-    out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False, errorpass=True)
+    
+    # create an environment containing the locations of all GAMMA submodules to be passed ot the subprocess calls
+    gammaenv = {'GAMMA_HOME': ExamineGamma().home}
+    for module in ['DIFF', 'DISP', 'IPTA', 'ISP', 'LAT']:
+        loc = os.path.join(gammaenv['GAMMA_HOME'], module)
+        if os.path.isdir(loc):
+            gammaenv[module + '_HOME'] = loc
+    
+    # execute the command
+    out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False, errorpass=True, env=gammaenv)
     gammaErrorHandler(out, err)
     if not void:
         return out, err
