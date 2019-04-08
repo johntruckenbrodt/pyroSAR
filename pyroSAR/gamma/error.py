@@ -44,7 +44,8 @@ def gammaErrorHandler(out, err):
                    'gc_map operates only with slant range geometry, image geometry in SLC_par: GROUND_RANGE': RuntimeError,
                    'OPOD state vector data ends before start of the state vector time window': RuntimeError,
                    'non-zero exit status': RuntimeError,
-                   'unsupported DEM projection': RuntimeError}
+                   'unsupported DEM projection': RuntimeError,
+                   'tiffWriteProc:No space left on device': RuntimeError}
     
     # check if the error message is known and throw the mapped error from knownErrors accordingly.
     # Otherwise throw an GammaUnknownError.
