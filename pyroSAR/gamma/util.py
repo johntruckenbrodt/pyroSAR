@@ -373,7 +373,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
                         shellscript=shellscript)
 
 
-def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=2,
+def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=5,
             func_interp=2, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
             cleanup=True, normalization_method=2, export_extra=None):
     """
@@ -393,20 +393,27 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         the target resolution in meters
     scaling: {'linear', 'db'} or list
         the value scaling of the backscatter values; either 'linear', 'db' or a list of both, i.e. ['linear', 'db']
-    func_geoback: {0, 1, 2, 3}
+    func_geoback: {0, 1, 2, 3, 4, 5, 6, 7}
         backward geocoding interpolation mode (see GAMMA command geocode_back)
-         * 0: nearest-neighbor
-         * 1: bicubic spline
-         * 2: bicubic-log spline, interpolates log(data)
-         * 3: bicubic-sqrt spline, interpolates sqrt(data)
+         - 0: nearest-neighbor
+         - 1: bicubic spline (default)
+         - 2: bicubic-spline, interpolate log(data)
+         - 3: bicubic-spline, interpolate sqrt(data)
+         - 4: B-spline interpolation (default B-spline degree: 5)
+         - 5: B-spline interpolation sqrt(x) (default B-spline degree: 5)
+         - 6: Lanczos interpolation (default Lanczos function order: 5)
+         - 7: Lanczos interpolation sqrt(x) (default Lanczos function order: 5)
 
-        NOTE: bicubic-log spline and bicubic-sqrt spline modes should only be used with non-negative data!
+        NOTE: log and sqrt interpolation modes should only be used with non-negative data!
+        
+        NOTE: Gamma reccomendation for MLI data: "The interpolation should be performed on
+        the square root of the data. A mid-order (3 to 5) B-spline interpolation is recommended."
     func_interp: {0, 1, 2, 3}
         output lookup table values in regions of layover, shadow, or DEM gaps (see GAMMA command gc_map)
-         * 0: set to (0., 0.)
-         * 1: linear interpolation across these regions
-         * 2: actual value
-         * 3: nn-thinned
+         - 0: set to (0., 0.)
+         - 1: linear interpolation across these regions
+         - 2: actual value
+         - 3: nn-thinned
     nodata: tuple
         the nodata values for the output files; defined as a tuple with two values, the first for linear,
         the second for logarithmic scaling
@@ -424,14 +431,14 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         should all files written to the temporary directory during function execution be deleted after processing?
     normalization_method: {1, 2}
         the topographic normalization approach to be used
-         * 1: first geocoding, then terrain flattening
-         * 2: first terrain flattening, then geocoding; see `Small 2011 <https://doi.org/10.1109/Tgrs.2011.2120616>`_
+         - 1: first geocoding, then terrain flattening
+         - 2: first terrain flattening, then geocoding; see `Small 2011 <https://doi.org/10.1109/Tgrs.2011.2120616>`_
     export_extra: list or None
         a list of image file IDs to be exported to outdir
-         * format is GeoTiff if the file is geocoded and ENVI otherwise. Non-geocoded images can be converted via Gamma
+         - format is GeoTiff if the file is geocoded and ENVI otherwise. Non-geocoded images can be converted via Gamma
            command data2tiff yet the output was found impossible to read with GIS software
-         * scaling of SAR image products is applied as defined by parameter `scaling`
-         * see Notes for ID options
+         - scaling of SAR image products is applied as defined by parameter `scaling`
+         - see Notes for ID options
     
     Returns
     -------
@@ -443,40 +450,40 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     | SAR products will additionally contain the polarization, e.g. `S1A__IW___A_20141012T162337_VV_grd_mli`
     | IDs in brackets are only written if selected by `export_extra`
     
-    * images in range-Doppler geometry
+    - images in range-Doppler geometry
      
-      - **grd**: the ground range detected SAR intensity image
-      - **grd_mli**: the multi-looked grd image with approached target resolution
-      - specific to normalization method 2:
+      * **grd**: the ground range detected SAR intensity image
+      * **grd_mli**: the multi-looked grd image with approached target resolution
+      * specific to normalization method 2:
       
         + **pix_ellip_sigma0**: ellipsoid-based pixel area
         + **pix_area_sigma0**: actual illuminated area as obtained from integrating DEM-facets (command pixel_area)
         + **pix_fine**: refined pixel area normalization factor (pix_ellip_sigma0 / pix_area_sigma0)
         + **grd_mli_pan**: the pixel area normalized MLI (grd_mli * pix_fine)
      
-    * images in map geometry
+    - images in map geometry
      
-      - **dem_seg_geo**: dem subsetted to the extent of the intersect between input DEM and SAR image
-      - (**u_geo**): zenith angle of surface normal vector n (angle between z and n)
-      - (**v_geo**): orientation angle of n (between x and projection of n in xy plane)
-      - **inc_geo**: local incidence angle (between surface normal and look vector)
-      - (**psi_geo**): projection angle (between surface normal and image plane normal)
-      - **pix_geo**: pixel area normalization factor (command gc_map)
-      - **ls_map_geo**: layover and shadow map (in map projection)
-      - (**sim_sar_geo**): simulated SAR backscatter image
+      * **dem_seg_geo**: dem subsetted to the extent of the intersect between input DEM and SAR image
+      * (**u_geo**): zenith angle of surface normal vector n (angle between z and n)
+      * (**v_geo**): orientation angle of n (between x and projection of n in xy plane)
+      * **inc_geo**: local incidence angle (between surface normal and look vector)
+      * (**psi_geo**): projection angle (between surface normal and image plane normal)
+      * **pix_geo**: pixel area normalization factor (command gc_map)
+      * **ls_map_geo**: layover and shadow map (in map projection)
+      * (**sim_sar_geo**): simulated SAR backscatter image
      
-    * additional files
+    - additional files
      
-      - **lut_init**: initial geocoding lookup table
+      * **lut_init**: initial geocoding lookup table
      
-    * files specific to SAR simulation cross-correlation geocoding
+    - files specific to SAR simulation cross-correlation geocoding
      
-      - **lut_fine**: refined geocoding lookup table
-      - **diffpar**: ISP offset/interferogram parameter file
-      - **offs**: offset estimates (fcomplex)
-      - **coffs**: culled range and azimuth offset estimates (fcomplex)
-      - **coffsets**: culled offset estimates and cross correlation values (text format)
-      - **ccp**: cross-correlation of each patch (0.0->1.0) (float)
+      * **lut_fine**: refined geocoding lookup table
+      * **diffpar**: ISP offset/interferogram parameter file
+      * **offs**: offset estimates (fcomplex)
+      * **coffs**: culled range and azimuth offset estimates (fcomplex)
+      * **coffsets**: culled offset estimates and cross correlation values (text format)
+      * **ccp**: cross-correlation of each patch (0.0->1.0) (float)
     
     Examples
     --------
