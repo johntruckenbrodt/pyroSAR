@@ -497,7 +497,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     .. figure:: gamma_geocode.png
         :align: center
         
-        Workflow diagram for function geocode
+        Workflow diagram for function geocode using normalization method 2 for processing a Sentinel-1 Ground Range
+        Detected (GRD) scene to radiometrically terrain corrected (RTC) backscatter.
     """
     if normalization_method == 2 and func_interp != 2:
         raise RuntimeError('parameter func_interp must be set to 2 if normalization_method is set to 2; '
