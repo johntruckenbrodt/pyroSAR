@@ -319,7 +319,7 @@ class DEMHandler:
                 raise RuntimeError(str(e))
             ftp.prot_p()  # switch to secure data connection.. IMPORTANT! Otherwise, only the user and password is encrypted and not all the file data.
         else:
-            ftp = ftplib.FTP(url)
+            ftp = ftplib.FTP(url, timeout=100)
             ftp.login()
         if path != '':
             ftp.cwd(path)
