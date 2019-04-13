@@ -7,6 +7,7 @@ import os
 import re
 import json
 import string
+import shutil
 import codecs
 import inspect
 import subprocess as sp
@@ -451,6 +452,13 @@ class ExamineGamma(object):
             attr = ConfigHandler['GAMMA']
             for key, value in attr.items():
                 setattr(self, key, value)
+        if hasattr(self, 'home'):
+            if self.home != os.environ['GAMMA_HOME']:
+                print('the value of GAMMA_HOME is different to that in the pyroSAR configuration;\n'
+                      'resetting the configuration and deleting parsed modules')
+                parsed = os.path.join(os.path.dirname(ConfigHandler.file), 'gammaparse')
+                shutil.rmtree(parsed)
+                self.home = os.environ['GAMMA_HOME']
         if not hasattr(self, 'home'):
             try:
                 setattr(self, 'home', os.environ['GAMMA_HOME'])
