@@ -296,6 +296,10 @@ class ConfigHandler(object):
             self.parser.add_section(section)
             self.write()
     
+    @property
+    def file(self):
+        return self.__GLOBAL['config']
+    
     def set(self, section, key, value, overwrite=False):
         """
         Set an option.
