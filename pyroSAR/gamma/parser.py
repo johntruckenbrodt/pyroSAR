@@ -185,8 +185,8 @@ def parse_command(command, indent='    '):
     usage = re.search('usage:.*(?=\n)', out).group()
     
     # filter required and optional arguments from usage description text
-    arg_req_raw = [re.sub('[^\w.-]*', '', x) for x in re.findall('[^<]*<([^>]*)>', usage)]
-    arg_opt_raw = [re.sub('[^\w.-]*', '', x) for x in re.findall('[^[]*\[([^]]*)\]', usage)]
+    arg_req_raw = [re.sub(r'[^\w.-]*', '', x) for x in re.findall('[^<]*<([^>]*)>', usage)]
+    arg_opt_raw = [re.sub(r'[^\w.-]*', '', x) for x in re.findall(r'[^[]*\[([^]]*)\]', usage)]
     
     ###########################################
     # remove parameters from the usage description which are not documented
@@ -377,7 +377,7 @@ def parse_command(command, indent='    '):
     
     # define a pattern containing individual parameter documentations
     pattern = r'\n[ ]*[<\[]*(?P<par>{0})[>\]]*[\t ]+(?P<doc>.*)'.format(
-        '|'.join(arg_req_raw + arg_opt_raw).replace('.', '\.'))
+        '|'.join(arg_req_raw + arg_opt_raw).replace('.', r'\.'))
     
     # identify the start indices of all pattern matches
     starts = [m.start(0) for m in re.finditer(pattern, doc)] + [len(out)]
@@ -431,10 +431,10 @@ def parse_command(command, indent='    '):
     # do some extra formatting
     for i, item in enumerate(doc_items):
         par, description = item
-        description = re.split('\n+\s*', description.strip('\n'))
+        description = re.split(r'\n+\s*', description.strip('\n'))
         
         # escape * characters (which are treated as special characters for bullet lists by sphinx)
-        description = [x.replace('*', '\*') for x in description]
+        description = [x.replace('*', r'\*') for x in description]
         
         # convert all lines starting with an integer number or 'NOTE' to bullet list items
         latest = None
@@ -534,7 +534,7 @@ def parse_module(bindir, outfile):
                 ]
     failed = []
     outstring = ''
-    for cmd in sorted(finder(bindir, ['^\w+$'], regex=True), key=lambda s: s.lower()):
+    for cmd in sorted(finder(bindir, [r'^\w+$'], regex=True), key=lambda s: s.lower()):
         basename = os.path.basename(cmd)
         if basename not in excludes:
             # print(basename)
@@ -590,7 +590,7 @@ def autoparse():
                 except OSError:
                     print('..does not exist')
             print('=' * 20)
-    modules = [re.sub('\.py', '', os.path.basename(x)) for x in finder(target, ['[a-z]+\.py$'], regex=True)]
+    modules = [re.sub(r'\.py', '', os.path.basename(x)) for x in finder(target, [r'[a-z]+\.py$'], regex=True)]
     if len(modules) > 0:
         with open(os.path.join(target, '__init__.py'), 'w') as init:
             init.write('from . import {}'.format(', '.join(modules)))
