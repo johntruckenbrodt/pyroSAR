@@ -456,7 +456,10 @@ class ExamineGamma(object):
         if hasattr(self, 'home'):
             if home_sys is not None and self.home != home_sys:
                 print('the value of GAMMA_HOME is different to that in the pyroSAR configuration;\n'
-                      'resetting the configuration and deleting parsed modules')
+                      '  was: {}\n'
+                      '  is : {}\n'
+                      'resetting the configuration and deleting parsed modules'
+                      .format(self.home, home_sys))
                 parsed = os.path.join(os.path.dirname(ConfigHandler.file), 'gammaparse')
                 shutil.rmtree(parsed)
                 self.home = home_sys
