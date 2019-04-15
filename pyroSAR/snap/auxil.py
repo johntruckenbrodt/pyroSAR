@@ -73,7 +73,7 @@ def parse_node(name):
     return Node(element)
 
 
-def execute(xmlfile, cleanup=True):
+def execute(xmlfile, cleanup=True, gpt_exceptions=None):
     """
     execute SNAP workflows via the Graph Processing Tool gpt.
     This function merely calls gpt with some additional command
@@ -87,6 +87,11 @@ def execute(xmlfile, cleanup=True):
         the name of the workflow XML file
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
+    gpt_exceptions: dict
+        a dictionary to override the configured GPT executable for certain operators;
+        each (sub-)workflow containing this operator will be executed with the define executable;
+        
+         - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
     
     Returns
     -------
@@ -102,12 +107,21 @@ def execute(xmlfile, cleanup=True):
     infile = workflow['Read'].parameters['file']
     nodes = workflow.nodes()
     workers = [x.id for x in nodes if x.operator not in ['Read', 'Write']]
-    print(' -> '.join(workers))
+    message = ' -> '.join(workers)
+    gpt_exec = None
+    if gpt_exceptions is not None:
+        for item, exec in gpt_exceptions.items():
+            if item in workers:
+                gpt_exec = exec
+                message += ' (using {})'.format(exec)
+                break
+    print(message)
     # try to find the GPT executable
-    try:
-        gpt_exec = ExamineSnap().gpt
-    except AttributeError:
-        raise RuntimeError('could not find SNAP GPT executable')
+    if gpt_exec is None:
+        try:
+            gpt_exec = ExamineSnap().gpt
+        except AttributeError:
+            raise RuntimeError('could not find SNAP GPT executable')
     # create the list of arguments to be passed to the subprocess module calling GPT
     if format == 'GeoTiff-BigTIFF':
         cmd = [gpt_exec,
@@ -139,7 +153,7 @@ def execute(xmlfile, cleanup=True):
         raise RuntimeError(errmessage)
 
 
-def gpt(xmlfile, groups=None, cleanup=True):
+def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
     Input is a readily formatted workflow XML file as
@@ -158,6 +172,11 @@ def gpt(xmlfile, groups=None, cleanup=True):
         a list of lists each containing IDs for individual nodes
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
+    gpt_exceptions: dict
+        a dictionary to override the configured GPT executable for certain operators;
+        each (sub-)workflow containing this operator will be executed with the define executable;
+        
+         - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
     
     Returns
     -------
@@ -177,9 +196,9 @@ def gpt(xmlfile, groups=None, cleanup=True):
     if groups is not None:
         subs = split(xmlfile, groups)
         for sub in subs:
-            execute(sub, cleanup=cleanup)
+            execute(sub, cleanup=cleanup, gpt_exceptions=gpt_exceptions)
     else:
-        execute(xmlfile, cleanup=cleanup)
+        execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions)
     
     if format == 'ENVI':
         print('converting to GTiff')
