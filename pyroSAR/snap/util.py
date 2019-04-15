@@ -356,6 +356,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                                        'Please specify externalDEMNoDataValue')
             else:
                 dempar['externalDEMNoDataValue'] = externalDEMNoDataValue
+            dempar['reGridMethod'] = False
         else:
             raise RuntimeError('specified externalDEMFile does not exist')
         dempar['demName'] = 'External DEM'
