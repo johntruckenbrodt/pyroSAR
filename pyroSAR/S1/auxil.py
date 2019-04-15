@@ -129,12 +129,17 @@ class OSV(object):
         else:
             return self.remote_res, self.outdir_res
     
-    def catch(self, osvtype='POE', start=None, stop=None):
+    def catch(self, sensor, osvtype='POE', start=None, stop=None):
         """
         check a server for files
 
         Parameters
         ----------
+        sensor: str or list
+            The S1 mission(s):
+             - 'S1A'
+             - 'S1B'
+             - ['S1A', 'S1B']
         osvtype: {'POE', 'RES'}
             the type of orbit files required
         start: str
@@ -150,6 +155,14 @@ class OSV(object):
         address, outdir = self._typeEvaluate(osvtype)
         # a dictionary for storing the url arguments
         query = {'page': 1}
+        
+        if sensor in ['S1A', 'S1B']:
+            query['sentinel1__mission'] = sensor
+        elif sensor == ['S1A', 'S1B']:
+            pass
+        else:
+            raise RuntimeError('unsupported input for parameter sensor')
+        
         # the collection of files to be returned
         files = []
         # set the defined date or the date of the first existing OSV file otherwise
