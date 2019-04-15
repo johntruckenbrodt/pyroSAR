@@ -835,6 +835,10 @@ class Par(object):
     def __init__(self, element):
         self.__element = element
     
+    def __delitem__(self, key):
+        par = self.__element.find('.//{}'.format(key))
+        self.__element.remove(par)
+    
     def __getitem__(self, item):
         if item not in self.keys():
             raise KeyError('key {} does not exist'.format(item))
