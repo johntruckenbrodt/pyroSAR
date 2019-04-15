@@ -344,22 +344,20 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
     
     if osvdir is None:
         osvdir = os.path.join(id.scene, 'osv')
-        if not os.path.isdir(osvdir):
-            os.makedirs(osvdir)
         try:
             id.getOSV(osvdir, osvType)
         except URLError:
             print('..no internet access')
     
     images = id.getGammaImages(id.scene)
-    # read parameter file entries int object
+    # read parameter file entries into object
     with ISPPar(images[0] + '.par') as par:
         # extract acquisition time stamp
         timestamp = datetime.strptime(par.date, '%Y-%m-%dT%H:%M:%S.%f').strftime('%Y%m%dT%H%M%S')
     
     # find an OSV file matching the time stamp and defined OSV type(s)
     with OSV(osvdir) as osv:
-        osvfile = osv.match(timestamp, osvType)
+        osvfile = osv.match(sensor=id.sensor, timestamp=timestamp, osvtype=osvType)
     if not osvfile:
         raise RuntimeError('no Orbit State Vector file found')
     
