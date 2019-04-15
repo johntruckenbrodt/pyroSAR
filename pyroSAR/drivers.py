@@ -1252,13 +1252,13 @@ class SAFE(ID):
         # download the files
         if osvType in ['POE', 'RES']:
             with S1.OSV(outdir) as osv:
-                files = osv.catch(osvType, before, after)
+                files = osv.catch(sensor=self.sensor, osvtype=osvType, start=before, stop=after)
                 osv.retrieve(files)
         elif sorted(osvType) == ['POE', 'RES']:
             with S1.OSV(outdir) as osv:
-                files = osv.catch('POE', before, after)
+                files = osv.catch(sensor=self.sensor, osvtype='POE', start=before, stop=after)
                 if len(files) == 0:
-                    files = osv.catch('RES', before, after)
+                    files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after)
                 osv.retrieve(files)
     
     def scanMetadata(self):
