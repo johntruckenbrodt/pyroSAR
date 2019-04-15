@@ -115,6 +115,7 @@ def parse_command(command, indent='    '):
                        'mosaic': [('<..>', '<...>'),
                                   ('DEM_parout', 'DEM_par_out')],
                        'multi_class_mapping': [('...', '<...>')],
+                       'multi_look_MLI': [('MLI in_par', 'MLI_in_par')],
                        'offset_fit': [('interact_flag', 'interact_mode')],
                        'offset_plot_az': [('rmin', 'r_min'),
                                           ('rmax', 'r_max')],
