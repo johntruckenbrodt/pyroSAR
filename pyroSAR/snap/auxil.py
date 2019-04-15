@@ -573,6 +573,12 @@ class Workflow(object):
         with open(xmlfile, 'r') as infile:
             self.tree = ET.fromstring(infile.read())
     
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+    
     def __getitem__(self, item):
         pattern = '(?P<key>[a-zA-Z-_]*)=(?P<value>[a-zA-Z-_]*)'
         if isinstance(item, int):
