@@ -407,13 +407,13 @@ class OSV(object):
         """
         self._init_dir()
         try:
-            files_poe = self.catch('POE', start=self.maxdate('POE', 'start'))
+            files_poe = self.catch(sensor=['S1A', 'S1B'], osvtype='POE', start=self.maxdate('POE', 'start'))
         except RuntimeError as e:
             raise e
         self.retrieve(files_poe)
         if update_res:
             print('---------------------------------------------------------')
-            files_res = self.catch('RES', start=self.maxdate('POE', 'start'))
+            files_res = self.catch(sensor=['S1A', 'S1B'], osvtype='RES', start=self.maxdate('POE', 'start'))
             self.retrieve(files_res)
             self.clean_res()
 
