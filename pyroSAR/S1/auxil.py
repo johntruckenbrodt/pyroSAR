@@ -158,7 +158,7 @@ class OSV(object):
         
         if sensor in ['S1A', 'S1B']:
             query['sentinel1__mission'] = sensor
-        elif sensor == ['S1A', 'S1B']:
+        elif sorted(sensor) == ['S1A', 'S1B']:
             pass
         else:
             raise RuntimeError('unsupported input for parameter sensor')
@@ -295,15 +295,19 @@ class OSV(object):
         files = finder(directory, [self.pattern], regex=True)
         return min([self.date(x, datetype) for x in files]) if len(files) > 0 else None
     
-    def match(self, timestamp, osvtype='POE'):
+    def match(self, sensor, timestamp, osvtype='POE'):
         """
-        return the corresponding OSV file for the provided time stamp.
+        return the corresponding OSV file for the provided sensor and time stamp.
         The file returned is one which covers the acquisition time and, if multiple exist,
         the one which was published last.
         In case a list of options is provided as osvtype, the file of higher accuracy (i.e. POE over RES) is returned.
 
         Parameters
         ----------
+        sensor: str
+            The S1 mission:
+             - 'S1A'
+             - 'S1B'
         timestamp: str
             the time stamp in the format 'YYYmmddTHHMMSS'
         osvtype: {'POE', 'RES'} or list
@@ -319,6 +323,7 @@ class OSV(object):
             locals = self.getLocals(osvtype)
             # filter the files to those which contain data for the defined time stamp
             files = [x for x in locals if self.date(x, 'start') <= timestamp <= self.date(x, 'stop')]
+            files = [x for x in files if os.path.basename(x).startswith(sensor)]
             if len(files) > 0:
                 # select the file which was published last
                 best = self.sortByDate(files, 'publish')[-1]
@@ -327,9 +332,9 @@ class OSV(object):
                 return files[0]
             return None
         elif sorted(osvtype) == ['POE', 'RES']:
-            best = self.match(timestamp, 'POE')
+            best = self.match(sensor=sensor, timestamp=timestamp, osvtype='POE')
             if not best:
-                best = self.match(timestamp, 'RES')
+                best = self.match(sensor=sensor, timestamp=timestamp, osvtype='RES')
             return best
     
     def retrieve(self, files):
