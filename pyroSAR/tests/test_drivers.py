@@ -151,6 +151,8 @@ def test_archive(tmpdir, testdata, appveyor):
     if not appveyor:
         db = pyroSAR.Archive(dbfile)
         db.insert(testdata['s1'], verbose=False)
+        assert all(isinstance(x, str) for x in db.get_tablenames())
+        assert all(isinstance(x, str) for x in db.get_colnames())
         assert db.is_registered(testdata['s1']) is True
         assert len(db.get_unique_directories()) == 1
         assert db.select_duplicates() == []
@@ -160,7 +162,9 @@ def test_archive(tmpdir, testdata, appveyor):
         assert len(db.select(vectorobject=id.bbox())) == 1
         assert len(db.select(sensor='S1A', vectorobject='foo', processdir=str(tmpdir), verbose=True)) == 1
         assert len(db.select(sensor='S1A', mindate='foo', maxdate='bar', foobar='foobar')) == 1
-        assert len(db.select(vv=1, acquisition_mode=('IW', 'EW'))) == 1
+        out = db.select(vv=1, acquisition_mode=('IW', 'EW'))
+        assert len(out) == 1
+        assert isinstance(out[0], str)
         with pytest.raises(IOError):
             db.filter_scenelist([1])
         db.close()
