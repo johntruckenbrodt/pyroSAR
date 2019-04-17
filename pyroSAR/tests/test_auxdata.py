@@ -38,6 +38,8 @@ def test_autoload(auxdata_dem_cases, travis):
         if not travis:
             files = dem_autoload([box], 'AW3D30')
             assert len(files) == 1
+            files = dem_autoload([box], 'AW3D30', product='stk')
+            assert len(files) == 1
         files = dem_autoload([box], 'SRTM 1Sec HGT')
         assert len(files) == 1
         files = dem_autoload([box], 'SRTM 3Sec')
@@ -46,5 +48,3 @@ def test_autoload(auxdata_dem_cases, travis):
             files = dem_autoload([box], 'TDX90m')
         with pytest.raises(RuntimeError):
             dem_autoload([box], 'AW3D30', product='foobar')
-        files = dem_autoload([box], 'AW3D30', product='stk')
-        assert len(files) == 1
