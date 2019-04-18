@@ -1599,15 +1599,16 @@ class Archive(object):
                 cursor.execute(insert_string, insertion)
                 counter_regulars += 1
             except sqlite3.IntegrityError as e:
-                if str(e) == 'UNIQUE constraint failed: data.outname_base':
+                if str(e) == 'UNIQUE constraint failed: data.outname_base' \
+                        or str(e) == 'column outname_base is not unique':
                     cursor.execute('INSERT INTO duplicates(outname_base, scene) VALUES(?, ?)',
                                    (id.outname_base(), id.scene))
                     counter_duplicates += 1
                 else:
                     raise e
-            if pbar:
+            if pbar is not None:
                 pbar.update(i + 1)
-        if pbar:
+        if pbar is not None:
             pbar.finish()
         if not test:
             if verbose:
