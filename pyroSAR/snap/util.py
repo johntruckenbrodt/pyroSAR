@@ -13,7 +13,7 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BoderNoise=True, removeS1ThermalNoise=True, offset=None,
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
-            basename_extensions=None, test=False, export_extra=None, groupsize=2, cleanup=True):
+            basename_extensions=None, test=False, export_extra=None, groupsize=2, cleanup=True, gpt_exceptions=None):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -58,14 +58,19 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         If set to True the workflow xml file is only written and not executed. Default is False.
     export_extra: list or None
         a list of image file IDs to be exported to outdir. The following IDs are currently supported:
-         * incidenceAngleFromEllipsoid
-         * localIncidenceAngle
-         * projectedLocalIncidenceAngle
-         * DEM
+         - incidenceAngleFromEllipsoid
+         - localIncidenceAngle
+         - projectedLocalIncidenceAngle
+         - DEM
     groupsize: int
         the number of workers executed together in one gpt call
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
+    gpt_exceptions: dict
+        a dictionary to override the configured GPT executable for certain operators;
+        each (sub-)workflow containing this operator will be executed with the define executable;
+        
+         - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
 
     Note
     ----
@@ -351,6 +356,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                                        'Please specify externalDEMNoDataValue')
             else:
                 dempar['externalDEMNoDataValue'] = externalDEMNoDataValue
+            dempar['reGridMethod'] = False
         else:
             raise RuntimeError('specified externalDEMFile does not exist')
         dempar['demName'] = 'External DEM'
@@ -379,7 +385,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if not test:
         try:
             groups = groupbyWorkers(outname + '_proc.xml', groupsize)
-            gpt(outname + '_proc.xml', groups=groups, cleanup=cleanup)
+            gpt(outname + '_proc.xml', groups=groups, cleanup=cleanup,
+                gpt_exceptions=gpt_exceptions)
         except RuntimeError:
             if cleanup:
                 os.remove(outname + '_proc.xml')

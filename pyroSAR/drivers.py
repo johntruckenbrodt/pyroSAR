@@ -1252,13 +1252,13 @@ class SAFE(ID):
         # download the files
         if osvType in ['POE', 'RES']:
             with S1.OSV(outdir) as osv:
-                files = osv.catch(osvType, before, after)
+                files = osv.catch(sensor=self.sensor, osvtype=osvType, start=before, stop=after)
                 osv.retrieve(files)
         elif sorted(osvType) == ['POE', 'RES']:
             with S1.OSV(outdir) as osv:
-                files = osv.catch('POE', before, after)
+                files = osv.catch(sensor=self.sensor, osvtype='POE', start=before, stop=after)
                 if len(files) == 0:
-                    files = osv.catch('RES', before, after)
+                    files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after)
                 osv.retrieve(files)
     
     def scanMetadata(self):
@@ -1447,7 +1447,7 @@ class Archive(object):
     >>> from spatialist.ancillary import finder
     >>> dbfile = '/.../scenelist.db'
     >>> archive_s1 = '/.../sentinel1/GRD'
-    >>> scenes_s1 = finder(archive_s1, ['^S1[AB].*\.zip'], regex=True, recursive=True)
+    >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*\.zip'], regex=True, recursive=True)
     >>> with Archive(dbfile) as archive:
     >>>     archive.insert(scenes_s1)
     
@@ -1636,6 +1636,13 @@ class Archive(object):
         """
         return len(self.select(scene=scene)) != 0 or len(self.select_duplicates(scene=scene)) != 0
     
+    @staticmethod
+    def encode(string, encoding='utf-8'):
+        if not isinstance(string, str):
+            return string.encode(encoding)
+        else:
+            return string
+
     def export2shp(self, shp):
         """
         export the database to a shapefile
@@ -1670,13 +1677,11 @@ class Archive(object):
                 raise IOError('items in scenelist must be of type "str" or pyroSAR.ID')
         cursor = self.conn.cursor()
         cursor.execute('SELECT scene FROM data')
-        registered = [os.path.basename(x[0].encode('ascii')) for x in cursor.fetchall()]
+        registered = [os.path.basename(self.encode(x[0])) for x in cursor.fetchall()]
         cursor.execute('SELECT scene FROM duplicates')
-        duplicates = [os.path.basename(x[0].encode('ascii')) for x in cursor.fetchall()]
-        
+        duplicates = [os.path.basename(self.encode(x[0])) for x in cursor.fetchall()]
         names = [item.scene if isinstance(item, ID) else item for item in scenelist]
         filtered = [x for x, y in zip(scenelist, names) if os.path.basename(y) not in registered + duplicates]
-        
         return filtered
     
     def get_colnames(self):
@@ -1690,7 +1695,7 @@ class Archive(object):
         """
         cursor = self.conn.cursor()
         cursor.execute('PRAGMA table_info(data)')
-        return sorted([str(x[1]) for x in cursor.fetchall()])
+        return sorted([self.encode(x[1]) for x in cursor.fetchall()])
     
     def get_tablenames(self):
         """
@@ -1703,7 +1708,7 @@ class Archive(object):
         """
         cursor = self.conn.cursor()
         cursor.execute('SELECT * FROM sqlite_master WHERE type="table"')
-        return sorted([x[1].encode('ascii') for x in cursor.fetchall()])
+        return sorted([self.encode(x[1]) for x in cursor.fetchall()])
     
     def get_unique_directories(self):
         """
@@ -1716,7 +1721,7 @@ class Archive(object):
         """
         cursor = self.conn.cursor()
         cursor.execute('SELECT scene FROM data')
-        registered = [os.path.dirname(x[0].encode('ascii')) for x in cursor.fetchall()]
+        registered = [os.path.dirname(self.encode(x[0])) for x in cursor.fetchall()]
         return list(set(registered))
     
     def import_outdated(self, dbfile, verbose=False):
@@ -1879,7 +1884,7 @@ class Archive(object):
                       if len(finder(processdir, [x[1]], regex=True, recursive=recursive)) == 0]
         else:
             scenes = cursor.fetchall()
-        return [x[0].encode('ascii') for x in scenes]
+        return [self.encode(x[0]) for x in scenes]
     
     def select_duplicates(self, outname_base=None, scene=None):
         """

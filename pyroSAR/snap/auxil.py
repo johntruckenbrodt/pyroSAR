@@ -73,7 +73,7 @@ def parse_node(name):
     return Node(element)
 
 
-def execute(xmlfile, cleanup=True):
+def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
     """
     execute SNAP workflows via the Graph Processing Tool gpt.
     This function merely calls gpt with some additional command
@@ -87,6 +87,13 @@ def execute(xmlfile, cleanup=True):
         the name of the workflow XML file
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
+    gpt_exceptions: dict
+        a dictionary to override the configured GPT executable for certain operators;
+        each (sub-)workflow containing this operator will be executed with the define executable;
+        
+         - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
+    verbose: bool
+        print out status messages?
     
     Returns
     -------
@@ -102,12 +109,22 @@ def execute(xmlfile, cleanup=True):
     infile = workflow['Read'].parameters['file']
     nodes = workflow.nodes()
     workers = [x.id for x in nodes if x.operator not in ['Read', 'Write']]
-    print(' -> '.join(workers))
+    message = ' -> '.join(workers)
+    gpt_exec = None
+    if gpt_exceptions is not None:
+        for item, exec in gpt_exceptions.items():
+            if item in workers:
+                gpt_exec = exec
+                message += ' (using {})'.format(exec)
+                break
+    if verbose:
+        print(message)
     # try to find the GPT executable
-    try:
-        gpt_exec = ExamineSnap().gpt
-    except AttributeError:
-        raise RuntimeError('could not find SNAP GPT executable')
+    if gpt_exec is None:
+        try:
+            gpt_exec = ExamineSnap().gpt
+        except AttributeError:
+            raise RuntimeError('could not find SNAP GPT executable')
     # create the list of arguments to be passed to the subprocess module calling GPT
     if format == 'GeoTiff-BigTIFF':
         cmd = [gpt_exec,
@@ -127,19 +144,32 @@ def execute(xmlfile, cleanup=True):
     err = err.decode('utf-8') if isinstance(err, bytes) else err
     # delete intermediate files if an error occurred
     if proc.returncode != 0:
-        if cleanup:
-            if os.path.isfile(outname + '.tif'):
-                os.remove(outname + '.tif')
-            elif os.path.isdir(outname):
-                shutil.rmtree(outname)
-        print(out + err)
-        print('failed: {}'.format(os.path.basename(infile)))
-        err_match = re.search('Error: (.*)\n', out + err)
-        errmessage = err_match.group(1) if err_match else err
-        raise RuntimeError(errmessage)
+        pattern = r"Error: \[NodeId: (?P<id>[a-zA-Z0-9-_]*)\] " \
+                  r"Operator \'[a-zA-Z0-9-_]*\': " \
+                  r"Unknown element \'(?P<par>[a-zA-Z]*)\'"
+        match = re.search(pattern, err)
+        if match is not None:
+            replace = match.groupdict()
+            with Workflow(xmlfile) as flow:
+                print('  removing parameter {id}:{par} and executing modified workflow'.format(**replace))
+                node = flow[replace['id']]
+                del node.parameters[replace['par']]
+                flow.write(xmlfile)
+            execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, verbose=False)
+        else:
+            if cleanup:
+                if os.path.isfile(outname + '.tif'):
+                    os.remove(outname + '.tif')
+                elif os.path.isdir(outname):
+                    shutil.rmtree(outname)
+            print(out + err)
+            print('failed: {}'.format(os.path.basename(infile)))
+            err_match = re.search('Error: (.*)\n', out + err)
+            errmessage = err_match.group(1) if err_match else err
+            raise RuntimeError(errmessage)
 
 
-def gpt(xmlfile, groups=None, cleanup=True):
+def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
     Input is a readily formatted workflow XML file as
@@ -158,6 +188,11 @@ def gpt(xmlfile, groups=None, cleanup=True):
         a list of lists each containing IDs for individual nodes
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
+    gpt_exceptions: dict
+        a dictionary to override the configured GPT executable for certain operators;
+        each (sub-)workflow containing this operator will be executed with the define executable;
+        
+         - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
     
     Returns
     -------
@@ -177,9 +212,9 @@ def gpt(xmlfile, groups=None, cleanup=True):
     if groups is not None:
         subs = split(xmlfile, groups)
         for sub in subs:
-            execute(sub, cleanup=cleanup)
+            execute(sub, cleanup=cleanup, gpt_exceptions=gpt_exceptions)
     else:
-        execute(xmlfile, cleanup=cleanup)
+        execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions)
     
     if format == 'ENVI':
         print('converting to GTiff')
@@ -569,9 +604,16 @@ class Workflow(object):
     xmlfile: str
         the workflow XML file
     """
+    
     def __init__(self, xmlfile):
         with open(xmlfile, 'r') as infile:
             self.tree = ET.fromstring(infile.read())
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
     
     def __getitem__(self, item):
         pattern = '(?P<key>[a-zA-Z-_]*)=(?P<value>[a-zA-Z-_]*)'
@@ -677,7 +719,7 @@ class Workflow(object):
                 # print('resetting source of successor {} to {}'.format(successor.id, newnode.id))
                 successor.source = newnode.id
             # else:
-                # print('no source resetting required')
+            # print('no source resetting required')
         else:
             self.tree.insert(len(self.tree) - 1, node.element)
         self.refresh_ids()
@@ -705,7 +747,7 @@ class Workflow(object):
             else:
                 counter[operator] += 1
                 node.id = '{} ({})'.format(operator, counter[operator])
-                
+    
     @property
     def suffix(self):
         """
@@ -746,6 +788,7 @@ class Node(object):
     element: ~xml.etree.ElementTree.Element
         the node XML element
     """
+    
     def __init__(self, element):
         if not isinstance(element, ET.Element):
             raise TypeError('element must be of type xml.etree.ElementTree.Element')
@@ -826,8 +869,13 @@ class Par(object):
     element: ~xml.etree.ElementTree.Element
         the node parameter XML element
     """
+    
     def __init__(self, element):
         self.__element = element
+    
+    def __delitem__(self, key):
+        par = self.__element.find('.//{}'.format(key))
+        self.__element.remove(par)
     
     def __getitem__(self, item):
         if item not in self.keys():

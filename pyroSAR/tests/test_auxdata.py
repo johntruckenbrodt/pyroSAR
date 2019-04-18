@@ -23,7 +23,7 @@ def test_handler(auxdata_dem_cases):
                 assert result == reference
 
 
-def test_autoload(auxdata_dem_cases):
+def test_autoload(auxdata_dem_cases, travis):
     # delete all target files to test downloading them again
     home = os.path.expanduser('~')
     demdir = os.path.join(home, '.snap', 'auxdata', 'dem')
@@ -33,8 +33,13 @@ def test_autoload(auxdata_dem_cases):
             os.remove(item)
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
         # if the following is run in a loop, it is not possible to see which demType failed
-        files = dem_autoload([box], 'AW3D30')
-        assert len(files) == 1
+        # Travis CI does not support ftp access;
+        # see https://blog.travis-ci.com/2018-07-23-the-tale-of-ftp-at-travis-ci
+        if not travis:
+            files = dem_autoload([box], 'AW3D30')
+            assert len(files) == 1
+            files = dem_autoload([box], 'AW3D30', product='stk')
+            assert len(files) == 1
         files = dem_autoload([box], 'SRTM 1Sec HGT')
         assert len(files) == 1
         files = dem_autoload([box], 'SRTM 3Sec')
@@ -43,5 +48,3 @@ def test_autoload(auxdata_dem_cases):
             files = dem_autoload([box], 'TDX90m')
         with pytest.raises(RuntimeError):
             dem_autoload([box], 'AW3D30', product='foobar')
-        files = dem_autoload([box], 'AW3D30', product='stk')
-        assert len(files) == 1

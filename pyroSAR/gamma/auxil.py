@@ -7,6 +7,7 @@ import os
 import re
 import json
 import string
+import shutil
 import codecs
 import inspect
 import subprocess as sp
@@ -447,14 +448,25 @@ def slc_corners(parfile):
 
 class ExamineGamma(object):
     def __init__(self):
+        home_sys = os.environ.get('GAMMA_HOME')
         if 'GAMMA' in ConfigHandler.sections:
             attr = ConfigHandler['GAMMA']
             for key, value in attr.items():
                 setattr(self, key, value)
+        if hasattr(self, 'home'):
+            if home_sys is not None and self.home != home_sys:
+                print('the value of GAMMA_HOME is different to that in the pyroSAR configuration;\n'
+                      '  was: {}\n'
+                      '  is : {}\n'
+                      'resetting the configuration and deleting parsed modules'
+                      .format(self.home, home_sys))
+                parsed = os.path.join(os.path.dirname(ConfigHandler.file), 'gammaparse')
+                shutil.rmtree(parsed)
+                self.home = home_sys
         if not hasattr(self, 'home'):
-            try:
-                setattr(self, 'home', os.environ['GAMMA_HOME'])
-            except KeyError:
+            if home_sys is not None:
+                setattr(self, 'home', home_sys)
+            else:
                 raise RuntimeError('could not read Gamma installation directory')
         self.version = re.search('GAMMA_SOFTWARE-(?P<version>[0-9]{8})',
                                  getattr(self, 'home')).group('version')
