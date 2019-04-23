@@ -20,12 +20,12 @@ packagedir=${root}/packages
 installdir=$HOME/local
 
 # the version of GDAL and its dependencies
-GDALVERSION=2.1.1
+GDALVERSION=2.4.1
 
 # these versions are not quite as important. If you use already installed them you might need to define their location
 # for the configuration of GDAL
-geos_version=3.5.0
-proj_version=4.9.2
+geos_version=3.7.1
+proj_version=6.0.0
 
 # define the number of threads for compilation
 threads=2
@@ -42,7 +42,9 @@ fi
 export PATH=${installdir}/bin:$PATH
 export LD_LIBRARY_PATH=${installdir}/lib:$LD_LIBRARY_PATH
 
-pythonlibdir=${installdir}/lib/python2.7/site-packages
+# choose on of the following depending on your system
+#pythonlibdir=${installdir}/lib/python3.6/site-packages
+pythonlibdir=${installdir}/lib64/python3.6/site-packages
 export PYTHONPATH=${pythonlibdir}:$PYTHONPATH
 
 for dir in ${root} ${downloaddir} ${packagedir} ${pythonlibdir}; do
@@ -106,6 +108,7 @@ sudo make install
 # this needs swig to be installed
 
 cd ${packagedir}/gdal*/swig/python
+# edit the file GNUmakefile if a Python executable other than the standard one is to be used
 make -j${threads}
 sudo python setup.py install --prefix=${installdir}
 ########################################################################################################################
