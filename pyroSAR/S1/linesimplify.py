@@ -13,6 +13,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
+matplotlib.rcParams['font.size'] = 12
 
 
 def simplify(x, y, maxpoints=20):
@@ -120,7 +121,7 @@ def reduce(seq, maxpoints=20, straighten=False, plot=False):
         return np.array(seq)
     x = list(range(0, len(seq)))
     if plot:
-        plt.plot(seq, label='original')
+        plt.plot(seq, label='ESA-corrected')
     # simplify the sequence using the Visvalingam-Whyatt algorithm
     VWpts = simplify(x, seq, maxpoints)
     xn, yn = [list(x) for x in zip(*VWpts)]
@@ -162,8 +163,7 @@ def reduce(seq, maxpoints=20, straighten=False, plot=False):
         xn.insert(index, cp[0])
         yn.insert(index, cp[1])
     if plot:
-        poly = createPoly(xn, yn, seq.size, int(max(seq)), plot=True)
-        plt.plot(xn, yn, linewidth=2, color='g', label='corrected')
+        plt.plot(xn, yn, linewidth=2, color='limegreen', label='corrected')
     # further straighten the line segments
     if straighten:
         indices = [i for i in range(0, len(xn)) if (xn[i], yn[i]) in VWpts]
@@ -180,5 +180,7 @@ def reduce(seq, maxpoints=20, straighten=False, plot=False):
             plt.plot(xn, yn, linewidth=2, color='m', label='straightened')
     if plot:
         plt.legend()
+        plt.xlabel('row')
+        plt.ylabel('column')
         plt.show()
     return np.interp(x, xn, yn).astype(int)
