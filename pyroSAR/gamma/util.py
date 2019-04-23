@@ -565,6 +565,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
             correctOSV(id=scene, osvdir=osvdir, osvType=osvtype,
                        logpath=path_log, outdir=scene.scene, shellscript=shellscript)
         except RuntimeError:
+            print('orbit state vector correction failed for scene {}'.format(scene.scene))
             return
     
     calibrate(scene, scene.scene, logpath=path_log, outdir=scene.scene, shellscript=shellscript)
