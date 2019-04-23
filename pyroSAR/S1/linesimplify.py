@@ -67,13 +67,13 @@ def createPoly(xn, yn, xmax, ymax, plot=False):
     ogr.Geometry
     """
     ring = ogr.Geometry(ogr.wkbLinearRing)
-    ring.AddPoint(0, 0)
+    ring.AddPoint_2D(0, 0)
     for item in zip(xn, yn):
         item = list(map(int, item))
         if item != [0, 0] and item != [xmax, ymax]:
-            ring.AddPoint(item[0], item[1])
-    ring.AddPoint(xmax, ymax)
-    ring.AddPoint(xmax, 0)
+            ring.AddPoint_2D(item[0], item[1])
+    ring.AddPoint_2D(xmax, ymax)
+    ring.AddPoint_2D(xmax, 0)
     ring.CloseRings()
     poly = ogr.Geometry(ogr.wkbPolygon)
     poly.AddGeometry(ring)
