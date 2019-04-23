@@ -90,50 +90,95 @@ def createPoly(xn, yn, xmax, ymax, plot=False):
     return poly
 
 
-def reduce(seq, maxpoints=20, straighten=False):
+def reduce(seq, maxpoints=20, straighten=False, plot=False):
+    """
+    reduce the complexity of a line; the following steps are performed:
+     - simplify the line using the Visvalingam-Whyatt method
+     - iteratively add points on the original line back to the simplified line
+       until the polygon spanned by the simplified line and (xmin, ymin) does not
+       contain any further points of the original line; the polygon area is
+       expected to only cover valid pixels of the image
+     - optionally further straighten the result for smoother edges
+    
+    Parameters
+    ----------
+    seq: numpy.ndarray
+        the 1D line sequence to be simplified
+    maxpoints: int
+        the maximum number points in the simplified sequence
+    straighten: bool
+        perform additional straightening on the simplified line?
+    plot: bool
+        plot the results?
+    
+    Returns
+    -------
+    numpy.ndarray
+        the simplified line sequence
+    """
     if min(seq) == max(seq):
         return np.array(seq)
-    x = map(float, range(0, len(seq)))
-    # plt.plot(seq)
+    x = list(range(0, len(seq)))
+    if plot:
+        plt.plot(seq, label='original')
+    # simplify the sequence using the Visvalingam-Whyatt algorithm
     VWpts = simplify(x, seq, maxpoints)
-    xn, yn = map(list, zip(*VWpts))
-    # plt.plot(xn, yn, linewidth=2, color='r')
+    xn, yn = [list(x) for x in zip(*VWpts)]
+    if plot:
+        plt.plot(xn, yn, linewidth=2, color='r', label='VW-simplified')
     simple = np.interp(x, xn, yn)
-    seq2 = np.copy(seq)
+    # create a list of OGR points for the original border
     points = []
-    for xi, yi in enumerate(seq2):
+    for xi, yi in enumerate(seq):
         point = ogr.Geometry(ogr.wkbPoint)
-        point.AddPoint(xi, yi)
+        point.AddPoint(int(xi), int(yi))
         points.append(point)
     points = np.array(points)
     while True:
-        poly = createPoly(xn, yn, len(seq2), max(seq2))
+        # create a polygon containing all pixels inside the simplified border
+        # i.e., containing the area considered valid
+        poly = createPoly(xn, yn, seq.size, int(max(seq)))
+        # create an OGR line from the simplified border points
         line = ogr.Geometry(ogr.wkbLineString)
         for xi, yi in zip(xn, yn):
             line.AddPoint(xi, yi)
+        # compute the distance of each original point to the simplified line
         dists = np.array([line.Distance(point) for point in points])
+        # check which points are inside of the polygon
         contain = np.array([point.Within(poly) for point in points])
+        # remove points outside the polygon and stop if
+        # no further points outside the polygon exist
         dists[~contain] = 0
         points = points[(dists > 0)]
         dists = dists[(dists > 0)]
         if len(dists) == 0:
             break
+        # select the point with the largest distance to the simplified
+        # line and add it to the list of simplified points
+        # this reduces the size of the polygon an thus the area considered valid
         candidate = points[np.argmax(dists)]
         cp = candidate.GetPoint()
         index = np.argmin(np.array(xn) < cp[0])
         xn.insert(index, cp[0])
         yn.insert(index, cp[1])
+    if plot:
+        poly = createPoly(xn, yn, seq.size, int(max(seq)), plot=True)
+        plt.plot(xn, yn, linewidth=2, color='g', label='corrected')
+    # further straighten the line segments
     if straighten:
         indices = [i for i in range(0, len(xn)) if (xn[i], yn[i]) in VWpts]
         for i, j in enumerate(indices):
-            if i < (len(indices)-1):
-                if indices[i+1] > j+1:
+            if i < (len(indices) - 1):
+                if indices[i + 1] > j + 1:
                     dx = abs(xn[j] - xn[indices[i + 1]])
                     dy = abs(yn[j] - yn[indices[i + 1]])
                     if dx > dy:
-                        seg_y = yn[j:indices[i + 1]+1]
-                        for k in range(j, indices[i + 1]+1):
+                        seg_y = yn[j:indices[i + 1] + 1]
+                        for k in range(j, indices[i + 1] + 1):
                             yn[k] = min(seg_y)
-    # plt.plot(xn, yn, linewidth=2, color='g')
-    # plt.show()
+        if plot:
+            plt.plot(xn, yn, linewidth=2, color='m', label='straightened')
+    if plot:
+        plt.legend()
+        plt.show()
     return np.interp(x, xn, yn).astype(int)
