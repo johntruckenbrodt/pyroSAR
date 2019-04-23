@@ -1,13 +1,18 @@
 ##############################################################
 # Utilities for simplification of lines used by pyroSAR for border noise removal
-# John Truckenbrodt 2017
+# John Truckenbrodt 2017-2019
 ##############################################################
 
 from osgeo import ogr
 import numpy as np
 from spatialist.ancillary import rescale
 from .polysimplify import VWSimplifier
-# import matplotlib.pyplot as plt
+
+
+import matplotlib
+import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
+from matplotlib.collections import PatchCollection
 
 
 def simplify(x, y, maxpoints=20):
@@ -42,11 +47,29 @@ def simplify(x, y, maxpoints=20):
         return VWpts
 
 
-def createPoly(xn, yn, xmax, ymax):
+def createPoly(xn, yn, xmax, ymax, plot=False):
+    """
+    create an OGR geometry from a sequence of indices
+    
+    Parameters
+    ----------
+    xn: numpy.ndarray
+        the x indices of the points
+    yn: numpy.ndarray
+        the y  indices of the points
+    xmax: int or float
+        the maximum x index value
+    ymax: int or float
+        the maximum y index value
+
+    Returns
+    -------
+    ogr.Geometry
+    """
     ring = ogr.Geometry(ogr.wkbLinearRing)
     ring.AddPoint(0, 0)
     for item in zip(xn, yn):
-        item = map(int, item)
+        item = list(map(int, item))
         if item != [0, 0] and item != [xmax, ymax]:
             ring.AddPoint(item[0], item[1])
     ring.AddPoint(xmax, ymax)
@@ -54,6 +77,16 @@ def createPoly(xn, yn, xmax, ymax):
     ring.CloseRings()
     poly = ogr.Geometry(ogr.wkbPolygon)
     poly.AddGeometry(ring)
+    if plot:
+        fig, ax = plt.subplots()
+        pts = ring.GetPoints()
+        arr = np.array(pts)
+        polygon = Polygon(arr, True)
+        p = PatchCollection([polygon], cmap=matplotlib.cm.jet, alpha=0.4)
+        ax.add_collection(p)
+        ax.autoscale_view()
+        plt.scatter(arr[:, 0], arr[:, 1], s=10, color='red')
+        plt.show()
     return poly
 
 
