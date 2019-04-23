@@ -16,9 +16,9 @@ from matplotlib.collections import PatchCollection
 
 
 def simplify(x, y, maxpoints=20):
-    x = map(float, x)
-    y = map(float, y)
-    pts = np.array(zip(x, y))
+    x = list(map(float, x))
+    y = list(map(float, y))
+    pts = np.array(list(zip(x, y)))
     simplifier = VWSimplifier(pts)
     sqd = []
     iter_range = range(2, maxpoints + 1)
@@ -42,7 +42,7 @@ def simplify(x, y, maxpoints=20):
         # plt.legend(loc='upper center', shadow=True)
         # plt.show()
         # npoints = np.argmin(iter + sqd) + 2
-        npoints = np.argmax(np.array(sqd) < 0.01)+2
+        npoints = np.argmax(np.array(sqd) < 0.01) + 2
         VWpts = simplifier.from_number(npoints)
         return VWpts
 
