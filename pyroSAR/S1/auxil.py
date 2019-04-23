@@ -13,7 +13,7 @@ import os
 import re
 import ssl
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
 import numpy as np
 from osgeo import gdal
@@ -166,13 +166,19 @@ class OSV(object):
         # the collection of files to be returned
         files = []
         # set the defined date or the date of the first existing OSV file otherwise
+        # two days are added/subtracted from the defined start and stop dates since the
+        # online query does only allow for searching the start time; hence, if e.g.
+        # the start date is 2018-01-01T000000, the query would not return the corresponding
+        # file, whose start date is 2017-12-31 (V20171231T225942_20180102T005942)
         if start is not None:
-            date_start = datetime.strptime(start, '%Y%m%dT%H%M%S').strftime('%Y-%m-%d')
+            date_start = datetime.strptime(start, '%Y%m%dT%H%M%S')
+            date_start = (date_start - timedelta(days=2)).strftime('%Y-%m-%d')
         else:
-            date_start = '2014-08-22'
+            date_start = '2014-07-31'
         # set the defined date or the current date otherwise
         if stop is not None:
-            date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S').strftime('%Y-%m-%d')
+            date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S')
+            date_stop = (date_stop + timedelta(days=2)).strftime('%Y-%m-%d')
         else:
             date_stop = time.strftime('%Y-%m-%d')
         
