@@ -24,6 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================
 
+code was obtained from https://github.com/Permafacture/Py-Visvalingam-Whyatt/blob/master/polysimplify.py
 minor edits for Python3 compatibility by John Truckenbrodt 2019
 """
 
