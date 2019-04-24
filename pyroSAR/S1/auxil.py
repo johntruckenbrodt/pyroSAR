@@ -155,6 +155,8 @@ class OSV(object):
         address, outdir = self._typeEvaluate(osvtype)
         # a dictionary for storing the url arguments
         query = {'page': 1}
+        # a list of pages to be searched; will be extended during url readout
+        pages = [1]
         
         if sensor in ['S1A', 'S1B']:
             query['sentinel1__mission'] = sensor
@@ -189,7 +191,7 @@ class OSV(object):
         query['validity_start'] = '{0}..{1}'.format(date_start, date_stop)
         print('searching for new {} files'.format(osvtype))
         # iterate through the url pages and look for files
-        while True:
+        while len(pages) > 0:
             # parse the url
             subaddress = urlQueryParser(address, query)
             # read the remote content
@@ -198,6 +200,13 @@ class OSV(object):
                 print(subaddress)
             except IOError as e:
                 raise RuntimeError(e)
+            if query['page'] == 1:
+                # read all existing pages from the url return of the first page
+                pages_str = re.findall('page=[0-9]+', response)
+                pages = list(set([int(x.strip('page=')) for x in pages_str]))
+            else:
+                # delete the page from the list of pages yet to be searched
+                del pages[pages.index(query['page'])]
             # list all osv files found on the page
             remotes = sorted(set(re.findall(pattern_url, response)))
             # do a more accurate filtering of the time stamps
@@ -207,13 +216,11 @@ class OSV(object):
                 remotes = [x for x in remotes if self.date(x, 'start') <= stop]
             # filter files already existing in the files collection
             selection = [x for x in remotes if x not in files]
-            # stop the loop if no more files are found on the current url page
-            if len(selection) == 0:
-                break
-            else:
-                # append the found files to the collection and increment the url page
+            if len(selection) >= 0:
+                # append the found files to the collection
                 files += selection
-                query['page'] += 1
+            # increment the url page
+            query['page'] += 1
         # in case the type 'RES' is selected then only return those files covering
         # a time period not covered by any POE file
         if osvtype == 'RES':
