@@ -203,6 +203,8 @@ class OSV(object):
             # do a more accurate filtering of the time stamps
             if start is not None:
                 remotes = [x for x in remotes if self.date(x, 'stop') > start]
+            if stop is not None:
+                remotes = [x for x in remotes if self.date(x, 'start') <= stop]
             # filter files already existing in the files collection
             selection = [x for x in remotes if x not in files]
             # stop the loop if no more files are found on the current url page
