@@ -217,7 +217,7 @@ class OSV(object):
         # in case the type 'RES' is selected then only return those files covering
         # a time period not covered by any POE file
         if osvtype == 'RES':
-            files = [x for x in files if self.date(x, 'stop') > self.maxdate('POE', 'stop')]
+            files = [x for x in files if self.date(x, 'start') > self.maxdate('POE', 'stop')]
         return files
     
     def date(self, file, datetype):
