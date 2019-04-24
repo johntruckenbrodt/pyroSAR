@@ -202,7 +202,7 @@ class OSV(object):
             remotes = sorted(set(re.findall(pattern_url, response)))
             # do a more accurate filtering of the time stamps
             if start is not None:
-                remotes = [x for x in remotes if self.date(x, 'stop') > start]
+                remotes = [x for x in remotes if self.date(x, 'stop') >= start]
             if stop is not None:
                 remotes = [x for x in remotes if self.date(x, 'start') <= stop]
             # filter files already existing in the files collection
