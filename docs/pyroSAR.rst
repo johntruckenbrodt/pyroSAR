@@ -159,6 +159,12 @@ Sentinel-1 Tools
     :undoc-members:
     :show-inheritance:
 
+    .. autosummary::
+        :nosignatures:
+
+        OSV
+        removeGRDBorderNoise
+
 Auxiliary Data Tools
 ====================
 
@@ -166,6 +172,12 @@ Auxiliary Data Tools
     :members: dem_autoload, dem_create
     :undoc-members:
     :show-inheritance:
+
+    .. autosummary::
+        :nosignatures:
+
+        dem_autoload
+        dem_create
 
 Datacube Tools
 ==============
@@ -186,7 +198,10 @@ Ancillary Functions
         :nosignatures:
 
         find_datasets
+        getargs
         groupby
         groupbyTime
+        hasarg
+        multilook_factors
         parse_datasetname
         seconds
