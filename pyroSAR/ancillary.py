@@ -8,6 +8,7 @@ This script gathers central functions and classes for general pyroSAR applicatio
 import os
 import re
 import math
+import inspect
 from datetime import datetime
 from ._dev_config import product_pattern
 
@@ -221,3 +222,22 @@ def find_datasets(directory, recursive=False, **kwargs):
         if match:
             selection.append(file)
     return selection
+
+
+def hasarg(func, arg):
+    """
+    simple check whether a function takes a parameter as input
+    
+    Parameters
+    ----------
+    func: function
+        the function to be checked
+    arg: str
+        the argument name to be found
+
+    Returns
+    -------
+    bool
+        does the function take this as argument?
+    """
+    return arg in inspect.getfullargspec(func).args

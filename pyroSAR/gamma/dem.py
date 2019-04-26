@@ -27,7 +27,8 @@ from spatialist.envi import HDRobject
 from ..auxdata import dem_autoload, dem_create
 from ..drivers import ID
 from . import ISPPar, UTM, slc_corners, par2hdr
-from .auxil import ExamineGamma, hasarg
+from .auxil import ExamineGamma
+from pyroSAR.ancillary import hasarg
 
 try:
     from .api import diff, disp, isp
