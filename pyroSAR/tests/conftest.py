@@ -24,7 +24,9 @@ def testdata(testdir):
         # ftp://ftp.eorc.jaxa.jp/pub/ALOS-2/1501sample/310_forestbrazil/0000022708_001001_ALOS2015976960-140909.zip
         'psr2': os.path.join(testdir, '0000022708_001001_ALOS2015976960-140909.zip'),
         'tif': os.path.join(testdir, 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'),
-        'archive_old': os.path.join(testdir, 'archive_outdated.csv')
+        'archive_old': os.path.join(testdir, 'archive_outdated.csv'),
+        'dempar': os.path.join(testdir, 'dem.par'),
+        'mlipar': os.path.join(testdir, 'mli.par')
     }
     return out
 
