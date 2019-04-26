@@ -119,3 +119,87 @@ SNAP API
 - function :func:`pyroSAR.snap.util.geocode`:
 
   + export temporarily written files (e.g. local incidence angle) via new parameter `export_extra`
+
+0.9 / tbd
+---------
+
+Drivers
+*******
+
+- :class:`pyroSAR.drivers.SAFE`: read heading angle, incident angle and image geometry (e.g. Ground Range) from metadata
+- :class:`pyroSAR.drivers.Archive`: improved cross-compatibility with Python2 and Python3
+
+
+SNAP API
+********
+
+- function :func:`pyroSAR.snap.util.geocode`:
+
+  + option to export `DEM` via parameter `export_extra`
+  + added Sentinel-1 `ThermalNoiseRemoval` node via new parameter `removeS1ThermalNoise`
+  + added `Multilook` node which is executed to approximate the target resolution if necessary
+    (currently only for Sentinel-1 since metadata entries `incidence` and `image_geometry` are required)
+  + new parameter `groupsize` to split workflows into several groups, which are executed separately with
+    intermediate products written to disk. This increases processing speed
+  + simplified internal node parametrization for easier use in future functions
+  + fail if no POE orbit state vector file is found
+  + `Terrain-Flattening`:
+
+    * added additional parameters `additionalOverlap` and `oversamplingMultiple`
+    * use bilinear instead of bicubic interpolation
+  + `Remove-GRD-Border-Noise`: decrease `borderLimit` from 1000 to 500 (SNAP default)
+  + new parameter `gpt_exceptions` to execute workflows containing specific nodes with different GPT versions than
+    the default one
+  + automatically remove node parameters on GPT fail and re-run the modified workflow; this is relevant if a node is
+    executed in an older GPT version (e.g. via parameter `gpt_exceptions`), which does not accept parameters which were
+    introduced in later GPT versions (e.g. those described above for node `Terrain-Flattening`)
+
+GAMMA API
+*********
+
+- SRTM Tools renamed to DEM Tools
+
+  + function :func:`pyroSAR.gamma.dem.dem_autocreate`:
+
+    * define arbitrary output CRS and resolution via new parameters `t_srs` and `tr`
+    * optionally perform geoid to ellipsoid conversion in either GDAL or GAMMA via new parameter `geoid_mode`
+
+- function :func:`pyroSAR.gamma.geocode`:
+
+  + removed multiplication of backscatter with cosine of incident angle via command `lin_comb`
+  + fixed bug in writing correct nodata values to ancillary products defined via parameter `export_extra`
+  + changed default of parameter `func_geoback` from 2 to 1 (GAMMA default)
+
+- function :func:`pyroSAR.gamma.correctOSV`:
+
+  + fixed bug in using the first OSV file in a directory for correcting an image, which resulted in S1B files being
+    corrected with S1A OSV files. This occasionally resulted in errors of no DEM overlap while processing S1B scenes
+
+- fixed bug in treating GAMMA image pixel coordinates as top left instead of pixel center. This is relevant for writing
+  ENVI HDR files for GAMMA images via function :func:`pyroSAR.gamma.par2hdr` resulting in the image to be shifted
+  by 1/2 pixel to Southeast
+
+Command Parser
+++++++++++++++
+- compatibility with GAMMA version released in November 2018
+- delete parsed modules if environment variable `GAMMA_HOME` was reset causing them to be re-parsed with the new version
+  on module import
+
+general functionality
+*********************
+
+- new function :func:`pyroSAR.ancillary.multilook_factors` to compute factors depending on image geometry and target resolution
+- :func:`pyroSAR.S1.removeGRDBorderNoise`: reached Python3 compatibility
+
+Auxiliary Data Handling
+***********************
+
+- new function :func:`pyroSAR.auxdata.dem_create` for convenient creation of DEM mosaics as downloaded by
+  :func:`pyroSAR.auxdata.dem_autoload`
+
+- function :func:`pyroSAR.auxdata.dem_autoload`: download 1 degree tiles instead of 5 degree tiles
+
+- class :class:`pyroSAR.S1.OSV`:
+
+  + download files specific to the Sentinel-1 sensor (S1A/S1B) instead of all matching the acquisition time
+  + improved time span search, which occasionally resulted in missing OSV files
