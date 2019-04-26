@@ -1241,7 +1241,7 @@ class SAFE(ID):
 
         See Also
         --------
-        :meth:`pyroSAR.S1.auxil.OSV`
+        :meth:`pyroSAR.S1.OSV`
         """
         date = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
         
