@@ -314,7 +314,8 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
 
 def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shellscript=None):
     """
-    correct GAMMA parameter files with orbit state vector information from dedicated OSV files
+    correct GAMMA parameter files with orbit state vector information from dedicated OSV files;
+    OSV files are downloaded automatically to either the defined `osvdir` or a sub-directory `osv` of the scene directory
     
     Parameters
     ----------
@@ -331,6 +332,23 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
 
     Returns
     -------
+    
+    Examples
+    --------
+    
+    >>> from pyroSAR import identify
+    >>> from pyroSAR.gamma import correctOSV, convert2gamma
+    >>> filename = 'S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'
+    # identify the SAR scene
+    >>> scene = identify(filename)
+    # unpack the zipped scene to an arbitrary directory
+    >>> scene.unpack('/home/test')
+    >>> print(scene.scene)
+    /home/test/S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.SAFE
+    # convert the unpacked scene to GAMMA format
+    >>> convert2gamma(id=scene, directory=scene.scene)
+    # correct the OSV information of the converted GAMMA images
+    >>> correctOSV(id=scene, osvdir='/home/test/osv')
     """
     
     if not isinstance(id, ID):
