@@ -204,7 +204,7 @@ def dem_create(src, dst, t_srs=None, tr=None, geoid_convert=False, geoid='EGM96'
         errstr = str(e)
         if 'Cannot open egm96_15.gtx' in errstr:
             addition = '\nplease refer to the following site for instructions ' \
-                       'on how to use the file egm96_15.gtx:\n' \
+                       'on how to use the file egm96_15.gtx (requires proj.4 >= 5.0.0):\n' \
                        'https://gis.stackexchange.com/questions/258532/' \
                        'noaa-vdatum-gdal-variable-paths-for-linux-ubuntu'
             raise RuntimeError(errstr + addition)

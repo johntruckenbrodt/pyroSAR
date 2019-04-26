@@ -80,13 +80,16 @@ Alternatively, you can build GDAL and the dependencies from source. The script `
 gives specific instructions on how to do it. It is not yet intended to run this script via shell, but rather to 
 follow the instructions step by step.
 ### SQLite + SpatiaLite
-While sqlite3 and its Python binding are usually already installed, the spatialite extension needs to be 
-added. Two packages exist, libspatialite and mod_spatialite. Both can be used by pyroSAR.
-mod_spatialite has been found to be easier to setup with sqlite and can be installed via apt:
+While `sqlite3` and its Python binding are usually already installed, the `spatialite` extension needs to be 
+added. Two packages exist, `libspatialite` and `mod_spatialite`. Both can be used by pyroSAR.
+On Ubuntu, `mod_spatialite` has been found to be easier to setup with `sqlite` and can be installed via `apt`:
 ```sh
 sudo apt-get install libsqlite3-mod-spatialite
 ```
-
+On CentOS, `libspatialite` including shared objects for extension loading can be installed via `yum`:
+```sh
+sudo yum install libspatialite-devel
+```
 The following can be run in Python to test the needed functionality:
 ```Python
 import sqlite3
@@ -99,15 +102,16 @@ try:
 except sqlite3.OperationalError:
     con.load_extension('libspatialite.so')
 ```
-In case loading extensions is not permitted you might need to install the package `pysqlite2`. 
+In case loading extensions is not permitted you might need to install the package `pysqlite2` 
+together with a static build of `sqlite3`. 
 See the script `pyroSAR/install/install_deps.sh` for instructions. 
-There you can also find instructions on how to install spatialite from source.
+There you can also find instructions on how to install `spatialite` from source.
 To test `pysqlite2` you can import it as follows and then run the test above:
 ```Python
 from pysqlite2 import dbapi2 as sqlite3
 ```
-Installing this package is likely to cause problems with the sqlite3 library installed on the system. 
-Thus, it is safer to build a static sqlite3 library for it (see installation script).
+Installing this package is likely to cause problems with the `sqlite3` library installed on the system. 
+Thus, it is safer to build a static `sqlite3` library for it (see installation script).
 
 
 #  Example
@@ -118,7 +122,7 @@ At first we load the scene into pyroSAR for analysis of the metadata:
 from pyroSAR import identify
 name = 'S1A_IW_GRDH_1SDV_20150222T170750_20150222T170815_004739_005DD8_3768.zip'
 scene = identify(name)
-scene.summary()
+print(scene)
 ```
 This will automatically identify the scene, scan it for metadata and print a summary of selected metadata entries.
 The names of the attributes (e.g. sensor and acquisition_mode) are standardized for all SAR scenes.

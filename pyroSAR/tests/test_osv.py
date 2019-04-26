@@ -15,11 +15,10 @@ def test_scene_osv(tmpdir, testdata):
             with pytest.raises(IOError):
                 osv.catch(sensor='S1A', osvtype='XYZ')
             res = osv.catch(sensor='S1A', osvtype='RES', start=osv.mindate('POE'), stop=osv.maxdate('POE'))
-            assert len(res) == 21
-            osv.retrieve(res[0:3])
+            assert len(res) == 0
             
             assert len(osv.getLocals('POE')) == 3
-            assert len(osv.getLocals('RES')) == 3
+            assert len(osv.getLocals('RES')) == 0
             assert osv.match(sensor=id.sensor, timestamp=id.start, osvtype='POE') is not None
             assert osv.match(sensor=id.sensor, timestamp=id.start, osvtype=['POE', 'RES']) is not None
             assert osv.match(sensor=id.sensor, timestamp=id.start, osvtype='RES') is None
@@ -27,8 +26,10 @@ def test_scene_osv(tmpdir, testdata):
                 os.remove(item)
             assert len(osv.getLocals('POE')) == 1
             osv.clean_res()
-            res = osv.catch(sensor='S1A', osvtype='POE', stop='20140823T120000')
-            assert len(res) == 3
+            res = osv.catch(sensor='S1A', osvtype='RES', start='20180101T120000', stop='20180102T120000')
+            assert len(res) == 33
+            osv.retrieve(res[0:3])
+            assert len(osv.getLocals('RES')) == 3
             res = osv.catch(sensor='S1A', osvtype='POE', start=time.strftime('%Y%m%dT%H%M%S'))
     else:
         with pytest.raises(RuntimeError):

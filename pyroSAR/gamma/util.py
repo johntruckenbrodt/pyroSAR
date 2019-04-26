@@ -389,7 +389,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
                         shellscript=shellscript)
 
 
-def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=5,
+def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=1,
             func_interp=2, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
             cleanup=True, normalization_method=2, export_extra=None):
     """
@@ -583,6 +583,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
             correctOSV(id=scene, osvdir=osvdir, osvType=osvtype,
                        logpath=path_log, outdir=scene.scene, shellscript=shellscript)
         except RuntimeError:
+            print('orbit state vector correction failed for scene {}'.format(scene.scene))
             return
     
     calibrate(scene, scene.scene, logpath=path_log, outdir=scene.scene, shellscript=shellscript)

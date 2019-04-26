@@ -23,6 +23,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================
+
+code was obtained from https://github.com/Permafacture/Py-Visvalingam-Whyatt/blob/master/polysimplify.py
+minor edits for Python3 compatibility by John Truckenbrodt 2019
 """
 
 from numpy import array, argmin
@@ -37,12 +40,12 @@ def triangle_area(p1, p2, p3):
 
 
 def triangle_areas_from_array(arr):
-    '''
+    """
     take an (N,2) array of points and return an (N,1)
     array of the areas of those triangles, where the first
     and last areas are np.inf
     see triangle_area for algorithm
-    '''
+    """
 
     result = np.empty((len(arr),), arr.dtype)
     result[0] = np.inf
@@ -74,12 +77,12 @@ def triangle_areas_from_array(arr):
 # the min value.  So, I am safe in "deleting" an index by
 # just shifting the array over on top of it
 def remove(s, i):
-    '''
+    """
     Quick trick to remove an item from a numpy array without
     creating a new object.  Rather than the array shape changing,
     the final value just gets repeated to fill the space.
     ~3.5x faster than numpy.delete
-    '''
+    """
     s[i:-1] = s[i + 1:]
 
 
@@ -103,7 +106,7 @@ class VWSimplifier(object):
         pts = self.pts
         nmax = len(pts)
         real_areas = triangle_areas_from_array(pts)
-        real_indices = range(nmax)
+        real_indices = list(range(nmax))
 
         # destructable copies
         # ARG! areas=real_areas[:] doesn't make a copy!
@@ -111,7 +114,7 @@ class VWSimplifier(object):
         i = real_indices[:]
 
         # pick first point and set up for loop
-        min_vert = argmin(areas)
+        min_vert = int(argmin(areas))
         this_area = areas[min_vert]
         #  areas and i are modified for each point finished
         remove(areas, min_vert)  # faster
@@ -328,7 +331,7 @@ else:
         # rather than concise, I'd rather be explicit and clear.
 
         def pt2str(self, pt):
-            '''make length 2 numpy.array.__str__() fit for wkt'''
+            """make length 2 numpy.array.__str__() fit for wkt"""
             return ' '.join(pt)
 
         def linebuild(self):
