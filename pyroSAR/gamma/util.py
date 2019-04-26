@@ -181,14 +181,14 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
                 outname_base = '{}_{}_mli_geo'.format(id.outname_base(), polarization)
                 outname = os.path.join(directory, outname_base)
                 
-                isp.par_EORC_PALSAR_geo(CEOS_leader=id.file,
-                                        MLI_par=outname + '.par',
-                                        DEM_par=outname + '_dem.par',
-                                        CEOS_data=image,
-                                        MLI=outname,
-                                        logpath=logpath,
-                                        outdir=outdir,
-                                        shellscript=shellscript)
+                diff.par_EORC_PALSAR_geo(CEOS_leader=id.file,
+                                         MLI_par=outname + '.par',
+                                         DEM_par=outname + '_dem.par',
+                                         CEOS_data=image,
+                                         MLI=outname,
+                                         logpath=logpath,
+                                         outdir=outdir,
+                                         shellscript=shellscript)
             par2hdr(outname + '.par', outname + '.hdr')
     
     elif isinstance(id, ESA):
@@ -303,7 +303,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
                 pars['MLI_par'] = outname + '.par'
                 pars['DEM_par'] = outname + '_dem.par'
                 pars['GEO'] = outname
-                isp.par_TX_geo(**pars)
+                diff.par_TX_geo(**pars)
             else:
                 raise RuntimeError('unknown product: {}'.format(id.product))
             
@@ -323,6 +323,8 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
         the scene to be corrected
     osvdir: str
         the directory of OSV files; subdirectories POEORB and RESORB are created automatically
+    osvType: {'POE', 'RES'}
+        the OSV type to be used
     logpath: str or None
         a directory to write command logfiles to
     outdir: str or None
@@ -349,6 +351,10 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
     >>> convert2gamma(id=scene, directory=scene.scene)
     # correct the OSV information of the converted GAMMA images
     >>> correctOSV(id=scene, osvdir='/home/test/osv')
+    
+    See Also
+    --------
+    :meth:`pyroSAR.drivers.SAFE.getOSV`
     """
     
     if not isinstance(id, ID):
@@ -1014,13 +1020,13 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
                 out1.write(item + '\t' + item + '.par\t' + item + '.tops_par\n')
                 out2.write(item + '_drp\t' + item + '_drp.par\t' + item + '_drp.tops_par\n')
     
-    isp.S1_deramp_S1_TOPS(SLC1_tab=tab_in,
-                          SLC2_tab=tab_out,
-                          mode=0,
-                          phflg=0,
-                          logpath=logpath,
-                          outdir=outdir,
-                          shellscript=shellscript)
+    isp.SLC_deramp_S1_TOPS(SLC1_tab=tab_in,
+                           SLC2_tab=tab_out,
+                           mode=0,
+                           phflg=0,
+                           logpath=logpath,
+                           outdir=outdir,
+                           shellscript=shellscript)
     
     isp.SLC_mosaic_S1_TOPS(SLC_tab=tab_out,
                            SLC=name_out,
