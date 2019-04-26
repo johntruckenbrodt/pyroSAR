@@ -257,4 +257,4 @@ def hasarg(func, arg):
     bool
         does the function take this as argument?
     """
-    return arg in inspect.getfullargspec(func).args
+    return arg in getargs(func)
