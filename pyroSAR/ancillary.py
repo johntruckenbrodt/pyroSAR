@@ -224,6 +224,23 @@ def find_datasets(directory, recursive=False, **kwargs):
     return selection
 
 
+def getargs(func):
+    """
+    get the arguments of a function
+    
+    Parameters
+    ----------
+    func: function
+        the function to be checked
+
+    Returns
+    -------
+    list or str
+        the argument names
+    """
+    return sorted(inspect.getfullargspec(func).args)
+
+
 def hasarg(func, arg):
     """
     simple check whether a function takes a parameter as input
