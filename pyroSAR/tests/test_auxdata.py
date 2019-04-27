@@ -1,6 +1,6 @@
 import os
 import pytest
-from pyroSAR.auxdata import dem_autoload, DEMHandler
+from pyroSAR.auxdata import dem_autoload, DEMHandler, dem_create
 
 from spatialist import bbox
 
@@ -21,6 +21,12 @@ def test_handler(auxdata_dem_cases):
             for demType, reference in cases:
                 result = handler.remote_ids(demType=demType, extent=box.extent)
                 assert result == reference
+    with pytest.raises(RuntimeError):
+        test = DEMHandler('foobar')
+    ext_utm = {'xmin': -955867, 'xmax': -915536, 'ymin': -5915518, 'ymax': -5863678}
+    with bbox(ext_utm, crs=32632) as box:
+        with pytest.raises(RuntimeError):
+            test = DEMHandler([box])
 
 
 def test_autoload(auxdata_dem_cases, travis):
@@ -48,3 +54,13 @@ def test_autoload(auxdata_dem_cases, travis):
             files = dem_autoload([box], 'TDX90m')
         with pytest.raises(RuntimeError):
             dem_autoload([box], 'AW3D30', product='foobar')
+
+
+def test_dem_create(tmpdir):
+    with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
+        with pytest.raises(RuntimeError):
+            files = dem_autoload([box], 'foobar')
+        vrt = dem_autoload([box], 'SRTM 3Sec', vrt='/vsimem/test.vrt')
+    out = os.path.join(str(tmpdir), 'srtm.tif')
+    dem_create(src=vrt, dst=out, t_srs=32632, tr=(90, 90))
+    assert os.path.isfile(out)
