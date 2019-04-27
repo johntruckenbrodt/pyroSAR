@@ -39,7 +39,7 @@ def parse_command(command, indent='    '):
         # for all other commands stderr is just appended to stdout
         out += err
     
-    if re.search("Can't locate FILE/Path\.pm in @INC", out):
+    if re.search(r"Can't locate FILE/Path\.pm in @INC", out):
         raise RuntimeError('unable to parse Perl script')
     ###########################################
     # fix command-specific inconsistencies in parameter naming
