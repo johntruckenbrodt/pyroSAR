@@ -142,7 +142,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
                 if not os.path.isfile(outname):
                     lea = id.findfiles('LEA_01.001')[0]
                     dat = id.findfiles('DAT_01.001')[0]
-                    title = re.sub('\.PS$', '', os.path.basename(id.file))
+                    title = re.sub(r'\.PS$', '', os.path.basename(id.file))
                     
                     isp.par_ESA_ERS(CEOS_SAR_leader=lea,
                                     SLC_par=outname + '.par',
