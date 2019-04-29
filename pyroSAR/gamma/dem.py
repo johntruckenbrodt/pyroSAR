@@ -166,8 +166,9 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
       * this correction is not done for TanDEM-X data, which contains ellipsoid
         heights; see `here <https://geoservice.dlr.de/web/dataguide/tdm90>`_
     
-    - if the command ``create_dem_par`` accepts a parameter EPSG and the command ``dem_import`` exists,
-      an arbitrary CRS can be defined via parameter ``t_srs``. In this case and if parameter ``t_srs`` is not kept at
+    - if the command ``create_dem_par`` accepts a parameter EPSG and the command ``dem_import`` exists
+      (depending on the GAMMA version used),
+      an arbitrary CRS can be defined via parameter ``t_srs``. In this case, and if parameter ``t_srs`` is not kept at
       its default of 4326, conversion to Gamma format is done with command ``dem_import`` instead of ``srtm2dem``
 
     Parameters
@@ -196,7 +197,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
     password: str or None
         (optional) the password for the registration account
     geoid_mode: str
-        the software to be used for converting geoid to ellipsoid heights; options:
+        the software to be used for converting geoid to ellipsoid heights; does not apply to demType TDX90m; options:
          - 'gamma'
          - 'gdal'
 
