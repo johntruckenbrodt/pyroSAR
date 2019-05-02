@@ -12,7 +12,7 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BoderNoise=True, removeS1ThermalNoise=True, offset=None,
-            externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
+            externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
             basename_extensions=None, test=False, export_extra=None, groupsize=2, cleanup=True, gpt_exceptions=None):
     """
     wrapper function for geocoding SAR images using ESA SNAP
@@ -52,6 +52,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         specified external DEM.
     externalDEMApplyEGM: bool, optional
         Apply Earth Gravitational Model to external DEM? Default is True.
+    terainFlattening: bool
+        apply topographic normalization on the data?
     basename_extensions: list of str
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     test: bool, optional
@@ -182,21 +184,28 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     # terrain flattening node configuration
     # print('-- configuring Terrain-Flattening Node')
-    tf = workflow['Terrain-Flattening']
-    if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
-        tf.parameters['sourceBands'] = 'Beta0'
+    if terrainFlattening:
+        tf = parse_node('Terrain-Flattening')
+        workflow.insert_node(tf, before='Calibration')
+        if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
+            tf.parameters['sourceBands'] = 'Beta0'
+        else:
+            tf.parameters['sourceBands'] = bands_beta
+        pred_tc = 'Terrain-Flattening'
     else:
-        tf.parameters['sourceBands'] = bands_beta
+        cal.parameters['outputBetaBand'] = False
+        cal.parameters['outputGammaBand'] = True
+        pred_tc = 'Calibration'
     ############################################
     # configuration of node sequence for specific geocoding approaches
     # print('-- configuring geocoding approach Nodes')
     if geocoding_type == 'Range-Doppler':
         tc = parse_node('Terrain-Correction')
-        workflow.insert_node(tc, before='Terrain-Flattening')
+        workflow.insert_node(tc, before=pred_tc)
         tc.parameters['sourceBands'] = bands_gamma
     elif geocoding_type == 'SAR simulation cross correlation':
         sarsim = parse_node('SAR-Simulation')
-        workflow.insert_node(sarsim, before='Terrain-Flattening')
+        workflow.insert_node(sarsim, before=pred_tc)
         sarsim.parameters['sourceBands'] = bands_gamma
         
         workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
@@ -223,9 +232,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                                     incidence=incidence)
     
     if azlks > 1 or rlks > 1:
-        workflow.insert_node(parse_node('Multilook'), after=tf.id)
+        workflow.insert_node(parse_node('Multilook'), before=pred_tc)
         ml = workflow['Multilook']
-        ml.parameters['sourceBands'] = bands_beta
+        ml.parameters['sourceBands'] = bands_gamma
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
     ############################################
