@@ -1,0 +1,17 @@
+<node id="Terrain-Flattening">
+    <operator>Terrain-Flattening</operator>
+    <sources>
+        <sourceProduct refid="Multilook"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+        <sourceBands>Beta0_VV,Beta0_VH</sourceBands>
+        <demName>SRTM 1Sec HGT</demName>
+        <demResamplingMethod>BILINEAR_INTERPOLATION</demResamplingMethod>
+        <externalDEMFile/>
+        <externalDEMNoDataValue>0</externalDEMNoDataValue>
+        <outputSimulatedImage>false</outputSimulatedImage>
+        <additionalOverlap>0.1</additionalOverlap>
+        <oversamplingMultiple>1.5</oversamplingMultiple>
+        <reGridMethod>false</reGridMethod>
+    </parameters>
+</node>
