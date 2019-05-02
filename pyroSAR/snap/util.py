@@ -191,6 +191,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             tf.parameters['sourceBands'] = 'Beta0'
         else:
             tf.parameters['sourceBands'] = bands_beta
+        if externalDEMFile is None:
+            tf.parameters['reGridMethod'] = True
+        else:
+            tf.parameters['reGridMethod'] = False
         pred_tc = 'Terrain-Flattening'
     else:
         cal.parameters['outputBetaBand'] = False
