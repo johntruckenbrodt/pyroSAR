@@ -38,27 +38,10 @@
             <outputBetaBand>true</outputBetaBand>
         </parameters>
     </node>
-    <node id="Terrain-Flattening">
-        <operator>Terrain-Flattening</operator>
-        <sources>
-            <sourceProduct refid="Calibration"/>
-        </sources>
-        <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-            <sourceBands>Beta0_VH,Beta0_VV</sourceBands>
-            <demName>SRTM 1Sec HGT</demName>
-            <demResamplingMethod>BILINEAR_INTERPOLATION</demResamplingMethod>
-            <externalDEMFile/>
-            <externalDEMNoDataValue>0.0</externalDEMNoDataValue>
-            <outputSimulatedImage>false</outputSimulatedImage>
-            <additionalOverlap>0.1</additionalOverlap>
-            <oversamplingMultiple>1.5</oversamplingMultiple>
-            <reGridMethod>true</reGridMethod>
-        </parameters>
-    </node>
     <node id="Write">
         <operator>Write</operator>
         <sources>
-            <sourceProduct refid="Terrain-Flattening"/>
+            <sourceProduct refid="Calibration"/>
         </sources>
         <parameters class="com.bc.ceres.binding.dom.XppDomElement">
             <file>E:\DATA\SWOS\SNAP\test\output\S1A_IW_GRDH_1SDV_20141005T052515_20141005T052540_002690_003012_763E.tif</file>
