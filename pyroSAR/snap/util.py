@@ -141,7 +141,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     # parse base workflow
     # print('- parsing base workflow')
-    workflow = parse_recipe('geocode')
+    workflow = parse_recipe('base')
     ############################################
     # Read node configuration
     # print('-- configuring Read Node')

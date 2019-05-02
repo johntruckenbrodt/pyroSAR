@@ -39,7 +39,7 @@ def parse_recipe(name):
     Examples
     --------
     >>> from pyroSAR.snap.auxil import parse_recipe
-    >>> workflow = parse_recipe('geocode')
+    >>> workflow = parse_recipe('base')
     """
     name = name if name.endswith('.xml') else name + '.xml'
     absname = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'recipes', name)
