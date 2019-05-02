@@ -31,7 +31,7 @@
             <outputImageInComplex>false</outputImageInComplex>
             <outputImageScaleInDb>false</outputImageScaleInDb>
             <createGammaBand>false</createGammaBand>
-            <createBetaBand>true</createBetaBand>
+            <createBetaBand>false</createBetaBand>
             <selectedPolarisations>VH,VV</selectedPolarisations>
             <outputSigmaBand>false</outputSigmaBand>
             <outputGammaBand>false</outputGammaBand>
