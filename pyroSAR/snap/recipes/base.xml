@@ -58,7 +58,7 @@
     <node id="Write">
         <operator>Write</operator>
         <sources>
-            <sourceProduct refid="Terrain-Correction"/>
+            <sourceProduct refid="Terrain-Flattening"/>
         </sources>
         <parameters class="com.bc.ceres.binding.dom.XppDomElement">
             <file>E:\DATA\SWOS\SNAP\test\output\S1A_IW_GRDH_1SDV_20141005T052515_20141005T052540_002690_003012_763E.tif</file>
