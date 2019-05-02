@@ -274,10 +274,10 @@ class DEMHandler:
                 ext_new = geo.extent
             else:
                 for key in ['xmin', 'ymin']:
-                    if geo.extent[key] < ext_new[key]:
+                    if geo.extent[key] > ext_new[key]:
                         ext_new[key] = geo.extent[key]
                 for key in ['xmax', 'ymax']:
-                    if geo.extent[key] > ext_new[key]:
+                    if geo.extent[key] < ext_new[key]:
                         ext_new[key] = geo.extent[key]
         ext_new = self.__applybuffer(ext_new, buffer)
         return ext_new
