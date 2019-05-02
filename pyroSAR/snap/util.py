@@ -238,9 +238,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if azlks > 1 or rlks > 1:
         workflow.insert_node(parse_node('Multilook'), before='Calibration')
         ml = workflow['Multilook']
-        ml.parameters['sourceBands'] = bands_gamma
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
+        if cal.parameters['outputBetaBand']:
+            ml.parameters['sourceBands'] = bands_beta
+        elif cal.parameters['outputGammaBand']:
+            ml.parameters['sourceBands'] = bands_gamma
     ############################################
     # specify spatial resolution and coordinate reference system of the output dataset
     # print('-- configuring CRS')
