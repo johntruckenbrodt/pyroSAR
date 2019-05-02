@@ -4,12 +4,17 @@ from pyroSAR import identify
 from pyroSAR.snap import geocode
 from spatialist import bbox
 from spatialist.ancillary import finder
-from pyroSAR.snap.auxil import is_consistent, split, groupbyWorkers, ExamineSnap, Workflow
+from pyroSAR.snap.auxil import is_consistent, split, groupbyWorkers, ExamineSnap, Workflow, parse_recipe
 
 
 def test_installation():
     reg = ExamineSnap()
     assert os.path.isfile(reg.gpt)
+
+
+def test_consistency():
+    with parse_recipe('base') as wf:
+        assert is_consistent(wf.nodes())
 
 
 def test_geocode(tmpdir, testdata):
