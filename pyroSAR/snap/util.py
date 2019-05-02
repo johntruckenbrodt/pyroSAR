@@ -232,7 +232,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                                     incidence=incidence)
     
     if azlks > 1 or rlks > 1:
-        workflow.insert_node(parse_node('Multilook'), before=pred_tc)
+        workflow.insert_node(parse_node('Multilook'), before='Calibration')
         ml = workflow['Multilook']
         ml.parameters['sourceBands'] = bands_gamma
         ml.parameters['nAzLooks'] = azlks
