@@ -164,18 +164,50 @@ def reduce(seq, maxpoints=20, straighten=False, plot=False):
         yn.insert(index, cp[1])
     if plot:
         plt.plot(xn, yn, linewidth=2, color='limegreen', label='corrected')
+    
     # further straighten the line segments
-    if straighten:
+    # def straight(xn, yn, VWpts):
+    #     indices = [i for i in range(0, len(xn)) if (xn[i], yn[i]) in VWpts]
+    #     print(indices)
+    #     for i, j in enumerate(indices):
+    #         if i < (len(indices) - 1):
+    #             if indices[i + 1] > j + 1:
+    #                 dx = abs(xn[j] - xn[indices[i + 1]])
+    #                 dy = abs(yn[j] - yn[indices[i + 1]])
+    #                 if dx > dy:
+    #                     seg_y = yn[j:indices[i + 1] + 1]
+    #                     for k in range(j, indices[i + 1] + 1):
+    #                         yn[k] = min(seg_y)
+    #     return yn
+    
+    def straight(xn, yn, VWpts):
         indices = [i for i in range(0, len(xn)) if (xn[i], yn[i]) in VWpts]
-        for i, j in enumerate(indices):
-            if i < (len(indices) - 1):
-                if indices[i + 1] > j + 1:
-                    dx = abs(xn[j] - xn[indices[i + 1]])
-                    dy = abs(yn[j] - yn[indices[i + 1]])
-                    if dx > dy:
-                        seg_y = yn[j:indices[i + 1] + 1]
-                        for k in range(j, indices[i + 1] + 1):
-                            yn[k] = min(seg_y)
+        xn_new = []
+        yn_new = []
+        # make all line segments horizontal or vertical
+        for index in range(len(indices) - 1):
+            i = indices[index]
+            j = indices[index + 1]
+            ymin = min(yn[i:j + 1])
+            xn_new.extend([xn[i], xn[j]])
+            yn_new.extend([ymin, ymin])
+        # shift horizontal lines down if the preceding horizontal line has a lower y value
+        # but only if the shift is less than the tolerance
+        tolerance = 15
+        for i in range(len(xn_new) - 2):
+            if yn_new[i] == yn_new[i + 1]:
+                if yn_new[i] < yn_new[i + 2] and abs(yn_new[i] - yn_new[i + 2]) < tolerance:
+                    yn_new[i + 2] = yn_new[i]
+                    yn_new[i + 3] = yn_new[i]
+                elif (yn_new[i] > yn_new[i + 2]) \
+                        and (yn_new[i + 2] == yn_new[i + 3]) \
+                        and abs(yn_new[i] - yn_new[i + 2]) < tolerance:
+                    yn_new[i] = yn_new[i + 2]
+                    yn_new[i + 1] = yn_new[i + 2]
+        return xn_new, yn_new
+    
+    if straighten:
+        xn, yn = straight(xn, yn, VWpts)
         if plot:
             plt.plot(xn, yn, linewidth=2, color='m', label='straightened')
     if plot:
