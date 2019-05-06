@@ -202,6 +202,7 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None):
     workflow = Workflow(xmlfile)
     write = workflow['Write']
     outname = write.parameters['file']
+    suffix = workflow.suffix
     format = write.parameters['formatName']
     dem_name = workflow.tree.find('.//demName').text
     if dem_name == 'External DEM':
@@ -247,7 +248,6 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None):
     
     if format == 'ENVI':
         print('converting to GTiff')
-        suffix = workflow.suffix
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
         for item in finder(outname, ['*.img'], recursive=False):
@@ -529,6 +529,10 @@ def split(xmlfile, groups):
     -------
     list of str
         the names of the newly written temporary workflows
+    
+    Raises
+    ------
+    RuntimeError
     """
     workflow = Workflow(xmlfile)
     write = workflow['Write']
@@ -919,6 +923,21 @@ class Node(object):
     
     @source.setter
     def source(self, value):
+        """
+        reset the source of the node by ID
+        
+        Parameters
+        ----------
+        value: str
+            the ID of the new source node
+
+        Returns
+        -------
+        
+        Raises
+        ------
+        RuntimeError
+        """
         source = self.element.find('.//sources/sourceProduct')
         if source is not None:
             source.attrib['refid'] = value
