@@ -9,6 +9,10 @@ Welcome to pyroSAR's documentation!
 .. toctree::
 
    pyroSAR
+
+.. toctree::
+   :maxdepth: 2
+
    changelog
 
 
