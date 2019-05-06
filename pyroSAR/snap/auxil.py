@@ -828,6 +828,9 @@ class Node(object):
             raise TypeError('element must be of type xml.etree.ElementTree.Element')
         self.element = element
     
+    def __repr__(self):
+        return "pyroSAR Node object '{}'".format(self.id)
+    
     def __str__(self):
         rough_string = ET.tostring(self.element, 'utf-8')
         reparsed = minidom.parseString(rough_string)
