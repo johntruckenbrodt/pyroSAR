@@ -469,7 +469,7 @@ def is_consistent(nodes):
     Returns
     -------
     bool
-        is the list of nodes consistent
+        is the list of nodes consistent?
     """
     ids = [x.id for x in nodes]
     check = []
@@ -498,7 +498,8 @@ def split(xmlfile, groups):
 
     Returns
     -------
-
+    list of str
+        the names of the newly written temporary workflows
     """
     workflow = Workflow(xmlfile)
     write = workflow['Write']
@@ -625,10 +626,32 @@ class Workflow(object):
         else:
             return Node(self.tree.find('.//node[@id="{}"]'.format(item)))
     
+    def __delitem__(self, key):
+        if not isinstance(key, str):
+            raise TypeError('key must be of type str')
+        element = self.tree.find('.//node[@id="{}"]'.format(key))
+        node = Node(element)
+        source = node.source
+        successors = [x for x in self.nodes() if x.source == key]
+        for node in successors:
+            node.source = source
+        self.tree.remove(element)
+    
     def __str__(self):
         rough_string = ET.tostring(self.tree, 'utf-8')
         reparsed = minidom.parseString(rough_string)
         return reparsed.toprettyxml(indent='\t', newl='')
+    
+    @property
+    def ids(self):
+        """
+        
+        Returns
+        -------
+        list
+            the IDs of all nodes
+        """
+        return [node.id for node in self.nodes()]
     
     def index(self, node):
         """
@@ -736,6 +759,17 @@ class Workflow(object):
             the list of :class:`Node` objects in the workflow
         """
         return [Node(x) for x in self.tree.findall('node')]
+    
+    @property
+    def operators(self):
+        """
+        
+        Returns
+        -------
+        list
+            the names of the unique operators in the workflow
+        """
+        return sorted(list(set([node.operator for node in self.nodes()])))
     
     def refresh_ids(self):
         counter = {}
