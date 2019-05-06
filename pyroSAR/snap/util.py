@@ -13,7 +13,8 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BoderNoise=True, removeS1ThermalNoise=True, offset=None,
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
-            basename_extensions=None, test=False, export_extra=None, groupsize=2, cleanup=True, gpt_exceptions=None):
+            basename_extensions=None, test=False, export_extra=None, groupsize=2, cleanup=True,
+            gpt_exceptions=None, returnWF=False):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -73,6 +74,13 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         each (sub-)workflow containing this operator will be executed with the define executable;
         
          - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
+    returnWF: bool
+        return the full name of the written workflow XML file?
+    
+    Returns
+    -------
+    str or None
+        either the name of the workflow file if `returnWF == True` or None otherwise
 
     Note
     ----
@@ -406,3 +414,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         except RuntimeError:
             if cleanup:
                 os.remove(outname + '_proc.xml')
+    
+    if returnWF:
+        return outname + '_proc.xml'
