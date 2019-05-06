@@ -3,6 +3,7 @@
 # John Truckenbrodt, 2016-2019
 ####################################################################
 import os
+import shutil
 import pyroSAR
 from ..ancillary import multilook_factors
 from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers
@@ -413,6 +414,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 gpt_exceptions=gpt_exceptions)
         except RuntimeError:
             if cleanup:
+                if os.path.isdir(outname):
+                    shutil.rmtree(outname)
+                elif os.path.isfile(outname):
+                    os.remove(outname)
                 os.remove(outname + '_proc.xml')
     
     if returnWF:
