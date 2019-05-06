@@ -47,6 +47,16 @@ Workflow Parsing
     :undoc-members:
     :show-inheritance:
 
+    .. autosummary::
+        :nosignatures:
+
+        gpt
+        parse_node
+        parse_recipe
+        Workflow
+        Node
+        Par
+
 GAMMA Processing
 ================
 
