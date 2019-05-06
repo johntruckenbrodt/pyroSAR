@@ -412,13 +412,15 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             groups = groupbyWorkers(outname + '_proc.xml', groupsize)
             gpt(outname + '_proc.xml', groups=groups, cleanup=cleanup,
                 gpt_exceptions=gpt_exceptions)
-        except RuntimeError:
+        except RuntimeError as e:
             if cleanup:
                 if os.path.isdir(outname):
                     shutil.rmtree(outname)
                 elif os.path.isfile(outname):
                     os.remove(outname)
                 os.remove(outname + '_proc.xml')
+            with open(outname + '_error.log', 'w') as log:
+                log.write(str(e))
     
     if returnWF:
         return outname + '_proc.xml'
