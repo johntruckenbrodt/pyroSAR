@@ -25,6 +25,9 @@ def test_geocode(tmpdir, testdata):
     nodes = tree.nodes()
     assert is_consistent(nodes) is True
     groups = groupbyWorkers(xmlfile, 2)
+    assert len(groups) == 4
+    groups2 = groupbyWorkers(xmlfile, 100)
+    assert len(groups2) == 1
     split(xmlfile, groups)
     id = identify(scene)
     basename = '{}_{}'.format(id.outname_base(), tree.suffix)
