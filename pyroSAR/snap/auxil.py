@@ -232,14 +232,14 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None):
             nodata = dem_nodata if re.search('elevation', item) else 0
             translateoptions['noData'] = nodata
             gdal_translate(item, name_new, translateoptions)
-        if cleanup:
-            shutil.rmtree(outname)
     # by default the nodata value is not registered in the GTiff metadata
     elif format == 'GeoTiff-BigTIFF':
         ras = gdal.Open(outname + '.tif', GA_Update)
         for i in range(1, ras.RasterCount + 1):
             ras.GetRasterBand(i).SetNoDataValue(0)
         ras = None
+    if cleanup:
+        shutil.rmtree(outname)
     print('done')
 
 
