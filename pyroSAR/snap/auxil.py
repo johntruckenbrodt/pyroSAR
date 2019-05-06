@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 from osgeo import gdal
 from osgeo.gdalconst import GA_Update
 
-from pyroSAR import ConfigHandler
+from pyroSAR import ConfigHandler, identify
 from .._dev_config import LOOKUP
 
 from spatialist.auxil import gdal_translate
@@ -208,6 +208,35 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None):
         dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
     else:
         dem_nodata = 0
+    
+    if 'Remove-GRD-Border-Noise' in workflow.ids:
+        xmlfile = os.path.join(outname,
+                               os.path.basename(xmlfile.replace('_bnr', '')))
+        if not os.path.isdir(outname):
+            os.makedirs(outname)
+        # border noise removal is done outside of SNAP and the node is thus removed from the workflow
+        del workflow['Remove-GRD-Border-Noise']
+        # remove the node name from the groups
+        i = 0
+        while i < len(groups) - 1:
+            if 'Remove-GRD-Border-Noise' in groups[i]:
+                del groups[i][groups[i].index('Remove-GRD-Border-Noise')]
+            if len(groups[i]) == 0:
+                del groups[i]
+            else:
+                i += 1
+        # identify the input scene, unpack it and perform the custom border noise removal
+        read = workflow['Read']
+        scene = identify(read.parameters['file'])
+        print('unpacking scene')
+        scene.unpack(outname)
+        print('removing border noise..')
+        scene.removeGRDBorderNoise()
+        # change the name of the input file to that of the unpacked archive
+        read.parameters['file'] = scene.scene
+        # write a new workflow file
+        workflow.write(xmlfile)
+    
     print('executing node sequence{}..'.format('s' if groups is not None else ''))
     if groups is not None:
         subs = split(xmlfile, groups)
