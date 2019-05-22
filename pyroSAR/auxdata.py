@@ -451,7 +451,7 @@ class DEMHandler:
         if product == 'dem':
             nodata = self.config[demType]['nodata']
         else:
-            nodata = None
+            nodata = 0
         
         if vrt is not None:
             self.__buildvrt(archives=locals, vrtfile=vrt,
