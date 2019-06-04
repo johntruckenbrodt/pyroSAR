@@ -15,7 +15,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             geocoding_type='Range-Doppler', removeS1BoderNoise=True, removeS1ThermalNoise=True, offset=None,
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
             basename_extensions=None, test=False, export_extra=None, groupsize=2, cleanup=True,
-            gpt_exceptions=None, returnWF=False):
+            gpt_exceptions=None, returnWF=False,
+            demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION'):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -77,6 +78,17 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
     returnWF: bool
         return the full name of the written workflow XML file?
+    demResamplingMethod: str
+        one of the following:
+         - 'NEAREST_NEIGHBOUR'
+         - 'BILINEAR_INTERPOLATION'
+         - 'CUBIC_CONVOLUTION'
+         - 'BISINC_5_POINT_INTERPOLATION'
+         - 'BISINC_11_POINT_INTERPOLATION'
+         - 'BISINC_21_POINT_INTERPOLATION'
+         - 'BICUBIC_INTERPOLATION'
+    imgResamplingMethod: str
+        the resampling method for geocoding the SAR image; the options are identical to demResamplingMethod
     
     Returns
     -------
@@ -397,6 +409,26 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     for key, value in dempar.items():
         workflow.set_par(key, value)
+    ############################################
+    ############################################
+    # configure the resampling methods
+    
+    options = ['NEAREST_NEIGHBOUR',
+               'BILINEAR_INTERPOLATION',
+               'CUBIC_CONVOLUTION',
+               'BISINC_5_POINT_INTERPOLATION',
+               'BISINC_11_POINT_INTERPOLATION',
+               'BISINC_21_POINT_INTERPOLATION',
+               'BICUBIC_INTERPOLATION']
+    
+    message = '{0} must be one of the following:\n- {1}'
+    if demResamplingMethod not in options:
+        raise ValueError(message.format('demResamplingMethod', '\n- '.join(options)))
+    if imgResamplingMethod not in options:
+        raise ValueError(message.format('imgResamplingMethod', '\n- '.join(options)))
+    
+    workflow.set_par('demResamplingMethod', demResamplingMethod)
+    workflow.set_par('imgResamplingMethod', imgResamplingMethod)
     ############################################
     ############################################
     # write workflow to file and optionally execute it
