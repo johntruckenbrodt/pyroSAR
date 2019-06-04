@@ -970,14 +970,7 @@ class Par(object):
     def __setitem__(self, key, value):
         if key not in self.keys():
             raise KeyError('key {} does not exist'.format(key))
-        if isinstance(value, bool):
-            strval = str(value).lower()
-        elif isinstance(value, list):
-            strval = ','.join(map(str, value))
-        elif value is None:
-            strval = value
-        else:
-            strval = str(value)
+        strval = value2str(value)
         self.__element.find('.//{}'.format(key)).text = strval
     
     def __repr__(self):
