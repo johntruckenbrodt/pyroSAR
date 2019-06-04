@@ -1022,3 +1022,27 @@ class Par(object):
             the parameter values as from :meth:`dict.values()`
         """
         return [x.text for x in self.__element.findall('./')]
+
+
+def value2str(value):
+    """
+    format a parameter value to string to be inserted into a workflow
+    
+    Parameters
+    ----------
+    value: bool, int, float, list
+
+    Returns
+    -------
+    str
+        the string representation of the value
+    """
+    if isinstance(value, bool):
+        strval = str(value).lower()
+    elif isinstance(value, list):
+        strval = ','.join(map(str, value))
+    elif value is None:
+        strval = value
+    else:
+        strval = str(value)
+    return strval
