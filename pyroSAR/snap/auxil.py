@@ -815,6 +815,24 @@ class Workflow(object):
                 counter[operator] += 1
                 node.id = '{} ({})'.format(operator, counter[operator])
     
+    def set_par(self, key, value):
+        """
+        set a parameter for all nodes in the workflow
+        
+        Parameters
+        ----------
+        key: str
+            the parameter name
+        value
+
+        Returns
+        -------
+
+        """
+        for node in self.nodes():
+            if key in node.parameters.keys():
+                node.parameters[key] = value2str(value)
+    
     @property
     def suffix(self):
         """
