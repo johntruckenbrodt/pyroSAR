@@ -395,10 +395,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         dempar['externalDEMFile'] = None
         dempar['externalDEMNoDataValue'] = 0
     
-    for node in workflow.nodes():
-        for key, value in dempar.items():
-            if key in node.parameters.keys():
-                node.parameters[key] = value
+    for key, value in dempar.items():
+        workflow.set_par(key, value)
     ############################################
     ############################################
     # write workflow to file and optionally execute it
