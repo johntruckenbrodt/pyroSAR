@@ -117,6 +117,13 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     :class:`pyroSAR.drivers.ID`,
     :class:`spatialist.vector.Vector`,
     :func:`spatialist.auxil.crsConvert()`
+    
+    .. figure:: snap_geocode.png
+        :align: center
+        
+        Workflow diagram for function geocode for processing a Sentinel-1 Ground Range
+        Detected (GRD) scene to radiometrically terrain corrected (RTC) backscatter.
+        An additional Subset node might be inserted in case a vector geometry is provided.
     """
     
     id = infile if isinstance(infile, pyroSAR.ID) else pyroSAR.identify(infile)
