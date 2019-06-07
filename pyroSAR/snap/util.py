@@ -102,6 +102,15 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     (one for each polarization/extra product).
     If GeoTiff would directly be selected as output format for multiple polarizations then a multilayer GeoTiff
     is written by SNAP which is considered an unfavorable format
+    
+    
+    .. figure:: snap_geocode.png
+        :scale: 25%
+        :align: center
+        
+        Workflow diagram for function geocode for processing a Sentinel-1 Ground Range
+        Detected (GRD) scene to radiometrically terrain corrected (RTC) backscatter.
+        An additional Subset node might be inserted in case a vector geometry is provided.
 
     Examples
     --------
@@ -117,13 +126,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     :class:`pyroSAR.drivers.ID`,
     :class:`spatialist.vector.Vector`,
     :func:`spatialist.auxil.crsConvert()`
-    
-    .. figure:: snap_geocode.png
-        :align: center
-        
-        Workflow diagram for function geocode for processing a Sentinel-1 Ground Range
-        Detected (GRD) scene to radiometrically terrain corrected (RTC) backscatter.
-        An additional Subset node might be inserted in case a vector geometry is provided.
     """
     
     id = infile if isinstance(infile, pyroSAR.ID) else pyroSAR.identify(infile)

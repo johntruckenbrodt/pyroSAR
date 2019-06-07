@@ -517,6 +517,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     >>>         export_extra=['dem_seg_geo', 'inc_geo', 'ls_map_geo'])
     
     .. figure:: gamma_geocode.png
+        :scale: 25%
         :align: center
         
         Workflow diagram for function geocode using normalization method 2 for processing a Sentinel-1 Ground Range
