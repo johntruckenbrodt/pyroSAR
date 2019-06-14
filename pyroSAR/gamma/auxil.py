@@ -165,7 +165,7 @@ class ISPPar(object):
         if out['data_type'] == 6:
             out['complex_function'] = 'Power'
         # projections = ['AEAC', 'EQA', 'LCC', 'LCC2', 'OMCH', 'PC', 'PS', 'SCH', 'TM', 'UTM']
-        # the corner coordinates are shifted by 1/2 pixel to the Northeast since GAMMA pixel
+        # the corner coordinates are shifted by 1/2 pixel to the Northwest since GAMMA pixel
         # coordinates are defined for the pixel center while in ENVI it is the upper left
         if hasattr(self, 'DEM_projection'):
             if self.DEM_projection == 'UTM':
