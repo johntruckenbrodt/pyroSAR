@@ -19,7 +19,7 @@ else:
 setup(name='pyroSAR',
       packages=find_packages(),
       include_package_data=True,
-      version='0.8',
+      version='0.9',
       description='a framework for large-scale SAR satellite data processing',
       classifiers=[
           'License :: OSI Approved :: MIT License',
@@ -31,7 +31,7 @@ setup(name='pyroSAR',
                         'pathos>=0.2',
                         'numpy',
                         'scoop',
-                        'spatialist==0.2.8',
+                        'spatialist==0.2.9',
                         'pyyaml'],
       extras_require={
           'docs': ['sphinx'],
