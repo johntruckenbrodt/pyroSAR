@@ -120,8 +120,8 @@ SNAP API
 
   + export temporarily written files (e.g. local incidence angle) via new parameter `export_extra`
 
-0.9 / tbd
----------
+0.9 / 2019-06-15
+----------------
 
 Drivers
 *******
@@ -153,6 +153,10 @@ SNAP API
   + automatically remove node parameters on GPT fail and re-run the modified workflow; this is relevant if a node is
     executed in an older GPT version (e.g. via parameter `gpt_exceptions`), which does not accept parameters which were
     introduced in later GPT versions (e.g. those described above for node `Terrain-Flattening`)
+  + disable/enable terrain flattening via new parameter `terrainFlattening`
+  + optionally return workflow filename with new parameter `returnWF`
+  + execute custom pyroSAR S1 GRD border noise removal (see :func:`pyroSAR.S1.removeGRDBorderNoise`)
+  + new parameters `demResamplingMethod` and `imgResamplingMethod`
 
 GAMMA API
 *********
