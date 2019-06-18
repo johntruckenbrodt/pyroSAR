@@ -34,6 +34,17 @@ The pyroSAR package aims at providing a complete solution for the scalable organ
 
 [Here](https://pyrosar.readthedocs.io/en/latest/?badge=latest) you can find the documentation.
 
+pyroSAR is/was used in these projects:
+* [BACI](http://www.baci-h2020.eu/index.php/Main/HomePage)
+* [CCI Biomass](http://cci.esa.int/biomass)
+* [GlobBiomass](http://globbiomass.org/)
+* [SALDI](https://www.saldi.uni-jena.de/)
+* [SenThIS](https://eos-jena.com/en/projects/)
+* [Sentinel4REDD](https://www.dlr.de/rd/en/Portaldata/28/Resources/dokumente/re/Projektblatt_Sentinel4REDD_engl.pdf)
+* [SWOS](https://www.swos-service.eu/)
+
+You know of other projects? We'd be happy to know.
+
 # Installation
 First we need to install pip. On Windows pip is installed together with Anaconda, on Linux you can easily install it
  via command line:
