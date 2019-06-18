@@ -35,27 +35,32 @@ The pyroSAR package aims at providing a complete solution for the scalable organ
 [Here](https://pyrosar.readthedocs.io/en/latest/?badge=latest) you can find the documentation.
 
 # Installation
-For the installation we need the Python tool pip and the version control system git. On Windows pip is 
-installed together with Anaconda, git can be downloaded from [here](https://git-scm.com/downloads).
-On Linux you can easily install both via command line:
+First we need to install pip. On Windows pip is installed together with Anaconda, on Linux you can easily install it
+ via command line:
 ```sh
 sudo apt-get install python-pip
+```
+The latest stable release of pyroSAR can then be installed:
+```sh
+python -m pip install pyroSAR
+```
+
+For installation of the latest master branch on GitHub, we need the version control system git. On Windows, git can be 
+downloaded from [here](https://git-scm.com/downloads). On Linux you can install it via command line:
+```sh
 sudo apt-get install git
 ```
 Once everything is set up, pyroSAR is ready to be installed:
 ```sh
-sudo pip install git+https://github.com/johntruckenbrodt/pyroSAR.git
+python -m pip install git+https://github.com/johntruckenbrodt/pyroSAR.git
 ```
-On Windows you need to use the Anaconda Prompt and leave out `sudo` in the above command.
 
 # Dependencies
 If you are using Windows, the easiest way to work with pyroSAR and Python in general is by using 
 [Anaconda](https://www.anaconda.com/download/). It comes with all basic requirements of pyroSAR.
 The more specific instructions below are intended for Linux users.
 ### GDAL
-pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as the GDAL Python binding. 
-Alternatively, one can use <a href="https://github.com/nextgis/pygdal">pygdal</a>, 
-a virtualenv and setuptools friendly version of standard GDAL python bindings.
+pyroSAR requires GDAL version 2.1 with GEOS and PROJ4 as dependencies as well as the GDAL Python binding.
 #### Ubuntu
 Starting with release Yakkety (16.10), Ubuntu comes with GDAL >2.1. 
 See <a href="https://launchpad.net/ubuntu/yakkety/amd64/gdal-bin">here</a>. 
