@@ -147,7 +147,7 @@ def transform(infile, outfile, posting=90):
 
 
 def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None, logpath=None,
-                   username=None, password=None, geoid_mode='gamma'):
+                   username=None, password=None, geoid_mode='gamma', resampling_method='bilinear'):
     """
     | automatically create a DEM in Gamma format for a defined spatial geometry
     | the following steps will be performed:
@@ -200,6 +200,9 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
         the software to be used for converting geoid to ellipsoid heights; does not apply to demType TDX90m; options:
          - 'gamma'
          - 'gdal'
+    resampling_method: str
+        the gdalwarp resampling method; See `here <https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r>`_
+        for options.
 
     Returns
     -------
@@ -250,7 +253,8 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
             else:
                 raise RuntimeError("'geoid_mode' not supported")
         
-        dem_create(vrt, dem, t_srs=epsg, tr=tr, geoid_convert=gdal_geoid)
+        dem_create(vrt, dem, t_srs=epsg, tr=tr, geoid_convert=gdal_geoid,
+                   resampling_method=resampling_method)
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
