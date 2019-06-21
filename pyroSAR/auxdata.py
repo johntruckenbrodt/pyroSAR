@@ -138,7 +138,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             product=product)
 
 
-def dem_create(src, dst, t_srs=None, tr=None, geoid_convert=False, geoid='EGM96'):
+def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoid_convert=False, geoid='EGM96'):
     """
     create a new DEM GeoTiff file and optionally convert heights from geoid to ellipsoid
     
@@ -154,6 +154,9 @@ def dem_create(src, dst, t_srs=None, tr=None, geoid_convert=False, geoid='EGM96'
         Default (None): use the crs of ``src``.
     tr: None or tuple
         the target resolution as (xres, yres)
+    resampling_method: str
+        the gdalwarp resampling method; See `here <https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r>`_
+        for options.
     geoid_convert: bool
         convert geoid heights?
     geoid: str
@@ -177,7 +180,9 @@ def dem_create(src, dst, t_srs=None, tr=None, geoid_convert=False, geoid='EGM96'
     gdalwarp_args = {'format': 'GTiff', 'multithread': True,
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
-                     'dstSRS': 'EPSG:{}'.format(epsg_out)}
+                     'dstSRS': 'EPSG:{}'.format(epsg_out),
+                     'resampleAlg': resampling_method}
+    
     if tr is not None:
         gdalwarp_args.update({'xRes': tr[0],
                               'yRes': tr[1]})
