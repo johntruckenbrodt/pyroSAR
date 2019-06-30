@@ -12,7 +12,7 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
-            geocoding_type='Range-Doppler', removeS1BoderNoise=True, removeS1ThermalNoise=True, offset=None,
+            geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1ThermalNoise=True, offset=None,
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
             basename_extensions=None, test=False, export_extra=None, groupsize=2, cleanup=True,
             gpt_exceptions=None, returnWF=False,
@@ -41,7 +41,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         Should the output be in linear or decibel scaling? Default is 'dB'.
     geocoding_type: {'Range-Doppler', 'SAR simulation cross correlation'}, optional
         The type of geocoding applied; can be either 'Range-Doppler' (default) or 'SAR simulation cross correlation'
-    removeS1BoderNoise: bool, optional
+    removeS1BorderNoise: bool, optional
         Enables removal of S1 GRD border noise (default).
     removeS1ThermalNoise: bool, optional
         Enables removal of S1 thermal noise (default).
@@ -183,7 +183,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     # Remove-GRD-Border-Noise node configuration
     # print('-- configuring Remove-GRD-Border-Noise Node')
-    if id.sensor in ['S1A', 'S1B'] and removeS1BoderNoise:
+    if id.sensor in ['S1A', 'S1B'] and removeS1BorderNoise:
         bn = parse_node('Remove-GRD-Border-Noise')
         workflow.insert_node(bn, before='Read')
         bn.parameters['selectedPolarisations'] = polarizations
