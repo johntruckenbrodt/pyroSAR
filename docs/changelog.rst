@@ -207,3 +207,21 @@ Auxiliary Data Handling
 
   + download files specific to the Sentinel-1 sensor (S1A/S1B) instead of all matching the acquisition time
   + improved time span search, which occasionally resulted in missing OSV files
+
+0.9.1 / 2019-07-05
+------------------
+
+Auxiliary Data Handling
+***********************
+
+- function :func:`pyroSAR.auxdata.dem_create`: new parameter `resampling_method`
+
+GAMMA API
+*********
+
+- function :func:`pyroSAR.gamma.dem.dem_autocreate`: new parameter `resampling_method`
+
+SNAP API
+********
+
+- function :func:`pyroSAR.snap.util.geocode`: fixed typo of parameter `removeS1BorderNoise`
