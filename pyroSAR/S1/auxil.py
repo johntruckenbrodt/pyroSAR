@@ -143,9 +143,9 @@ class OSV(object):
         osvtype: {'POE', 'RES'}
             the type of orbit files required
         start: str
-            the date to start searching for files
+            the date to start searching for files in format YYYYmmddTHHMMSS
         stop: str
-            the date to stop searching for files
+            the date to stop searching for files in format YYYYmmddTHHMMSS
 
         Returns
         -------
