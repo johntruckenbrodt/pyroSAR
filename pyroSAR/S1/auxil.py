@@ -200,14 +200,17 @@ class OSV(object):
                 print(subaddress)
             except IOError as e:
                 raise RuntimeError(e)
-            if query['page'] == 1:
-                # read all existing pages from the url return of the first page
-                pages_str = re.findall('page=[0-9]+', response)
-                pages = list(set([int(x.strip('page=')) for x in pages_str]))
-            else:
-                # delete the page from the list of pages yet to be searched
-                del pages[pages.index(query['page'])]
-            # list all osv files found on the page
+            
+            # get all links to other pages
+            pages_str = re.findall('page=[0-9]+', response)
+            pages_int = list(set([int(x.strip('page=')) for x in pages_str]))
+            # add teh page numbers to the page list if they are higher than the list's maximum
+            for page in pages_int:
+                if page > max(pages):
+                    pages.append(page)
+            # delete the page from the list of pages yet to be searched
+            del pages[pages.index(query['page'])]
+            
             remotes = sorted(set(re.findall(pattern_url, response)))
             # do a more accurate filtering of the time stamps
             if start is not None:
