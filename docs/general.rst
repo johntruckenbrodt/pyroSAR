@@ -6,11 +6,11 @@ processing software to update the product's metadata. Currently, pyroSAR only su
 
 In SNAP, the corresponding processing node is called `Apply-Orbit-File`, which automatically downloads the OSV file and
 updates the scene's metadata. The files are stored in SNAP's location for auxiliary data,
-which is `$HOME/.snap/auxdata/Orbits` per default.
+which per default is `$HOME/.snap/auxdata/Orbits`.
 
 In GAMMA, on the other hand, the downloading has to be done manually after which the command `isp.S1_OPOD_vec` can be
 used for updating the metadata. pyroSAR offers several approaches for automatically downloading these
-files.The central tool for managing existing files and downloading new ones is the class :class:`pyroSAR.S1.OSV`, which
+files. The central tool for managing existing files and downloading new ones is the class :class:`pyroSAR.S1.OSV`, which
 is used for all approaches.
 
 **approach 1: direct download by time span**
@@ -32,9 +32,9 @@ can be downloaded by time span to a central directory. This is the most basic ap
         osv.retrieve(files)
 
 Two sub-directories `POEORB` and `RESORB` will be created in `osvdir` containing the downloaded files. `POEORB` will
-contain the `Precise Orbit Ephemerides` files, which are more accurate but are first available about two weeks after
+contain the `Precise Orbit Ephemerides` files, which are the most accurate but are first available about two weeks after
 the scene's acquisition. `RESORB` describes the `Restituted Orbit` files, which are less accurate but available
-directly after acquisition.
+directly after acquisition. The files can be manually downloaded here: https://qc.sentinel1.eo.esa.int/.
 
 **approach 2: manual download per scene**
 
@@ -79,5 +79,5 @@ The parameter `allow_RES_OSV` can be used to allow processing with `RES` files i
             tempdir='tmpdir',
             outdir='outdir',
             targetres=20,
-            osvdir='/path/to/osvdir'
+            osvdir='/path/to/osvdir',
             allow_RES_OSV=False)
