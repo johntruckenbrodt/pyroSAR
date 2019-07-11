@@ -213,13 +213,14 @@ def find_datasets(directory, recursive=False, **kwargs):
     selection = []
     for file in files:
         meta = parse_datasetname(file)
-        match = True
+        matches = []
         for key, val in kwargs.items():
             if isinstance(val, tuple):
                 match = meta[key] in val
             else:
                 match = meta[key] == val
-        if match:
+            matches.append(match)
+        if all(match for match in matches):
             selection.append(file)
     return selection
 
