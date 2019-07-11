@@ -6,6 +6,14 @@
 Welcome to pyroSAR's documentation!
 ===================================
 
+General Topics
+--------------
+
+.. toctree::
+   :maxdepth: 1
+
+   general
+
 API Documentation
 -----------------
 
