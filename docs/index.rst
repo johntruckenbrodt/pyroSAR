@@ -6,12 +6,18 @@
 Welcome to pyroSAR's documentation!
 ===================================
 
+API Documentation
+-----------------
+
 .. toctree::
 
    pyroSAR
 
+Changelog
+---------
+
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    changelog
 
