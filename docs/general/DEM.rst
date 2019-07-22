@@ -30,7 +30,7 @@ This function internally makes use of function :func:`spatialist.auxil.gdalbuild
     site = 'mysite.shp'
     vrt = 'mosaic.vrt'
 
-    with Vector(site) as shp:
+    with Vector(site) as vec:
         vrt = dem_autoload(geometries=[vec],
                            demType='SRTM 1Sec HGT'
                            vrt = vrt,
@@ -61,10 +61,10 @@ Conversion of vertical reference systems, e.g. from geoid to ellipsoid, require 
 
     outname = 'mysite_srtm.tif'
 
-    def dem_create(src=vrt, dst=outname,
-                   t_srs=32632, tr=20,
-                   resampling_method='bilinear',
-                   geoid_convert=True, geoid='EGM96')
+    dem_create(src=vrt, dst=outname,
+               t_srs=32632, tr=20,
+               resampling_method='bilinear',
+               geoid_convert=True, geoid='EGM96')
 
 **GAMMA Import**
 
