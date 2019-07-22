@@ -3,16 +3,16 @@ Changelog
 #########
 
 0.6 / 2018-11-20
-----------------
+================
 
 SAR metadata
-************
+------------
 - new standardized  metadata fields `orbitNumber_abs`, `orbitNumber_rel`, `cycleNumber` and `frameNumber` for all SAR
   formats
 - customization of output file names with additional metadata fields (e.g. orbit numbers)
 
 software configuration
-**********************
+----------------------
 - pyroSAR configuration file handling: the paths to the SNAP and Gamma installation as well as relevant metadata
   directories are now registered in a configuration file `config.ini`, which is stored in a directory `.pyrosar` in the
   user home directory
@@ -21,7 +21,7 @@ software configuration
   stored in the configuration file
 
 general functionality
-*********************
+---------------------
 - deeper integration of package `spatialist <https://github.com/johntruckenbrodt/spatialist>`_: all the spatial file
   handling functionality that was part of pyroSAR is now part of package spatialist; now all the functionality is imported
   from spatialist and removed from pyroSAR
@@ -34,7 +34,7 @@ general functionality
 - improved documentation
 
 Open Data Cube Export
-*********************
+---------------------
 functionality to export processed datasets directly to an Open Data Cube:
 it is now possible to create Open Data Cube product YML files as well as YML files for data indexing and ingestion
 into this product; pyroSAR also internally checks for compatibility of a particular dataset with the target product;
@@ -42,22 +42,22 @@ this way, the resulting files can easily be passed to the Open Data Cube command
 several bug fixes
 
 SNAP API
-********
+--------
 improved SNAP processing workflow node linking: it is now possible to add a node also before an existing one, instead
 of just after it
 
 Python package integrity
-************************
+------------------------
 - add trove classifiers for supported operating systems and MIT license for easier online search
 - exchange http with https for all URLs that support it
 
 0.7 / 2019-01-03
-----------------
+================
 
 several changes to the functioning of the Gamma command API
 
 GAMMA API
-*********
+---------
 
 processing
 ++++++++++
@@ -87,10 +87,10 @@ general
   convenience functions
 
 0.8 / 2019-02-11
-----------------
+================
 
 Auxiliary Data Handling
-***********************
+-----------------------
 
 - new module auxdata with function :func:`pyroSAR.auxdata.dem_autoload` to automatically download tiles of
   different DEM types overlapping with given geometries
@@ -98,7 +98,7 @@ Auxiliary Data Handling
   included more meaningful status messages
 
 GAMMA API
-*********
+---------
 
 - new function :func:`pyroSAR.gamma.srtm.dem_autocreate` to automatically create DEMs in Gamma format from the output
   of function :func:`pyroSAR.auxdata.dem_autoload`
@@ -115,24 +115,24 @@ GAMMA API
     (see documentation of Gamma command pixel_area)
 
 SNAP API
-********
+--------
 
 - function :func:`pyroSAR.snap.util.geocode`:
 
   + export temporarily written files (e.g. local incidence angle) via new parameter `export_extra`
 
 0.9 / 2019-06-15
-----------------
+================
 
 Drivers
-*******
+-------
 
 - :class:`pyroSAR.drivers.SAFE`: read heading angle, incident angle and image geometry (e.g. Ground Range) from metadata
 - :class:`pyroSAR.drivers.Archive`: improved cross-compatibility with Python2 and Python3
 
 
 SNAP API
-********
+--------
 
 - function :func:`pyroSAR.snap.util.geocode`:
 
@@ -160,7 +160,7 @@ SNAP API
   + new parameters `demResamplingMethod` and `imgResamplingMethod`
 
 GAMMA API
-*********
+---------
 
 - SRTM Tools renamed to DEM Tools
 
@@ -191,13 +191,13 @@ Command Parser
   on module import
 
 general functionality
-*********************
+---------------------
 
 - new function :func:`pyroSAR.ancillary.multilook_factors` to compute factors depending on image geometry and target resolution
 - :func:`pyroSAR.S1.removeGRDBorderNoise`: reached Python3 compatibility
 
 Auxiliary Data Handling
-***********************
+-----------------------
 
 - new function :func:`pyroSAR.auxdata.dem_create` for convenient creation of DEM mosaics as downloaded by
   :func:`pyroSAR.auxdata.dem_autoload`
@@ -210,19 +210,19 @@ Auxiliary Data Handling
   + improved time span search, which occasionally resulted in missing OSV files
 
 0.9.1 / 2019-07-05
-------------------
+==================
 
 Auxiliary Data Handling
-***********************
+-----------------------
 
 - function :func:`pyroSAR.auxdata.dem_create`: new parameter `resampling_method`
 
 GAMMA API
-*********
+---------
 
 - function :func:`pyroSAR.gamma.dem.dem_autocreate`: new parameter `resampling_method`
 
 SNAP API
-********
+--------
 
 - function :func:`pyroSAR.snap.util.geocode`: fixed typo of parameter `removeS1BorderNoise`
