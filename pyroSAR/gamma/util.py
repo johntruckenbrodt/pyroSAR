@@ -516,7 +516,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     >>> geocode(scene=filename, dem='demfile', outdir='outdir', targetres=20, scaling='db',
     >>>         export_extra=['dem_seg_geo', 'inc_geo', 'ls_map_geo'])
     
-    .. figure:: gamma_geocode.png
+    .. figure:: figures/gamma_geocode.png
         :scale: 25%
         :align: center
         

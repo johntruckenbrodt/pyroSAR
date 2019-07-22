@@ -104,7 +104,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     is written by SNAP which is considered an unfavorable format
     
     
-    .. figure:: snap_geocode.png
+    .. figure:: figures/snap_geocode.png
         :scale: 25%
         :align: center
         

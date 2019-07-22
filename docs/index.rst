@@ -3,32 +3,33 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+###################################
 Welcome to pyroSAR's documentation!
-===================================
+###################################
 
 General Topics
---------------
+==============
 
 .. toctree::
    :maxdepth: 1
 
-   general
+   general/OSV
+   general/DEM
 
 API Documentation
------------------
+=================
 
 .. toctree::
 
    pyroSAR
 
-Changelog
----------
+About
+=====
 
 .. toctree::
    :maxdepth: 1
 
    changelog
-
 
 Indices and tables
 ==================

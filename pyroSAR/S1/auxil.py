@@ -459,7 +459,7 @@ def removeGRDBorderNoise(scene):
         the Sentinel-1 scene object
 
 
-    .. figure:: S1_bnr.png
+    .. figure:: figures/S1_bnr.png
         :scale: 30%
         
         Demonstration of the border nose removal for a vertical left image border. The area under the respective lines
