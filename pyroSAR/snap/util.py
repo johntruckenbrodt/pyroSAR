@@ -258,7 +258,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         workflow.insert_node(sf, before='Terrain-Flattening')
         sf.parameters['sourceBands'] = bands_gamma
         sf.parameters['filter'] = speckleFilter
-        pred_tc = 'Speckle-Filter'
+        last = 'Speckle-Filter'
     ############################################
     # configuration of node sequence for specific geocoding approaches
     # print('-- configuring geocoding approach Nodes')
