@@ -221,6 +221,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     cal = workflow['Calibration']
     cal.parameters['selectedPolarisations'] = polarizations
     cal.parameters['sourceBands'] = bands_int
+    last = 'Calibration'
     ############################################
     # terrain flattening node configuration
     # print('-- configuring Terrain-Flattening Node')
@@ -235,11 +236,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             tf.parameters['reGridMethod'] = True
         else:
             tf.parameters['reGridMethod'] = False
-        pred_tc = 'Terrain-Flattening'
+        last = 'Terrain-Flattening'
     else:
         cal.parameters['outputBetaBand'] = False
         cal.parameters['outputGammaBand'] = True
-        pred_tc = 'Calibration'
     ############################################
     # speckle filtering node configuration
     speckleFilter_options = ['Boxcar',
@@ -264,11 +264,11 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # print('-- configuring geocoding approach Nodes')
     if geocoding_type == 'Range-Doppler':
         tc = parse_node('Terrain-Correction')
-        workflow.insert_node(tc, before=pred_tc)
+        workflow.insert_node(tc, before=last)
         tc.parameters['sourceBands'] = bands_gamma
     elif geocoding_type == 'SAR simulation cross correlation':
         sarsim = parse_node('SAR-Simulation')
-        workflow.insert_node(sarsim, before=pred_tc)
+        workflow.insert_node(sarsim, before=last)
         sarsim.parameters['sourceBands'] = bands_gamma
         
         workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
@@ -335,8 +335,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     if scaling in ['dB', 'db']:
         lin2db = parse_node('lin2db')
-        sourceNode = 'Terrain-Correction' if geocoding_type == 'Range-Doppler' else 'SARSim-Terrain-Correction'
-        workflow.insert_node(lin2db, before=sourceNode)
+        workflow.insert_node(lin2db, before=tc.id)
         
         lin2db.parameters['sourceBands'] = bands_gamma
     

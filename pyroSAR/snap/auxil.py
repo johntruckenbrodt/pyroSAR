@@ -713,7 +713,7 @@ class Workflow(object):
         before: str
             the ID of the node before the newly inserted node
         after: str
-            the ID of the node before the newly inserted node
+            the ID of the node after the newly inserted node
         resetSuccessorSource: bool
             reset the source of the successor node to the ID of the newly inserted node?
         void: bool
