@@ -255,7 +255,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         if speckleFilter not in speckleFilter_options:
             raise ValueError(message.format('speckleFilter', '\n- '.join(speckleFilter_options)))
         sf = parse_node('Speckle-Filter')
-        workflow.insert_node(sf, before='Terrain-Flattening')
+        workflow.insert_node(sf, before=last)
         sf.parameters['sourceBands'] = bands_gamma
         sf.parameters['filter'] = speckleFilter
         last = 'Speckle-Filter'
