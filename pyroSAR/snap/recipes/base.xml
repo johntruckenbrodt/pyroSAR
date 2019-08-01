@@ -35,7 +35,7 @@
             <selectedPolarisations>VH,VV</selectedPolarisations>
             <outputSigmaBand>false</outputSigmaBand>
             <outputGammaBand>false</outputGammaBand>
-            <outputBetaBand>true</outputBetaBand>
+            <outputBetaBand>false</outputBetaBand>
         </parameters>
     </node>
     <node id="Write">
