@@ -55,7 +55,7 @@ extensions = [
 autosummary_generate = False
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
-                       'spatialist': ('https://spatialist.readthedocs.io/en/latest', None)}
+                       'spatialist': ('https://spatialist.readthedocs.io/en/v0.2.9', None)}
 
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
