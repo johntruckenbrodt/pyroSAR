@@ -671,9 +671,28 @@ class Workflow(object):
         self.tree.remove(element)
     
     def __str__(self):
+        self.__optimize_appearance()
         rough_string = ET.tostring(self.tree, 'utf-8')
         reparsed = minidom.parseString(rough_string)
         return reparsed.toprettyxml(indent='\t', newl='')
+    
+    def __optimize_appearance(self):
+        layout = self.tree.find('.//applicationData[@id="Presentation"]')
+        
+        counter = 0
+        x = 5
+        for id in self.ids:
+            pres = layout.find('.//node[@id="{}"]'.format(id))
+            y = 20. if counter % 2 == 0 else 160.
+            if pres is None:
+                pres = ET.SubElement(layout, 'node', {'id': id})
+                pos = ET.SubElement(pres, 'displayPosition',
+                                    {'x': "{}".format(x), 'y': "{}".format(y)})
+            else:
+                pres.find('displayPosition').attrib['x'] = "{}".format(x)
+                pres.find('displayPosition').attrib['y'] = "{}".format(y)
+            counter += 1
+            x += len(id) * 8
     
     @property
     def ids(self):
