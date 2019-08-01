@@ -677,6 +677,15 @@ class Workflow(object):
         return reparsed.toprettyxml(indent='\t', newl='')
     
     def __optimize_appearance(self):
+        """
+        assign grid coordinates to the nodes for display in the SNAP GraphBuilder GUI
+        
+        This method is applied by :meth:`__str__` for the final formatting of the XML text representation
+        
+        Returns
+        -------
+
+        """
         layout = self.tree.find('.//applicationData[@id="Presentation"]')
         
         counter = 0
