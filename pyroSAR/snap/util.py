@@ -16,7 +16,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
             basename_extensions=None, test=False, export_extra=None, groupsize=2, cleanup=True,
             gpt_exceptions=None, returnWF=False,
-            demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION'):
+            demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
+            speckleFilter=False):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -89,6 +90,15 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - 'BICUBIC_INTERPOLATION'
     imgResamplingMethod: str
         the resampling method for geocoding the SAR image; the options are identical to demResamplingMethod
+    speckleFilter: str
+        one of the following:
+         - 'Boxcar'
+         - 'Median'
+         - 'Frost'
+         - 'Gamma Map'
+         - 'Refined Lee'
+         - 'Lee'
+         - 'Lee Sigma'
     
     Returns
     -------
@@ -230,6 +240,25 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     else:
         cal.parameters['outputBetaBand'] = False
         cal.parameters['outputGammaBand'] = True
+    ############################################
+    # speckle filtering node configuration
+    speckleFilter_options = ['Boxcar',
+                             'Median',
+                             'Frost',
+                             'Gamma Map',
+                             'Refined Lee',
+                             'Lee',
+                             'Lee Sigma']
+    
+    if speckleFilter:
+        message = '{0} must be one of the following:\n- {1}'
+        if speckleFilter not in speckleFilter_options:
+            raise ValueError(message.format('speckleFilter', '\n- '.join(speckleFilter_options)))
+        sf = parse_node('Speckle-Filter')
+        workflow.insert_node(sf, before=last)
+        sf.parameters['sourceBands'] = bands_gamma
+        sf.parameters['filter'] = speckleFilter
+        last = 'Speckle-Filter'
     ############################################
     # configuration of node sequence for specific geocoding approaches
     # print('-- configuring geocoding approach Nodes')
