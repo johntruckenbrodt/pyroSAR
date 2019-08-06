@@ -182,7 +182,7 @@ class ID(object):
             lines.append(line)
         return '\n'.join(lines)
     
-    def bbox(self, outname=None, overwrite=True):
+    def bbox(self, outname=None, driver=None, overwrite=True):
         """
         get the bounding box of a scene either as a vector object or written to a shapefile
 
@@ -190,6 +190,9 @@ class ID(object):
         ----------
         outname: str
             the name of the shapefile to be written
+        driver: str
+        the output file format; needs to be defined if the format cannot
+            be auto-detected from the filename extension
         overwrite: bool
             overwrite an existing shapefile?
 
@@ -201,7 +204,7 @@ class ID(object):
         if outname is None:
             return bbox(self.getCorners(), self.projection)
         else:
-            bbox(self.getCorners(), self.projection, outname=outname, format='ESRI Shapefile',
+            bbox(self.getCorners(), self.projection, outname=outname, driver=driver,
                  overwrite=overwrite)
     
     @property
