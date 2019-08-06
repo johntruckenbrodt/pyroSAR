@@ -15,6 +15,7 @@
 import sys
 import os
 import datetime
+from pkg_resources import get_distribution
 
 project = 'pyroSAR'
 authors = 'John Truckenbrodt, Felix Cremer, Ismail Baris, Rhys Kidd'
@@ -29,10 +30,11 @@ sys.path.insert(0, os.path.abspath('..'))
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
-# The short X.Y version.
-version = '0.9.1'
 # The full version, including alpha/beta/rc tags.
-release = '0.9.1'
+# release = get_distribution('pyroSAR').version
+# The short X.Y version.
+# version = '.'.join(release.split('.')[:2])
+version = get_distribution(project).version
 
 autodoc_mock_imports = ['osgeo', 'sqlite3']
 
@@ -54,8 +56,13 @@ extensions = [
 # autodoc_default_flags = ['members']
 autosummary_generate = False
 
+# explicitly link to documentation of the spatialist version installed alongside pyroSAR,
+# which is defined in setup.py and requirements.txt
+version_spatialist = get_distribution('spatialist').version
+
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
-                       'spatialist': ('https://spatialist.readthedocs.io/en/v0.2.9', None)}
+                       'spatialist': ('https://spatialist.readthedocs.io/en/v{}'
+                                      .format(version_spatialist), None)}
 
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
@@ -212,10 +219,10 @@ htmlhelp_basename = '{}doc'.format(project)
 latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
     # 'papersize': 'letterpaper',
-
+    
     # The font size ('10pt', '11pt' or '12pt').
     # 'pointsize': '10pt',
-
+    
     # Additional stuff for the LaTeX preamble.
     # 'preamble': '',
 }
