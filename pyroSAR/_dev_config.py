@@ -20,7 +20,7 @@ product_pattern = r'(?:.*[/\\]|)' \
                   r'(?P<acquisition_mode>[A-Z0-9]{1,4})_+' \
                   r'(?P<orbit>[AD])_' \
                   r'(?P<start>[0-9T]{15})' \
-                  r'(?:_(?P<extensions>\w*)_|)' \
+                  r'(?:_(?P<extensions>\w*)|)' \
                   r')_' \
                   r'(?P<polarization>[HV]{2})_' \
                   r'(?P<proc_steps>\w*).tif$'
