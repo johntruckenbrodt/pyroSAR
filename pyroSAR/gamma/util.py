@@ -136,9 +136,12 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
     
     if isinstance(id, CEOS_ERS):
         if id.sensor in ['ERS1', 'ERS2']:
-            if id.product == 'SLC' and id.meta['proc_system'] in ['PGS-ERS', 'VMP-ERS', 'SPF-ERS']:
-                basename = '{}_{}_{}'.format(id.outname_base(), id.polarizations[0], id.product.lower())
-                outname = os.path.join(directory, basename)
+            if id.product == 'SLC' \
+                    and id.meta['proc_system'] in ['PGS-ERS', 'VMP-ERS', 'SPF-ERS']:
+                outname_base = '{}_{}_{}'.format(id.outname_base(),
+                                                 id.polarizations[0],
+                                                 id.product.lower())
+                outname = os.path.join(directory, outname_base)
                 if not os.path.isfile(outname):
                     lea = id.findfiles('LEA_01.001')[0]
                     dat = id.findfiles('DAT_01.001')[0]
@@ -193,7 +196,8 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
     
     elif isinstance(id, ESA):
         """
-        the command par_ASAR also accepts a K_dB argument for calibration in which case the resulting image names will carry the suffix GRD;
+        the command par_ASAR also accepts a K_dB argument for calibration
+        in which case the resulting image names will carry the suffix grd;
         this is not implemented here but instead in function calibrate
         """
         outname = os.path.join(directory, id.outname_base())
@@ -208,14 +212,15 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
             os.remove(outname + '.hdr')
             for item in finder(directory, [os.path.basename(outname)], regex=True):
                 ext = '.par' if item.endswith('.par') else ''
-                base = os.path.basename(item).strip(ext)
-                base = base.replace('.', '_')
-                base = base.replace('PRI', 'pri')
-                base = base.replace('SLC', 'slc')
-                newname = os.path.join(directory, base + ext)
-                os.rename(item, newname)
-                if newname.endswith('.par'):
-                    par2hdr(newname, newname.replace('.par', '.hdr'))
+                outname_base = os.path.basename(item)\
+                    .strip(ext)\
+                    .replace('.', '_')\
+                    .replace('PRI', 'pri')\
+                    .replace('SLC', 'slc')
+                outname = os.path.join(directory, outname_base + ext)
+                os.rename(item, outname)
+                if outname.endswith('.par'):
+                    par2hdr(outname, outname.replace('.par', '.hdr'))
         else:
             raise IOError('scene already processed')
     
@@ -246,7 +251,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
             fields = (id.outname_base(),
                       match.group('pol').upper(),
                       product)
-            name = os.path.join(directory, '_'.join(fields))
+            outname = os.path.join(directory, '_'.join(fields))
             
             pars = {'GeoTIFF': tiff,
                     'annotation_XML': xml_ann,
@@ -258,17 +263,17 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
             
             if product == 'slc':
                 swath = match.group('swath').upper()
-                name = name.replace('{:_<{length}}'.format(id.acquisition_mode, length=len(swath)), swath)
-                pars['SLC'] = name
-                pars['SLC_par'] = name + '.par'
-                pars['TOPS_par'] = name + '.tops_par'
+                outname = outname.replace('{:_<{length}}'.format(id.acquisition_mode, length=len(swath)), swath)
+                pars['SLC'] = outname
+                pars['SLC_par'] = outname + '.par'
+                pars['TOPS_par'] = outname + '.tops_par'
                 isp.par_S1_SLC(**pars)
             else:
-                pars['MLI'] = name
-                pars['MLI_par'] = name + '.par'
+                pars['MLI'] = outname
+                pars['MLI_par'] = outname + '.par'
                 isp.par_S1_GRD(**pars)
             
-            par2hdr(name + '.par', name + '.hdr')
+            par2hdr(outname + '.par', outname + '.hdr')
     
     elif isinstance(id, TSX):
         images = id.findfiles(id.pattern_ds)
