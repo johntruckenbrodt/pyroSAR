@@ -101,7 +101,8 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
         raise NotImplementedError('calibration for class {} is not implemented yet'.format(type(id).__name__))
 
 
-def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None, shellscript=None):
+def convert2gamma(id, directory, S1_noiseremoval=True, basename_extensions=None,
+                  logpath=None, outdir=None, shellscript=None):
     """
     general function for converting SAR images to GAMMA format
 
@@ -113,6 +114,8 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
         the output directory for the converted images
     S1_noiseremoval: bool
         only Sentinel-1: should noise removal be applied to the image?
+    basename_extensions: list of str
+        names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     logpath: str or None
         a directory to write command logfiles to
     outdir: str or None
@@ -138,7 +141,8 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
         if id.sensor in ['ERS1', 'ERS2']:
             if id.product == 'SLC' \
                     and id.meta['proc_system'] in ['PGS-ERS', 'VMP-ERS', 'SPF-ERS']:
-                outname_base = '{}_{}_{}'.format(id.outname_base(),
+                outname_base = id.outname_base(extensions=basename_extensions)
+                outname_base = '{}_{}_{}'.format(outname_base,
                                                  id.polarizations[0],
                                                  id.product.lower())
                 outname = os.path.join(directory, outname_base)
@@ -169,8 +173,9 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
             raise RuntimeError('PALSAR level 1.0 products are not supported')
         for image in images:
             polarization = re.search('[HV]{2}', os.path.basename(image)).group(0)
+            outname_base = id.outname_base(extensions=basename_extensions)
             if id.product == '1.1':
-                outname_base = '{}_{}_slc'.format(id.outname_base(), polarization)
+                outname_base = '{}_{}_slc'.format(outname_base, polarization)
                 outname = os.path.join(directory, outname_base)
                 
                 isp.par_EORC_PALSAR(CEOS_leader=id.file,
@@ -181,7 +186,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
                                     outdir=outdir,
                                     shellscript=shellscript)
             else:
-                outname_base = '{}_{}_mli_geo'.format(id.outname_base(), polarization)
+                outname_base = '{}_{}_mli_geo'.format(outname_base, polarization)
                 outname = os.path.join(directory, outname_base)
                 
                 diff.par_EORC_PALSAR_geo(CEOS_leader=id.file,
@@ -200,7 +205,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
         in which case the resulting image names will carry the suffix grd;
         this is not implemented here but instead in function calibrate
         """
-        outname = os.path.join(directory, id.outname_base())
+        outname = os.path.join(directory, id.outname_base(extensions=basename_extensions))
         if not id.is_processed(directory):
             
             isp.par_ASAR(ASAR_ERS_file=os.path.basename(id.file),
@@ -248,7 +253,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
             else:
                 xml_noise = '-'
             
-            fields = (id.outname_base(),
+            fields = (id.outname_base(extensions=basename_extensions),
                       match.group('pol').upper(),
                       product)
             outname = os.path.join(directory, '_'.join(fields))
@@ -263,7 +268,8 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
             
             if product == 'slc':
                 swath = match.group('swath').upper()
-                outname = outname.replace('{:_<{length}}'.format(id.acquisition_mode, length=len(swath)), swath)
+                old = '{:_<{length}}'.format(id.acquisition_mode, length=len(swath))
+                outname = outname.replace(old, swath)
                 pars['SLC'] = outname
                 pars['SLC_par'] = outname + '.par'
                 pars['TOPS_par'] = outname + '.tops_par'
@@ -280,7 +286,8 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
         pattern = re.compile(id.pattern_ds)
         for image in images:
             pol = pattern.match(os.path.basename(image)).group('pol')
-            outname = os.path.join(directory, id.outname_base() + '_' + pol)
+            outname_base = id.outname_base(extensions=basename_extensions)
+            outname = os.path.join(directory, outname_base + '_' + pol)
             
             pars = {'annotation_XML': id.file,
                     'pol': pol,
