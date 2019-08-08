@@ -409,7 +409,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=1,
             func_interp=2, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
-            cleanup=True, normalization_method=2, export_extra=None):
+            cleanup=True, normalization_method=2, export_extra=None, basename_extensions=None):
     """
     general function for geocoding SAR images with GAMMA
     
@@ -473,6 +473,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
            command data2tiff yet the output was found impossible to read with GIS software
          - scaling of SAR image products is applied as defined by parameter `scaling`
          - see Notes for ID options
+    basename_extensions: list of str
+        names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     
     Returns
     -------
@@ -560,7 +562,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
             os.makedirs(dir)
     
     if scene.is_processed(outdir):
-        print('scene {} already processed'.format(scene.outname_base()))
+        print('scene {} already processed'.format(scene.outname_base(extensions=basename_extensions)))
         return
     
     scaling = [scaling] if isinstance(scaling, str) else scaling if isinstance(scaling, list) else []
@@ -579,7 +581,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         scene.scene = os.path.join(tempdir, os.path.basename(scene.file))
         os.makedirs(scene.scene)
     
-    shellscript = os.path.join(scene.scene, scene.outname_base() + '_commands.sh')
+    shellscript = os.path.join(scene.scene, scene.outname_base(extensions=basename_extensions) + '_commands.sh')
     
     path_log = os.path.join(scene.scene, 'logfiles')
     if not os.path.isdir(path_log):
@@ -590,7 +592,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         scene.removeGRDBorderNoise()
     
     print('converting scene to GAMMA format..')
-    convert2gamma(scene, scene.scene, logpath=path_log, outdir=scene.scene, shellscript=shellscript)
+    convert2gamma(scene, scene.scene, logpath=path_log, outdir=scene.scene,
+                  basename_extensions=basename_extensions, shellscript=shellscript)
     
     if scene.sensor in ['S1A', 'S1B']:
         print('updating orbit state vectors..')
@@ -624,7 +627,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     # create output names for files to be written
     # appreciated files will be written
     # depreciated files will be set to '-' in the GAMMA function call and are thus not written
-    n = Namespace(scene.scene, scene.outname_base())
+    n = Namespace(scene.scene, scene.outname_base(extensions=basename_extensions))
     n.appreciate(['dem_seg_geo', 'lut_init', 'pix_geo', 'inc_geo', 'ls_map_geo'])
     n.depreciate(['sim_sar_geo', 'u_geo', 'v_geo', 'psi_geo'])
     
@@ -851,8 +854,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                      nodata=dict(zip(('linear', 'db'), nodata))[scale], outdir=outdir)
     
     if scene.sensor in ['S1A', 'S1B']:
+        outname_base = scene.outname_base(extensions=basename_extensions)
         shutil.copyfile(os.path.join(scene.scene, 'manifest.safe'),
-                        os.path.join(outdir, scene.outname_base() + '_manifest.safe'))
+                        os.path.join(outdir, outname_base + '_manifest.safe'))
     
     if export_extra is not None:
         print('exporting extra products..')
