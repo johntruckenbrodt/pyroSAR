@@ -43,12 +43,8 @@ fi
 export PATH=${installdir}/bin:$PATH
 export LD_LIBRARY_PATH=${installdir}/lib:$LD_LIBRARY_PATH
 
-# choose on of the following depending on your system
-#pythonlibdir=${installdir}/lib/python3.6/site-packages
-pythonlibdir=${installdir}/lib64/python3.6/site-packages
-export PYTHONPATH=${pythonlibdir}:$PYTHONPATH
 
-for dir in ${root} ${downloaddir} ${packagedir} ${pythonlibdir}; do
+for dir in ${root} ${downloaddir} ${packagedir}; do
     mkdir -p ${dir}
 done
 ########################################################################################################################
@@ -93,7 +89,8 @@ sudo make install
 # otherwise you might need to define the locations of the packages
 
 cd ${packagedir}/gdal*
-./configure --without-python --prefix ${installdir} \
+./configure --with-python \
+            --prefix ${installdir} \
             --with-geos=${installdir}/bin/geos-config \
             --with-static-proj4=${installdir} \
             --with-libz=internal --with-pcraster=internal \
@@ -106,12 +103,8 @@ make -j${threads}
 sudo make install
 ########################################################################################################################
 # install GDAL Python binding
-# this needs swig to be installed
 
-cd ${packagedir}/gdal*/swig/python
-# edit the file GNUmakefile if a Python executable other than the standard one is to be used
-make -j${threads}
-sudo python setup.py install --prefix=${installdir}
+python -m pip install gdal==$GDALVERSION --global-option=build_ext --user --global-option="-I$installdir/include"
 ########################################################################################################################
 ########################################################################################################################
 # install pysqlite2 python package with static sqlite3 build
@@ -151,7 +144,6 @@ sudo make install
 echo depending on your choice of installdir you might need to add the following lines to your .bashrc:
 echo "export PATH=${installdir}/bin:$"PATH
 echo "export LD_LIBRARY_PATH=${installdir}/lib:$"LD_LIBRARY_PATH
-echo "export PYTHONPATH=${pythonlibdir}:$"PYTHONPATH
 echo done
 
 # deleting the root directory which is no longer needed
