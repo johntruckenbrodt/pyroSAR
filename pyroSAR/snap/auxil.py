@@ -671,9 +671,37 @@ class Workflow(object):
         self.tree.remove(element)
     
     def __str__(self):
+        self.__optimize_appearance()
         rough_string = ET.tostring(self.tree, 'utf-8')
         reparsed = minidom.parseString(rough_string)
         return reparsed.toprettyxml(indent='\t', newl='')
+    
+    def __optimize_appearance(self):
+        """
+        assign grid coordinates to the nodes for display in the SNAP GraphBuilder GUI
+        
+        This method is applied by :meth:`__str__` for the final formatting of the XML text representation
+        
+        Returns
+        -------
+
+        """
+        layout = self.tree.find('.//applicationData[@id="Presentation"]')
+        
+        counter = 0
+        x = 5
+        for id in self.ids:
+            pres = layout.find('.//node[@id="{}"]'.format(id))
+            y = 20. if counter % 2 == 0 else 160.
+            if pres is None:
+                pres = ET.SubElement(layout, 'node', {'id': id})
+                pos = ET.SubElement(pres, 'displayPosition',
+                                    {'x': "{}".format(x), 'y': "{}".format(y)})
+            else:
+                pres.find('displayPosition').attrib['x'] = "{}".format(x)
+                pres.find('displayPosition').attrib['y'] = "{}".format(y)
+            counter += 1
+            x += len(id) * 8
     
     @property
     def ids(self):
@@ -713,7 +741,7 @@ class Workflow(object):
         before: str
             the ID of the node before the newly inserted node
         after: str
-            the ID of the node before the newly inserted node
+            the ID of the node after the newly inserted node
         resetSuccessorSource: bool
             reset the source of the successor node to the ID of the newly inserted node?
         void: bool

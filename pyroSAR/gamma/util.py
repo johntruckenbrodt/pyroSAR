@@ -101,7 +101,8 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
         raise NotImplementedError('calibration for class {} is not implemented yet'.format(type(id).__name__))
 
 
-def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None, shellscript=None):
+def convert2gamma(id, directory, S1_noiseremoval=True, basename_extensions=None,
+                  logpath=None, outdir=None, shellscript=None):
     """
     general function for converting SAR images to GAMMA format
 
@@ -113,6 +114,8 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
         the output directory for the converted images
     S1_noiseremoval: bool
         only Sentinel-1: should noise removal be applied to the image?
+    basename_extensions: list of str
+        names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     logpath: str or None
         a directory to write command logfiles to
     outdir: str or None
@@ -136,9 +139,13 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
     
     if isinstance(id, CEOS_ERS):
         if id.sensor in ['ERS1', 'ERS2']:
-            if id.product == 'SLC' and id.meta['proc_system'] in ['PGS-ERS', 'VMP-ERS', 'SPF-ERS']:
-                basename = '{}_{}_{}'.format(id.outname_base(), id.polarizations[0], id.product.lower())
-                outname = os.path.join(directory, basename)
+            if id.product == 'SLC' \
+                    and id.meta['proc_system'] in ['PGS-ERS', 'VMP-ERS', 'SPF-ERS']:
+                outname_base = id.outname_base(extensions=basename_extensions)
+                outname_base = '{}_{}_{}'.format(outname_base,
+                                                 id.polarizations[0],
+                                                 id.product.lower())
+                outname = os.path.join(directory, outname_base)
                 if not os.path.isfile(outname):
                     lea = id.findfiles('LEA_01.001')[0]
                     dat = id.findfiles('DAT_01.001')[0]
@@ -166,8 +173,9 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
             raise RuntimeError('PALSAR level 1.0 products are not supported')
         for image in images:
             polarization = re.search('[HV]{2}', os.path.basename(image)).group(0)
+            outname_base = id.outname_base(extensions=basename_extensions)
             if id.product == '1.1':
-                outname_base = '{}_{}_slc'.format(id.outname_base(), polarization)
+                outname_base = '{}_{}_slc'.format(outname_base, polarization)
                 outname = os.path.join(directory, outname_base)
                 
                 isp.par_EORC_PALSAR(CEOS_leader=id.file,
@@ -178,7 +186,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
                                     outdir=outdir,
                                     shellscript=shellscript)
             else:
-                outname_base = '{}_{}_mli_geo'.format(id.outname_base(), polarization)
+                outname_base = '{}_{}_mli_geo'.format(outname_base, polarization)
                 outname = os.path.join(directory, outname_base)
                 
                 diff.par_EORC_PALSAR_geo(CEOS_leader=id.file,
@@ -193,10 +201,11 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
     
     elif isinstance(id, ESA):
         """
-        the command par_ASAR also accepts a K_dB argument for calibration in which case the resulting image names will carry the suffix GRD;
+        the command par_ASAR also accepts a K_dB argument for calibration
+        in which case the resulting image names will carry the suffix grd;
         this is not implemented here but instead in function calibrate
         """
-        outname = os.path.join(directory, id.outname_base())
+        outname = os.path.join(directory, id.outname_base(extensions=basename_extensions))
         if not id.is_processed(directory):
             
             isp.par_ASAR(ASAR_ERS_file=os.path.basename(id.file),
@@ -208,14 +217,15 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
             os.remove(outname + '.hdr')
             for item in finder(directory, [os.path.basename(outname)], regex=True):
                 ext = '.par' if item.endswith('.par') else ''
-                base = os.path.basename(item).strip(ext)
-                base = base.replace('.', '_')
-                base = base.replace('PRI', 'pri')
-                base = base.replace('SLC', 'slc')
-                newname = os.path.join(directory, base + ext)
-                os.rename(item, newname)
-                if newname.endswith('.par'):
-                    par2hdr(newname, newname.replace('.par', '.hdr'))
+                outname_base = os.path.basename(item)\
+                    .strip(ext)\
+                    .replace('.', '_')\
+                    .replace('PRI', 'pri')\
+                    .replace('SLC', 'slc')
+                outname = os.path.join(directory, outname_base + ext)
+                os.rename(item, outname)
+                if outname.endswith('.par'):
+                    par2hdr(outname, outname.replace('.par', '.hdr'))
         else:
             raise IOError('scene already processed')
     
@@ -243,10 +253,10 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
             else:
                 xml_noise = '-'
             
-            fields = (id.outname_base(),
+            fields = (id.outname_base(extensions=basename_extensions),
                       match.group('pol').upper(),
                       product)
-            name = os.path.join(directory, '_'.join(fields))
+            outname = os.path.join(directory, '_'.join(fields))
             
             pars = {'GeoTIFF': tiff,
                     'annotation_XML': xml_ann,
@@ -258,24 +268,26 @@ def convert2gamma(id, directory, S1_noiseremoval=True, logpath=None, outdir=None
             
             if product == 'slc':
                 swath = match.group('swath').upper()
-                name = name.replace('{:_<{length}}'.format(id.acquisition_mode, length=len(swath)), swath)
-                pars['SLC'] = name
-                pars['SLC_par'] = name + '.par'
-                pars['TOPS_par'] = name + '.tops_par'
+                old = '{:_<{length}}'.format(id.acquisition_mode, length=len(swath))
+                outname = outname.replace(old, swath)
+                pars['SLC'] = outname
+                pars['SLC_par'] = outname + '.par'
+                pars['TOPS_par'] = outname + '.tops_par'
                 isp.par_S1_SLC(**pars)
             else:
-                pars['MLI'] = name
-                pars['MLI_par'] = name + '.par'
+                pars['MLI'] = outname
+                pars['MLI_par'] = outname + '.par'
                 isp.par_S1_GRD(**pars)
             
-            par2hdr(name + '.par', name + '.hdr')
+            par2hdr(outname + '.par', outname + '.hdr')
     
     elif isinstance(id, TSX):
         images = id.findfiles(id.pattern_ds)
         pattern = re.compile(id.pattern_ds)
         for image in images:
             pol = pattern.match(os.path.basename(image)).group('pol')
-            outname = os.path.join(directory, id.outname_base() + '_' + pol)
+            outname_base = id.outname_base(extensions=basename_extensions)
+            outname = os.path.join(directory, outname_base + '_' + pol)
             
             pars = {'annotation_XML': id.file,
                     'pol': pol,
@@ -397,7 +409,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=1,
             func_interp=2, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
-            cleanup=True, normalization_method=2, export_extra=None):
+            cleanup=True, normalization_method=2, export_extra=None, basename_extensions=None):
     """
     general function for geocoding SAR images with GAMMA
     
@@ -461,6 +473,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
            command data2tiff yet the output was found impossible to read with GIS software
          - scaling of SAR image products is applied as defined by parameter `scaling`
          - see Notes for ID options
+    basename_extensions: list of str
+        names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     
     Returns
     -------
@@ -548,7 +562,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
             os.makedirs(dir)
     
     if scene.is_processed(outdir):
-        print('scene {} already processed'.format(scene.outname_base()))
+        print('scene {} already processed'.format(scene.outname_base(extensions=basename_extensions)))
         return
     
     scaling = [scaling] if isinstance(scaling, str) else scaling if isinstance(scaling, list) else []
@@ -567,7 +581,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         scene.scene = os.path.join(tempdir, os.path.basename(scene.file))
         os.makedirs(scene.scene)
     
-    shellscript = os.path.join(scene.scene, scene.outname_base() + '_commands.sh')
+    shellscript = os.path.join(scene.scene, scene.outname_base(extensions=basename_extensions) + '_commands.sh')
     
     path_log = os.path.join(scene.scene, 'logfiles')
     if not os.path.isdir(path_log):
@@ -578,7 +592,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         scene.removeGRDBorderNoise()
     
     print('converting scene to GAMMA format..')
-    convert2gamma(scene, scene.scene, logpath=path_log, outdir=scene.scene, shellscript=shellscript)
+    convert2gamma(scene, scene.scene, logpath=path_log, outdir=scene.scene,
+                  basename_extensions=basename_extensions, shellscript=shellscript)
     
     if scene.sensor in ['S1A', 'S1B']:
         print('updating orbit state vectors..')
@@ -612,7 +627,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     # create output names for files to be written
     # appreciated files will be written
     # depreciated files will be set to '-' in the GAMMA function call and are thus not written
-    n = Namespace(scene.scene, scene.outname_base())
+    n = Namespace(scene.scene, scene.outname_base(extensions=basename_extensions))
     n.appreciate(['dem_seg_geo', 'lut_init', 'pix_geo', 'inc_geo', 'ls_map_geo'])
     n.depreciate(['sim_sar_geo', 'u_geo', 'v_geo', 'psi_geo'])
     
@@ -839,8 +854,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                      nodata=dict(zip(('linear', 'db'), nodata))[scale], outdir=outdir)
     
     if scene.sensor in ['S1A', 'S1B']:
+        outname_base = scene.outname_base(extensions=basename_extensions)
         shutil.copyfile(os.path.join(scene.scene, 'manifest.safe'),
-                        os.path.join(outdir, scene.outname_base() + '_manifest.safe'))
+                        os.path.join(outdir, outname_base + '_manifest.safe'))
     
     if export_extra is not None:
         print('exporting extra products..')

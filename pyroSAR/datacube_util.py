@@ -46,6 +46,17 @@ from .ancillary import parse_datasetname
 
 
 class Dataset(object):
+    """
+    A general class describing dataset information required for creating ODC YML files
+    
+    Parameters
+    ----------
+    filename: str, list, Dataset
+        the product to be used; either an existing :class:`Dataset` object or a (list of) file(s) matching the pyroSAR
+        naming pattern, i.e. that can be parsed by :func:`pyroSAR.ancillary.parse_datasetname`
+    units: str
+        the units of the product measurement
+    """
     def __init__(self, filename, units='DN'):
         
         if isinstance(filename, list):
@@ -162,7 +173,7 @@ class Dataset(object):
     
     def __radd__(self, dataset):
         """
-        similar to Dataset.__add__ but for function sum, e.g. sum([Dataset1, Dataset2])
+        similar to :meth:`Dataset.__add__` but for function :func:`sum`, e.g. :code:`sum([Dataset1, Dataset2])`
         
         Parameters
         ----------
@@ -297,6 +308,22 @@ class Dataset(object):
 
 
 class Product(object):
+    """
+    A class for describing an ODC product definition
+    
+    Parameters
+    ----------
+    definition: str, list, None
+        the source of the product definition; either an existing product YML, a list of :class:`Dataset` objects,
+        or None. In the latter case the product is defined using the parameters
+        `name`, `product_type` and `description`.
+    name: str
+        the name of the product in the data cube
+    product_type: str
+        the type of measurement defined in the product, e.g. `gamma0`
+    description: str
+        the description of the product and its measurements
+    """
     def __init__(self, definition=None, name=None, product_type=None,
                  description=None):
         
@@ -559,6 +586,23 @@ class Product(object):
                                            format(measurement, attr, match[attr], content[attr]))
     
     def export_indexing_yml(self, dataset, outdir):
+        """
+        Write a YML file named {:meth:`Dataset.identifier`}_dcindex.yml, which can be used for indexing a dataset in
+        an Open Data Cube. The file will contain information from the product and the dataset and a test is first
+        performed to check whether the dataset matches the product definition.
+        A unique ID is issued using :func:`uuid.uuid4()`.
+        
+        Parameters
+        ----------
+        dataset: Dataset
+            the dataset for which to export a file for
+        outdir: str
+            the directory to write the file to
+
+        Returns
+        -------
+
+        """
         
         self.__validate()
         
@@ -597,7 +641,22 @@ class Product(object):
             yaml.dump(out, yml, default_flow_style=False)
     
     def export_ingestion_yml(self, outname, product_name, ingest_location):
+        """
+        Write a YML file, which can be used for ingesting indexed datasets into an Open Data Cube.
         
+        Parameters
+        ----------
+        outname: str
+            the name of the YML file to write
+        product_name: str
+            the name of the product in the ODC
+        ingest_location: str
+            the location of the ingested NetCDF files
+
+        Returns
+        -------
+
+        """
         if os.path.isfile(outname):
             raise RuntimeError('product definition YML already exists: \n   {}'.format(outname))
         

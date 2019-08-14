@@ -16,7 +16,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
             basename_extensions=None, test=False, export_extra=None, groupsize=2, cleanup=True,
             gpt_exceptions=None, returnWF=False,
-            demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION'):
+            demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
+            speckleFilter=False, refarea='gamma0'):
     """
     wrapper function for geocoding SAR images using ESA SNAP
 
@@ -89,6 +90,20 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - 'BICUBIC_INTERPOLATION'
     imgResamplingMethod: str
         the resampling method for geocoding the SAR image; the options are identical to demResamplingMethod
+    speckleFilter: str
+        one of the following:
+         - 'Boxcar'
+         - 'Median'
+         - 'Frost'
+         - 'Gamma Map'
+         - 'Refined Lee'
+         - 'Lee'
+         - 'Lee Sigma'
+    refarea: str
+        one of the following:
+         - 'beta0'
+         - 'gamma0'
+         - 'sigma0'
     
     Returns
     -------
@@ -166,9 +181,11 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # print(polarizations)
     # print(format)
     
-    bands_int = ['Intensity_' + x for x in polarizations]
-    bands_beta = ['Beta0_' + x for x in polarizations]
-    bands_gamma = ['Gamma0_' + x for x in polarizations]
+    bandnames = dict()
+    bandnames['int'] = ['Intensity_' + x for x in polarizations]
+    bandnames['beta0'] = ['Beta0_' + x for x in polarizations]
+    bandnames['gamma0'] = ['Gamma0_' + x for x in polarizations]
+    bandnames['sigma0'] = ['Sigma0_' + x for x in polarizations]
     ############################################
     ############################################
     # parse base workflow
@@ -210,37 +227,63 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # print('-- configuring Calibration Node')
     cal = workflow['Calibration']
     cal.parameters['selectedPolarisations'] = polarizations
-    cal.parameters['sourceBands'] = bands_int
+    cal.parameters['sourceBands'] = bandnames['int']
+    if terrainFlattening:
+        if refarea != 'gamma0':
+            raise RuntimeError('if terrain flattening is applied refarea must be gamma0')
+        cal.parameters['outputBetaBand'] = True
+    else:
+        refarea_options = ['sigma0', 'beta0', 'gamma0']
+        if refarea not in refarea_options:
+            message = '{0} must be one of the following:\n- {1}'
+            raise ValueError(message.format('refarea', '\n- '.join(refarea_options)))
+        cal.parameters['output{}Band'.format(refarea[:-1].capitalize())] = True
+    last = cal.id
     ############################################
     # terrain flattening node configuration
     # print('-- configuring Terrain-Flattening Node')
     if terrainFlattening:
         tf = parse_node('Terrain-Flattening')
-        workflow.insert_node(tf, before='Calibration')
+        workflow.insert_node(tf, before=last)
         if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
             tf.parameters['sourceBands'] = 'Beta0'
         else:
-            tf.parameters['sourceBands'] = bands_beta
+            tf.parameters['sourceBands'] = bandnames['beta0']
         if externalDEMFile is None:
             tf.parameters['reGridMethod'] = True
         else:
             tf.parameters['reGridMethod'] = False
-        pred_tc = 'Terrain-Flattening'
-    else:
-        cal.parameters['outputBetaBand'] = False
-        cal.parameters['outputGammaBand'] = True
-        pred_tc = 'Calibration'
+        last = tf.id
+    ############################################
+    # speckle filtering node configuration
+    speckleFilter_options = ['Boxcar',
+                             'Median',
+                             'Frost',
+                             'Gamma Map',
+                             'Refined Lee',
+                             'Lee',
+                             'Lee Sigma']
+    
+    if speckleFilter:
+        message = '{0} must be one of the following:\n- {1}'
+        if speckleFilter not in speckleFilter_options:
+            raise ValueError(message.format('speckleFilter', '\n- '.join(speckleFilter_options)))
+        sf = parse_node('Speckle-Filter')
+        workflow.insert_node(sf, before=last)
+        sf.parameters['sourceBands'] = bandnames[refarea]
+        sf.parameters['filter'] = speckleFilter
+        last = sf.id
     ############################################
     # configuration of node sequence for specific geocoding approaches
     # print('-- configuring geocoding approach Nodes')
     if geocoding_type == 'Range-Doppler':
         tc = parse_node('Terrain-Correction')
-        workflow.insert_node(tc, before=pred_tc)
-        tc.parameters['sourceBands'] = bands_gamma
+        workflow.insert_node(tc, before=last)
+        tc.parameters['sourceBands'] = bandnames[refarea]
     elif geocoding_type == 'SAR simulation cross correlation':
         sarsim = parse_node('SAR-Simulation')
-        workflow.insert_node(sarsim, before=pred_tc)
-        sarsim.parameters['sourceBands'] = bands_gamma
+        workflow.insert_node(sarsim, before=last)
+        sarsim.parameters['sourceBands'] = bandnames[refarea]
         
         workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
         
@@ -270,10 +313,13 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ml = workflow['Multilook']
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
-        if cal.parameters['outputBetaBand']:
-            ml.parameters['sourceBands'] = bands_beta
-        elif cal.parameters['outputGammaBand']:
-            ml.parameters['sourceBands'] = bands_gamma
+        ml.parameters['sourceBands'] = None
+        # if cal.parameters['outputBetaBand']:
+        #     ml.parameters['sourceBands'] = bandnames['beta0']
+        # elif cal.parameters['outputGammaBand']:
+        #     ml.parameters['sourceBands'] = bandnames['gamma0']
+        # elif cal.parameters['outputSigmaBand']:
+        #     ml.parameters['sourceBands'] = bandnames['sigma0']
     ############################################
     # specify spatial resolution and coordinate reference system of the output dataset
     # print('-- configuring CRS')
@@ -306,10 +352,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     if scaling in ['dB', 'db']:
         lin2db = parse_node('lin2db')
-        sourceNode = 'Terrain-Correction' if geocoding_type == 'Range-Doppler' else 'SARSim-Terrain-Correction'
-        workflow.insert_node(lin2db, before=sourceNode)
-        
-        lin2db.parameters['sourceBands'] = bands_gamma
+        workflow.insert_node(lin2db, before=tc.id)
+        lin2db.parameters['sourceBands'] = bandnames[refarea]
     
     ############################################
     # (optionally) add subset node and add bounding box coordinates of defined shapefile
