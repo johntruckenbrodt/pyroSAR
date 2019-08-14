@@ -1,9 +1,9 @@
+#!/usr/bin bash
 ##############################################################
 # manual installation of pyroSAR dependencies
 # GDAL, GEOS, PROJ, SpatiaLite
 # John Truckenbrodt, Rhys Kidd 2017-2019
 ##############################################################
-#!/usr/bin/env bash
 
 
 # define a root directory for downloading packages
