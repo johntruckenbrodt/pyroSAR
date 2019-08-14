@@ -20,12 +20,13 @@ packagedir=${root}/packages
 installdir=$HOME/local
 
 # the version of GDAL and its dependencies
-GDALVERSION=2.4.1
+GDALVERSION=3.0.1
 
 # these versions are not quite as important. If you use already installed them you might need to define their location
 # for the configuration of GDAL
-geos_version=3.7.1
-proj_version=6.0.0
+geos_version=3.7.2
+proj_version=6.1.1
+spatialite_version=4.3.0
 
 # define the number of threads for compilation
 threads=2
@@ -60,7 +61,7 @@ declare -a remotes=(
                 )
 
 for package in "${remotes[@]}"; do
-    wget ${package} -P ${downloaddir}
+    wget ${package} -nc -P ${downloaddir}
 done
 ########################################################################################################################
 # unpack downloaded archives
@@ -130,17 +131,16 @@ sudo python setup.py build_static install --prefix=${installdir}
 ########################################################################################################################
 # install spatialite
 
-wget https://www.gaia-gis.it/gaia-sins/libspatialite-sources/libspatialite-amalgamation-2.4.0.tar.gz -P ${downloaddir}
+spname=libspatialite-$spatialite_version
+wget https://www.gaia-gis.it/gaia-sins/libspatialite-sources/$spname.tar.gz -P ${downloaddir}
 
 cd ${downloaddir}
-tar xfvz libspatialite-amalgamation-2.4.0.tar.gz -C ${packagedir}
-cd ${packagedir}/libspatialite-amalgamation-2.4.0
+tar xfvz ${spname}.tar.gz -C ${packagedir}
+cd ${packagedir}/${spname}
 
-./configure --with-geos-lib=${installdir}/lib \
-            --with-geos-include=${installdir}/include \
-            --with-proj-lib=${installdir}/lib \
-            --with-proj-include=${installdir}/include \
-            --prefix=${installdir}
+# PROJ now uses a new API, using the old deprecated one (as done by spatialite) needs to be indicated explicitly
+./configure --prefix=${installdir} \
+            CFLAGS=-DACCEPT_USE_OF_DEPRECATED_PROJ_API_H
 
 make -j${threads}
 sudo make install
