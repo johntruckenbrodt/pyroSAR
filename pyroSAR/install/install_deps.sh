@@ -14,8 +14,8 @@ downloaddir=${root}/originals
 packagedir=${root}/packages
 
 # define the installation directory; This needs to be outside of the root directory so that the latter can be deleted in the end.
-# In case installdir is set to a location outside of /usr/*, the following installation commands do not need to be run with a
-# dministration rights (sudo)
+# In case installdir is set to a location outside of /usr/*, the following installation commands do not need to be run with
+# administration rights (sudo)
 #installdir=/usr/local
 installdir=$HOME/local
 
@@ -44,7 +44,7 @@ export PATH=${installdir}/bin:$PATH
 export LD_LIBRARY_PATH=${installdir}/lib:$LD_LIBRARY_PATH
 
 
-for dir in ${root} ${downloaddir} ${packagedir}; do
+for dir in ${root} ${downloaddir} ${packagedir} ${installdir}; do
     mkdir -p ${dir}
 done
 ########################################################################################################################
@@ -54,6 +54,7 @@ declare -a remotes=(
                 "https://download.osgeo.org/gdal/$GDALVERSION/gdal-$GDALVERSION.tar.gz"
                 "https://download.osgeo.org/geos/geos-$geos_version.tar.bz2"
                 "https://download.osgeo.org/proj/proj-$proj_version.tar.gz"
+                "https://www.gaia-gis.it/gaia-sins/libspatialite-sources/libspatialite-$spatialite_version.tar.gz"
                 )
 
 for package in "${remotes[@]}"; do
@@ -83,26 +84,35 @@ cd ${packagedir}/proj*
 make -j${threads}
 sudo make install
 ########################################################################################################################
+# install spatialite
+
+cd ${packagedir}/libspatialite*
+
+# PROJ now uses a new API, using the old deprecated one (as done by spatialite) needs to be indicated explicitly
+./configure --prefix=${installdir} \
+            CFLAGS=-DACCEPT_USE_OF_DEPRECATED_PROJ_API_H
+
+make -j${threads}
+sudo make install
+########################################################################################################################
 # install GDAL
 
 # please check the output of configure to make sure that the GEOS and PROJ drivers are enabled
 # otherwise you might need to define the locations of the packages
 
+python_bin=/usr/bin/python3.6
+
 cd ${packagedir}/gdal*
-./configure --with-python \
-            --prefix ${installdir} \
+./configure --prefix ${installdir} \
+            --with-python=${python_bin} \
             --with-geos=${installdir}/bin/geos-config \
-            --with-static-proj4=${installdir} \
-            --with-libz=internal --with-pcraster=internal \
-            --with-png=internal --with-pcidsk=internal \
-            --with-libtiff=internal --with-geotiff=internal \
-            --with-jpeg=internal --with-gif=internal \
-            --with-qhull=internal --with-libjson-c=internal
+            --with-proj=${installdir} \
+            --with-spatialite=${installdir}
 
 make -j${threads}
 sudo make install
 ########################################################################################################################
-# install GDAL Python binding
+# install GDAL Python binding inside a virtual environment
 
 python -m pip install gdal==$GDALVERSION --global-option=build_ext --user --global-option="-I$installdir/include"
 ########################################################################################################################
@@ -114,37 +124,21 @@ cd ${packagedir}
 git clone https://github.com/ghaering/pysqlite.git
 cd pysqlite
 
-wget https://sqlite.org/2017/sqlite-amalgamation-3190300.zip
+wget https://sqlite.org/2019/sqlite-amalgamation-3290000.zip
 
-unzip sqlite-amalgamation-3190300.zip
-cp sqlite-amalgamation-3190300/* .
+unzip sqlite-amalgamation-3290000.zip
+cp sqlite-amalgamation-3290000/* .
 
 sudo python setup.py build_static install --prefix=${installdir}
 ########################################################################################################################
 ########################################################################################################################
-# install spatialite
-
-spname=libspatialite-$spatialite_version
-wget https://www.gaia-gis.it/gaia-sins/libspatialite-sources/$spname.tar.gz -P ${downloaddir}
-
-cd ${downloaddir}
-tar xfvz ${spname}.tar.gz -C ${packagedir}
-cd ${packagedir}/${spname}
-
-# PROJ now uses a new API, using the old deprecated one (as done by spatialite) needs to be indicated explicitly
-./configure --prefix=${installdir} \
-            CFLAGS=-DACCEPT_USE_OF_DEPRECATED_PROJ_API_H
-
-make -j${threads}
-sudo make install
-########################################################################################################################
-########################################################################################################################
 # finishing the process
 
-echo depending on your choice of installdir you might need to add the following lines to your .bashrc:
+echo depending on your choice of installdir and Python version you might need to add the following lines to your .bashrc:
 echo "export PATH=${installdir}/bin:$"PATH
 echo "export LD_LIBRARY_PATH=${installdir}/lib:$"LD_LIBRARY_PATH
-echo done
+echo "export PYTHONPATH=${installdir}/lib64/python3.6/site-packages:$"PYTHONPATH
+echo "done"
 
 # deleting the root directory which is no longer needed
 sudo rm -rf ${root}
