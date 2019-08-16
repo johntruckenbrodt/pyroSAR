@@ -23,7 +23,7 @@ product_pattern = r'(?:.*[/\\]|)' \
                   r'(?:_(?P<extensions>\w*)|)' \
                   r')_' \
                   r'(?P<polarization>[HV]{2})_' \
-                  r'(?P<proc_steps>\w*).tif$'
+                  r'(?P<proc_steps>\w*).*'
 
 
 class Storage(dict):
