@@ -80,6 +80,15 @@ def test_parse_datasetname():
     assert meta['start'] == datetime.datetime(2015, 3, 9, 17, 30, 17)
     meta = parse_datasetname('S1A__IW___A_20150309T173017_VV_grd.tif')
     assert meta['proc_steps'] == ['grd']
+    
+    meta1 = parse_datasetname('S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif')
+    meta2 = parse_datasetname('S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db')
+    meta3 = parse_datasetname('S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.nc')
+    
+    for k in meta1.keys():
+        if k != 'filename':
+            assert meta1[k] == meta2[k]
+            assert meta1[k] == meta3[k]
 
 
 def test_find_datasets(testdir):
