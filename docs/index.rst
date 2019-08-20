@@ -13,6 +13,7 @@ General Topics
 .. toctree::
    :maxdepth: 1
 
+   general/installation
    general/OSV
    general/DEM
 
