@@ -1264,6 +1264,41 @@ class SAFE(ID):
                     files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after)
                 osv.retrieve(files)
     
+    def quicklook(self, outname, format='kmz'):
+        """
+        export a quick look image of the scene
+        
+        Parameters
+        ----------
+        outname: str
+            the name of the output file
+        format: str
+            the format of the file to write;
+            currently only kmz is supported
+
+        Returns
+        -------
+        
+        Examples
+        --------
+        
+        >>> from pyroSAR import identify
+        >>> scene = identify('S1A_IW_GRDH_1SDV_20180101T170648_20180101T170713_019964_021FFD_DA78.zip')
+        >>> scene.quicklook('S1A__IW___A_20180101T170648.kmz')
+        """
+        if format != 'kmz':
+            raise RuntimeError('currently only kmz is supported as format')
+        kml_name = self.findfiles('map-overlay.kml')[0]
+        kml_membername = kml_name.replace(self.scene, '').strip(r'\/')
+        png = self.findfiles('quick-look.png')[0]
+        png_membername = png.replace(self.scene, '').strip(r'\/')
+        with zf.ZipFile(self.scene, 'r') as archive:
+            with zf.ZipFile(outname, 'w') as out:
+                kml = archive.open(kml_membername).read().decode('utf-8')
+                kml = kml.replace('Sentinel-1 Map Overlay', self.outname_base())
+                out.writestr('doc.kml', data=kml)
+                out.writestr('quick-look.png', data=archive.open(png_membername).read())
+    
     def scanMetadata(self):
         with self.getFileObj(self.findfiles('manifest.safe')[0]) as input:
             manifest = input.getvalue()
