@@ -58,7 +58,7 @@ class Dataset(object):
     filename: str, list, Dataset
         the product to be used; either an existing :class:`Dataset` object or a (list of) file(s) matching the pyroSAR
         naming pattern, i.e. that can be parsed by :func:`pyroSAR.ancillary.parse_datasetname`
-    units: str
+    units: str or dict
         the units of the product measurement
     """
     def __init__(self, filename, units='DN'):
