@@ -11,6 +11,10 @@ by pyroSAR for ingestion into an Open Data Cube.
     archive_s1 = '/.../sentinel1/GRD/processed'
     scenes_s1 = find_datasets(archive_s1, sensor=('S1A', 'S1B'), acquisition_mode='IW')
     
+    # group the found files by their file basenames
+    # files with the same basename are considered to belong to the same dataset
+    grouped = groupby(scenes_s1, 'outname_base')
+    
     # define the polarization units describing the data sets
     units = {'VV': 'backscatter VV', 'VH': 'backscatter VH'}
     
@@ -19,7 +23,7 @@ by pyroSAR for ingestion into an Open Data Cube.
                  product_type='gamma0',
                  description='Gamma Naught RTC backscatter') as prod:
         
-        for dataset in scenes_s1:
+        for dataset in grouped:
             with Dataset(dataset, units=units) as ds:
                 
                 # add the dataset to the product
