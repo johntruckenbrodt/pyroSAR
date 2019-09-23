@@ -338,7 +338,7 @@ class Product(object):
             if os.path.isfile(definition):
                 with open(definition, 'r') as yml:
                     try:
-                        self.meta = yaml.load(yml)
+                        self.meta = yaml.load(yml, Loader=yaml.FullLoader)
                     except yaml.YAMLError:
                         raise RuntimeError('the provided file does not seem to be a YAML file')
             else:
