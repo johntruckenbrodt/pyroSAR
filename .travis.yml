@@ -1,4 +1,4 @@
-dist: xenial
+dist: bionic
 language: python
 sudo: required
 cache:
@@ -30,10 +30,7 @@ addons:
 # this might change in the future; an alternative could be to install  the GDAL python bindings
 # directly in the venv; see e.g. here: https://gist.github.com/cspanring/5680334
 python:
-  - '3.5'
-
-virtualenv:
-  system_site_packages: true
+  - '3.7'
 
 before_install:
   - wget -O esa-snap_sentinel_unix_7_0.sh https://step.esa.int/downloads/7.0/installers/esa-snap_sentinel_unix_7_0.sh
@@ -42,6 +39,7 @@ before_install:
 
 install:
   - pip install --ignore-installed six # install six inside the venv since the system version is too old
+  - pip install GDAL==$(gdal-config --version) --global-option=build_ext --global-option=\"$(gdal-config --cflags)\"
   - pip install -r requirements-dev.txt
   - pip install coveralls coverage
   - python setup.py install
