@@ -22,7 +22,7 @@ addons:
       - python3-gdal
       - libspatialite-dev
       - libsqlite3-mod-spatialite
-      - swig2.0
+      - swig
       - libproj-dev
       - gdal-bin
 
