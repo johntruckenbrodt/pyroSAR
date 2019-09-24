@@ -85,7 +85,7 @@ class OSV(object):
         self.outdir_poe = os.path.join(osvdir, 'POEORB')
         self.outdir_res = os.path.join(osvdir, 'RESORB')
         self.pattern = r'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
-        self.pattern_fine = r'S1[AB]_OPER_AUX_' \
+        self.pattern_fine = r'(?P<sensor>S1[AB])_OPER_AUX_' \
                             r'(?P<type>(?:POE|RES)ORB)_OPOD_' \
                             r'(?P<publish>[0-9]{8}T[0-9]{6})_V' \
                             r'(?P<start>[0-9]{8}T[0-9]{6})_' \
@@ -392,6 +392,21 @@ class OSV(object):
                     with open(local, 'wb') as outfile:
                         outfile.write(infile.read())
                 infile.close()
+    
+    def sensor(self, file):
+        """
+        
+        Parameters
+        ----------
+        file: str
+            the OSV file
+
+        Returns
+        -------
+        str
+            either S1A or S1B
+        """
+        return re.match(self.pattern_fine, os.path.basename(file)).group('sensor')
     
     def sortByDate(self, files, datetype='start'):
         """
