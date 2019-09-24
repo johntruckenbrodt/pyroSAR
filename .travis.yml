@@ -17,19 +17,11 @@ addons:
       - sourceline: 'ppa:ubuntugis/ppa'
     packages:
       - libgdal-dev
-      - libudunits2-dev
-      - python-gdal
-      - python3-gdal
-      - libspatialite-dev
-      - libsqlite3-mod-spatialite
-      - swig
-      - libproj-dev
       - gdal-bin
+      - libsqlite3-mod-spatialite
+      - libproj-dev
       - python3-dev
 
-# currently 3.5 is the only version that works together with system site apt_packages:
-# this might change in the future; an alternative could be to install  the GDAL python bindings
-# directly in the venv; see e.g. here: https://gist.github.com/cspanring/5680334
 python:
   - '3.7'
 
