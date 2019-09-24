@@ -25,6 +25,7 @@ addons:
       - swig
       - libproj-dev
       - gdal-bin
+      - python3-dev
 
 # currently 3.5 is the only version that works together with system site apt_packages:
 # this might change in the future; an alternative could be to install  the GDAL python bindings
@@ -39,7 +40,8 @@ before_install:
 
 install:
   - pip install --ignore-installed six # install six inside the venv since the system version is too old
-  - pip install GDAL==$(gdal-config --version) --global-option=build_ext --global-option=\"$(gdal-config --cflags)\"
+  - pip install numpy
+  - pip install GDAL==$(gdal-config --version) --global-option=build_ext --global-option="$(gdal-config --cflags)"
   - pip install -r requirements-dev.txt
   - pip install coveralls coverage
   - python setup.py install
