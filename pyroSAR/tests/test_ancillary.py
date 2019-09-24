@@ -67,8 +67,8 @@ def test_parse_datasetname():
     filename = 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'
     meta = parse_datasetname(filename, parse_date=True)
     assert sorted(meta.keys()) == ['acquisition_mode', 'extensions', 'filename',
-                                   'orbit', 'outname_base', 'polarization',
-                                   'proc_steps', 'sensor', 'start']
+                                   'filetype', 'orbit', 'outname_base',
+                                   'polarization','proc_steps', 'sensor', 'start']
     assert meta['acquisition_mode'] == 'IW'
     assert meta['extensions'] is None
     assert meta['filename'] == filename
@@ -85,8 +85,12 @@ def test_parse_datasetname():
     meta2 = parse_datasetname('S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db')
     meta3 = parse_datasetname('S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.nc')
     
+    assert meta1['filetype'] == '.tif'
+    assert meta2['filetype'] == ''
+    assert meta3['filetype'] == '.nc'
+    
     for k in meta1.keys():
-        if k != 'filename':
+        if k not in ['filename', 'filetype']:
             assert meta1[k] == meta2[k]
             assert meta1[k] == meta3[k]
 
