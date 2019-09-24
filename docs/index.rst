@@ -14,8 +14,10 @@ General Topics
    :maxdepth: 1
 
    general/installation
+   general/filenaming
    general/OSV
    general/DEM
+   general/processing
 
 API Documentation
 =================
@@ -30,7 +32,8 @@ About
 .. toctree::
    :maxdepth: 1
 
-   changelog
+   about/projects
+   about/changelog
 
 Indices and tables
 ==================
