@@ -237,6 +237,8 @@ class OSV(object):
 
         Parameters
         ----------
+        file: str
+            the OSV file
         datetype: {'publish', 'start', 'stop'}
             one of three possible date types contained in the OSV filename
 
@@ -356,7 +358,7 @@ class OSV(object):
                 best = self.match(sensor=sensor, timestamp=timestamp, osvtype='RES')
             return best
     
-    def retrieve(self, files, zipped=True):
+    def retrieve(self, files, zipped=True, subdirs=True):
         """
         download a list of remote files into the respective subdirectories, i.e. POEORB or RESORB
 
@@ -366,19 +368,30 @@ class OSV(object):
             a list of remotely existing OSV files as returned by method :meth:`catch`
         zipped: bool
             compress the downloaded file into a zip archive; this is required by SNAP
+        subdirs: bool
+            store the files in subdirectories for sensor, year and month; this is required by SNAP
 
         Returns
         -------
         """
         self._init_dir()
         for type in ['POE', 'RES']:
-            address, outdir = self._typeEvaluate(type)
+            address, outdir_main = self._typeEvaluate(type)
             downloads = [x for x in files
                          if re.search('{}ORB'.format(type), x) and
-                         not os.path.isfile(os.path.join(outdir, os.path.basename(x)))]
-            # print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
+                         not finder(outdir_main, [os.path.basename(x) + '*'])]
+            # print('downloading {} {} file{}'.format(len(downloads), type, '' if len(downloads) == 1 else 's'))
             for remote in downloads:
                 basename = os.path.basename(remote)
+                if subdirs:
+                    start = self.date(basename, datetype='start')
+                    start = datetime.strptime(start, '%Y%m%dT%H%M%S')
+                    month = '{:02d}'.format(start.month)
+                    outdir = os.path.join(outdir_main, self.sensor(basename),
+                                          str(start.year), month)
+                    os.makedirs(outdir, exist_ok=True)
+                else:
+                    outdir = outdir_main
                 local = os.path.join(outdir, basename)
                 infile = urlopen(remote, context=self.sslcontext)
                 if zipped:
