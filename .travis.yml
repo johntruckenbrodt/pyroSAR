@@ -36,8 +36,8 @@ virtualenv:
   system_site_packages: true
 
 before_install:
-  - wget -O esa-snap_sentinel_unix_6_0.sh https://step.esa.int/downloads/6.0/installers/esa-snap_sentinel_unix_6_0.sh
-  - bash esa-snap_sentinel_unix_6_0.sh -q
+  - wget -O esa-snap_sentinel_unix_7_0.sh https://step.esa.int/downloads/7.0/installers/esa-snap_sentinel_unix_7_0.sh
+  - bash esa-snap_sentinel_unix_7_0.sh -q
   - export PATH=$PATH:/opt/snap/bin
 
 install:
