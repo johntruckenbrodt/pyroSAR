@@ -13,6 +13,7 @@ import os
 import re
 import ssl
 import time
+import zipfile as zf
 from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
 import numpy as np
@@ -355,7 +356,7 @@ class OSV(object):
                 best = self.match(sensor=sensor, timestamp=timestamp, osvtype='RES')
             return best
     
-    def retrieve(self, files):
+    def retrieve(self, files, zipped=True):
         """
         download a list of remote files into the respective subdirectories, i.e. POEORB or RESORB
 
@@ -363,6 +364,8 @@ class OSV(object):
         ----------
         files: list
             a list of remotely existing OSV files as returned by method :meth:`catch`
+        zipped: bool
+            compress the downloaded file into a zip archive; this is required by SNAP
 
         Returns
         -------
@@ -375,10 +378,19 @@ class OSV(object):
                          not os.path.isfile(os.path.join(outdir, os.path.basename(x)))]
             # print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
             for remote in downloads:
-                local = os.path.join(outdir, os.path.basename(remote))
+                basename = os.path.basename(remote)
+                local = os.path.join(outdir, basename)
                 infile = urlopen(remote, context=self.sslcontext)
-                with open(local, 'wb') as outfile:
-                    outfile.write(infile.read())
+                if zipped:
+                    with zf.ZipFile(file=local + '.zip',
+                                    mode='w',
+                                    compression=zf.ZIP_DEFLATED) \
+                            as outfile:
+                        outfile.writestr(zinfo_or_arcname=basename,
+                                         data=infile.read())
+                else:
+                    with open(local, 'wb') as outfile:
+                        outfile.write(infile.read())
                 infile.close()
     
     def sortByDate(self, files, datetype='start'):
