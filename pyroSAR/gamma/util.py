@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import shutil
+import zipfile as zf
 from datetime import datetime
 
 if sys.version_info >= (3, 0):
@@ -29,8 +30,8 @@ from spatialist.ancillary import union, finder
 from ..S1 import OSV
 from ..drivers import ID, CEOS_ERS, CEOS_PSR, ESA, SAFE, TSX, identify
 from . import ISPPar, Namespace, par2hdr
-from pyroSAR.ancillary import hasarg
-from ..ancillary import multilook_factors
+from ..ancillary import multilook_factors, hasarg
+from pyroSAR.examine import ExamineSnap
 
 try:
     from .api import diff, disp, isp, lat
@@ -379,11 +380,15 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
         os.makedirs(logpath)
     
     if osvdir is None:
-        osvdir = os.path.join(id.scene, 'osv')
         try:
-            id.getOSV(osvdir, osvType)
-        except URLError:
-            print('..no internet access')
+            auxdatapath = ExamineSnap().auxdatapath
+        except AttributeError:
+            auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
+        osvdir = os.path.join(auxdatapath, 'Orbits', 'Sentinel-1')
+    try:
+        id.getOSV(osvdir, osvType)
+    except URLError:
+        print('..no internet access')
     
     images = id.getGammaImages(id.scene)
     # read parameter file entries into object
@@ -396,6 +401,12 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
         osvfile = osv.match(sensor=id.sensor, timestamp=timestamp, osvtype=osvType)
     if not osvfile:
         raise RuntimeError('no Orbit State Vector file found')
+    
+    if osvfile.endswith('.zip'):
+        osvdir = os.path.join(id.scene, 'osv')
+        with zf.ZipFile(osvfile) as zip:
+            zip.extractall(path=osvdir)
+        osvfile = os.path.join(osvdir, os.path.basename(osvfile).replace('.zip', ''))
     
     # update the GAMMA parameter file with the selected orbit state vectors
     print('correcting state vectors with file {}'.format(osvfile))
