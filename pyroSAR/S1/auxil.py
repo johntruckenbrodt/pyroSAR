@@ -405,7 +405,8 @@ class OSV(object):
                     with open(local, 'wb') as outfile:
                         outfile.write(infile.read())
                 infile.close()
-    
+        self.clean_res()
+
     def sensor(self, file):
         """
         
