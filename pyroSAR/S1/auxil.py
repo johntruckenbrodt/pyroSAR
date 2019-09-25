@@ -20,6 +20,7 @@ import numpy as np
 from osgeo import gdal
 from osgeo.gdalconst import GA_Update
 from . import linesimplify as ls
+from ..snap import ExamineSnap
 
 from spatialist.ancillary import finder, urlQueryParser
 
@@ -79,7 +80,13 @@ class OSV(object):
         the directory to write the orbit files to
     """
     
-    def __init__(self, osvdir):
+    def __init__(self, osvdir=None):
+        if osvdir is None:
+            try:
+                auxdatapath = ExamineSnap().auxdatapath
+            except AttributeError:
+                auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
+            osvdir = os.path.join(auxdatapath, 'Orbits', 'Sentinel-1')
         self.remote_poe = 'https://qc.sentinel1.eo.esa.int/aux_poeorb/'
         self.remote_res = 'https://qc.sentinel1.eo.esa.int/aux_resorb/'
         self.outdir_poe = os.path.join(osvdir, 'POEORB')
