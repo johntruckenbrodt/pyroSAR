@@ -438,47 +438,6 @@ class OSV(object):
             the input OSV files sorted by the defined date
         """
         return sorted(files, key=lambda x: self.date(x, datetype))
-    
-    def update(self, update_res=True):
-        """
-        Caution! This method is intended for downloading all available POE files and all RES files for whose
-        time span no POE file yet exists locally.
-        This will be a data volume of several GB and is particularly suited for multi-node SAR processing where not
-        all nodes might have internet access and thus all files have to be downloaded before starting the processing.
-
-        If you want to download the OSV file for a single scene either use the respective methods
-        of the SAR drivers (e.g. :meth:`pyroSAR.drivers.SAFE.getOSV`) or methods :meth:`catch` and :meth:`retrieve` in combination.
-
-        Perform creating/updating operations for POE and RES files:
-        download newest POE and RES files, delete RES files which can be replaced by newly downloaded POE files.
-
-        actions performed:
-         * the ESA Quality Control (QC) server is checked for any POE files not in the local directory
-         * POE  files on the server and not in the local directory are downloaded
-         * RES files newer than the latest POE file are downloaded; POE files are approximately 18 days behind the actual date, thus RES files can be used instead
-         * delete all RES files for whose date a POE file now exists locally
-
-
-        Parameters
-        ----------
-        update_res: bool
-            should the RES files also be updated (or just the POE files)
-
-        Returns
-        -------
-
-        """
-        self._init_dir()
-        try:
-            files_poe = self.catch(sensor=['S1A', 'S1B'], osvtype='POE', start=self.maxdate('POE', 'start'))
-        except RuntimeError as e:
-            raise e
-        self.retrieve(files_poe)
-        if update_res:
-            print('---------------------------------------------------------')
-            files_res = self.catch(sensor=['S1A', 'S1B'], osvtype='RES', start=self.maxdate('POE', 'start'))
-            self.retrieve(files_res)
-            self.clean_res()
 
 
 def removeGRDBorderNoise(scene):
