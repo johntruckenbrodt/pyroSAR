@@ -20,7 +20,7 @@ import numpy as np
 from osgeo import gdal
 from osgeo.gdalconst import GA_Update
 from . import linesimplify as ls
-from ..snap import ExamineSnap
+from .._dev_config import ExamineSnap
 
 from spatialist.ancillary import finder, urlQueryParser
 
