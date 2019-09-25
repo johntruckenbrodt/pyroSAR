@@ -1228,14 +1228,15 @@ class SAFE(ID):
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def getOSV(self, outdir, osvType='POE'):
+    def getOSV(self, osvdir=None, osvType='POE'):
         """
         download Orbit State Vector files for the scene
 
         Parameters
         ----------
-        outdir: str
-            the directory of OSV files; subdirectories POEORB and RESORB are created automatically
+        osvdir: str
+            the directory of OSV files; subdirectories POEORB and RESORB are created automatically;
+            if no directory is defined, the standard SNAP auxdata location is used
         osvType: {'POE', 'RES'}
             the type of orbit file either 'POE', 'RES' or a list of both
 
@@ -1244,7 +1245,7 @@ class SAFE(ID):
 
         See Also
         --------
-        :meth:`pyroSAR.S1.OSV`
+        :class:`pyroSAR.S1.OSV`
         """
         date = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
         
@@ -1254,11 +1255,11 @@ class SAFE(ID):
         
         # download the files
         if osvType in ['POE', 'RES']:
-            with S1.OSV(outdir) as osv:
+            with S1.OSV(osvdir) as osv:
                 files = osv.catch(sensor=self.sensor, osvtype=osvType, start=before, stop=after)
                 osv.retrieve(files)
         elif sorted(osvType) == ['POE', 'RES']:
-            with S1.OSV(outdir) as osv:
+            with S1.OSV(osvdir) as osv:
                 files = osv.catch(sensor=self.sensor, osvtype='POE', start=before, stop=after)
                 if len(files) == 0:
                     files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after)
