@@ -94,6 +94,7 @@ class OSV(object):
             self.sslcontext = ssl._create_unverified_context()
         else:
             raise RuntimeError('this functionality requires Python Version >=2.7.9')
+        self._reorganize()
     
     def __enter__(self):
         return self
@@ -279,7 +280,7 @@ class OSV(object):
         str
             a time stamp in the format YYYYmmddTHHMMSS
         """
-        return re.match(self.pattern_fine, os.path.basename(file)).group(datetype)
+        return self._parse(file)[datetype]
     
     def clean_res(self):
         """
@@ -390,7 +391,7 @@ class OSV(object):
                 best = self.match(sensor=sensor, timestamp=timestamp, osvtype='RES')
             return best
     
-    def retrieve(self, files, zipped=True, subdirs=True):
+    def retrieve(self, files):
         """
         download a list of remote files into the respective subdirectories, i.e. POEORB or RESORB
 
@@ -398,10 +399,6 @@ class OSV(object):
         ----------
         files: list
             a list of remotely existing OSV files as returned by method :meth:`catch`
-        zipped: bool
-            compress the downloaded file into a zip archive; this is required by SNAP
-        subdirs: bool
-            store the files in subdirectories for sensor, year and month; this is required by SNAP
 
         Returns
         -------
@@ -415,27 +412,17 @@ class OSV(object):
             # print('downloading {} {} file{}'.format(len(downloads), type, '' if len(downloads) == 1 else 's'))
             for remote in downloads:
                 basename = os.path.basename(remote)
-                if subdirs:
-                    start = self.date(basename, datetype='start')
-                    start = datetime.strptime(start, '%Y%m%dT%H%M%S')
-                    month = '{:02d}'.format(start.month)
-                    outdir = os.path.join(outdir_main, self.sensor(basename),
-                                          str(start.year), month)
-                    os.makedirs(outdir, exist_ok=True)
-                else:
-                    outdir = outdir_main
+                outdir = self._subdir(basename)
+                os.makedirs(outdir, exist_ok=True)
                 local = os.path.join(outdir, basename)
                 infile = urlopen(remote, context=self.sslcontext)
-                if zipped:
-                    with zf.ZipFile(file=local + '.zip',
-                                    mode='w',
-                                    compression=zf.ZIP_DEFLATED) \
-                            as outfile:
-                        outfile.writestr(zinfo_or_arcname=basename,
-                                         data=infile.read())
-                else:
-                    with open(local, 'wb') as outfile:
-                        outfile.write(infile.read())
+                
+                with zf.ZipFile(file=local + '.zip',
+                                mode='w',
+                                compression=zf.ZIP_DEFLATED) \
+                        as outfile:
+                    outfile.writestr(zinfo_or_arcname=basename,
+                                     data=infile.read())
                 infile.close()
         self.clean_res()
     
