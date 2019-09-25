@@ -9,7 +9,8 @@ from osgeo import gdal
 from osgeo.gdalconst import GA_Update
 
 from pyroSAR import identify
-from pyroSAR._dev_config import ExamineSnap, LOOKUP
+from pyroSAR._dev_config import LOOKUP
+from pyroSAR.examine import ExamineSnap
 
 from spatialist.auxil import gdal_translate
 from spatialist.ancillary import finder
