@@ -109,6 +109,38 @@ class OSV(object):
             if not os.path.isdir(dir):
                 os.makedirs(dir)
     
+    def _parse(self, file):
+        basename = os.path.basename(file)
+        groups = re.match(self.pattern_fine, basename).groupdict()
+        return groups
+    
+    def _reorganize(self):
+        """
+        compress and move EOF files into subdirectories
+        
+        Returns
+        -------
+
+        """
+        message = True
+        for subdir in [self.outdir_poe, self.outdir_res]:
+            if not os.path.isdir(subdir):
+                continue
+            files = finder(subdir, [self.pattern], recursive=False, regex=True)
+            for eof in files:
+                base = os.path.basename(eof)
+                target = os.path.join(self._subdir(eof), base + '.zip')
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                if not os.path.isfile(target):
+                    if message:
+                        print('compressing and reorganizing EOF files')
+                        message = False
+                    with zf.ZipFile(file=target,
+                                    mode='w',
+                                    compression=zf.ZIP_DEFLATED) as zip:
+                        zip.write(eof)
+                os.remove(eof)
+    
     def _typeEvaluate(self, osvtype):
         """
         evaluate the 'osvtype' method argument and return the corresponding remote repository and local directory
@@ -406,21 +438,6 @@ class OSV(object):
                         outfile.write(infile.read())
                 infile.close()
         self.clean_res()
-
-    def sensor(self, file):
-        """
-        
-        Parameters
-        ----------
-        file: str
-            the OSV file
-
-        Returns
-        -------
-        str
-            either S1A or S1B
-        """
-        return re.match(self.pattern_fine, os.path.basename(file)).group('sensor')
     
     def sortByDate(self, files, datetype='start'):
         """
@@ -439,6 +456,31 @@ class OSV(object):
             the input OSV files sorted by the defined date
         """
         return sorted(files, key=lambda x: self.date(x, datetype))
+
+    def _subdir(self, file):
+        """
+        | return the subdirectory in which to store the EOF file,
+        | i.e. basedir/{type}ORB/{sensor}/{year}/{month}
+        | e.g. basedir/POEORB/S1A/2018/12
+
+        Parameters
+        ----------
+        file: str
+            the EOF filename
+
+        Returns
+        -------
+        str
+            the target directory
+        """
+        attr = self._parse(file)
+        address, outdir = self._typeEvaluate(attr['type'][:3])
+        start = self.date(file, datetype='start')
+        start = datetime.strptime(start, '%Y%m%dT%H%M%S')
+        month = '{:02d}'.format(start.month)
+        outdir = os.path.join(outdir, attr['sensor'],
+                              str(start.year), month)
+        return outdir
 
 
 def removeGRDBorderNoise(scene):
