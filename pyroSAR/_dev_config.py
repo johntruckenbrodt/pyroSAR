@@ -154,7 +154,23 @@ STORAGE = Storage(URL=URL,
                   LOOKUP=LOOKUP)
 
 
-class ConfigHandler(object):
+class Singleton(type):
+    """
+    Define an Instance operation that lets clients access its unique instance.
+    https://sourcemaking.com/design_patterns/singleton/python/1
+    """
+
+    def __init__(cls, name, bases, attrs, **kwargs):
+        super().__init__(name, bases, attrs)
+        cls._instance = None
+
+    def __call__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__call__(*args, **kwargs)
+        return cls._instance
+
+
+class ConfigHandler(metaclass=Singleton):
     """
     ConfigHandler is a configuration handler for pyroSAR. It is intended to be called by a class's '__init__' and
     set or get the configuration parameters throughout an entire package.
