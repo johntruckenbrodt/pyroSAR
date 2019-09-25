@@ -25,7 +25,6 @@ def test_scene_osv(tmpdir, testdata):
             for item in osv.getLocals('POE')[1:3]:
                 os.remove(item)
             assert len(osv.getLocals('POE')) == 1
-            osv.clean_res()
             res = osv.catch(sensor='S1A', osvtype='RES', start='20180101T120000', stop='20180102T120000')
             assert len(res) == 33
             osv.retrieve(res[0:3])
