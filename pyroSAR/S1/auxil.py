@@ -146,7 +146,8 @@ class OSV(object):
                     with zf.ZipFile(file=target,
                                     mode='w',
                                     compression=zf.ZIP_DEFLATED) as zip:
-                        zip.write(eof)
+                        zip.write(filename=eof,
+                                  arcname=base)
                 os.remove(eof)
     
     def _typeEvaluate(self, osvtype):
