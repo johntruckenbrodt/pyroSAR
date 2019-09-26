@@ -139,7 +139,7 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
     out = out.decode('utf-8') if isinstance(out, bytes) else out
     err = err.decode('utf-8') if isinstance(err, bytes) else err
     # delete intermediate files if an error occurred
-    if proc.returncode != 0:
+    if proc.returncode == 1:
         pattern = r"Error: \[NodeId: (?P<id>[a-zA-Z0-9-_]*)\] " \
                   r"Operator \'[a-zA-Z0-9-_]*\': " \
                   r"Unknown element \'(?P<par>[a-zA-Z]*)\'"
@@ -163,6 +163,15 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
             err_match = re.search('Error: (.*)\n', out + err)
             errmessage = err_match.group(1) if err_match else err
             raise RuntimeError(errmessage)
+    elif proc.returncode == -9:
+        if cleanup:
+            if os.path.isfile(outname + '.tif'):
+                os.remove(outname + '.tif')
+            elif os.path.isdir(outname):
+                shutil.rmtree(outname)
+        print('the process was killed by SNAP. One possible cause is a lack of memory.')
+    else:
+        print('process return code: {}'.format(proc.returncode))
 
 
 def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None):
