@@ -151,7 +151,7 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
                 node = flow[replace['id']]
                 del node.parameters[replace['par']]
                 flow.write(xmlfile)
-            execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, verbose=False)
+            execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, verbose=verbose)
         else:
             if cleanup:
                 if os.path.isfile(outname + '.tif'):
