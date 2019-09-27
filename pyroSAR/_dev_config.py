@@ -294,7 +294,7 @@ class ConfigHandler(metaclass=Singleton):
         
         os.startfile(self.__GLOBAL['config'])
     
-    def add_section(self, section='SNAP'):
+    def add_section(self, section):
         """
         Create a new section in the configuration.
 
@@ -311,6 +311,8 @@ class ConfigHandler(metaclass=Singleton):
         if not self.parser.has_section(section):
             self.parser.add_section(section)
             self.write()
+        else:
+            raise RuntimeError('section already exists')
     
     @property
     def file(self):
