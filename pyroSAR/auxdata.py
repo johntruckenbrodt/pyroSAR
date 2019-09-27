@@ -18,7 +18,7 @@ else:
 from osgeo import gdal
 
 from pyroSAR import identify
-from .snap import ExamineSnap
+from pyroSAR.examine import ExamineSnap
 from spatialist import Raster
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp

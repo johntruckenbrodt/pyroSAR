@@ -13,12 +13,14 @@ import os
 import re
 import ssl
 import time
+import zipfile as zf
 from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
 import numpy as np
 from osgeo import gdal
 from osgeo.gdalconst import GA_Update
 from . import linesimplify as ls
+from pyroSAR.examine import ExamineSnap
 
 from spatialist.ancillary import finder, urlQueryParser
 
@@ -78,13 +80,19 @@ class OSV(object):
         the directory to write the orbit files to
     """
     
-    def __init__(self, osvdir):
+    def __init__(self, osvdir=None):
+        if osvdir is None:
+            try:
+                auxdatapath = ExamineSnap().auxdatapath
+            except AttributeError:
+                auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
+            osvdir = os.path.join(auxdatapath, 'Orbits', 'Sentinel-1')
         self.remote_poe = 'https://qc.sentinel1.eo.esa.int/aux_poeorb/'
         self.remote_res = 'https://qc.sentinel1.eo.esa.int/aux_resorb/'
         self.outdir_poe = os.path.join(osvdir, 'POEORB')
         self.outdir_res = os.path.join(osvdir, 'RESORB')
         self.pattern = r'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
-        self.pattern_fine = r'S1[AB]_OPER_AUX_' \
+        self.pattern_fine = r'(?P<sensor>S1[AB])_OPER_AUX_' \
                             r'(?P<type>(?:POE|RES)ORB)_OPOD_' \
                             r'(?P<publish>[0-9]{8}T[0-9]{6})_V' \
                             r'(?P<start>[0-9]{8}T[0-9]{6})_' \
@@ -93,6 +101,7 @@ class OSV(object):
             self.sslcontext = ssl._create_unverified_context()
         else:
             raise RuntimeError('this functionality requires Python Version >=2.7.9')
+        self._reorganize()
     
     def __enter__(self):
         return self
@@ -107,6 +116,39 @@ class OSV(object):
         for dir in [self.outdir_poe, self.outdir_res]:
             if not os.path.isdir(dir):
                 os.makedirs(dir)
+    
+    def _parse(self, file):
+        basename = os.path.basename(file)
+        groups = re.match(self.pattern_fine, basename).groupdict()
+        return groups
+    
+    def _reorganize(self):
+        """
+        compress and move EOF files into subdirectories
+        
+        Returns
+        -------
+
+        """
+        message = True
+        for subdir in [self.outdir_poe, self.outdir_res]:
+            if not os.path.isdir(subdir):
+                continue
+            files = finder(subdir, [self.pattern], recursive=False, regex=True)
+            for eof in files:
+                base = os.path.basename(eof)
+                target = os.path.join(self._subdir(eof), base + '.zip')
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                if not os.path.isfile(target):
+                    if message:
+                        print('compressing and reorganizing EOF files')
+                        message = False
+                    with zf.ZipFile(file=target,
+                                    mode='w',
+                                    compression=zf.ZIP_DEFLATED) as zip:
+                        zip.write(filename=eof,
+                                  arcname=base)
+                os.remove(eof)
     
     def _typeEvaluate(self, osvtype):
         """
@@ -236,6 +278,8 @@ class OSV(object):
 
         Parameters
         ----------
+        file: str
+            the OSV file
         datetype: {'publish', 'start', 'stop'}
             one of three possible date types contained in the OSV filename
 
@@ -244,7 +288,7 @@ class OSV(object):
         str
             a time stamp in the format YYYYmmddTHHMMSS
         """
-        return re.match(self.pattern_fine, os.path.basename(file)).group(datetype)
+        return self._parse(file)[datetype]
     
     def clean_res(self):
         """
@@ -369,17 +413,26 @@ class OSV(object):
         """
         self._init_dir()
         for type in ['POE', 'RES']:
-            address, outdir = self._typeEvaluate(type)
+            address, outdir_main = self._typeEvaluate(type)
             downloads = [x for x in files
                          if re.search('{}ORB'.format(type), x) and
-                         not os.path.isfile(os.path.join(outdir, os.path.basename(x)))]
-            # print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
+                         not finder(outdir_main, [os.path.basename(x) + '*'])]
+            # print('downloading {} {} file{}'.format(len(downloads), type, '' if len(downloads) == 1 else 's'))
             for remote in downloads:
-                local = os.path.join(outdir, os.path.basename(remote))
+                basename = os.path.basename(remote)
+                outdir = self._subdir(basename)
+                os.makedirs(outdir, exist_ok=True)
+                local = os.path.join(outdir, basename)
                 infile = urlopen(remote, context=self.sslcontext)
-                with open(local, 'wb') as outfile:
-                    outfile.write(infile.read())
+                
+                with zf.ZipFile(file=local + '.zip',
+                                mode='w',
+                                compression=zf.ZIP_DEFLATED) \
+                        as outfile:
+                    outfile.writestr(zinfo_or_arcname=basename,
+                                     data=infile.read())
                 infile.close()
+        self.clean_res()
     
     def sortByDate(self, files, datetype='start'):
         """
@@ -398,47 +451,31 @@ class OSV(object):
             the input OSV files sorted by the defined date
         """
         return sorted(files, key=lambda x: self.date(x, datetype))
-    
-    def update(self, update_res=True):
+
+    def _subdir(self, file):
         """
-        Caution! This method is intended for downloading all available POE files and all RES files for whose
-        time span no POE file yet exists locally.
-        This will be a data volume of several GB and is particularly suited for multi-node SAR processing where not
-        all nodes might have internet access and thus all files have to be downloaded before starting the processing.
-
-        If you want to download the OSV file for a single scene either use the respective methods
-        of the SAR drivers (e.g. :meth:`pyroSAR.drivers.SAFE.getOSV`) or methods :meth:`catch` and :meth:`retrieve` in combination.
-
-        Perform creating/updating operations for POE and RES files:
-        download newest POE and RES files, delete RES files which can be replaced by newly downloaded POE files.
-
-        actions performed:
-         * the ESA Quality Control (QC) server is checked for any POE files not in the local directory
-         * POE  files on the server and not in the local directory are downloaded
-         * RES files newer than the latest POE file are downloaded; POE files are approximately 18 days behind the actual date, thus RES files can be used instead
-         * delete all RES files for whose date a POE file now exists locally
-
+        | return the subdirectory in which to store the EOF file,
+        | i.e. basedir/{type}ORB/{sensor}/{year}/{month}
+        | e.g. basedir/POEORB/S1A/2018/12
 
         Parameters
         ----------
-        update_res: bool
-            should the RES files also be updated (or just the POE files)
+        file: str
+            the EOF filename
 
         Returns
         -------
-
+        str
+            the target directory
         """
-        self._init_dir()
-        try:
-            files_poe = self.catch(sensor=['S1A', 'S1B'], osvtype='POE', start=self.maxdate('POE', 'start'))
-        except RuntimeError as e:
-            raise e
-        self.retrieve(files_poe)
-        if update_res:
-            print('---------------------------------------------------------')
-            files_res = self.catch(sensor=['S1A', 'S1B'], osvtype='RES', start=self.maxdate('POE', 'start'))
-            self.retrieve(files_res)
-            self.clean_res()
+        attr = self._parse(file)
+        address, outdir = self._typeEvaluate(attr['type'][:3])
+        start = self.date(file, datetype='start')
+        start = datetime.strptime(start, '%Y%m%dT%H%M%S')
+        month = '{:02d}'.format(start.month)
+        outdir = os.path.join(outdir, attr['sensor'],
+                              str(start.year), month)
+        return outdir
 
 
 def removeGRDBorderNoise(scene):

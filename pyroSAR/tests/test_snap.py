@@ -4,7 +4,8 @@ from pyroSAR import identify
 from pyroSAR.snap import geocode
 from spatialist import bbox
 from spatialist.ancillary import finder
-from pyroSAR.snap.auxil import is_consistent, split, groupbyWorkers, ExamineSnap, Workflow, parse_recipe
+from pyroSAR.snap.auxil import is_consistent, split, groupbyWorkers, Workflow, parse_recipe
+from pyroSAR.examine import ExamineSnap
 
 
 def test_installation():

@@ -2,9 +2,9 @@
 import os
 import sys
 import json
-import warnings
 
 # Python 3 comparability
+
 if sys.version_info >= (3, 0):
     import configparser as ConfigParser
 else:
@@ -154,7 +154,23 @@ STORAGE = Storage(URL=URL,
                   LOOKUP=LOOKUP)
 
 
-class ConfigHandler(object):
+class Singleton(type):
+    """
+    Define an Instance operation that lets clients access its unique instance.
+    https://sourcemaking.com/design_patterns/singleton/python/1
+    """
+
+    def __init__(cls, name, bases, attrs, **kwargs):
+        super().__init__(name, bases, attrs)
+        cls._instance = None
+
+    def __call__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__call__(*args, **kwargs)
+        return cls._instance
+
+
+class ConfigHandler(metaclass=Singleton):
     """
     ConfigHandler is a configuration handler for pyroSAR. It is intended to be called by a class's '__init__' and
     set or get the configuration parameters throughout an entire package.
@@ -190,15 +206,13 @@ class ConfigHandler(object):
     # Define __setter to control changeable keys (optional)
     # __setter = ["etc", "auxdata"]
     
-    def __init__(self, path=None, config_fname='config.ini'):
-        
-        path = os.path.expanduser('~') if path is None else os.path.realpath(path)
-        path = os.path.join(path, '.pyrosar')
+    def __init__(self):
+        path = os.path.join(os.path.expanduser('~'), '.pyrosar')
         
         self.__GLOBAL = {
             'path': path,
-            'config_fname': config_fname,
-            'config': os.path.join(path, config_fname),
+            'config_fname': 'config.ini',
+            'config': os.path.join(path, 'config.ini'),
         }
         
         if not os.path.isfile(self.__GLOBAL['config']):
@@ -280,7 +294,7 @@ class ConfigHandler(object):
         
         os.startfile(self.__GLOBAL['config'])
     
-    def add_section(self, section='SNAP'):
+    def add_section(self, section):
         """
         Create a new section in the configuration.
 
@@ -297,6 +311,8 @@ class ConfigHandler(object):
         if not self.parser.has_section(section):
             self.parser.add_section(section)
             self.write()
+        else:
+            raise RuntimeError('section already exists')
     
     @property
     def file(self):
@@ -355,6 +371,22 @@ class ConfigHandler(object):
             raise AttributeError('Key {0} does not exist.'.format(str(key)))
         
         self.parser.remove_option(section, key)
+        self.write()
+    
+    def remove_section(self, section):
+        """
+        remove a section
+        
+        Parameters
+        ----------
+        section: str
+            Section name.
+
+        Returns
+        -------
+
+        """
+        self.parser.remove_section(section)
         self.write()
     
     def write(self):

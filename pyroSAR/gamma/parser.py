@@ -4,7 +4,7 @@ import subprocess as sp
 from collections import Counter
 from spatialist.ancillary import finder, which, dissolve
 
-from .auxil import ExamineGamma
+from pyroSAR.examine import ExamineGamma
 
 
 def parse_command(command, indent='    '):

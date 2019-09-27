@@ -14,7 +14,7 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1ThermalNoise=True, offset=None,
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
-            basename_extensions=None, test=False, export_extra=None, groupsize=2, cleanup=True,
+            basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True,
             gpt_exceptions=None, returnWF=False,
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             speckleFilter=False, refarea='gamma0'):
@@ -157,6 +157,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if id.sensor in ['ASAR', 'ERS1', 'ERS2']:
         formatName = 'ENVISAT'
     elif id.sensor in ['S1A', 'S1B']:
+        id.getOSV()
         if id.product == 'SLC':
             raise RuntimeError('Sentinel-1 SLC data is not supported yet')
         formatName = 'SENTINEL-1'
