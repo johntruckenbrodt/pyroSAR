@@ -206,15 +206,13 @@ class ConfigHandler(metaclass=Singleton):
     # Define __setter to control changeable keys (optional)
     # __setter = ["etc", "auxdata"]
     
-    def __init__(self, path=None, config_fname='config.ini'):
-        
-        path = os.path.expanduser('~') if path is None else os.path.realpath(path)
-        path = os.path.join(path, '.pyrosar')
+    def __init__(self):
+        path = os.path.join(os.path.expanduser('~'), '.pyrosar')
         
         self.__GLOBAL = {
             'path': path,
-            'config_fname': config_fname,
-            'config': os.path.join(path, config_fname),
+            'config_fname': 'config.ini',
+            'config': os.path.join(path, 'config.ini'),
         }
         
         if not os.path.isfile(self.__GLOBAL['config']):
