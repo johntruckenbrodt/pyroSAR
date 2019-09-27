@@ -373,6 +373,22 @@ class ConfigHandler(metaclass=Singleton):
         self.parser.remove_option(section, key)
         self.write()
     
+    def remove_section(self, section):
+        """
+        remove a section
+        
+        Parameters
+        ----------
+        section: str
+            Section name.
+
+        Returns
+        -------
+
+        """
+        self.parser.remove_section(section)
+        self.write()
+    
     def write(self):
         if sys.version_info >= (3, 0):
             with open(self.__GLOBAL['config'], 'w', encoding='utf8') as out:
