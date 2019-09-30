@@ -1290,15 +1290,14 @@ class SAFE(ID):
         if format != 'kmz':
             raise RuntimeError('currently only kmz is supported as format')
         kml_name = self.findfiles('map-overlay.kml')[0]
-        kml_membername = kml_name.replace(self.scene, '').strip(r'\/')
-        png = self.findfiles('quick-look.png')[0]
-        png_membername = png.replace(self.scene, '').strip(r'\/')
-        with zf.ZipFile(self.scene, 'r') as archive:
-            with zf.ZipFile(outname, 'w') as out:
-                kml = archive.open(kml_membername).read().decode('utf-8')
+        png_name = self.findfiles('quick-look.png')[0]
+        with zf.ZipFile(outname, 'w') as out:
+            with self.getFileObj(kml_name) as kml_in:
+                kml = kml_in.getvalue().decode('utf-8')
                 kml = kml.replace('Sentinel-1 Map Overlay', self.outname_base())
                 out.writestr('doc.kml', data=kml)
-                out.writestr('quick-look.png', data=archive.open(png_membername).read())
+            with self.getFileObj(png_name) as png_in:
+                out.writestr('quick-look.png', data=png_in.getvalue())
     
     def scanMetadata(self):
         with self.getFileObj(self.findfiles('manifest.safe')[0]) as input:
