@@ -97,6 +97,7 @@ class OSV(object):
                             r'(?P<publish>[0-9]{8}T[0-9]{6})_V' \
                             r'(?P<start>[0-9]{8}T[0-9]{6})_' \
                             r'(?P<stop>[0-9]{8}T[0-9]{6})\.EOF'
+        self._init_dir()
         self._reorganize()
     
     def __enter__(self):
@@ -384,27 +385,28 @@ class OSV(object):
         Returns
         -------
         """
-        self._init_dir()
-        for type in ['POE', 'RES']:
-            outdir_main = self._typeEvaluate(type)
-            downloads = [x for x in files
-                         if re.search('{}ORB'.format(type), x) and
-                         not finder(outdir_main, [os.path.basename(x) + '*'])]
-            # print('downloading {} {} file{}'.format(len(downloads), type, '' if len(downloads) == 1 else 's'))
-            for remote in downloads:
-                basename = os.path.basename(remote)
-                outdir = self._subdir(basename)
-                os.makedirs(outdir, exist_ok=True)
-                local = os.path.join(outdir, basename)
+        downloads = []
+        for remote in files:
+            outdir = self._subdir(remote)
+            os.makedirs(outdir, exist_ok=True)
+            basename = os.path.basename(remote)
+            local = os.path.join(outdir, basename) + '.zip'
+            if not os.path.isfile(local):
+                downloads.append((remote, local, basename))
+        if len(downloads) == 0:
+            return
+        print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
+        with pb.ProgressBar(maxval=len(downloads)) as pbar:
+            for remote, local, basename in downloads:
                 infile = urlopen(remote)
-                
-                with zf.ZipFile(file=local + '.zip',
+                with zf.ZipFile(file=local,
                                 mode='w',
                                 compression=zf.ZIP_DEFLATED) \
                         as outfile:
                     outfile.writestr(zinfo_or_arcname=basename,
                                      data=infile.read())
                 infile.close()
+                pbar.update(1)
         self.clean_res()
     
     def sortByDate(self, files, datetype='start'):
