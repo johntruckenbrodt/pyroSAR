@@ -11,8 +11,8 @@ else:
 
 import os
 import re
-import ssl
 import time
+import json
 import zipfile as zf
 from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
@@ -21,6 +21,7 @@ from osgeo import gdal
 from osgeo.gdalconst import GA_Update
 from . import linesimplify as ls
 from pyroSAR.examine import ExamineSnap
+import progressbar as pb
 
 from spatialist.ancillary import finder, urlQueryParser
 
@@ -87,8 +88,7 @@ class OSV(object):
             except AttributeError:
                 auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
             osvdir = os.path.join(auxdatapath, 'Orbits', 'Sentinel-1')
-        self.remote_poe = 'https://qc.sentinel1.eo.esa.int/aux_poeorb/'
-        self.remote_res = 'https://qc.sentinel1.eo.esa.int/aux_resorb/'
+        self.url = 'https://qc.sentinel1.eo.esa.int/api/v1/'
         self.outdir_poe = os.path.join(osvdir, 'POEORB')
         self.outdir_res = os.path.join(osvdir, 'RESORB')
         self.pattern = r'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
@@ -97,10 +97,6 @@ class OSV(object):
                             r'(?P<publish>[0-9]{8}T[0-9]{6})_V' \
                             r'(?P<start>[0-9]{8}T[0-9]{6})_' \
                             r'(?P<stop>[0-9]{8}T[0-9]{6})\.EOF'
-        if sys.version_info >= (2, 7, 9):
-            self.sslcontext = ssl._create_unverified_context()
-        else:
-            raise RuntimeError('this functionality requires Python Version >=2.7.9')
         self._reorganize()
     
     def __enter__(self):
@@ -125,7 +121,7 @@ class OSV(object):
     def _reorganize(self):
         """
         compress and move EOF files into subdirectories
-        
+
         Returns
         -------
 
@@ -167,9 +163,9 @@ class OSV(object):
         if osvtype not in ['POE', 'RES']:
             raise IOError('type must be either "POE" or "RES"')
         if osvtype == 'POE':
-            return self.remote_poe, self.outdir_poe
+            return self.outdir_poe
         else:
-            return self.remote_res, self.outdir_res
+            return self.outdir_res
     
     def catch(self, sensor, osvtype='POE', start=None, stop=None):
         """
@@ -194,11 +190,15 @@ class OSV(object):
         list
             the URLs of the remote OSV files
         """
-        address, outdir = self._typeEvaluate(osvtype)
         # a dictionary for storing the url arguments
-        query = {'page': 1}
-        # a list of pages to be searched; will be extended during url readout
-        pages = [1]
+        query = {}
+        
+        if osvtype == 'POE':
+            query['product_type'] = 'AUX_POEORB'
+        elif osvtype == 'RES':
+            query['product_type'] = 'AUX_RESORB'
+        else:
+            raise RuntimeError("osvtype must be either 'POE' or 'RES'")
         
         if sensor in ['S1A', 'S1B']:
             query['sentinel1__mission'] = sensor
@@ -208,70 +208,42 @@ class OSV(object):
             raise RuntimeError('unsupported input for parameter sensor')
         
         # the collection of files to be returned
-        files = []
+        collection = []
         # set the defined date or the date of the first existing OSV file otherwise
         # two days are added/subtracted from the defined start and stop dates since the
         # online query does only allow for searching the start time; hence, if e.g.
         # the start date is 2018-01-01T000000, the query would not return the corresponding
         # file, whose start date is 2017-12-31 (V20171231T225942_20180102T005942)
         if start is not None:
-            date_start = datetime.strptime(start, '%Y%m%dT%H%M%S')
-            date_start = (date_start - timedelta(days=2)).strftime('%Y-%m-%d')
+            date_start = datetime.strptime(start, '%Y%m%dT%H%M%S').strftime('%Y-%m-%dT%H:%M:%S')
         else:
             date_start = '2014-07-31'
         # set the defined date or the current date otherwise
         if stop is not None:
-            date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S')
-            date_stop = (date_stop + timedelta(days=2)).strftime('%Y-%m-%d')
+            date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S').strftime('%Y-%m-%dT%H:%M:%S')
         else:
             date_stop = time.strftime('%Y-%m-%d')
         
-        # pattern for scanning urlopen response for links to OSV files
-        pattern_url = 'http.*{}'.format(self.pattern)
-        
         # append the time frame to the query dictionary
-        query['validity_start_gte'] = date_start
-        query['validity_stop_lte'] = date_stop
+        query['validity_start__gte'] = date_start
+        query['validity_stop__lte'] = date_stop
         print('searching for new {} files'.format(osvtype))
-        # iterate through the url pages and look for files
-        while len(pages) > 0:
-            # parse the url
-            subaddress = urlQueryParser(address, query)
-            # read the remote content
-            try:
-                response = urlopen(subaddress, context=self.sslcontext).read().decode('utf-8')
-                print(subaddress)
-            except IOError as e:
-                raise RuntimeError('{}\ntrying to access {}'.format(str(e), subaddress))
-            
-            # get all links to other pages
-            pages_str = re.findall('page=[0-9]+', response)
-            pages_int = list(set([int(x.strip('page=')) for x in pages_str]))
-            # add teh page numbers to the page list if they are higher than the list's maximum
-            for page in pages_int:
-                if page > max(pages):
-                    pages.append(page)
-            # delete the page from the list of pages yet to be searched
-            del pages[pages.index(query['page'])]
-            
-            remotes = sorted(set(re.findall(pattern_url, response)))
-            # do a more accurate filtering of the time stamps
-            if start is not None:
-                remotes = [x for x in remotes if self.date(x, 'stop') >= start]
-            if stop is not None:
-                remotes = [x for x in remotes if self.date(x, 'start') <= stop]
-            # filter files already existing in the files collection
-            selection = [x for x in remotes if x not in files]
-            if len(selection) >= 0:
-                # append the found files to the collection
-                files += selection
-            # increment the url page
-            query['page'] += 1
-        # in case the type 'RES' is selected then only return those files covering
-        # a time period not covered by any POE file
+        target = urlQueryParser(self.url, query).replace('%3A', ':')
+        pbar = None
+        while target is not None:
+            response = json.load(urlopen(target))
+            if pbar is None:
+                print(target)
+                pbar = pb.ProgressBar(maxval=response['count']).start()
+            remotes = [item['remote_url'] for item in response['results']]
+            collection += remotes
+            pbar.update(len(collection))
+            target = response['next']
+        pbar.finish()
         if osvtype == 'RES':
-            files = [x for x in files if self.date(x, 'start') > self.maxdate('POE', 'stop')]
-        return files
+            collection = [x for x in collection
+                          if self.date(x, 'start') > self.maxdate('POE', 'stop')]
+        return collection
     
     def date(self, file, datetype):
         """
@@ -315,7 +287,7 @@ class OSV(object):
         list
             a selection of local OSV files
         """
-        address, directory = self._typeEvaluate(osvtype)
+        directory = self._typeEvaluate(osvtype)
         return finder(directory, [self.pattern], regex=True)
     
     def maxdate(self, osvtype='POE', datetype='stop'):
@@ -334,7 +306,7 @@ class OSV(object):
         str
             a timestamp in format YYYYmmddTHHMMSS
         """
-        address, directory = self._typeEvaluate(osvtype)
+        directory = self._typeEvaluate(osvtype)
         files = finder(directory, [self.pattern], regex=True)
         return max([self.date(x, datetype) for x in files]) if len(files) > 0 else None
     
@@ -354,7 +326,7 @@ class OSV(object):
         str
             a timestamp in format YYYYmmddTHHMMSS
         """
-        address, directory = self._typeEvaluate(osvtype)
+        directory = self._typeEvaluate(osvtype)
         files = finder(directory, [self.pattern], regex=True)
         return min([self.date(x, datetype) for x in files]) if len(files) > 0 else None
     
@@ -414,7 +386,7 @@ class OSV(object):
         """
         self._init_dir()
         for type in ['POE', 'RES']:
-            address, outdir_main = self._typeEvaluate(type)
+            outdir_main = self._typeEvaluate(type)
             downloads = [x for x in files
                          if re.search('{}ORB'.format(type), x) and
                          not finder(outdir_main, [os.path.basename(x) + '*'])]
@@ -424,7 +396,7 @@ class OSV(object):
                 outdir = self._subdir(basename)
                 os.makedirs(outdir, exist_ok=True)
                 local = os.path.join(outdir, basename)
-                infile = urlopen(remote, context=self.sslcontext)
+                infile = urlopen(remote)
                 
                 with zf.ZipFile(file=local + '.zip',
                                 mode='w',
@@ -452,7 +424,7 @@ class OSV(object):
             the input OSV files sorted by the defined date
         """
         return sorted(files, key=lambda x: self.date(x, datetype))
-
+    
     def _subdir(self, file):
         """
         | return the subdirectory in which to store the EOF file,
@@ -470,7 +442,7 @@ class OSV(object):
             the target directory
         """
         attr = self._parse(file)
-        address, outdir = self._typeEvaluate(attr['type'][:3])
+        outdir = self._typeEvaluate(attr['type'][:3])
         start = self.date(file, datetype='start')
         start = datetime.strptime(start, '%Y%m%dT%H%M%S')
         month = '{:02d}'.format(start.month)
@@ -499,13 +471,13 @@ def removeGRDBorderNoise(scene):
 
     .. figure:: figures/S1_bnr.png
         :scale: 30%
-        
+
         Demonstration of the border nose removal for a vertical left image border. The area under the respective lines
         covers pixels considered valid, everything above will be masked out. The blue line is the result of the noise
         removal as recommended by ESA, in which a lot of noise is still present. The red line is the over-simplified
         result using the Visvalingam-Whyatt method of poly-line vertex reduction. The green line is the final result
         after further correcting the VW-simplified result.
-    
+
     """
     if scene.compression is not None:
         raise RuntimeError('scene is not yet unpacked')
