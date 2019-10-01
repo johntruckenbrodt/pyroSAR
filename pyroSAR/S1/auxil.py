@@ -230,7 +230,8 @@ class OSV(object):
         pattern_url = 'http.*{}'.format(self.pattern)
         
         # append the time frame to the query dictionary
-        query['validity_start'] = '{0}..{1}'.format(date_start, date_stop)
+        query['validity_start_gte'] = date_start
+        query['validity_stop_lte'] = date_stop
         print('searching for new {} files'.format(osvtype))
         # iterate through the url pages and look for files
         while len(pages) > 0:
@@ -241,7 +242,7 @@ class OSV(object):
                 response = urlopen(subaddress, context=self.sslcontext).read().decode('utf-8')
                 print(subaddress)
             except IOError as e:
-                raise RuntimeError(e)
+                raise RuntimeError('{}\ntrying to access {}'.format(str(e), subaddress))
             
             # get all links to other pages
             pages_str = re.findall('page=[0-9]+', response)
