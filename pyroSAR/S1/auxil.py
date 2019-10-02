@@ -240,7 +240,7 @@ class OSV(object):
             pbar.update(len(collection))
             target = response['next']
         pbar.finish()
-        if osvtype == 'RES':
+        if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
             collection = [x for x in collection
                           if self.date(x, 'start') > self.maxdate('POE', 'stop')]
         return collection
@@ -268,10 +268,11 @@ class OSV(object):
         delete all RES files for whose date a POE file exists
         """
         maxdate_poe = self.maxdate('POE', 'stop')
-        deprecated = [x for x in self.getLocals('RES') if self.date(x, 'stop') < maxdate_poe]
-        print('deleting {} RES file{}'.format(len(deprecated), '' if len(deprecated) == 1 else 's'))
-        for item in deprecated:
-            os.remove(item)
+        if maxdate_poe is not None:
+            deprecated = [x for x in self.getLocals('RES') if self.date(x, 'stop') < maxdate_poe]
+            print('deleting {} RES file{}'.format(len(deprecated), '' if len(deprecated) == 1 else 's'))
+            for item in deprecated:
+                os.remove(item)
     
     def getLocals(self, osvtype='POE'):
         """

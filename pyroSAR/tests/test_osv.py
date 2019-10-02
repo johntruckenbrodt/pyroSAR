@@ -3,6 +3,19 @@ import time
 import pytest
 from pyroSAR import identify
 from pyroSAR.S1 import OSV
+from datetime import datetime, timedelta
+
+
+def test_osv_cleanres(tmpdir):
+    with OSV(str(tmpdir)) as osv:
+        assert osv.getLocals('POE') == []
+        assert osv.getLocals('RES') == []
+        now = (datetime.now() - timedelta(hours=10)).strftime('%Y%m%dT%H%M%S')
+        res = osv.catch(sensor='S1A', osvtype='RES', start=now)
+        nfiles = len(res)
+        osv.retrieve(res)
+        osv.clean_res()
+        assert len(osv.getLocals('RES')) == nfiles
 
 
 def test_scene_osv(tmpdir, testdata):
