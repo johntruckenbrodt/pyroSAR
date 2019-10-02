@@ -11,10 +11,9 @@ else:
 
 import os
 import re
-import time
 import json
 import zipfile as zf
-from datetime import datetime, timedelta
+from datetime import datetime
 import xml.etree.ElementTree as ET
 import numpy as np
 from osgeo import gdal
@@ -223,7 +222,7 @@ class OSV(object):
         if stop is not None:
             date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S').strftime('%Y-%m-%dT%H:%M:%S')
         else:
-            date_stop = time.strftime('%Y-%m-%d')
+            date_stop = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
         
         # append the time frame to the query dictionary
         query['validity_start__gte'] = date_start
@@ -235,7 +234,7 @@ class OSV(object):
             response = json.load(urlopen(target))
             if pbar is None:
                 print(target)
-                pbar = pb.ProgressBar(maxval=response['count']).start()
+                pbar = pb.ProgressBar(max_value=response['count']).start()
             remotes = [item['remote_url'] for item in response['results']]
             collection += remotes
             pbar.update(len(collection))
@@ -396,7 +395,7 @@ class OSV(object):
         if len(downloads) == 0:
             return
         print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
-        with pb.ProgressBar(maxval=len(downloads)) as pbar:
+        with pb.ProgressBar(max_value=len(downloads)) as pbar:
             for remote, local, basename in downloads:
                 infile = urlopen(remote)
                 with zf.ZipFile(file=local,
