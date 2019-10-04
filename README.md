@@ -13,6 +13,8 @@
     <img src='https://readthedocs.org/projects/pyrosar/badge/?version=latest' alt='Documentation Status' /></a>
   <a href='https://badge.fury.io/py/pyroSAR'>
     <img src='https://badge.fury.io/py/pyroSAR.svg' alt='PIP Status' /></a>
+  <a href='https://pepy.tech/project/pyroSAR'>
+    <img src='http://pepy.tech/badge/pyroSAR' alt='Downloads' /></a>
 </p>
 
 The pyroSAR package aims at providing a complete solution for the scalable organization and processing of SAR satellite data:
