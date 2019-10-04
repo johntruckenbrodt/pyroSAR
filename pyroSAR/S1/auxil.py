@@ -2,16 +2,11 @@
 # general utilities for Sentinel-1
 # John Truckenbrodt 2016-2019
 ##############################################################
-import sys
-
-if sys.version_info >= (3, 0):
-    from urllib.request import urlopen
-else:
-    from urllib import urlopen
 
 import os
 import re
-import json
+import sys
+import requests
 import zipfile as zf
 from datetime import datetime
 import xml.etree.ElementTree as ET
@@ -231,7 +226,7 @@ class OSV(object):
         target = urlQueryParser(self.url, query).replace('%3A', ':')
         pbar = None
         while target is not None:
-            response = json.load(urlopen(target))
+            response = requests.get(target).json()
             if pbar is None:
                 print(target)
                 pbar = pb.ProgressBar(max_value=response['count']).start()
@@ -398,13 +393,13 @@ class OSV(object):
         print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
         with pb.ProgressBar(max_value=len(downloads)) as pbar:
             for remote, local, basename in downloads:
-                infile = urlopen(remote)
+                infile = requests.get(remote)
                 with zf.ZipFile(file=local,
                                 mode='w',
                                 compression=zf.ZIP_DEFLATED) \
                         as outfile:
                     outfile.writestr(zinfo_or_arcname=basename,
-                                     data=infile.read())
+                                     data=infile.content)
                 infile.close()
                 pbar.update(1)
         self.clean_res()
