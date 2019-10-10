@@ -4,3 +4,4 @@ numpy
 scoop
 spatialist==0.3
 pyyaml
+requests

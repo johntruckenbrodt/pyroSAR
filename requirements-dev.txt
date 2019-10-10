@@ -4,6 +4,7 @@ numpy
 scoop
 spatialist==0.3
 pyyaml
+requests
 
 #Testing requirements
 pytest
