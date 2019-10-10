@@ -232,7 +232,7 @@ class ExamineSnap(object):
 class ExamineGamma(object):
     def __init__(self):
         home_sys = os.environ.get('GAMMA_HOME')
-        if not os.path.isdir(home_sys):
+        if home_sys is not None and not os.path.isdir(home_sys):
             warnings.warn('found GAMMA_HOME environment variable, but directory does not exist')
             home_sys = None
         if 'GAMMA' in config.sections:
