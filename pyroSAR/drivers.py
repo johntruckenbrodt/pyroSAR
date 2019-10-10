@@ -488,6 +488,31 @@ class ID(object):
             the converted time stamp in format YYYYmmddTHHMMSS
         """
         return parse_date(x)
+
+    @abc.abstractmethod
+    def quicklook(self, outname, format='kmz'):
+        """
+        export a quick look image of the scene
+
+        Parameters
+        ----------
+        outname: str
+            the name of the output file
+        format: str
+            the format of the file to write;
+            currently only kmz is supported
+
+        Returns
+        -------
+
+        Examples
+        --------
+
+        >>> from pyroSAR import identify
+        >>> scene = identify('S1A_IW_GRDH_1SDV_20180101T170648_20180101T170713_019964_021FFD_DA78.zip')
+        >>> scene.quicklook('S1A__IW___A_20180101T170648.kmz')
+        """
+        raise NotImplementedError
     
     def summary(self):
         """
@@ -1218,7 +1243,7 @@ class SAFE(ID):
     
     def removeGRDBorderNoise(self):
         """
-        mask out Sentinel-1 image border noise. See :func:`~pyroSAR.S1.auxil.removeGRDBorderNoise`
+        mask out Sentinel-1 image border noise. See :func:`~pyroSAR.S1.removeGRDBorderNoise`
         """
         S1.removeGRDBorderNoise(self)
     
@@ -1266,27 +1291,6 @@ class SAFE(ID):
                 osv.retrieve(files)
     
     def quicklook(self, outname, format='kmz'):
-        """
-        export a quick look image of the scene
-        
-        Parameters
-        ----------
-        outname: str
-            the name of the output file
-        format: str
-            the format of the file to write;
-            currently only kmz is supported
-
-        Returns
-        -------
-        
-        Examples
-        --------
-        
-        >>> from pyroSAR import identify
-        >>> scene = identify('S1A_IW_GRDH_1SDV_20180101T170648_20180101T170713_019964_021FFD_DA78.zip')
-        >>> scene.quicklook('S1A__IW___A_20180101T170648.kmz')
-        """
         if format != 'kmz':
             raise RuntimeError('currently only kmz is supported as format')
         kml_name = self.findfiles('map-overlay.kml')[0]
