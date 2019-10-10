@@ -174,7 +174,7 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
         print('process return code: {}'.format(proc.returncode))
 
 
-def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None):
+def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None, removeS1BorderNoiseMethod='pyroSAR'):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
     Input is a readily formatted workflow XML file as
@@ -198,6 +198,10 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None):
         each (sub-)workflow containing this operator will be executed with the define executable;
         
          - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
+    removeS1BorderNoiseMethod: str
+        the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
+         - 'ESA': the pure implementation as described by ESA
+         - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
     
     Returns
     -------
@@ -237,7 +241,7 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None):
         print('unpacking scene')
         scene.unpack(outname)
         print('removing border noise..')
-        scene.removeGRDBorderNoise()
+        scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
         # change the name of the input file to that of the unpacked archive
         read.parameters['file'] = scene.scene
         # write a new workflow file

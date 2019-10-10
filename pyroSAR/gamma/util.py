@@ -421,7 +421,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=1,
             func_interp=2, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
             cleanup=True, normalization_method=2, export_extra=None, basename_extensions=None,
-            removeS1BorderNoise=True):
+            removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR'):
     """
     general function for geocoding SAR images with GAMMA
     
@@ -489,6 +489,10 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     removeS1BorderNoise: bool, optional
         Enables removal of S1 GRD border noise (default).
+    removeS1BorderNoiseMethod: str
+        the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
+         - 'ESA': the pure implementation as described by ESA
+         - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
     
     Returns
     -------
@@ -603,7 +607,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     
     if scene.sensor in ['S1A', 'S1B'] and removeS1BorderNoise:
         print('removing border noise..')
-        scene.removeGRDBorderNoise()
+        scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
     
     print('converting scene to GAMMA format..')
     convert2gamma(scene, scene.scene, logpath=path_log, outdir=scene.scene,

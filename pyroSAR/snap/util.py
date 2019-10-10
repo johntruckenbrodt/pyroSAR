@@ -12,7 +12,8 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
-            geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1ThermalNoise=True, offset=None,
+            geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR',
+            removeS1ThermalNoise=True, offset=None,
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
             basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True,
             gpt_exceptions=None, returnWF=False,
@@ -44,6 +45,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         The type of geocoding applied; can be either 'Range-Doppler' (default) or 'SAR simulation cross correlation'
     removeS1BorderNoise: bool, optional
         Enables removal of S1 GRD border noise (default).
+    removeS1BorderNoiseMethod: str
+        the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
+         - 'ESA': the pure implementation as described by ESA
+         - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
     removeS1ThermalNoise: bool, optional
         Enables removal of S1 thermal noise (default).
     offset: tuple, optional
@@ -495,7 +500,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         try:
             groups = groupbyWorkers(outname + '_proc.xml', groupsize)
             gpt(outname + '_proc.xml', groups=groups, cleanup=cleanup,
-                gpt_exceptions=gpt_exceptions)
+                gpt_exceptions=gpt_exceptions,
+                removeS1BorderNoiseMethod=removeS1BorderNoiseMethod)
         except RuntimeError as e:
             if cleanup:
                 if os.path.isdir(outname):

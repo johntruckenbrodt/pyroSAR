@@ -1241,11 +1241,25 @@ class SAFE(ID):
         
         self.gammafiles = {'slc': [], 'pri': [], 'grd': []}
     
-    def removeGRDBorderNoise(self):
+    def removeGRDBorderNoise(self, method='pyroSAR'):
         """
-        mask out Sentinel-1 image border noise. See :func:`~pyroSAR.S1.removeGRDBorderNoise`
+        mask out Sentinel-1 image border noise.
+        
+        Parameters
+        ----------
+        method: str
+            the border noise removal method to be applied; one of the following:
+             - 'ESA': the pure implementation as described by ESA
+             - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
+
+        Returns
+        -------
+        
+        See Also
+        --------
+        :func:`~pyroSAR.S1.removeGRDBorderNoise`
         """
-        S1.removeGRDBorderNoise(self)
+        S1.removeGRDBorderNoise(self, method=method)
     
     def getCorners(self):
         coordinates = self.meta['coordinates']
