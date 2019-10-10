@@ -420,7 +420,8 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
 
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=1,
             func_interp=2, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
-            cleanup=True, normalization_method=2, export_extra=None, basename_extensions=None):
+            cleanup=True, normalization_method=2, export_extra=None, basename_extensions=None,
+            removeS1BorderNoise=True):
     """
     general function for geocoding SAR images with GAMMA
     
@@ -486,6 +487,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
          - see Notes for ID options
     basename_extensions: list of str
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
+    removeS1BorderNoise: bool, optional
+        Enables removal of S1 GRD border noise (default).
     
     Returns
     -------
@@ -598,7 +601,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if not os.path.isdir(path_log):
         os.makedirs(path_log)
     
-    if scene.sensor in ['S1A', 'S1B']:
+    if scene.sensor in ['S1A', 'S1B'] and removeS1BorderNoise:
         print('removing border noise..')
         scene.removeGRDBorderNoise()
     
