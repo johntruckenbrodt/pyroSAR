@@ -31,6 +31,7 @@ import os
 import re
 import shutil
 import struct
+import operator
 import tarfile as tf
 import xml.etree.ElementTree as ET
 import zipfile as zf
@@ -101,7 +102,7 @@ def identify(scene):
     raise RuntimeError('data format not supported')
 
 
-def identify_many(scenes):
+def identify_many(scenes, verbose=True, sortkey=None):
     """
     wrapper function for returning metadata handlers of all valid scenes in a list, similar to function
     :func:`~pyroSAR.drivers.identify`.
@@ -111,13 +112,24 @@ def identify_many(scenes):
     ----------
     scenes: list
         the file names of the scenes to be identified
+    verbose: bool
+        adds a progressbar if True
+    sortkey: str
+        sort the handler object list by an attribute
     Returns
     -------
     list
         a list of pyroSAR metadata handlers
+    
+    Examples
+    --------
+    >>> from pyroSAR import identify_many
+    >>> files = finder('/path', ['S1*.zip'])
+    >>> ids = identify_many(files, verbose=False, sortkey='start')
     """
     idlist = []
-    pbar = pb.ProgressBar(max_value=len(scenes)).start()
+    if verbose:
+        pbar = pb.ProgressBar(max_value=len(scenes)).start()
     for i, scene in enumerate(scenes):
         if isinstance(scene, ID):
             idlist.append(scene)
@@ -127,8 +139,12 @@ def identify_many(scenes):
                 idlist.append(id)
             except RuntimeError:
                 continue
-        pbar.update(i + 1)
-    pbar.finish()
+        if verbose:
+            pbar.update(i + 1)
+    if verbose:
+        pbar.finish()
+    if sortkey is not None:
+        idlist.sort(key=operator.attrgetter(sortkey))
     return idlist
 
 
