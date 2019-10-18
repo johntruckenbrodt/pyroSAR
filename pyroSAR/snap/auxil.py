@@ -665,7 +665,8 @@ class Workflow(object):
             a file suffix created from the order of which the nodes will be executed
         """
         nodes = self.tree.findall('node')
-        suffix = '_'.join(filter(None, [LOOKUP.snap.suffix[x] for x in [y.attrib['id'] for y in nodes]]))
+        names = [re.sub(r'[ ]*\([0-9]+\)', '', y.attrib['id']) for y in nodes]
+        suffix = '_'.join(filter(None, [LOOKUP.snap.suffix[x] for x in names]))
         return suffix
     
     def write(self, outfile):
