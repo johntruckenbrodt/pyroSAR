@@ -24,8 +24,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
 
     Parameters
     ----------
-    infile: str or ~pyroSAR.drivers.ID
-        the SAR scene to be processed
+    infile: str or ~pyroSAR.drivers.ID or list
+        the SAR scene(s) to be processed; multiple scenes are treated as consecutive acquisitions, which will be
+        mosaicked with SNAP's SliceAssembly operator
     outdir: str
         The directory to write the final files to.
     t_srs: int, str or osr.SpatialReference
@@ -148,7 +149,17 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     :func:`spatialist.auxil.crsConvert()`
     """
     
-    id = infile if isinstance(infile, pyroSAR.ID) else pyroSAR.identify(infile)
+    if isinstance(infile, pyroSAR.ID):
+        id = infile
+    elif isinstance(infile, str):
+        id = pyroSAR.identify(infile)
+    elif isinstance(infile, list):
+        if removeS1BorderNoise:
+            raise RuntimeError('border noise removal is currently not yet supported for multiple scenes')
+        ids = pyroSAR.identify_many(infile, verbose=False, sortkey='start')
+        id = ids[0]
+    else:
+        raise TypeError("'infile' must be of type str, list or pyroSAR.ID")
     
     if id.is_processed(outdir):
         print('scene {} already processed'.format(id.outname_base()))
@@ -203,19 +214,32 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     read = workflow['Read']
     read.parameters['file'] = id.scene
     read.parameters['formatName'] = formatName
+    
+    if isinstance(infile, list):
+        readers = [read.id]
+        for i in range(1, len(infile)):
+            readn = parse_node('Read')
+            readn.parameters['file'] = ids[i].scene
+            readn.parameters['formatName'] = formatName
+            workflow.insert_node(readn, before=read.id, resetSuccessorSource=False)
+            readers.append(readn.id)
+        sliceAssembly = parse_node('SliceAssembly')
+        sliceAssembly.parameters['selectedPolarisations'] = polarizations
+        workflow.insert_node(sliceAssembly, before=readers)
+        read = sliceAssembly
     ############################################
     # Remove-GRD-Border-Noise node configuration
     # print('-- configuring Remove-GRD-Border-Noise Node')
     if id.sensor in ['S1A', 'S1B'] and removeS1BorderNoise:
         bn = parse_node('Remove-GRD-Border-Noise')
-        workflow.insert_node(bn, before='Read')
+        workflow.insert_node(bn, before=read.id)
         bn.parameters['selectedPolarisations'] = polarizations
     ############################################
     # ThermalNoiseRemoval node configuration
     # print('-- configuring ThermalNoiseRemoval Node')
     if id.sensor in ['S1A', 'S1B'] and removeS1ThermalNoise:
         tn = parse_node('ThermalNoiseRemoval')
-        workflow.insert_node(tn, before='Read')
+        workflow.insert_node(tn, before=read.id)
         tn.parameters['selectedPolarisations'] = polarizations
     ############################################
     # orbit file application node configuration
@@ -392,14 +416,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         # print('--- parse XML node')
         subset = parse_node('Subset')
         # print('--- insert node')
-        workflow.insert_node(subset, before='Read')
+        workflow.insert_node(subset, before=read.id)
         subset.parameters['region'] = [0, 0, id.samples, id.lines]
         subset.parameters['geoRegion'] = wkt
     ############################################
     # (optionally) configure subset node for pixel offsets
     if offset and not shapefile:
         subset = parse_node('Subset')
-        workflow.insert_node(subset, before='Read')
+        workflow.insert_node(subset, before=read.id)
         
         # left, right, top and bottom offset in pixels
         l, r, t, b = offset

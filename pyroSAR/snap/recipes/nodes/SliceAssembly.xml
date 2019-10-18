@@ -1,0 +1,10 @@
+<node id="SliceAssembly">
+    <operator>SliceAssembly</operator>
+    <sources>
+        <sourceProduct refid="Read"/>
+        <sourceProduct.1 refid="Read(2)"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+        <selectedPolarisations/>
+    </parameters>
+</node>
