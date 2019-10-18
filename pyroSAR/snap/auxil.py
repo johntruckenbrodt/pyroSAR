@@ -11,6 +11,7 @@ from osgeo.gdalconst import GA_Update
 from pyroSAR import identify
 from pyroSAR._dev_config import LOOKUP
 from pyroSAR.examine import ExamineSnap
+from pyroSAR.ancillary import parse_datasetname
 
 from spatialist.auxil import gdal_translate
 from spatialist.ancillary import finder
@@ -278,6 +279,25 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None, removeS1BorderN
         ras = None
     if cleanup:
         shutil.rmtree(outname)
+    ###########################################################################
+    # write the Sentinel-1 manifest.safe file as addition to the actual product
+    attrs = parse_datasetname(outname)
+    ext = '' if attrs['extensions'] is None else attrs['extensions']
+    readers = workflow['operator=Read']
+    for reader in readers:
+        infile = reader.parameters['file']
+        try:
+            id = identify(infile)
+            if id.sensor in ['S1A', 'S1B']:
+                manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
+                basename = '_'.join([id.outname_base() + ext, 'manifest.safe'])
+                outdir = os.path.dirname(outname)
+                outname_manifest = os.path.join(outdir, basename)
+                with open(outname_manifest, 'wb') as out:
+                    out.write(manifest.read())
+        except RuntimeError:
+            continue
+    ###########################################################################
     print('done')
 
 
