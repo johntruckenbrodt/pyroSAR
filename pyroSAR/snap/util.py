@@ -154,8 +154,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     elif isinstance(infile, str):
         id = pyroSAR.identify(infile)
     elif isinstance(infile, list):
-        if removeS1BorderNoise:
-            raise RuntimeError('border noise removal is currently not yet supported for multiple scenes')
         ids = pyroSAR.identify_many(infile, verbose=False, sortkey='start')
         id = ids[0]
     else:
