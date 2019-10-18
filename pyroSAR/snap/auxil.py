@@ -220,7 +220,9 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None, removeS1BorderN
     else:
         dem_nodata = 0
     
-    if 'Remove-GRD-Border-Noise' in workflow.ids:
+    if 'Remove-GRD-Border-Noise' in workflow.ids and removeS1BorderNoiseMethod == 'pyroSAR':
+        if 'SliceAssembly' in workflow.operators:
+            raise RuntimeError("pyroSAR's custom border noise removal is not yet implemented for multiple scene inputs")
         xmlfile = os.path.join(outname,
                                os.path.basename(xmlfile.replace('_bnr', '')))
         if not os.path.isdir(outname):
