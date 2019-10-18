@@ -298,7 +298,7 @@ def is_consistent(nodes):
     check = []
     for node in nodes:
         source = node.source
-        if source is None or source in ids:
+        if source is None or source in ids or all([x in ids for x in source]):
             check.append(True)
         else:
             check.append(False)
@@ -414,8 +414,11 @@ def groupbyWorkers(xmlfile, n=2):
         for worker in group:
             newgroup.append(worker)
             source = workflow[worker].source
-            if source in readers_id:
-                newgroup.insert(group.index(worker), source)
+            if not isinstance(source, list):
+                source = list(source)
+            for item in source:
+                if item in readers_id:
+                    newgroup.insert(newgroup.index(worker), item)
             for writer in writers_id:
                 if workflow[writer].source == worker:
                     newgroup.append(writer)
@@ -469,6 +472,19 @@ class Workflow(object):
         rough_string = ET.tostring(self.tree, 'utf-8')
         reparsed = minidom.parseString(rough_string)
         return reparsed.toprettyxml(indent='\t', newl='')
+    
+    def __find_source(self, predecessor):
+        if isinstance(predecessor, list):
+            return [self.__find_source(x) for x in predecessor]
+        else:
+            source_id = predecessor
+            while True:
+                # a Write node cannot be the source of another node
+                if self[source_id].operator == 'Write':
+                    source_id = self[source_id].source
+                else:
+                    break
+            return source_id
     
     def __optimize_appearance(self):
         """
@@ -532,8 +548,9 @@ class Workflow(object):
         ----------
         node: Node
             the node to be inserted
-        before: str
-            the ID of the node before the newly inserted node
+        before: str or list
+            the ID(s) of the node(s) before the newly inserted node; a list of node IDs is intended for nodes that
+            require multiple sources, e.g. sliceAssembly
         after: str
             the ID of the node after the newly inserted node
         resetSuccessorSource: bool
@@ -547,21 +564,21 @@ class Workflow(object):
             the new node or None, depending on arguement `void`
         """
         if before and not after:
-            predecessor = self[before]
+            if isinstance(before, list):
+                indices = [self.index(self[x]) for x in before]
+                predecessor = self[before[indices.index(max(indices))]]
+            else:
+                predecessor = self[before]
             # print('inserting node {} after {}'.format(node.id, predecessor.id))
             position = self.index(predecessor) + 1
             self.tree.insert(position, node.element)
             newnode = Node(self.tree[position])
             # print('new node id: {}'.format(newnode.id))
+            ####################################################
             # set the source product for the new node
-            source_id = before
-            while True:
-                if self[source_id].operator == 'Write':
-                    source_id = self[source_id].source
-                else:
-                    # print('setting source of new node to {}'.format(self[source_id].id))
-                    newnode.source = self[source_id].id
-                    break
+            if newnode.operator != 'Read':
+                newnode.source = self.__find_source(before)
+            ####################################################
             # set the source product for the node after the new node
             if resetSuccessorSource:
                 try:
@@ -569,6 +586,7 @@ class Workflow(object):
                     # print('resetting source of successor {} to {}'.format(successor.id, newnode.id))
                     successor.source = newnode.id
                 except IndexError:
+                    # case where no successor exists because the new node is the new last node in the graph
                     pass
             # else:
             #     print('no source resetting required')
@@ -579,19 +597,14 @@ class Workflow(object):
             self.tree.insert(position, node.element)
             newnode = Node(self.tree[position])
             # print('new node id: {}'.format(newnode.id))
+            ####################################################
             # set the source product for the new node
             try:
-                predecessor = self[position - 2]
-                source_id = predecessor.id
-                while True:
-                    if self[source_id].operator == 'Write':
-                        source_id = self[source_id].source
-                    else:
-                        # print('setting source of new node to {}'.format(self[source_id].id))
-                        newnode.source = self[source_id].id
-                        break
+                if newnode.operator != 'Read':
+                    newnode.source = self.__find_source(self[position - 2])
             except IndexError:
                 newnode.source = None
+            ####################################################
             # set the source product for the node after the new node
             if resetSuccessorSource:
                 # print('resetting source of successor {} to {}'.format(successor.id, newnode.id))
@@ -710,6 +723,13 @@ class Node(object):
         reparsed = minidom.parseString(rough_string)
         return reparsed.toprettyxml(indent='\t', newl='')
     
+    def __set_source(self, key, value):
+        source = self.element.find('.//sources/{}'.format(key))
+        if source is not None:
+            source.attrib['refid'] = value
+        else:
+            raise RuntimeError('cannot set source on {} node'.format(self.operator))
+    
     @property
     def id(self):
         """
@@ -754,13 +774,20 @@ class Node(object):
         
         Returns
         -------
-        str
-            the ID of the source node
+        str or list
+            the ID(s) of the source node(s)
         """
-        source = self.element.find('.//sources/sourceProduct')
-        if source is not None:
-            source = source.attrib['refid']
-        return source
+        sources = []
+        elements = self.element.findall('.//sources/')
+        for element in elements:
+            sources.append(element.attrib['refid'])
+        
+        if len(sources) == 0:
+            return None
+        elif len(sources) == 1:
+            return sources[0]
+        else:
+            return sources
     
     @source.setter
     def source(self, value):
@@ -769,8 +796,8 @@ class Node(object):
         
         Parameters
         ----------
-        value: str
-            the ID of the new source node
+        value: str or list
+            the ID(s) of the new source node(s)
 
         Returns
         -------
@@ -779,11 +806,13 @@ class Node(object):
         ------
         RuntimeError
         """
-        source = self.element.find('.//sources/sourceProduct')
-        if source is not None:
-            source.attrib['refid'] = value
-        else:
-            raise RuntimeError('cannot set source on {} node'.format(self.operator))
+        if isinstance(value, str):
+            self.__set_source('sourceProduct', value)
+        elif isinstance(value, list):
+            key = 'sourceProduct'
+            for i, item in enumerate(value):
+                self.__set_source(key, item)
+                key = 'sourceProduct.{}'.format(i + 1)
 
 
 class Par(object):
