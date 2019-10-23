@@ -644,7 +644,7 @@ class Product(object):
         with open(outname, 'w') as yml:
             yaml.dump(out, yml, default_flow_style=False)
     
-    def export_ingestion_yml(self, outname, product_name, ingest_location):
+    def export_ingestion_yml(self, outname, product_name, ingest_location, chunking):
         """
         Write a YML file, which can be used for ingesting indexed datasets into an Open Data Cube.
         
@@ -656,6 +656,9 @@ class Product(object):
             the name of the product in the ODC
         ingest_location: str
             the location of the ingested NetCDF files
+        chunking: dict
+            a dictionary with keys 'x', 'y' and 'time'; determines the size of the netCDF
+            files ingested into the datacube; e.g. {'x': 512, 'y': 512, 'time': 1}
 
         Returns
         -------
@@ -691,13 +694,9 @@ class Product(object):
         storage = self.meta['storage']
         storage['driver'] = 'NetCDF CF'
         storage['tile_size'] = {}
-        for key in storage['resolution']:
-            storage['tile_size'][key] = storage['resolution'][key] * 500
-            storage['tile_size'][key] = storage['resolution'][key] * 500
-        storage['chunking'] = {'time': 1}
-        for key in storage['resolution']:
-            storage['chunking'][key] = 500
-            storage['chunking'][key] = 500
+        storage['tile_size']['x'] = storage['resolution']['x'] * chunking['x']
+        storage['tile_size']['y'] = storage['resolution']['y'] * chunking['y']
+        storage['chunking'] = chunking
         storage['dimension_order'] = ['time', 'y', 'x']
         
         measurements = self.meta['measurements']
