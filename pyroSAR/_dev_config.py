@@ -97,13 +97,13 @@ snap_suffix = {'Apply-Orbit-File': 'Orb',
                'Remove-GRD-Border-Noise': 'bnr',
                'SAR-Simulation': 'Sim',
                'SARSim-Terrain-Correction': 'TC',
+               'SliceAssembly': '',
                'Speckle-Filter': 'SF',
                'Subset': '',
                'Terrain-Correction': 'TC',
                'Terrain-Flattening': 'TF',
                'ThermalNoiseRemoval': 'tnr',
-               'Write': '',
-               'Write (2)': ''}
+               'Write': ''}
 
 snap = Storage(suffix=snap_suffix)
 
