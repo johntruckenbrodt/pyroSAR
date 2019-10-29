@@ -504,7 +504,7 @@ class ID(object):
             the converted time stamp in format YYYYmmddTHHMMSS
         """
         return parse_date(x)
-
+    
     @abc.abstractmethod
     def quicklook(self, outname, format='kmz'):
         """
@@ -1619,6 +1619,21 @@ class Archive(object):
                     ', '.join(['GeomFromText(?, 4326)' if x == 'bbox' else '?' for x in colnames]))
         return insert_string, tuple(insertion)
     
+    def __select_missing(self, table):
+        """
+        
+        Returns
+        -------
+        list
+            the names of all scenes, which are no longer stored in their registered location
+        """
+        if table not in ['data', 'duplicates']:
+            raise ValueError("parameter 'table' must either be 'data' or 'duplicates'")
+        cursor = self.conn.cursor()
+        cursor.execute('''SELECT scene FROM {}'''.format(table))
+        files = [self.encode(x[0]) for x in cursor.fetchall()]
+        return [x for x in files if not os.path.isfile(x)]
+    
     def insert(self, scene_in, verbose=False, test=False):
         """
         Insert one or many scenes into the database
@@ -1715,7 +1730,7 @@ class Archive(object):
             return string.encode(encoding)
         else:
             return string
-
+    
     def export2shp(self, shp):
         """
         export the database to a shapefile
