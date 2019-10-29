@@ -1724,6 +1724,22 @@ class Archive(object):
         """
         return len(self.select(scene=scene)) != 0 or len(self.select_duplicates(scene=scene)) != 0
     
+    def cleanup(self):
+        """
+        Remove all scenes from the database, which are no longer stored in their registered location
+        
+        Returns
+        -------
+
+        """
+        cursor = self.conn.cursor()
+        for table in ['data', 'duplicates']:
+            missing = self.__select_missing(table)
+            for scene in missing:
+                query = '''DELETE FROM {0} WHERE scene=?'''.format(table)
+                cursor.execute(query, (scene,))
+        self.conn.commit()
+    
     @staticmethod
     def encode(string, encoding='utf-8'):
         if not isinstance(string, str):
