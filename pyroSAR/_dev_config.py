@@ -20,10 +20,10 @@ product_pattern = r'(?:.*[/\\]|)' \
                   r'(?P<acquisition_mode>[A-Z0-9]{1,4})_+' \
                   r'(?P<orbit>[AD])_' \
                   r'(?P<start>[0-9T]{15})' \
-                  r'(?:_(?P<extensions>\w*)|)' \
-                  r')_' \
-                  r'(?P<polarization>[HV]{2})_' \
-                  r'(?P<proc_steps>\w*)' \
+                  r'(?:_(?P<extensions>\w*?)|)' \
+                  r')_*' \
+                  r'(?:(?P<polarization>[HV]{2})_' \
+                  r'(?P<proc_steps>\w*)|)' \
                   r'(?P<filetype>(?:.tif|.nc|))$'
 
 
@@ -159,11 +159,11 @@ class Singleton(type):
     Define an Instance operation that lets clients access its unique instance.
     https://sourcemaking.com/design_patterns/singleton/python/1
     """
-
+    
     def __init__(cls, name, bases, attrs, **kwargs):
         super().__init__(name, bases, attrs)
         cls._instance = None
-
+    
     def __call__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super().__call__(*args, **kwargs)

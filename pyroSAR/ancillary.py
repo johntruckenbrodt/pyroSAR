@@ -176,10 +176,12 @@ def parse_datasetname(name, parse_date=False):
     out = match.groupdict()
     if out['extensions'] == '':
         out['extensions'] = None
-    out['proc_steps'] = out['proc_steps'].split('_')
+    if out['proc_steps'] is not None:
+        out['proc_steps'] = out['proc_steps'].split('_')
     if parse_date:
         out['start'] = datetime.strptime(out['start'], '%Y%m%dT%H%M%S')
     out['filename'] = filename
+    out['outname_base'] = out['outname_base'].strip('_')
     return out
 
 
