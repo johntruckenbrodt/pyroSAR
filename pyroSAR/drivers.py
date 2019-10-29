@@ -1585,6 +1585,10 @@ class Archive(object):
         create_string = 'CREATE TABLE if not exists duplicates (outname_base TEXT, scene TEXT)'
         cursor.execute(create_string)
         self.conn.commit()
+        sys.stdout.write('\rchecking for missing scenes..')
+        self.cleanup()
+        sys.stdout.write('\rchecking for missing scenes..done\n')
+        sys.stdout.flush()
     
     def __prepare_insertion(self, scene):
         """
