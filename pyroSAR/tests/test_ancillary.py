@@ -93,6 +93,26 @@ def test_parse_datasetname():
         if k not in ['filename', 'filetype']:
             assert meta1[k] == meta2[k]
             assert meta1[k] == meta3[k]
+    
+    filename = 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'
+    expectation = {'outname_base': 'S1A__IW___A_20150309T173017', 'sensor': 'S1A', 'acquisition_mode': 'IW',
+                   'orbit': 'A', 'start': '20150309T173017', 'extensions': None, 'polarization': 'VV',
+                   'proc_steps': ['grd', 'mli', 'geo', 'norm', 'db'], 'filetype': '.tif',
+                   'filename': 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'}
+    assert parse_datasetname(filename) == expectation
+
+    filename = 'S1A__IW___A_20150309T173017_149_abc_VV_grd_mli_geo_norm_db.tif'
+    expectation = {'outname_base': 'S1A__IW___A_20150309T173017_149_abc', 'sensor': 'S1A', 'acquisition_mode': 'IW',
+                   'orbit': 'A', 'start': '20150309T173017', 'extensions': '149_abc', 'polarization': 'VV',
+                   'proc_steps': ['grd', 'mli', 'geo', 'norm', 'db'], 'filetype': '.tif',
+                   'filename': 'S1A__IW___A_20150309T173017_149_abc_VV_grd_mli_geo_norm_db.tif'}
+    assert parse_datasetname(filename) == expectation
+    
+    filename = 'S1A__IW___A_20150309T173017_149_inc_geo.tif'
+    expectation = {'outname_base': 'S1A__IW___A_20150309T173017_149_inc_geo', 'sensor': 'S1A', 'acquisition_mode': 'IW',
+                   'orbit': 'A', 'start': '20150309T173017', 'extensions': '149_inc_geo', 'polarization': None,
+                   'proc_steps': None, 'filetype': '.tif', 'filename': 'S1A__IW___A_20150309T173017_149_inc_geo.tif'}
+    assert parse_datasetname(filename) == expectation
 
 
 def test_find_datasets(testdir):

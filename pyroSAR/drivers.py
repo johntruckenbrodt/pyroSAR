@@ -31,6 +31,7 @@ import os
 import re
 import shutil
 import struct
+import operator
 import tarfile as tf
 import xml.etree.ElementTree as ET
 import zipfile as zf
@@ -101,7 +102,7 @@ def identify(scene):
     raise RuntimeError('data format not supported')
 
 
-def identify_many(scenes):
+def identify_many(scenes, verbose=True, sortkey=None):
     """
     wrapper function for returning metadata handlers of all valid scenes in a list, similar to function
     :func:`~pyroSAR.drivers.identify`.
@@ -111,13 +112,24 @@ def identify_many(scenes):
     ----------
     scenes: list
         the file names of the scenes to be identified
+    verbose: bool
+        adds a progressbar if True
+    sortkey: str
+        sort the handler object list by an attribute
     Returns
     -------
     list
         a list of pyroSAR metadata handlers
+    
+    Examples
+    --------
+    >>> from pyroSAR import identify_many
+    >>> files = finder('/path', ['S1*.zip'])
+    >>> ids = identify_many(files, verbose=False, sortkey='start')
     """
     idlist = []
-    pbar = pb.ProgressBar(max_value=len(scenes)).start()
+    if verbose:
+        pbar = pb.ProgressBar(max_value=len(scenes)).start()
     for i, scene in enumerate(scenes):
         if isinstance(scene, ID):
             idlist.append(scene)
@@ -127,8 +139,12 @@ def identify_many(scenes):
                 idlist.append(id)
             except RuntimeError:
                 continue
-        pbar.update(i + 1)
-    pbar.finish()
+        if verbose:
+            pbar.update(i + 1)
+    if verbose:
+        pbar.finish()
+    if sortkey is not None:
+        idlist.sort(key=operator.attrgetter(sortkey))
     return idlist
 
 
@@ -488,7 +504,7 @@ class ID(object):
             the converted time stamp in format YYYYmmddTHHMMSS
         """
         return parse_date(x)
-
+    
     @abc.abstractmethod
     def quicklook(self, outname, format='kmz'):
         """
@@ -1569,6 +1585,10 @@ class Archive(object):
         create_string = 'CREATE TABLE if not exists duplicates (outname_base TEXT, scene TEXT)'
         cursor.execute(create_string)
         self.conn.commit()
+        sys.stdout.write('\rchecking for missing scenes..')
+        self.cleanup()
+        sys.stdout.write('\rchecking for missing scenes..done\n')
+        sys.stdout.flush()
     
     def __prepare_insertion(self, scene):
         """
@@ -1602,6 +1622,21 @@ class Archive(object):
             .format(', '.join(colnames),
                     ', '.join(['GeomFromText(?, 4326)' if x == 'bbox' else '?' for x in colnames]))
         return insert_string, tuple(insertion)
+    
+    def __select_missing(self, table):
+        """
+        
+        Returns
+        -------
+        list
+            the names of all scenes, which are no longer stored in their registered location
+        """
+        if table not in ['data', 'duplicates']:
+            raise ValueError("parameter 'table' must either be 'data' or 'duplicates'")
+        cursor = self.conn.cursor()
+        cursor.execute('''SELECT scene FROM {}'''.format(table))
+        files = [self.encode(x[0]) for x in cursor.fetchall()]
+        return [x for x in files if not os.path.isfile(x)]
     
     def insert(self, scene_in, verbose=False, test=False):
         """
@@ -1693,13 +1728,29 @@ class Archive(object):
         """
         return len(self.select(scene=scene)) != 0 or len(self.select_duplicates(scene=scene)) != 0
     
+    def cleanup(self):
+        """
+        Remove all scenes from the database, which are no longer stored in their registered location
+        
+        Returns
+        -------
+
+        """
+        cursor = self.conn.cursor()
+        for table in ['data', 'duplicates']:
+            missing = self.__select_missing(table)
+            for scene in missing:
+                query = '''DELETE FROM {0} WHERE scene=?'''.format(table)
+                cursor.execute(query, (scene,))
+        self.conn.commit()
+    
     @staticmethod
     def encode(string, encoding='utf-8'):
         if not isinstance(string, str):
             return string.encode(encoding)
         else:
             return string
-
+    
     def export2shp(self, shp):
         """
         export the database to a shapefile

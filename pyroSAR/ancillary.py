@@ -176,10 +176,12 @@ def parse_datasetname(name, parse_date=False):
     out = match.groupdict()
     if out['extensions'] == '':
         out['extensions'] = None
-    out['proc_steps'] = out['proc_steps'].split('_')
+    if out['proc_steps'] is not None:
+        out['proc_steps'] = out['proc_steps'].split('_')
     if parse_date:
         out['start'] = datetime.strptime(out['start'], '%Y%m%dT%H%M%S')
     out['filename'] = filename
+    out['outname_base'] = out['outname_base'].strip('_')
     return out
 
 
@@ -197,8 +199,9 @@ def find_datasets(directory, recursive=False, **kwargs):
         Metadata attributes for filtering the scene list supplied as `key=value`. e.g. `sensor='S1A'`.
         Multiple allowed options can be provided in tuples, e.g. `sensor=('S1A', 'S1B')`.
         Any types other than tuples require an exact match, e.g. `proc_steps=['grd', 'mli', 'geo', 'norm', 'db']`
-        will be matched if only these processing steps are contained in the product name in this exact order.
-        See function :func:`parse_datasetname` for options.
+        will be matched only if these processing steps are contained in the product name in this exact order.
+        The special attributes `start` and `stop` can be used for time filtering where `start<=value<=stop`.
+        See function :func:`parse_datasetname` for further options.
     
     Returns
     -------
@@ -215,12 +218,16 @@ def find_datasets(directory, recursive=False, **kwargs):
         meta = parse_datasetname(file)
         matches = []
         for key, val in kwargs.items():
-            if isinstance(val, tuple):
+            if key == 'start':
+                match = val <= meta['start']
+            elif key == 'stop':
+                match = val >= meta['start']  # only the start time stamp is contained in the filename
+            elif isinstance(val, tuple):
                 match = meta[key] in val
             else:
                 match = meta[key] == val
             matches.append(match)
-        if all(match for match in matches):
+        if all(matches):
             selection.append(file)
     return selection
 
