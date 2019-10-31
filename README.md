@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://www.travis-ci.org/johntruckenbrodt/pyroSAR"><img src="https://www.travis-ci.org/johntruckenbrodt/pyroSAR.svg?branch=master", alt="Travis Status"></a>
-  <a href='https://ci.appveyor.com/project/johntruckenbrodt/pyrosar'><img src='https://ci.appveyor.com/api/projects/status/won0layps8mkss9h?svg=true' alt='Appveyor Status' /></a>
+  <a href='https://ci.appveyor.com/project/johntruckenbrodt/pyrosar'><img src='https://ci.appveyor.com/api/projects/status/won0layps8mkss9h/branch/master?svg=true' alt='Appveyor Status' /></a>
   <a href='https://coveralls.io/github/johntruckenbrodt/pyroSAR?branch=master'>
     <img src='https://coveralls.io/repos/github/johntruckenbrodt/pyroSAR/badge.svg?branch=master' alt='Coveralls Status' />   </a>
   <a href='https://pyrosar.readthedocs.io/en/latest/?badge=latest'>
