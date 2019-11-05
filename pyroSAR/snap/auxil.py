@@ -437,7 +437,7 @@ def groupbyWorkers(xmlfile, n=2):
             newgroup.append(worker)
             source = workflow[worker].source
             if not isinstance(source, list):
-                source = list(source)
+                source = [source]
             for item in source:
                 if item in readers_id:
                     newgroup.insert(newgroup.index(worker), item)
