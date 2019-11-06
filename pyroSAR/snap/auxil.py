@@ -175,7 +175,8 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
         print('process return code: {}'.format(proc.returncode))
 
 
-def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None, removeS1BorderNoiseMethod='pyroSAR'):
+def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None,
+        removeS1BorderNoiseMethod='pyroSAR', basename_extensions=None):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
     Input is a readily formatted workflow XML file as
@@ -203,6 +204,8 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None, removeS1BorderN
         the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
+    basename_extensions: list of str
+        names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     
     Returns
     -------
@@ -283,8 +286,6 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None, removeS1BorderN
         shutil.rmtree(outname)
     ###########################################################################
     # write the Sentinel-1 manifest.safe file as addition to the actual product
-    attrs = parse_datasetname(outname)
-    ext = '' if attrs['extensions'] is None else attrs['extensions']
     readers = workflow['operator=Read']
     for reader in readers:
         infile = reader.parameters['file']
@@ -292,7 +293,8 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None, removeS1BorderN
             id = identify(infile)
             if id.sensor in ['S1A', 'S1B']:
                 manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
-                basename = '_'.join([id.outname_base() + ext, 'manifest.safe'])
+                basename = id.outname_base(basename_extensions)
+                basename = '{0}_{1}_manifest.safe'.format(basename, suffix)
                 outdir = os.path.dirname(outname)
                 outname_manifest = os.path.join(outdir, basename)
                 with open(outname_manifest, 'wb') as out:
