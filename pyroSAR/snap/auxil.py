@@ -15,6 +15,10 @@ from pyroSAR.examine import ExamineSnap
 from spatialist.auxil import gdal_translate
 from spatialist.ancillary import finder
 
+import logging
+
+log = logging.getLogger(__name__)
+
 
 def parse_recipe(name):
     """
@@ -578,6 +582,7 @@ class Workflow(object):
                 if not isinstance(successors, list):
                     successors = [successors]
                 for successor in successors:
+                    log.debug('resetting source of {} to {}'.format(successor, id))
                     successor_source = self[successor].source
                     if isinstance(successor_source, list):
                         successor_source[successor_source.index(source)] = id
@@ -590,10 +595,7 @@ class Workflow(object):
             except RuntimeError:
                 # case where the successor node is of type Read
                 pass
-        
-        source = self[id].source
-        print(id, source)
-        reset(id, source)
+        reset(id, self[id].source)
     
     def __optimize_appearance(self):
         """
@@ -678,7 +680,7 @@ class Workflow(object):
                 predecessor = self[before[indices.index(max(indices))]]
             else:
                 predecessor = self[before]
-            # print('inserting node {} after {}'.format(node.id, predecessor.id))
+            log.debug('inserting node {} after {}'.format(node.id, predecessor.id))
             position = self.index(predecessor) + 1
             self.tree.insert(position, node.element)
             newnode = Node(self.tree[position])
@@ -686,18 +688,18 @@ class Workflow(object):
             ####################################################
             # set the source product for the new node
             if newnode.operator != 'Read':
-                newnode.source = self.__find_source(before)
+                log.debug('setting the source of node {} to {}'.format(newnode.id, before))
+                newnode.source = before
             ####################################################
             # set the source product for the node after the new node
             if resetSuccessorSource:
                 self.__reset_successor_source(newnode.id)
         elif after and not before:
             successor = self[after]
-            # print('inserting node {} before {}'.format(node.id, successor.id))
+            log.debug('inserting node {} before {}'.format(node.id, successor.id))
             position = self.index(successor)
             self.tree.insert(position, node.element)
             newnode = Node(self.tree[position])
-            # print('new node id: {}'.format(newnode.id))
             ####################################################
             # set the source product for the new node
             try:
@@ -712,7 +714,6 @@ class Workflow(object):
         else:
             self.tree.insert(len(self.tree) - 1, node.element)
         self.refresh_ids()
-        # print([x.id for x in self.nodes()])
         if not void:
             return node
     
@@ -748,6 +749,7 @@ class Workflow(object):
                 counter[operator] += 1
                 new = '{} ({})'.format(operator, counter[operator])
                 if node.id != new:
+                    log.debug('renaming node {} to {}'.format(node.id, new))
                     node.id = new
     
     def set_par(self, key, value):
