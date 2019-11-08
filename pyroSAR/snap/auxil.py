@@ -474,11 +474,17 @@ class Workflow(object):
         pattern = '(?P<key>[a-zA-Z-_]*)=(?P<value>[a-zA-Z-_]*)'
         if isinstance(item, int):
             return self.nodes()[item]
-        elif re.search(pattern, item):
-            key, value = re.search(pattern, item).groups()
-            return [x for x in self.nodes() if getattr(x, key) == value]
+        elif isinstance(item, str):
+            if re.search(pattern, item):
+                key, value = re.search(pattern, item).groups()
+                return [x for x in self.nodes() if getattr(x, key) == value]
+            else:
+                try:
+                    return Node(self.tree.find('.//node[@id="{}"]'.format(item)))
+                except TypeError:
+                    raise KeyError('unknown key: {}'.format(item))
         else:
-            return Node(self.tree.find('.//node[@id="{}"]'.format(item)))
+            raise TypeError('item must be of type int or str')
     
     def __delitem__(self, key):
         if not isinstance(key, str):
