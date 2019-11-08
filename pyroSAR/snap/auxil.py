@@ -713,7 +713,9 @@ class Workflow(object):
                 node.id = operator
             else:
                 counter[operator] += 1
-                node.id = '{} ({})'.format(operator, counter[operator])
+                new = '{} ({})'.format(operator, counter[operator])
+                if node.id != new:
+                    node.id = new
     
     def set_par(self, key, value):
         """
