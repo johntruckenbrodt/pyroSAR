@@ -528,6 +528,29 @@ class Workflow(object):
                     break
             return source_id
     
+    def __find_successor(self, id):
+        """
+        find the succeeding node(s) of a node
+        
+        Parameters
+        ----------
+        id: str
+            the ID of  node
+
+        Returns
+        -------
+        list or str
+            the ID(s) of the successors
+        """
+        sources = []
+        for node in self.nodes():
+            if node.source == id or (isinstance(node.source, list) and id in node.source):
+                sources.append(node)
+        if len(sources) == 1:
+            return sources[0].id
+        else:
+            return [source.id for source in sources]
+
     def __optimize_appearance(self):
         """
         assign grid coordinates to the nodes for display in the SNAP GraphBuilder GUI
