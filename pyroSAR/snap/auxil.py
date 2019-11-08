@@ -744,7 +744,11 @@ class Workflow(object):
         """
         nodes = self.tree.findall('node')
         names = [re.sub(r'[ ]*\([0-9]+\)', '', y.attrib['id']) for y in nodes]
-        suffix = '_'.join(filter(None, [LOOKUP.snap.suffix[x] for x in names]))
+        names_unique = []
+        for name in names:
+            if name not in names_unique:
+                names_unique.append(name)
+        suffix = '_'.join(filter(None, [LOOKUP.snap.suffix[x] for x in names_unique]))
         return suffix
     
     def write(self, outfile):
