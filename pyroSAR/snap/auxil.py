@@ -682,7 +682,7 @@ class Workflow(object):
             position = self.index(predecessor) + 1
             self.tree.insert(position, node.element)
             newnode = Node(self.tree[position])
-            # print('new node id: {}'.format(newnode.id))
+            self.refresh_ids()
             ####################################################
             # set the source product for the new node
             if newnode.operator != 'Read':
@@ -690,15 +690,7 @@ class Workflow(object):
             ####################################################
             # set the source product for the node after the new node
             if resetSuccessorSource:
-                try:
-                    successor = self[position]
-                    # print('resetting source of successor {} to {}'.format(successor.id, newnode.id))
-                    successor.source = newnode.id
-                except IndexError:
-                    # case where no successor exists because the new node is the new last node in the graph
-                    pass
-            # else:
-            #     print('no source resetting required')
+                self.__reset_successor_source(newnode.id)
         elif after and not before:
             successor = self[after]
             # print('inserting node {} before {}'.format(node.id, successor.id))
@@ -716,10 +708,7 @@ class Workflow(object):
             ####################################################
             # set the source product for the node after the new node
             if resetSuccessorSource:
-                # print('resetting source of successor {} to {}'.format(successor.id, newnode.id))
-                successor.source = newnode.id
-            # else:
-            # print('no source resetting required')
+                self.__reset_successor_source(newnode.id)
         else:
             self.tree.insert(len(self.tree) - 1, node.element)
         self.refresh_ids()
