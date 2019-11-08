@@ -212,9 +212,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     read = workflow['Read']
     read.parameters['file'] = id.scene
     read.parameters['formatName'] = formatName
+    readers = [read.id]
     
     if isinstance(infile, list):
-        readers = [read.id]
         for i in range(1, len(infile)):
             readn = parse_node('Read')
             readn.parameters['file'] = ids[i].scene
@@ -236,9 +236,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # ThermalNoiseRemoval node configuration
     # print('-- configuring ThermalNoiseRemoval Node')
     if id.sensor in ['S1A', 'S1B'] and removeS1ThermalNoise:
-        tn = parse_node('ThermalNoiseRemoval')
-        workflow.insert_node(tn, before=read.id)
-        tn.parameters['selectedPolarisations'] = polarizations
+        for reader in readers:
+            tn = parse_node('ThermalNoiseRemoval')
+            workflow.insert_node(tn, before=reader)
+            tn.parameters['selectedPolarisations'] = polarizations
     ############################################
     # orbit file application node configuration
     # print('-- configuring Apply-Orbit-File Node')
