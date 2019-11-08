@@ -550,7 +550,51 @@ class Workflow(object):
             return sources[0].id
         else:
             return [source.id for source in sources]
+    
+    def __reset_successor_source(self, id):
+        """
+        reset the sources of nodes to that of a newly inserted one
+        
+        Parameters
+        ----------
+        id: str
+            the ID of the newly inserted node
 
+        Returns
+        -------
+
+        """
+        
+        def reset(id, source):
+            if isinstance(source, list):
+                for item in source:
+                    reset(id, item)
+            try:
+                successors = self.__find_successor(source)
+                if isinstance(successors, list) and id in successors:
+                    del successors[successors.index(id)]
+                elif isinstance(successors, str) and id == successors:
+                    successors = []
+                if not isinstance(successors, list):
+                    successors = [successors]
+                for successor in successors:
+                    successor_source = self[successor].source
+                    if isinstance(successor_source, list):
+                        successor_source[successor_source.index(source)] = id
+                        self[successor].source = successor_source
+                    else:
+                        self[successor].source = id
+            except IndexError:
+                # case where no successor exists because the new node is the new last node in the graph
+                pass
+            except RuntimeError:
+                # case where the successor node is of type Read
+                pass
+        
+        source = self[id].source
+        print(id, source)
+        reset(id, source)
+    
     def __optimize_appearance(self):
         """
         assign grid coordinates to the nodes for display in the SNAP GraphBuilder GUI
