@@ -503,11 +503,24 @@ class Workflow(object):
         reparsed = minidom.parseString(rough_string)
         return reparsed.toprettyxml(indent='\t', newl='')
     
-    def __find_source(self, predecessor):
-        if isinstance(predecessor, list):
-            return [self.__find_source(x) for x in predecessor]
+    def __find_source(self, id):
+        """
+        find the source nodes of a node or multiple nodes
+        
+        Parameters
+        ----------
+        id: str or list
+            the ID(s) of the node(s)
+
+        Returns
+        -------
+        list or str
+            the ID(s) of the source nodes
+        """
+        if isinstance(id, list):
+            return [self.__find_source(x) for x in id]
         else:
-            source_id = predecessor
+            source_id = id
             while True:
                 # a Write node cannot be the source of another node
                 if self[source_id].operator == 'Write':
