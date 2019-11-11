@@ -361,29 +361,43 @@ def split(xmlfile, groups):
     tmp = os.path.join(out, 'temp')
     if not os.path.isdir(tmp):
         os.makedirs(tmp)
+
+    def get_group_id(id, groups):
+        for i, group in enumerate(groups):
+            if id in group:
+                return i
     
     outlist = []
     prod_tmp = []
     prod_tmp_format = []
     for position, group in enumerate(groups):
+        log.debug('creating new workflow for group {}'.format(group))
         new = parse_recipe('blank')
         nodes = [workflow[x] for x in group]
-        if nodes[0].operator != 'Read':
-            read = new.insert_node(parse_node('Read'), void=False)
-        else:
-            read = new.insert_node(nodes[0], void=False)
-            del nodes[0]
-        
-        if position != 0:
-            read.parameters['file'] = prod_tmp[-1]
-            read.parameters['formatName'] = prod_tmp_format[-1]
-        
-        for i, node in enumerate(nodes):
-            if i == 0:
-                new.insert_node(node, before=read.id)
+    
+        for node in nodes:
+            sources = node.source
+            new.insert_node(node)
+            if sources is None:
+                continue
+            if isinstance(sources, list):
+                resetSuccessorSource = False
             else:
-                new.insert_node(node)
-        
+                resetSuccessorSource = True
+                sources = [sources]
+            reset = []
+            for source in sources:
+                if source not in group:
+                    read = new.insert_node(parse_node('Read'), after=node.id, void=False,
+                                           resetSuccessorSource=resetSuccessorSource)
+                    reset.append(read.id)
+                    group_id = get_group_id(source, groups)
+                    read.parameters['file'] = prod_tmp[group_id]
+                    read.parameters['formatName'] = prod_tmp_format[group_id]
+                else:
+                    reset.append(source)
+            if not resetSuccessorSource:
+                node.source = reset
         nodes = new.nodes()
         operators = [node.operator for node in nodes]
         writers = new['operator=Write']
@@ -488,6 +502,9 @@ class Workflow(object):
                     raise KeyError('unknown key: {}'.format(item))
         else:
             raise TypeError('item must be of type int or str')
+
+    def __len__(self):
+        return len(self.tree.findall('node'))
     
     def __delitem__(self, key):
         if not isinstance(key, str):
@@ -538,7 +555,7 @@ class Workflow(object):
         
         Parameters
         ----------
-        id: str
+        id: str or list
             the ID of  node
 
         Returns
@@ -546,6 +563,8 @@ class Workflow(object):
         list or str
             the ID(s) of the successors
         """
+        if not isinstance(id, (str, list)):
+            raise TypeError("'id' must be of type 'str' or 'list'")
         sources = []
         for node in self.nodes():
             if node.source == id or (isinstance(node.source, list) and id in node.source):
@@ -574,7 +593,12 @@ class Workflow(object):
                 for item in source:
                     reset(id, item)
             try:
-                successors = self.__find_successor(source)
+                # find the source nodes of the current node
+                if source is not None:
+                    successors = self.__find_successor(source)
+                else:
+                    return  # nothing to reset
+                # delete the ID of the current node from the successors
                 if isinstance(successors, list) and id in successors:
                     del successors[successors.index(id)]
                 elif isinstance(successors, str) and id == successors:
@@ -582,7 +606,6 @@ class Workflow(object):
                 if not isinstance(successors, list):
                     successors = [successors]
                 for successor in successors:
-                    log.debug('resetting source of {} to {}'.format(successor, id))
                     successor_source = self[successor].source
                     if isinstance(successor_source, list):
                         successor_source[successor_source.index(source)] = id
@@ -595,6 +618,7 @@ class Workflow(object):
             except RuntimeError:
                 # case where the successor node is of type Read
                 pass
+
         reset(id, self[id].source)
     
     def __optimize_appearance(self):
@@ -674,6 +698,8 @@ class Workflow(object):
         Node or None
             the new node or None, depending on arguement `void`
         """
+        if before is None and after is None and len(self) > 0:
+            before = self[len(self) - 1].id
         if before and not after:
             if isinstance(before, list):
                 indices = [self.index(self[x]) for x in before]
@@ -688,12 +714,12 @@ class Workflow(object):
             ####################################################
             # set the source product for the new node
             if newnode.operator != 'Read':
-                log.debug('setting the source of node {} to {}'.format(newnode.id, before))
                 newnode.source = before
             ####################################################
             # set the source product for the node after the new node
             if resetSuccessorSource:
                 self.__reset_successor_source(newnode.id)
+        ########################################################
         elif after and not before:
             successor = self[after]
             log.debug('inserting node {} before {}'.format(node.id, successor.id))
@@ -702,16 +728,15 @@ class Workflow(object):
             newnode = Node(self.tree[position])
             ####################################################
             # set the source product for the new node
-            try:
-                if newnode.operator != 'Read':
-                    newnode.source = self.__find_source(self[position - 2])
-            except IndexError:
-                newnode.source = None
+            if newnode.operator != 'Read':
+                source = successor.source
+                newnode.source = source
             ####################################################
             # set the source product for the node after the new node
             if resetSuccessorSource:
-                self.__reset_successor_source(newnode.id)
+                self[after].source = newnode.id
         else:
+            log.debug('inserting node {}'.format(node.id))
             self.tree.insert(len(self.tree) - 1, node.element)
         self.refresh_ids()
         if not void:
@@ -744,13 +769,15 @@ class Workflow(object):
             operator = node.operator
             if operator not in counter.keys():
                 counter[operator] = 1
-                node.id = operator
             else:
                 counter[operator] += 1
+            if counter[operator] > 1:
                 new = '{} ({})'.format(operator, counter[operator])
-                if node.id != new:
-                    log.debug('renaming node {} to {}'.format(node.id, new))
-                    node.id = new
+            else:
+                new = operator
+            if node.id != new:
+                log.debug('renaming node {} to {}'.format(node.id, new))
+                node.id = new
     
     def set_par(self, key, value):
         """
@@ -912,7 +939,11 @@ class Node(object):
         ------
         RuntimeError
         """
+        log.debug('setting the source of node {} to {}'.format(self.id, value))
         if isinstance(value, str):
+            if isinstance(self.source, list):
+                raise TypeError(
+                    'node {} has multiple sources, which must be reset using a list, not str'.format(self.id))
             self.__set_source('sourceProduct', value)
         elif isinstance(value, list):
             key = 'sourceProduct'
