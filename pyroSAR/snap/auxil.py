@@ -411,14 +411,26 @@ def split(xmlfile, groups):
             
             if not resetSuccessorSource:
                 newnode.source = reset
-        counter = 0
+
+        # if possible, read the name of the SAR product for parsing names of temporary files
+        # this was found necessary for SliceAssembly, which expects the names in a specific format
+        products = [x.parameters['file'] for x in new['operator=Read']]
+        try:
+            id = identify(products[0])
+            filename = os.path.basename(id.scene)
+        except (RuntimeError, OSError):
+            filename = os.path.basename(products[0])
+        basename = os.path.splitext(filename)[0]
+        basename = re.sub(r'_tmp[0-9]+', '', basename)
+        
         # add a Write node to all dangling nodes
+        counter = 0
         for node in new:
             if new.successors(node.id) == [] and node.id != 'Write':
                 write = parse_node('Write')
                 new.insert_node(write, before=node.id)
                 id = str(position) if counter == 0 else '{}-{}'.format(position, counter)
-                tmp_out = os.path.join(tmp, 'tmp{}.dim'.format(id))
+                tmp_out = os.path.join(tmp, '{}_tmp{}.dim'.format(basename, id))
                 prod_tmp[node_lookup[node.id]] = tmp_out
                 prod_tmp_format[node_lookup[node.id]] = 'BEAM-DIMAP'
                 write.parameters['file'] = tmp_out
@@ -427,7 +439,7 @@ def split(xmlfile, groups):
         if not is_consistent(new):
             message = 'inconsistent group:\n {}'.format(' -> '.join(group))
             raise RuntimeError(message)
-        outname = os.path.join(tmp, 'tmp{}.xml'.format(position))
+        outname = os.path.join(tmp, '{}_tmp{}.xml'.format(basename, position))
         new.write(outname)
         outlist.append(outname)
     return outlist
