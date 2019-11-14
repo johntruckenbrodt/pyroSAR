@@ -15,7 +15,7 @@ def test_installation():
 
 def test_consistency():
     with parse_recipe('base') as wf:
-        assert is_consistent(wf.nodes())
+        assert is_consistent(wf)
 
 
 def test_geocode(tmpdir, testdata):
@@ -23,8 +23,7 @@ def test_geocode(tmpdir, testdata):
     geocode(scene, str(tmpdir), test=True)
     xmlfile = finder(str(tmpdir), ['*.xml'])[0]
     tree = Workflow(xmlfile)
-    nodes = tree.nodes()
-    assert is_consistent(nodes) is True
+    assert is_consistent(tree) is True
     groups = groupbyWorkers(xmlfile, 2)
     assert len(groups) == 4
     groups2 = groupbyWorkers(xmlfile, 100)

@@ -107,8 +107,7 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
     write = workflow['Write']
     outname = write.parameters['file']
     infile = workflow['Read'].parameters['file']
-    nodes = workflow.nodes()
-    workers = [x.id for x in nodes if x.operator not in ['Read', 'Write']]
+    workers = [x.id for x in workflow if x.operator not in ['Read', 'Write']]
     message = ' -> '.join(workers)
     gpt_exec = None
     if gpt_exceptions is not None:
@@ -308,26 +307,34 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None,
     print('done')
 
 
-def is_consistent(nodes):
+def is_consistent(workflow):
     """
     check whether all nodes take either no source node or one that is in the list
     
     Parameters
     ----------
-    nodes: list of Node
-        a group of nodes
+    workflow: Workflow
+        the workflow to be analyzed
     Returns
     -------
     bool
         is the list of nodes consistent?
     """
-    ids = [x.id for x in nodes]
+    ids = workflow.ids
     check = []
-    for node in nodes:
+    for node in workflow:
         source = node.source
         if source is None or source in ids or all([x in ids for x in source]):
             check.append(True)
         else:
+            check.append(False)
+    for node in workflow:
+        successors = workflow.successors(node.id, recursive=True)
+        operators = [workflow[x].operator for x in successors]
+        if node.operator == 'Write' or 'Write' in operators:
+            check.append(True)
+        else:
+            log.debug('node {} does not have a Write successor'.format(node.id))
             check.append(False)
     return all(check)
 
@@ -361,26 +368,24 @@ def split(xmlfile, groups):
     tmp = os.path.join(out, 'temp')
     if not os.path.isdir(tmp):
         os.makedirs(tmp)
-
-    def get_group_id(id, groups):
-        for i, group in enumerate(groups):
-            if id in group:
-                return i
     
+    # the temporary XML files
     outlist = []
-    prod_tmp = []
-    prod_tmp_format = []
+    # the names and format of temporary products
+    prod_tmp = {}
+    prod_tmp_format = {}
     for position, group in enumerate(groups):
+        node_lookup = {}
         log.debug('creating new workflow for group {}'.format(group))
         new = parse_recipe('blank')
         nodes = [workflow[x] for x in group]
-    
         for node in nodes:
+            id_old = node.id
             sources = node.source
-            new.insert_node(node)
             if sources is None:
-                continue
-            if isinstance(sources, list):
+                sources = []
+                resetSuccessorSource = False
+            elif isinstance(sources, list):
                 resetSuccessorSource = False
             else:
                 resetSuccessorSource = True
@@ -388,35 +393,38 @@ def split(xmlfile, groups):
             reset = []
             for source in sources:
                 if source not in group:
-                    read = new.insert_node(parse_node('Read'), after=node.id, void=False,
+                    read = new.insert_node(parse_node('Read'), void=False,
                                            resetSuccessorSource=resetSuccessorSource)
                     reset.append(read.id)
-                    group_id = get_group_id(source, groups)
-                    read.parameters['file'] = prod_tmp[group_id]
-                    read.parameters['formatName'] = prod_tmp_format[group_id]
+                    read.parameters['file'] = prod_tmp[source]
+                    read.parameters['formatName'] = prod_tmp_format[source]
+                    node_lookup[read.id] = source
                 else:
                     reset.append(source)
+            if isinstance(sources, list):
+                sources_new_pos = [list(node_lookup.values()).index(x) for x in sources]
+                sources_new = [list(node_lookup.keys())[x] for x in sources_new_pos]
+                newnode = new.insert_node(node, before=sources_new, void=False)
+            else:
+                newnode = new.insert_node(node, void=False)
+            node_lookup[newnode.id] = id_old
+            
             if not resetSuccessorSource:
-                node.source = reset
-        nodes = new.nodes()
-        operators = [node.operator for node in nodes]
-        writers = new['operator=Write']
-        formats = [write.parameters['formatName'] for write in writers]
-        if (position < len(groups) - 1 and 'BEAM-DIMAP' not in formats) \
-                or (operators[-1] != 'Write'):
-            write = parse_node('Write')
-            new.insert_node(write, before=nodes[-1].id)
-            tmp_out = os.path.join(tmp, 'tmp{}.dim'.format(position))
-            prod_tmp.append(tmp_out)
-            prod_tmp_format.append('BEAM-DIMAP')
-            write.parameters['file'] = tmp_out
-            write.parameters['formatName'] = 'BEAM-DIMAP'
-            operators.append('Write')
-        else:
-            prod_tmp.append(nodes[-1].parameters['file'])
-            prod_tmp_format.append(nodes[-1].parameters['formatName'])
-        nodes = new.nodes()
-        if not is_consistent(nodes):
+                newnode.source = reset
+        counter = 0
+        # add a Write node to all dangling nodes
+        for node in new:
+            if new.successors(node.id) == [] and node.id != 'Write':
+                write = parse_node('Write')
+                new.insert_node(write, before=node.id)
+                id = str(position) if counter == 0 else '{}-{}'.format(position, counter)
+                tmp_out = os.path.join(tmp, 'tmp{}.dim'.format(id))
+                prod_tmp[node_lookup[node.id]] = tmp_out
+                prod_tmp_format[node_lookup[node.id]] = 'BEAM-DIMAP'
+                write.parameters['file'] = tmp_out
+                write.parameters['formatName'] = 'BEAM-DIMAP'
+                counter += 1
+        if not is_consistent(new):
             message = 'inconsistent group:\n {}'.format(' -> '.join(group))
             raise RuntimeError(message)
         outname = os.path.join(tmp, 'tmp{}.xml'.format(position))
@@ -444,8 +452,7 @@ def groupbyWorkers(xmlfile, n=2):
         on the newly created groups
     """
     workflow = Workflow(xmlfile)
-    nodes = workflow.nodes()
-    workers_id = [x.id for x in nodes if x.operator not in ['Read', 'Write']]
+    workers_id = [x.id for x in workflow if x.operator not in ['Read', 'Write']]
     readers_id = [x.id for x in workflow['operator=Read']]
     writers_id = [x.id for x in workflow['operator=Write']]
     workers_groups = [workers_id[i:i + n] for i in range(0, len(workers_id), n)]
@@ -494,7 +501,7 @@ class Workflow(object):
         elif isinstance(item, str):
             if re.search(pattern, item):
                 key, value = re.search(pattern, item).groups()
-                return [x for x in self.nodes() if getattr(x, key) == value]
+                return [x for x in self if getattr(x, key) == value]
             else:
                 try:
                     return Node(self.tree.find('.//node[@id="{}"]'.format(item)))
@@ -502,7 +509,7 @@ class Workflow(object):
                     raise KeyError('unknown key: {}'.format(item))
         else:
             raise TypeError('item must be of type int or str')
-
+    
     def __len__(self):
         return len(self.tree.findall('node'))
     
@@ -512,7 +519,7 @@ class Workflow(object):
         element = self.tree.find('.//node[@id="{}"]'.format(key))
         node = Node(element)
         source = node.source
-        successors = [x for x in self.nodes() if x.source == key]
+        successors = [x for x in self if x.source == key]
         for node in successors:
             node.source = source
         self.tree.remove(element)
@@ -523,56 +530,37 @@ class Workflow(object):
         reparsed = minidom.parseString(rough_string)
         return reparsed.toprettyxml(indent='\t', newl='')
     
-    def __find_source(self, id):
-        """
-        find the source nodes of a node or multiple nodes
-        
-        Parameters
-        ----------
-        id: str or list
-            the ID(s) of the node(s)
-
-        Returns
-        -------
-        list or str
-            the ID(s) of the source nodes
-        """
-        if isinstance(id, list):
-            return [self.__find_source(x) for x in id]
-        else:
-            source_id = id
-            while True:
-                # a Write node cannot be the source of another node
-                if self[source_id].operator == 'Write':
-                    source_id = self[source_id].source
-                else:
-                    break
-            return source_id
+    def __iter__(self):
+        return iter(self.nodes())
     
-    def __find_successor(self, id):
+    def successors(self, id, recursive=False):
         """
         find the succeeding node(s) of a node
         
         Parameters
         ----------
-        id: str or list
+        id: str
             the ID of  node
+        recursive: bool
+            find successors recursively?
 
         Returns
         -------
-        list or str
+        list of str
             the ID(s) of the successors
         """
-        if not isinstance(id, (str, list)):
-            raise TypeError("'id' must be of type 'str' or 'list'")
-        sources = []
-        for node in self.nodes():
+        if not isinstance(id, str):
+            raise TypeError("'id' must be of type 'str', is {}".format(type(id)))
+        successors = []
+        for node in self:
             if node.source == id or (isinstance(node.source, list) and id in node.source):
-                sources.append(node)
-        if len(sources) == 1:
-            return sources[0].id
-        else:
-            return [source.id for source in sources]
+                successors.append(node.id)
+        if recursive:
+            for item in successors:
+                new = self.successors(item, recursive=True)
+                successors.extend(new)
+            successors = list(set(successors))
+        return successors
     
     def __reset_successor_source(self, id):
         """
@@ -592,33 +580,31 @@ class Workflow(object):
             if isinstance(source, list):
                 for item in source:
                     reset(id, item)
-            try:
-                # find the source nodes of the current node
-                if source is not None:
-                    successors = self.__find_successor(source)
-                else:
-                    return  # nothing to reset
-                # delete the ID of the current node from the successors
-                if isinstance(successors, list) and id in successors:
-                    del successors[successors.index(id)]
-                elif isinstance(successors, str) and id == successors:
-                    successors = []
-                if not isinstance(successors, list):
-                    successors = [successors]
-                for successor in successors:
-                    successor_source = self[successor].source
-                    if isinstance(successor_source, list):
-                        successor_source[successor_source.index(source)] = id
-                        self[successor].source = successor_source
+            else:
+                try:
+                    # find the source nodes of the current node
+                    if source is not None:
+                        successors = self.successors(source)
                     else:
-                        self[successor].source = id
-            except IndexError:
-                # case where no successor exists because the new node is the new last node in the graph
-                pass
-            except RuntimeError:
-                # case where the successor node is of type Read
-                pass
-
+                        return  # nothing to reset
+                    # delete the ID of the current node from the successors
+                    if id in successors:
+                        del successors[successors.index(id)]
+                    for successor in successors:
+                        successor_source = self[successor].source
+                        if isinstance(successor_source, list):
+                            successor_source[successor_source.index(source)] = id
+                            self[successor].source = successor_source
+                        else:
+                            self[successor].source = id
+                except IndexError:
+                    # case where no successor exists because the new node
+                    # is the new last node in the graph
+                    pass
+                except RuntimeError:
+                    # case where the successor node is of type Read
+                    pass
+        
         reset(id, self[id].source)
     
     def __optimize_appearance(self):
@@ -657,7 +643,7 @@ class Workflow(object):
         list
             the IDs of all nodes
         """
-        return [node.id for node in self.nodes()]
+        return [node.id for node in self]
     
     def index(self, node):
         """
@@ -761,11 +747,11 @@ class Workflow(object):
         list
             the names of the unique operators in the workflow
         """
-        return sorted(list(set([node.operator for node in self.nodes()])))
+        return sorted(list(set([node.operator for node in self])))
     
     def refresh_ids(self):
         counter = {}
-        for node in self.nodes():
+        for node in self:
             operator = node.operator
             if operator not in counter.keys():
                 counter[operator] = 1
@@ -793,7 +779,7 @@ class Workflow(object):
         -------
 
         """
-        for node in self.nodes():
+        for node in self:
             if key in node.parameters.keys():
                 node.parameters[key] = value2str(value)
     
