@@ -62,7 +62,7 @@ Conversion of vertical reference systems, e.g. from geoid to ellipsoid, require 
     outname = 'mysite_srtm.tif'
 
     dem_create(src=vrt, dst=outname,
-               t_srs=32632, tr=20,
+               t_srs=32632, tr=(20, 20),
                resampling_method='bilinear',
                geoid_convert=True, geoid='EGM96')
 
