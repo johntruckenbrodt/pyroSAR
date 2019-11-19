@@ -525,14 +525,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 gpt_exceptions=gpt_exceptions,
                 removeS1BorderNoiseMethod=removeS1BorderNoiseMethod)
         except RuntimeError as e:
-            if cleanup:
-                if os.path.isdir(outname):
-                    shutil.rmtree(outname)
-                elif os.path.isfile(outname):
-                    os.remove(outname)
-                os.remove(outname + '_proc.xml')
+            print(str(e))
             with open(outname + '_error.log', 'w') as log:
                 log.write(str(e))
-    
     if returnWF:
         return outname + '_proc.xml'

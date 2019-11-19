@@ -124,7 +124,7 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
             raise RuntimeError('could not find SNAP GPT executable')
     # create the list of arguments to be passed to the subprocess module calling GPT
     if format == 'GeoTiff-BigTIFF':
-        cmd = [gpt_exec,
+        cmd = [gpt_exec, '-e',
                # '-Dsnap.dataio.reader.tileWidth=*',
                # '-Dsnap.dataio.reader.tileHeight=1',
                '-Dsnap.dataio.bigtiff.tiling.width=256',
@@ -139,40 +139,40 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
     out, err = proc.communicate()
     out = out.decode('utf-8') if isinstance(out, bytes) else out
     err = err.decode('utf-8') if isinstance(err, bytes) else err
-    # delete intermediate files if an error occurred
-    if proc.returncode == 1:
-        pattern = r"Error: \[NodeId: (?P<id>[a-zA-Z0-9-_]*)\] " \
-                  r"Operator \'[a-zA-Z0-9-_]*\': " \
-                  r"Unknown element \'(?P<par>[a-zA-Z]*)\'"
-        match = re.search(pattern, err)
-        if match is not None:
-            replace = match.groupdict()
-            with Workflow(xmlfile) as flow:
-                print('  removing parameter {id}:{par} and executing modified workflow'.format(**replace))
-                node = flow[replace['id']]
-                del node.parameters[replace['par']]
-                flow.write(xmlfile)
-            execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, verbose=verbose)
+    
+    # check for a message indicating an unknown parameter,
+    # which can easily be removed from the workflow
+    pattern = r"Error: \[NodeId: (?P<id>[a-zA-Z0-9-_]*)\] " \
+              r"Operator \'[a-zA-Z0-9-_]*\': " \
+              r"Unknown element \'(?P<par>[a-zA-Z]*)\'"
+    match = re.search(pattern, err)
+    
+    if proc.returncode == 0:
+        return
+    
+    # delete unknown parameters and run the modified workflow
+    elif proc.returncode == 1 and match is not None:
+        replace = match.groupdict()
+        with Workflow(xmlfile) as flow:
+            print('  removing parameter {id}:{par} and executing modified workflow'.format(**replace))
+            node = flow[replace['id']]
+            del node.parameters[replace['par']]
+            flow.write(xmlfile)
+        execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, verbose=verbose)
+    
+    # append additional information to the error message and raise an error
+    else:
+        if proc.returncode == -9:
+            submessage = '[{}] the process was killed by SNAP (process return code -9). ' \
+                         'One possible cause is a lack of memory.'.format(os.path.basename(xmlfile))
         else:
-            if cleanup:
-                if os.path.isfile(outname + '.tif'):
-                    os.remove(outname + '.tif')
-                elif os.path.isdir(outname):
-                    shutil.rmtree(outname)
-            print(out + err)
-            print('failed: {}'.format(os.path.basename(infile)))
-            err_match = re.search('Error: (.*)\n', out + err)
-            errmessage = err_match.group(1) if err_match else err
-            raise RuntimeError(errmessage)
-    elif proc.returncode == -9:
+            submessage = '{}{}\n[{}] failed with return code {}'
         if cleanup:
             if os.path.isfile(outname + '.tif'):
                 os.remove(outname + '.tif')
             elif os.path.isdir(outname):
                 shutil.rmtree(outname)
-        print('the process was killed by SNAP. One possible cause is a lack of memory.')
-    else:
-        print('process return code: {}'.format(proc.returncode))
+        raise RuntimeError(submessage.format(out, err, os.path.basename(xmlfile), proc.returncode))
 
 
 def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None,
@@ -209,7 +209,10 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None,
     
     Returns
     -------
-
+    
+    Raises
+    ------
+    RuntimeError
     """
     
     workflow = Workflow(xmlfile)
@@ -254,12 +257,17 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None,
         workflow.write(xmlfile)
     
     print('executing node sequence{}..'.format('s' if groups is not None else ''))
-    if groups is not None:
-        subs = split(xmlfile, groups)
-        for sub in subs:
-            execute(sub, cleanup=cleanup, gpt_exceptions=gpt_exceptions)
-    else:
-        execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions)
+    try:
+        if groups is not None:
+            subs = split(xmlfile, groups)
+            for sub in subs:
+                execute(sub, cleanup=cleanup, gpt_exceptions=gpt_exceptions)
+        else:
+            execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions)
+    except RuntimeError as e:
+        if cleanup:
+            shutil.rmtree(outname)
+        raise RuntimeError(str(e) + '\nfailed: {}'.format(xmlfile))
     
     if format == 'ENVI':
         print('converting to GTiff')
