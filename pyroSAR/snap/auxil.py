@@ -290,8 +290,6 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None,
         for i in range(1, ras.RasterCount + 1):
             ras.GetRasterBand(i).SetNoDataValue(0)
         ras = None
-    if cleanup:
-        shutil.rmtree(outname)
     ###########################################################################
     # write the Sentinel-1 manifest.safe file as addition to the actual product
     readers = workflow['operator=Read']
@@ -310,6 +308,8 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None,
         except RuntimeError:
             continue
     ###########################################################################
+    if cleanup:
+        shutil.rmtree(outname)
     print('done')
 
 
