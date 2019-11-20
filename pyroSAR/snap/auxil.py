@@ -1,6 +1,7 @@
 import os
 import re
 import shutil
+import requests
 import subprocess as sp
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
@@ -11,7 +12,6 @@ from osgeo.gdalconst import GA_Update
 from pyroSAR import identify
 from pyroSAR._dev_config import LOOKUP
 from pyroSAR.examine import ExamineSnap
-from pyroSAR.ancillary import parse_datasetname
 
 from spatialist.auxil import gdal_translate
 from spatialist.ancillary import finder
@@ -941,3 +941,24 @@ def value2str(value):
     else:
         strval = str(value)
     return strval
+
+
+def get_egm96_lookup():
+    """
+    If not found, download SNAP's lookup table for converting EGM96 geoid heights to WGS84 ellipsoid heights
+    
+    Returns
+    -------
+
+    """
+    try:
+        auxdatapath = ExamineSnap().auxdatapath
+    except AttributeError:
+        auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
+    local = os.path.join(auxdatapath, 'dem', 'egm96', 'ww15mgh_b.zip')
+    if not os.path.isfile(local):
+        remote = 'http://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
+        print('{} <<-- {}'.format(local, remote))
+        r = requests.get(remote)
+        with open(local, 'wb')as out:
+            out.write(r.content)

@@ -3,10 +3,9 @@
 # John Truckenbrodt, 2016-2019
 ####################################################################
 import os
-import shutil
 import pyroSAR
 from ..ancillary import multilook_factors
-from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers
+from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, get_egm96_lookup
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
@@ -490,6 +489,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     for key, value in dempar.items():
         workflow.set_par(key, value)
+
+    # download the EGM lookup table if necessary
+    if dempar['externalDEMApplyEGM']:
+        get_egm96_lookup()
     ############################################
     ############################################
     # configure the resampling methods
