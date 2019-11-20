@@ -299,7 +299,7 @@ class DEMHandler:
             if not os.path.isfile(outfile):
                 try:
                     input = urlopen(infile)
-                    print('{} -->> {}'.format(infile, outfile))
+                    print('{} <<-- {}'.format(outfile, infile))
                 except HTTPError:
                     continue
                 with open(outfile, 'wb') as output:
@@ -337,7 +337,7 @@ class DEMHandler:
                 except ftplib.error_temp:
                     continue
                 address = '{}://{}/{}{}'.format(protocol, url, path + '/' if path != '' else '', product_remote)
-                print('{} -->> {}'.format(address, product_local))
+                print('{} <<-- {}'.format(product_local, address))
                 with open(product_local, 'wb') as myfile:
                     ftp.retrbinary('RETR {}'.format(product_remote), myfile.write)
             if os.path.isfile(product_local):
