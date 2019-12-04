@@ -70,7 +70,7 @@ def parse_node(name):
     return Node(element)
 
 
-def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
+def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=True):
     """
     execute SNAP workflows via the Graph Processing Tool gpt.
     This function merely calls gpt with some additional command
@@ -89,6 +89,10 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
         each (sub-)workflow containing this operator will be executed with the define executable;
         
          - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
+    gpt_args: list or None
+        a list of additional arguments to be passed to the gpt call
+        
+        - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
     verbose: bool
         print out status messages?
     
@@ -123,17 +127,20 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
         except AttributeError:
             raise RuntimeError('could not find SNAP GPT executable')
     # create the list of arguments to be passed to the subprocess module calling GPT
+    cmd = [gpt_exec, '-e']
+    if isinstance(gpt_args, list):
+        cmd.extend(gpt_args)
     if format == 'GeoTiff-BigTIFF':
-        cmd = [gpt_exec, '-e',
-               # '-Dsnap.dataio.reader.tileWidth=*',
-               # '-Dsnap.dataio.reader.tileHeight=1',
-               '-Dsnap.dataio.bigtiff.tiling.width=256',
-               '-Dsnap.dataio.bigtiff.tiling.height=256',
-               # '-Dsnap.dataio.bigtiff.compression.type=LZW',
-               # '-Dsnap.dataio.bigtiff.compression.quality=0.75',
-               xmlfile]
-    else:
-        cmd = [gpt_exec, xmlfile]
+        cmd.extend([
+            # '-Dsnap.dataio.reader.tileWidth=*',
+            # '-Dsnap.dataio.reader.tileHeight=1',
+            '-Dsnap.dataio.bigtiff.tiling.width=256',
+            '-Dsnap.dataio.bigtiff.tiling.height=256',
+            # '-Dsnap.dataio.bigtiff.compression.type=LZW',
+            # '-Dsnap.dataio.bigtiff.compression.quality=0.75'
+        ])
+    cmd.append(xmlfile)
+    print(cmd)
     # execute the workflow
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     out, err = proc.communicate()
@@ -158,7 +165,8 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
             node = flow[replace['id']]
             del node.parameters[replace['par']]
             flow.write(xmlfile)
-        execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, verbose=verbose)
+        execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions,
+                gpt_args=gpt_args, verbose=verbose)
     
     # append additional information to the error message and raise an error
     else:
@@ -175,7 +183,8 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, verbose=True):
         raise RuntimeError(submessage.format(out, err, os.path.basename(xmlfile), proc.returncode))
 
 
-def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None,
+def gpt(xmlfile, groups=None, cleanup=True,
+        gpt_exceptions=None, gpt_args=None,
         removeS1BorderNoiseMethod='pyroSAR', basename_extensions=None):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
@@ -200,6 +209,10 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None,
         each (sub-)workflow containing this operator will be executed with the define executable;
         
          - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
+    gpt_args: list or None
+        a list of additional arguments to be passed to the gpt call
+        
+        - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
     removeS1BorderNoiseMethod: str
         the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
          - 'ESA': the pure implementation as described by ESA
@@ -261,9 +274,9 @@ def gpt(xmlfile, groups=None, cleanup=True, gpt_exceptions=None,
         if groups is not None:
             subs = split(xmlfile, groups)
             for sub in subs:
-                execute(sub, cleanup=cleanup, gpt_exceptions=gpt_exceptions)
+                execute(sub, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
         else:
-            execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions)
+            execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
     except RuntimeError as e:
         if cleanup:
             shutil.rmtree(outname)
