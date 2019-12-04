@@ -14,6 +14,11 @@ used for updating the metadata. pyroSAR offers several approaches for automatica
 files. The central tool for managing existing files and downloading new ones is the class :class:`pyroSAR.S1.OSV`, which
 is used for all approaches.
 
+NOTE: in the following a dedicated directory is defined into which the files will be downloaded. If this directory is
+not defined (default is `None`), the files will be downloaded to SNAP's auxiliary data location (see above). This is
+recommended as the files are kept in a central location that is accessible both by SNAP and by pyroSAR's GAMMA
+functionality.
+
 **approach 1: direct download by time span**
 
 In case a large number of scenes is to be processed and/or no internet access is available during processing, the files
