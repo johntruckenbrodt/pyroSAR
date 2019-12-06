@@ -1,3 +1,6 @@
+#####################################################################
+# Module for testing the functionality of the SNAP processing module
+#####################################################################
 import os
 import pytest
 from pyroSAR import identify
@@ -15,7 +18,7 @@ def test_installation():
 
 def test_consistency():
     with parse_recipe('base') as wf:
-        assert is_consistent(wf.nodes())
+        assert is_consistent(wf)
 
 
 def test_geocode(tmpdir, testdata):
@@ -23,8 +26,7 @@ def test_geocode(tmpdir, testdata):
     geocode(scene, str(tmpdir), test=True)
     xmlfile = finder(str(tmpdir), ['*.xml'])[0]
     tree = Workflow(xmlfile)
-    nodes = tree.nodes()
-    assert is_consistent(nodes) is True
+    assert is_consistent(tree) is True
     groups = groupbyWorkers(xmlfile, 2)
     assert len(groups) == 4
     groups2 = groupbyWorkers(xmlfile, 100)
@@ -41,6 +43,13 @@ def test_geocode(tmpdir, testdata):
 
 
 class Test_geocode_opts():
+    def test_infile_type(self, tmpdir, testdata):
+        scene = testdata['s1']
+        with pytest.raises(TypeError):
+            geocode(infile=123, outdir=str(tmpdir), test=True)
+        id = identify(scene)
+        geocode(infile=id, outdir=str(tmpdir), test=True)
+    
     def test_pol(self, tmpdir, testdata):
         scene = testdata['s1']
         with pytest.raises(RuntimeError):
@@ -48,6 +57,10 @@ class Test_geocode_opts():
         with pytest.raises(RuntimeError):
             geocode(scene, str(tmpdir), polarizations='foobar', test=True)
         geocode(scene, str(tmpdir), polarizations='VV', test=True)
+    
+    def test_pol_list(self, tmpdir, testdata):
+        scene = testdata['s1']
+        geocode(scene, str(tmpdir), polarizations=['VV', 'VH'], test=True)
     
     def test_geotype(self, tmpdir, testdata):
         scene = testdata['s1']
@@ -98,3 +111,25 @@ class Test_geocode_opts():
         with pytest.raises(RuntimeError):
             geocode(scene, str(tmpdir), externalDEMFile='foobar', test=True)
         geocode(scene, str(tmpdir), externalDEMFile=dem_dummy, test=True)
+
+    def test_speckleFilter(self, tmpdir, testdata):
+        scene = testdata['s1']
+        with pytest.raises(ValueError):
+            geocode(scene, str(tmpdir), speckleFilter='foobar', test=True)
+        geocode(scene, str(tmpdir), speckleFilter='Refined Lee', test=True)
+    
+    def test_refarea(self, tmpdir, testdata):
+        scene = testdata['s1']
+        with pytest.raises(RuntimeError):
+            geocode(scene, str(tmpdir), terrainFlattening=True, refarea='beta0', test=True)
+        with pytest.raises(ValueError):
+            geocode(scene, str(tmpdir), terrainFlattening=False, refarea='foobar', test=True)
+        geocode(scene, str(tmpdir), terrainFlattening=True, refarea='gamma0', test=True)
+    
+    def test_sliceassembly(self, tmpdir, testdata):
+        scene1 = testdata['s1']
+        scene2 = testdata['s1_2']
+        wf = geocode([scene1, scene2], str(tmpdir), test=True, returnWF=True)
+        for n in range(1, 4):
+            groups = groupbyWorkers(wf, n=n)
+            split(wf, groups)
