@@ -43,7 +43,7 @@ Workflow Parsing
 ----------------
 
 .. automodule:: pyroSAR.snap.auxil
-    :members: gpt, parse_node, parse_recipe, Workflow, Node, Par
+    :members: gpt, parse_node, parse_recipe, Workflow, Node, Par, get_egm96_lookup
     :undoc-members:
     :show-inheritance:
 
@@ -56,6 +56,7 @@ Workflow Parsing
         Workflow
         Node
         Par
+        get_egm96_lookup
 
 GAMMA Processing
 ================

@@ -226,3 +226,86 @@ SNAP API
 --------
 
 - function :func:`pyroSAR.snap.util.geocode`: fixed typo of parameter `removeS1BorderNoise`
+
+0.10 / 2019-12-06
+=================
+
+Drivers
+-------
+
+- method :meth:`~pyroSAR.drivers.ID.bbox`: choose the output vector file format via new parameter `driver` or by
+  using one of spatialist's supported file name extensions (see :meth:`spatialist.vector.Vector.write`)
+
+- :class:`pyroSAR.drivers.SAFE`
+
+  + new method :meth:`~pyroSAR.drivers.SAFE.quicklook` for writing KMZ quicklooks
+  + method :meth:`~pyroSAR.drivers.SAFE.getOSV`: renamed parameter `outdir` to `osvdir`
+
+- :class:`pyroSAR.drivers.Archive`: remove scenes from the database if they cannot be found at their file location.
+  This is performed at each initialization of an `Archive` object.
+
+GAMMA API
+---------
+
+- new parameter `basename_extensions` for adding extra metadata fields to output image names; affects:
+
+  + :func:`pyroSAR.gamma.convert2gamma`
+  + :func:`pyroSAR.gamma.geocode`
+
+- :func:`pyroSAR.gamma.correctOSV`: make use of OSV files in SNAP's auxdata structure
+- :func:`pyroSAR.gamma.geocode`: made border nose removal optional with new parameter `removeS1BorderNoise`
+
+SNAP API
+--------
+- workflow parsing
+
+  + improved output XML for better display in SNAP GUI
+  + support for nodes with multiple input scenes, e.g. `SliceAssembly`
+
+- SAR processor (function :func:`~pyroSAR.snap.auxil.gpt`)
+
+  + write Sentinel-1 manifest.safe with processing results
+  + two methods for border noise removal: `ESA` and `pyroSAR` via new parameter `removeS1BorderNoiseMethod`
+
+- function :func:`pyroSAR.snap.util.geocode`
+
+  + optional speckle filtering with new parameter `speckleFilter`
+  + choose the output backscatter reference area (`beta0`/`gamma0`/`sigma0`) with new parameter `refarea`
+  + default of parameter `groupsize` changed to 1
+  + internally download S1 OSV files
+  + internally download SNAP's `EGM96` geoid to `WGS84` ellipsoid DEM conversion lookup table via new function
+    :func:`pyroSAR.snap.auxil.get_egm96_lookup`
+  + support for multi-scene `SliceAssembly`; can be invoke by passing a list of scenes to parameter `infile`
+  + new parameter `removeS1BorderNoiseMethod`
+  + new parameter `gpt_args` to pass additional arguments to the GPT call
+
+Datacube Tools
+--------------
+
+- :meth:`pyroSAR.datacube_util.Product.export_ingestion_yml`: new parameter `chunking`
+
+Auxiliary Data Handling
+-----------------------
+
+- OSV download functionality (class :class:`pyroSAR.S1.OSV`)
+
+  + made definition of OSV download directory optional; default is SNAP's auxdata directory
+  + organization of downloaded files into SNAP's auxdata structure:
+
+    * compression to zip
+    * sort files into subdirs for sensor, year, month
+
+  + removed method :meth:`~pyroSAR.S1.OSV.update`
+
+Ancillary Tools
+---------------
+- :func:`pyroSAR.ancillary.parse_datasetname`
+
+  + support for datasets in NetCDF format
+  + enable parsing of ancillary products like local incidence angle (\*inc_geo.tif)
+
+- :func:`pyroSAR.ancillary.find_datasets`:  new parameters `start` and `stop` for time filtering
+
+general
+-------
+- bug fixes and documentation improvements
