@@ -7,7 +7,7 @@
         <sourceBands>Gamma0_VH,Gamma0_VV</sourceBands>
         <demName>SRTM 1Sec HGT</demName>
         <externalDEMFile/>
-        <externalDEMNoDataValue>0.0</externalDEMNoDataValue>
+        <externalDEMNoDataValue/>
         <externalDEMApplyEGM/>
         <demResamplingMethod>BILINEAR_INTERPOLATION</demResamplingMethod>
         <imgResamplingMethod>BILINEAR_INTERPOLATION</imgResamplingMethod>

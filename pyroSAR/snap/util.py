@@ -3,10 +3,9 @@
 # John Truckenbrodt, 2016-2019
 ####################################################################
 import os
-import shutil
 import pyroSAR
 from ..ancillary import multilook_factors
-from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers
+from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, get_egm96_lookup
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
@@ -16,7 +15,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             removeS1ThermalNoise=True, offset=None,
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
             basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True,
-            gpt_exceptions=None, returnWF=False,
+            gpt_exceptions=None, gpt_args=None, returnWF=False,
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             speckleFilter=False, refarea='gamma0'):
     """
@@ -84,6 +83,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         each (sub-)workflow containing this operator will be executed with the define executable;
         
          - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
+    gpt_args: list or None
+        a list of additional arguments to be passed to the gpt call
+        
+        - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
     returnWF: bool
         return the full name of the written workflow XML file?
     demResamplingMethod: str
@@ -492,6 +495,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     for key, value in dempar.items():
         workflow.set_par(key, value)
+    
+    # download the EGM lookup table if necessary
+    if dempar['externalDEMApplyEGM']:
+        get_egm96_lookup()
     ############################################
     ############################################
     # configure the resampling methods
@@ -524,17 +531,11 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         try:
             groups = groupbyWorkers(outname + '_proc.xml', groupsize)
             gpt(outname + '_proc.xml', groups=groups, cleanup=cleanup,
-                gpt_exceptions=gpt_exceptions,
+                gpt_exceptions=gpt_exceptions, gpt_args=gpt_args,
                 removeS1BorderNoiseMethod=removeS1BorderNoiseMethod)
         except RuntimeError as e:
-            if cleanup:
-                if os.path.isdir(outname):
-                    shutil.rmtree(outname)
-                elif os.path.isfile(outname):
-                    os.remove(outname)
-                os.remove(outname + '_proc.xml')
+            print(str(e))
             with open(outname + '_error.log', 'w') as log:
                 log.write(str(e))
-    
     if returnWF:
         return outname + '_proc.xml'
