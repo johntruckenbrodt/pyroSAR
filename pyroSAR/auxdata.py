@@ -469,6 +469,21 @@ class DEMHandler:
     
     @staticmethod
     def remote_ids(extent, demType):
+        """
+        parse the names of the remote files overlapping with an area of interest
+        
+        Parameters
+        ----------
+        extent: dict
+            the extent of the area of interest with keys xmin, xmax, ymin, ymax
+        demType: str
+            the type fo DEM to be used
+        
+        Returns
+        -------
+        str
+            the sorted names of the remote files
+        """
         # generate sequence of integer coordinates marking the tie points of the individual tiles
         def intrange(extent, step):
             lat = range(int(float(extent['ymin']) // step) * step,

@@ -34,9 +34,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         Default: `4326 <http://spatialreference.org/ref/epsg/4326/>`_.
     tr: int or float, optional
         The target resolution in meters. Default is 20
-    polarizations: list or {'VV', 'HH', 'VH', 'HV', 'all'}, optional
-        The polarizations to be processed; can be a string for a single polarization e.g. 'VV' or a list of several
-        polarizations e.g. ['VV', 'VH']. Default is 'all'.
+    polarizations: list or str
+        The polarizations to be processed; can be a string for a single polarization, e.g. 'VV', or a list of several
+        polarizations, e.g. ['VV', 'VH']. With the special value 'all' (default) all available polarizations are
+        processed.
     shapefile: str or :py:class:`~spatialist.vector.Vector`, optional
         A vector geometry for subsetting the SAR scene to a test site. Default is None.
     scaling: {'dB', 'db', 'linear'}, optional
@@ -215,9 +216,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     read = workflow['Read']
     read.parameters['file'] = id.scene
     read.parameters['formatName'] = formatName
+    readers = [read.id]
     
     if isinstance(infile, list):
-        readers = [read.id]
         for i in range(1, len(infile)):
             readn = parse_node('Read')
             readn.parameters['file'] = ids[i].scene
@@ -239,9 +240,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # ThermalNoiseRemoval node configuration
     # print('-- configuring ThermalNoiseRemoval Node')
     if id.sensor in ['S1A', 'S1B'] and removeS1ThermalNoise:
-        tn = parse_node('ThermalNoiseRemoval')
-        workflow.insert_node(tn, before=read.id)
-        tn.parameters['selectedPolarisations'] = polarizations
+        for reader in readers:
+            tn = parse_node('ThermalNoiseRemoval')
+            workflow.insert_node(tn, before=reader)
+            tn.parameters['selectedPolarisations'] = polarizations
     ############################################
     # orbit file application node configuration
     # print('-- configuring Apply-Orbit-File Node')
