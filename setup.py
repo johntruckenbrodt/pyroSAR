@@ -32,7 +32,7 @@ setup(name='pyroSAR',
                         'pathos>=0.2',
                         'numpy',
                         'scoop',
-                        'spatialist==0.3',
+                        'spatialist==0.4',
                         'pyyaml',
                         'requests'],
       extras_require={
