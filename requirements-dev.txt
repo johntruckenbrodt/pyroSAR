@@ -11,3 +11,4 @@ pytest
 
 #Documentation requirements
 sphinx
+sphinxcontrib-bibtex
