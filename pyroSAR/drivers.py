@@ -49,6 +49,16 @@ from .xml_util import getNamespaces
 from spatialist import sqlite_setup, crsConvert, sqlite3, ogr2ogr, Vector, bbox
 from spatialist.ancillary import parse_literal, finder
 
+# new imports for postgres
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy_utils import database_exists, create_database, drop_database
+from sqlalchemy.engine.url import URL
+from sqlalchemy.ext.automap import automap_base
+from geoalchemy2 import Geometry
+import subprocess
+
+
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines', 'orbitNumber_abs', 'orbitNumber_rel', 'cycleNumber', 'frameNumber']
 
@@ -2053,6 +2063,784 @@ class Archive(object):
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
+
+# just parked here...
+class Archive_pg(object):
+    """
+    Utility for storing SAR image metadata in a spatialite database
+
+    Parameters
+    ----------
+    dbfile: str
+        the database file. This file might either point to an existing database or will be created otherwise.
+    custom_fields: dict
+        a dictionary containing additional non-standard database column names and data types;
+        the names must be attributes of the SAR scenes to be inserted (i.e. id.attr) or keys in their meta attribute
+        (i.e. id.meta['attr'])
+
+    Examples
+    ----------
+    Ingest all Sentinel-1 scenes in a directory and its sub-directories into the database:
+
+    >>> from pyroSAR import Archive, identify
+    >>> from spatialist.ancillary import finder
+    >>> dbfile = '/.../scenelist.db'
+    >>> archive_s1 = '/.../sentinel1/GRD'
+    >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*\.zip'], regex=True, recursive=True)
+    >>> with Archive(dbfile) as archive:
+    >>>     archive.insert(scenes_s1)
+
+    select all Sentinel-1 A/B scenes stored in the database, which
+     * overlap with a test site
+     * were acquired in Ground-Range-Detected (GRD) Interferometric Wide Swath (IW) mode before 2018
+     * contain a VV polarization image
+     * have not been processed to directory `outdir` before
+
+    >>> from pyroSAR import Archive
+    >>> from spatialist import Vector
+    >>> archive = Archive('/path/to/dbfile.db')
+    >>> site = Vector('/path/to/site.shp')
+    >>> outdir = '/path/to/processed/results'
+    >>> maxdate = '20171231T235959'
+    >>> selection_proc = archive.select(vectorobject=site, processdir=outdir,
+    >>>                                 maxdate=maxdate, sensor=('S1A', 'S1B'),
+    >>>                                 product='GRD', acquisition_mode='IW', vv=1)
+    >>> archive.close()
+
+    Alternatively, the `with` statement can be used.
+    In this case to just check whether one particular scene is already registered in the database:
+
+    >>> from pyroSAR import identify, Archive
+    >>> scene = identify('S1A_IW_SLC__1SDV_20150330T170734_20150330T170801_005264_006A6C_DA69.zip')
+    >>> with Archive('/path/to/dbfile.db') as archive:
+    >>>     print(archive.is_registered(scene.scene))
+    """
+
+    def __init__(self, dbfile, driver='postgres', user='user', password='user', host='localhost', port=5432,
+                 custom_fields=None):
+
+        # hier kann man auch alles als dict ubergeben!!!!!!!!
+        # sqlite_db = {'drivername': 'sqlite', 'database': 'db.sqlite'}
+        # print(URL(**sqlite_db))
+        self.postgres_db = {'drivername': driver,
+                            'username': user,
+                            'password': password,
+                            'host': host,
+                            'port': port,
+                            'database': dbfile}
+        # print(URL(**postgres_db))
+        # print('postgresql://' + user + ':' + password + '@' + host + '/' + dbfile)
+        url = URL(**self.postgres_db)
+        self.engine = create_engine(url, echo=False)
+        if not database_exists(self.engine.url):
+            create_database(self.engine.url)
+            # activate postgis extension to be able to store geometry data
+            self.engine.connect().execute('CREATE EXTENSION postgis')
+            if not database_exists(self.engine.url):
+                print('something went wrong in the init')
+
+        self.conn = self.engine.connect()
+        self.Session = sessionmaker(bind=self.engine)
+        self.meta = MetaData(self.engine)
+
+        self.custom_fields = custom_fields
+        self.data_schema = Table('data', self.meta,
+                                 Column('sensor', String),
+                                 Column('orbit', String),
+                                 Column('orbitNumber_abs', Integer),
+                                 Column('orbitNumber_rel', Integer),
+                                 Column('cycleNumber', Integer),
+                                 Column('frameNumber', Integer),
+                                 Column('acquisition_mode', String),
+                                 Column('start', String),
+                                 Column('stop', String),
+                                 Column('product', String),
+                                 Column('samples', Integer),
+                                 Column('lines', Integer),
+                                 Column('outname_base', String, primary_key=True),
+                                 Column('scene', String),
+                                 Column('hh', Integer),
+                                 Column('vv', Integer),
+                                 Column('hv', Integer),
+                                 Column('vh', Integer),
+                                 Column('bbox', Geometry('POLYGON', srid=4326)))
+        if self.custom_fields is not None:
+            for key, val in self.custom_fields.items():
+                if val == 'Integer':
+                    self.data_schema.append_column(Column(key, Integer))
+                elif val == 'String':
+                    self.data_schema.append_column(Column(key, String))
+                else:
+                    print('Value in dict custom_fields must be "Integer" or "String"!')
+
+        self.duplicates_schema = Table('duplicates', self.meta,
+                                       Column('outname_base', String, primary_key=True),
+                                       Column('scene', String, primary_key=True))
+
+        if not self.engine.dialect.has_table(self.engine, 'data'):
+            self.data_schema.create(self.engine)
+        if not self.engine.dialect.has_table(self.engine, 'duplicates'):
+            self.duplicates_schema.create(self.engine)
+
+        self.Base = automap_base(metadata=self.meta)
+        self.Base.prepare(self.engine, reflect=True)
+        self.Data = self.Base.classes.data
+        self.Duplicates = self.Base.classes.duplicates
+        sys.stdout.write('\rchecking for missing scenes..')
+        self.cleanup()
+        sys.stdout.write('\rchecking for missing scenes..done\n')
+        sys.stdout.flush()
+
+    def __prepare_insertion(self, scene):
+        """
+        read scene metadata and parse a string for inserting it into the database
+
+        * changes for postgres -> insertion is now an object of class Data
+
+        :param scene: a SAR scene
+        :return: the actual insert string and a tuple containing parameters for the command, e.g.
+        execute('''INSERT INTO data(a, b) VALUES(?, ?)''', (1, 2))
+        where '?' is a placeholder for a value in the following tuple
+        """
+        id = scene if isinstance(scene, ID) else identify(scene)
+        pols = [x.lower() for x in id.polarizations]
+        insertion = self.Data()
+        colnames = self.get_colnames()
+        for attribute in colnames:
+            if attribute == 'bbox':
+                geom = id.bbox()
+                geom.reproject(4326)
+                geom = geom.convert2wkt(set3D=False)[0]
+                geom = 'SRID=4326;' + str(geom)
+                setattr(insertion, 'bbox', geom)
+            elif attribute in ['hh', 'vv', 'hv', 'vh']:
+                setattr(insertion, attribute, int(attribute in pols))
+                # insertion['hh'] = int(attribute in pols)
+            # elif attribute in ['vv']:
+            #   setattr(insertion, 'vv', int(attribute in pols))
+            # insertion['vv'] = int(attribute in pols)
+            # elif attribute in ['hv']:
+            #  setattr(insertion, 'hv', int(attribute in pols))
+            #   #insertion['hv'] = int(attribute in pols)
+            # elif attribute in ['vh']:
+            #   setattr(insertion, 'vh', int(attribute in pols))
+            # insertion['vh'] = int(attribute in pols)
+
+            else:
+                if hasattr(id, attribute):
+                    attr = getattr(id, attribute)
+                elif attribute in id.meta.keys():
+                    attr = id.meta[attribute]
+                else:
+                    raise AttributeError('could not find attribute {}'.format(attribute))
+                value = attr() if inspect.ismethod(attr) else attr
+                setattr(insertion, str(attribute), value)
+
+        return insertion
+
+    def __select_missing(self, table):
+        """
+
+        Returns
+        -------
+        list
+            the names of all scenes, which are no longer stored in their registered location
+        """
+        if table == 'data':
+            scenes = self.Session().query(self.Data.scene)
+        elif table == 'duplicates':
+            scenes = self.Session().query(self.Duplicates.scene)
+        else:
+            raise ValueError("parameter 'table' must either be 'data' or 'duplicates'")
+        # cursor = self.conn.cursor()
+        # scenes = self.Session().query(self.Data.scene)
+        files = [self.encode(x[0]) for x in scenes]
+        # print(scenes)
+        # cursor.execute('''SELECT scene FROM {}'''.format(table))
+        # files = [self.encode(x[0]) for x in scenes]
+        return [x for x in files if not os.path.isfile(x)]
+
+    def insert(self, scene_in, verbose=False, test=False):
+        """
+        Insert one or many scenes into the database
+
+        Parameters
+        ----------
+        scene_in: str or list
+            a SAR scene or a list of scenes to be inserted
+        verbose: bool
+            should status information and a progress bar be printed into the console?
+        test: bool
+            should the insertion only be tested or directly be committed to the database?
+        """
+        if verbose:
+            length = len(scene_in) if isinstance(scene_in, list) else 1
+            print('...got {0} scene{1}'.format(length, 's' if len(scene_in) > 1 else ''))
+        if isinstance(scene_in, (ID, str)):
+            scene_in = [scene_in]
+        if not isinstance(scene_in, list):
+            raise RuntimeError('scene_in must either be a string pointing to a file, a pyroSAR.ID object '
+                               'or a list containing several of either')
+
+        if verbose:
+            print('filtering scenes by name...')
+        scenes = self.filter_scenelist(scene_in)
+        # print(scenes)
+        if len(scenes) == 0:
+            print('nothing to be done')
+            return
+        if verbose:
+            print('identifying scenes and extracting metadata...')
+        scenes = identify_many(scenes)
+
+        if len(scenes) > 0:
+            if verbose:
+                print('...{0} scene{1} remaining'.format(len(scenes), 's' if len(scenes) > 1 else ''))
+        else:
+            print('all scenes are already registered')
+            return
+
+        counter_regulars = 0
+        counter_duplicates = 0
+        list_duplicates = []
+        pbar = None
+        if verbose:
+            print('inserting scenes into temporary database...')
+            pbar = pb.ProgressBar(max_value=len(scenes))
+        session = self.Session()
+        for i, id in enumerate(scenes):
+            insert_string = self.__prepare_insertion(id)
+            if not self.is_registered(id):
+                session.add(insert_string)
+                counter_regulars += 1
+            elif not self.__is_registered_in_duplicates(id):
+                session.add(self.Duplicates(outname_base=id.outname_base(), scene=id.scene))
+                counter_duplicates += 1
+            else:
+                list_duplicates.append(id.outname_base())
+
+            if pbar is not None:
+                pbar.update(i + 1)
+        if pbar is not None:
+            pbar.finish()
+        if not test:
+            if verbose:
+                print('committing transactions to permanent database...')
+            session.commit()
+        else:
+            if verbose:
+                print('reverting temporary database changes...')
+            session.rollback()
+        print('{} scenes registered regularly'.format(counter_regulars))
+        print('{} duplicates registered'.format(counter_duplicates))
+        if len(list_duplicates) != 0:
+            print('Scene(s) {} already registered as duplicate!'.format(list_duplicates))
+
+    def is_registered(self, scene):
+        """
+        Simple check if a scene is already registered in the database.
+
+        Parameters
+        ----------
+        scene: str or ID
+            the SAR scene
+
+        Returns
+        -------
+        bool
+            is the scene already registered?
+        """
+        id = scene if isinstance(scene, ID) else identify(scene)
+        exists_data = self.Session().query(self.Data.scene).filter(self.Data.scene == id.scene).first()
+        exists_duplicates = self.Session().query(self.Duplicates.scene).filter(
+            self.Duplicates.scene == id.scene).first()
+        in_data = False
+        in_dup = False
+        if exists_data:
+            in_data = len(exists_data) != 0
+        if exists_duplicates:
+            in_dup = len(exists_duplicates) != 0
+        return in_data or in_dup
+
+    def __is_registered_in_duplicates(self, scene):
+        """
+        Simple check if a scene is already registered in the database.
+
+        Parameters
+        ----------
+        scene: str or ID
+            the SAR scene
+
+        Returns
+        -------
+        bool
+            is the scene already registered?
+        """
+        id = scene if isinstance(scene, ID) else identify(scene)
+        exists_duplicates = self.Session().query(self.Duplicates.scene).filter(
+            self.Duplicates.scene == id.scene).first()
+        in_dup = False
+        if exists_duplicates:
+            in_dup = len(exists_duplicates) != 0
+        return in_dup
+
+    def cleanup(self):
+        """
+        Remove all scenes from the database, which are no longer stored in their registered location
+
+        Returns
+        -------
+
+        """
+        # session = self.Session()
+        for table in ['data', 'duplicates']:
+            missing = self.__select_missing(table)
+            for scene in missing:
+                print(scene)
+                print(table)
+                self.drop_element(scene, table)
+
+    @staticmethod
+    def encode(string, encoding='utf-8'):
+        if not isinstance(string, str):
+            return string.encode(encoding)
+        else:
+            return string
+
+    def export2shp(self, path):
+        """
+        export the database to a shapefile
+
+        Parameters
+        ----------
+        path: str
+            the path of the folder for the shapefiles data and duplicates to be written
+            this will overwrite shapefiles
+
+        Returns
+        -------
+        """
+        # largely taken from:
+        # https://hub.packtpub.com/moving-spatial-data-one-format-another/https:
+
+        # folder to hold output Shapefiles
+        destination_dir = os.path.realpath('../' + str(path))
+
+        # list of postGIS tables
+        postgis_tables_list = self.get_tablenames()
+
+        # database connection parameters
+        db_connection = """PG:host={0} port={1} user={2}
+                dbname={3} password={4} active_schema=public""".format(self.postgres_db['host'],
+                                                                       self.postgres_db['port'],
+                                                                       self.postgres_db['username'],
+                                                                       self.postgres_db['database'],
+                                                                       self.postgres_db['password'])
+        # check if destination directory exists
+        if not os.path.isdir(destination_dir):
+            os.mkdir(destination_dir)
+        for table in postgis_tables_list:
+            subprocess.call(["ogr2ogr", "-f", "ESRI Shapefile", destination_dir,
+                             db_connection, table, "-overwrite"])
+            print("running ogr2ogr on table: " + table)
+
+    def filter_scenelist(self, scenelist):
+        """
+        Filter a list of scenes by file names already registered in the database.
+
+        Parameters
+        ----------
+        scenelist: :obj:`list` of :obj:`str` or :obj:`pyroSAR.drivers.ID`
+            the scenes to be filtered
+
+        Returns
+        -------
+        list
+            the file names of the scenes whose basename is not yet registered in the database
+
+        """
+        for item in scenelist:
+            if not isinstance(item, (ID, str)):
+                raise IOError('items in scenelist must be of type "str" or pyroSAR.ID')
+        # cursor = self.conn.cursor()
+        # cursor.execute('SELECT scene FROM data')
+        scenes_data = self.Session().query(self.Data.scene)
+        # print(scenes_data)
+        registered = [os.path.basename(self.encode(x[0])) for x in scenes_data]
+        # print(registered)
+        scenes_duplicates = self.Session().query(self.Duplicates.scene)
+        # cursor.execute('SELECT scene FROM duplicates')
+        duplicates = [os.path.basename(self.encode(x[0])) for x in scenes_duplicates]
+        names = [item.scene if isinstance(item, ID) else item for item in scenelist]
+        filtered = [x for x, y in zip(scenelist, names) if os.path.basename(y) not in registered + duplicates]
+        return filtered
+
+    def get_colnames(self):
+        """
+        Return the names of the database table.
+
+        Returns
+        -------
+        list
+            the column names of the data table
+        """
+        col_names = self.Data.__table__.columns.keys()
+        return sorted([self.encode(x) for x in col_names])
+
+    def get_tablenames(self):
+        """
+        Return the names of all tables in the database except 'spatial_ref_sys'
+
+        Returns
+        -------
+        list
+            the table names
+        """
+        tables = sorted([self.encode(x) for x in self.meta.tables.keys()])
+        tables.remove('spatial_ref_sys')
+        return tables
+
+    def get_unique_directories(self):
+        """
+        Get a list of directories containing registered scenes
+
+        Returns
+        -------
+        list
+            the directory names
+        """
+        scenes = self.Session().query(self.Data.scene)
+        registered = [os.path.dirname(self.encode(x[0])) for x in scenes]
+        return list(set(registered))
+
+    def import_outdated(self, dbfile, verbose=False):
+        """
+        import an older data base in csv format
+
+        Parameters
+        ----------
+        dbfile: str
+            the file name of the old data base
+        verbose: bool
+            should status information and a progress bar be printed into the console?
+
+        Returns
+        -------
+
+        """
+        with open(dbfile) as csvfile:
+            text = csvfile.read()
+            csvfile.seek(0)
+            dialect = csv.Sniffer().sniff(text)
+            reader = csv.DictReader(csvfile, dialect=dialect)
+            scenes = []
+            for row in reader:
+                scenes.append(row['scene'])
+            self.insert(scenes, verbose=verbose)
+
+    def move(self, scenelist, directory):
+        """
+        Move a list of files while keeping the database entries up to date.
+        If a scene is registered in the database (in either the data or duplicates table),
+        the scene entry is directly changed to the new location.
+
+        Parameters
+        ----------
+        scenelist: list
+            the file locations
+        directory: str
+            a folder to which the files are moved
+
+        Returns
+        -------
+        """
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+        if not os.access(directory, os.W_OK):
+            raise RuntimeError('directory cannot be written to')
+        failed = []
+        double = []
+        pbar = pb.ProgressBar(max_value=len(scenelist)).start()
+        # cursor = self.conn.cursor()
+        # session = self.Session()
+        for i, scene in enumerate(scenelist):
+            new = os.path.join(directory, os.path.basename(scene))
+            if os.path.isfile(new):
+                double.append(new)
+                continue
+            try:
+                shutil.move(scene, directory)
+            except shutil.Error:
+                failed.append(scene)
+                continue
+            finally:
+                pbar.update(i + 1)
+            if self.select(scene=scene) != 0:
+                table = 'data'
+            else:
+                # session.query()
+                # query_duplicates = session.query(self.Duplicates.scene).filter(
+                #    self.Duplicates.scene == scene)
+                query_duplicates = self.conn.execute(
+                    '''SELECT scene FROM duplicates WHERE scene='{0}' '''.format(scene))
+                # cursor.execute('SELECT scene FROM duplicates WHERE scene=?', (scene,))
+                if len(query_duplicates) != 0:
+                    table = 'duplicates'
+                else:
+                    table = None
+            if table:
+                self.conn.execute('''UPDATE {0} SET scene= '{1}' WHERE scene='{2}' '''.format(table, new, scene))
+                # session.commit()
+        pbar.finish()
+        if len(failed) > 0:
+            print('the following scenes could not be moved:\n{}'.format('\n'.join(failed)))
+        if len(double) > 0:
+            print('the following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
+
+    # solved by core by now
+    def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None,
+               recursive=False, polarizations=None, verbose=False, **args):
+        """
+        select scenes from the database
+
+        Parameters
+        ----------
+        vectorobject: :class:`~spatialist.vector.Vector`
+            a geometry with which the scenes need to overlap
+        mindate:str
+            the minimum acquisition date in format YYYYmmddTHHMMSS
+        maxdate: str
+            the maximum acquisition date in format YYYYmmddTHHMMSS
+        processdir: str
+            a directory to be scanned for already processed scenes;
+            the selected scenes will be filtered to those that have not yet been processed
+        recursive: bool
+            should also the subdirectories of the processdir be scanned?
+        polarizations: list
+            a list of polarization strings, e.g. ['HH', 'VV']
+        verbose: bool
+            print details about the selection including the SQL query?
+        **args:
+            any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
+
+        Returns
+        -------
+        list
+            the file names pointing to the selected scenes
+
+        """
+
+        arg_valid = [x for x in args.keys() if x in self.get_colnames()]
+        arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
+        if len(arg_invalid) > 0:
+            print('the following arguments will be ignored as they are not registered in the data base: {}'.format(
+                ', '.join(arg_invalid)))
+        arg_format = []
+        vals = []
+        for key in arg_valid:
+            if key == 'scene':
+                arg_format.append('''scene LIKE '%%{0}%%' '''.format(os.path.basename(args[key])))
+            else:
+                if isinstance(args[key], (float, int, str)):
+                    arg_format.append('''{0}='{1}' '''.format(key, args[key]))
+                elif isinstance(args[key], (tuple, list)):
+                    arg_format.append('''{0} IN ('{1}')'''.format(key, ''' ', ' '''.join(map(str, args[key]))))
+        if mindate:
+            if re.search('[0-9]{8}T[0-9]{6}', mindate):
+                arg_format.append('start>=?')
+                vals.append(mindate)
+            else:
+                print('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
+        if maxdate:
+            if re.search('[0-9]{8}T[0-9]{6}', maxdate):
+                arg_format.append('stop<=?')
+                vals.append(maxdate)
+            else:
+                print('WARNING: argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
+
+        if polarizations:
+            for pol in polarizations:
+                if pol in ['HH', 'VV', 'HV', 'VH']:
+                    arg_format.append('{}=1'.format(pol.lower()))
+
+        if vectorobject:
+            if isinstance(vectorobject, Vector):
+                vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
+                site_geom = vectorobject.convert2wkt(set3D=False)[0]
+                arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
+                vals.append(site_geom)
+            else:
+                print('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
+
+        query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
+        for val in vals:
+            query = query.replace('?', ''' '{0}' ''', 1).format(val)
+
+        if verbose:
+            print(query)
+        print(query)
+        query_rs = self.conn.execute(query)
+
+        # whatever this does
+        if processdir and os.path.isdir(processdir):
+            scenes = [x for x in query_rs
+                      if len(finder(processdir, [x[1]], regex=True, recursive=recursive)) == 0]
+        else:
+
+            scenes = query_rs
+        ret = []
+        for x in scenes:
+            ret.append(self.encode(x[0]))
+
+        return ret  # [self.encode(x[0]) for x in scenes] somehow the inline for did not work...
+
+    # sieht auch nicht so einfach mit orm aus...
+    def select_duplicates(self, outname_base=None, scene=None):
+        """
+        Select scenes from the duplicates table. In case both `outname_base` and `scene` are set to None all scenes in
+        the table are returned, otherwise only those that match the attributes `outname_base` and `scene` if they are not None.
+
+        Parameters
+        ----------
+        outname_base: str
+            the basename of the scene
+        scene: str
+            the scene name
+
+        Returns
+        -------
+        list
+            the selected scene(s)
+        """
+        # session = self.Session()
+        # cursor = self.conn.cursor()
+        if not outname_base and not scene:
+            # ret_stmnt = session.query(self.Duplicates)
+            scenes = self.conn.execute('SELECT * from duplicates')
+            # cursor.execute('SELECT * from duplicates')
+        else:
+            cond = []
+            arg = []
+            if outname_base:
+                cond.append('outname_base=?')
+                arg.append(outname_base)
+            if scene:
+                cond.append('scene=?')
+                arg.append(scene)
+            query = 'SELECT * from duplicates WHERE {}'.format(' AND '.join(cond))
+            for a in arg:
+                query = query.replace('?', ''' '{0}' ''', 1).format(a)
+
+            # cursor.execute(query, tuple(arg))
+            scenes = self.conn.execute(query)
+
+        ret = []
+        for x in scenes:
+            ret.append(self.encode(x[0]))
+
+        return ret
+
+    @property
+    def size(self):
+        """
+        get the number of scenes registered in the database
+
+        Returns
+        -------
+        tuple
+            the number of scenes in (1) the main table and (2) the duplicates table
+        """
+        # cursor = self.conn.cursor()
+        r1 = self.Session().query(self.Data.outname_base).count()
+        # cursor.execute('''SELECT Count(*) FROM data''').fetchone()[0]
+        r2 = self.Session().query(self.Duplicates.outname_base).count()
+        # cursor.execute('''SELECT Count(*) FROM duplicates''').fetchone()[0]
+        return r1, r2
+
+    def __enter__(self):
+        return self
+
+    def close(self):
+        """
+        close the database connection
+        """
+        self.Session().close()
+        self.conn.close()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def drop_element(self, scene, table):
+        if table == 'data':
+            self.__drop_element_data(scene)
+        elif table == 'duplicates':
+            self.__drop_element_duplicates(scene)
+        else:
+            print('drop methods implemeted only for data and duplictes')
+
+    def __drop_element_data(self, scene):
+        """
+        Drop an entry from the database.
+
+        Parameters
+        ----------
+        scene:
+            a SAR scene
+
+        Returns
+        -------
+        """
+        # id = scene if isinstance(scene, ID) else identify(scene)
+        delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
+        self.conn.execute(delete_statement)
+        print('entry with id {} was dropped!'.format(scene))
+
+    def __drop_element_duplicates(self, scene):
+        """
+        Drop an entry from the database.
+
+        Parameters
+        ----------
+        scene:
+            a SAR scene
+
+        Returns
+        -------
+        """
+        # id = scene if isinstance(scene, ID) else identify(scene)
+        delete_statement = self.duplicates_schema.delete().where(self.duplicates_schema.c.scene == scene)
+        self.conn.execute(delete_statement)
+        print('entry with id {} was dropped!'.format(scene))
+
+    def drop_table(self, table):
+        if table == 'data':
+            self.__drop_table_data()
+        elif table == 'duplicates':
+            self.__drop_table_duplictes()
+        else:
+            print('drop methods implemeted only for data and duplictes')
+
+    def __drop_table_data(self):
+        self.Data.__table__.drop(self.engine)
+
+    def __drop_table_duplictes(self):
+        self.Duplicates.__table__.drop(self.engine)
+
+    def drop_database(self):
+        """
+        Closes connection and drops the database.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        """
+        self.conn.close()
+        self.close()
+        drop_database(self.engine.url)
+        print('Database dropped')
 
 
 def findfiles(scene, pattern, include_folders=False):
