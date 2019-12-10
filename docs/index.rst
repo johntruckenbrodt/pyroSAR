@@ -34,6 +34,7 @@ About
 
    about/projects
    about/changelog
+   about/publications
 
 Indices and tables
 ==================
