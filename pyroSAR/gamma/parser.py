@@ -39,6 +39,11 @@ def parse_command(command, indent='    '):
         # for all other commands stderr is just appended to stdout
         out += err
     
+    pattern = r'([\w]+ (?:has been|was) re(?:named to|placed by)(?: the ISP program|) [\w]+)'
+    match = re.search(pattern, out)
+    if match:
+        raise DeprecationWarning(match.groups()[0])
+    
     if re.search(r"Can't locate FILE/Path\.pm in @INC", out):
         raise RuntimeError('unable to parse Perl script')
     ###########################################
@@ -539,11 +544,6 @@ def parse_module(bindir, outfile):
         raise OSError('directory does not exist: {}'.format(bindir))
     
     excludes = ['coord_trans',  # doesn't take any parameters and is interactive
-                'interp_cpx',  # replaced by interp_data
-                'interp_real',  # replaced by interp_data
-                'par_RSI',  # replaced by par_RSI_ERS
-                'par_RSI_RSAT',  # replaced by par_RSAT_SLC
-                'PRI_to_MLI',  # replaced by radcal_MLI
                 'RSAT2_SLC_preproc',  # takes option flags
                 'mk_ASF_CEOS_list',  # "cannot create : Directory nonexistent"
                 '2PASS_UNW',  # parameter name inconsistencies
@@ -560,6 +560,8 @@ def parse_module(bindir, outfile):
                 fun = parse_command(cmd)
             except RuntimeError as e:
                 failed.append('{0}: {1}'.format(basename, str(e)))
+                continue
+            except DeprecationWarning:
                 continue
             except:
                 failed.append('{0}: {1}'.format(basename, 'error yet to be assessed'))
