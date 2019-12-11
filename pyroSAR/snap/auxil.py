@@ -364,9 +364,9 @@ def is_consistent(workflow):
 def split(xmlfile, groups):
     """
     split a workflow file into groups and write them to separate workflows including source and write target linking.
-    The new workflows are written to a sub-directory 'temp' of the target directory defined in the input's 'Write' node.
-    Each new workflow is parametrized with a Read and Write node if they don't already exist. Temporary outputs are
-    written to BEAM-DIMAP files named after the workflow suffix sequence.
+    The new workflows are written to a sub-directory `temp` of the target directory defined in the input's `Write` node.
+    Each new workflow is parameterized with a `Read` and `Write` node if they don't already exist. Temporary outputs are
+    written to `BEAM-DIMAP` files named after the workflow suffix sequence.
     
     Parameters
     ----------
@@ -483,7 +483,7 @@ def groupbyWorkers(xmlfile, n=2):
     list
         a list of lists each containing the IDs of all nodes belonging to the groups including Read and Write nodes;
         this list can e.g. be passed to function :func:`split` to split the workflow into new sub-workflow files based
-        on the newly created groups
+        on the newly created groups or directly to function :func:`gpt`, which will call :func:`split` internally.
     """
     workflow = Workflow(xmlfile)
     workers_id = [x.id for x in workflow if x.operator not in ['Read', 'Write']]

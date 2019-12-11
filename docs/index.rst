@@ -17,6 +17,7 @@ General Topics
    general/filenaming
    general/OSV
    general/DEM
+   general/snap
    general/processing
 
 API Documentation

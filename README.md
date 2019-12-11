@@ -20,7 +20,8 @@
 The pyroSAR package aims at providing a complete solution for the scalable organization and processing of SAR satellite data:
 * Reading of data from various past and present satellite missions
 * Handling of acquisition metadata
-* User-friendly access to processing utilities in SNAP and GAMMA Remote Sensing software
+* User-friendly access to processing utilities in [SNAP](https://step.esa.int/main/toolboxes/snap/) 
+and [GAMMA Remote Sensing](https://www.gamma-rs.ch/) software
 * Formatting of the preprocessed data for further analysis
 * Export to Data Cube solutions
 
