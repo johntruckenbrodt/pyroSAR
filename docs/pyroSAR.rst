@@ -102,6 +102,8 @@ DEM tools
         mosaic
         swap
 
+.. _gamma-command-api:
+
 GAMMA Command API
 -----------------
 
@@ -156,7 +158,7 @@ API Demo
 This is a demonstration of an output script as generated automatically by function
 :func:`~pyroSAR.gamma.parser.parse_module` for the Gamma module `ISP`.
 Within each function, the command name and all parameters are passed to function
-:func:`~pyroSAR.gamma.process`, which converts all input to str and then calls the command via the
+:func:`~pyroSAR.gamma.process`, which converts all input to :py:obj:`str` and then calls the command via the
 :mod:`subprocess` module.
 
 .. automodule:: pyroSAR.gamma.parser_demo
