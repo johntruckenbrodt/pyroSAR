@@ -234,11 +234,12 @@ def gpt(xmlfile, groups=None, cleanup=True,
     outname = write.parameters['file']
     suffix = workflow.suffix
     format = write.parameters['formatName']
-    dem_name = workflow.tree.find('.//demName').text
-    if dem_name == 'External DEM':
-        dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
-    else:
-        dem_nodata = 0
+    dem_name = workflow.tree.find('.//demName')
+    if dem_name is not None:
+        if dem_name.text == 'External DEM':
+            dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
+        else:
+            dem_nodata = 0
     
     if 'Remove-GRD-Border-Noise' in workflow.ids and removeS1BorderNoiseMethod == 'pyroSAR':
         if 'SliceAssembly' in workflow.operators:
