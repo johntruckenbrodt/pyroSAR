@@ -111,7 +111,6 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
     workflow = Workflow(xmlfile)
     write = workflow['Write']
     outname = write.parameters['file']
-    infile = workflow['Read'].parameters['file']
     workers = [x.id for x in workflow if x.operator not in ['Read', 'Write']]
     message = ' -> '.join(workers)
     gpt_exec = None
@@ -143,7 +142,6 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
             # '-Dsnap.dataio.bigtiff.compression.quality=0.75'
         ])
     cmd.append(xmlfile)
-    print(cmd)
     # execute the workflow
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     out, err = proc.communicate()
@@ -281,7 +279,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
         else:
             execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
     except RuntimeError as e:
-        if cleanup:
+        if cleanup and os.path.exists(outname):
             shutil.rmtree(outname)
         raise RuntimeError(str(e) + '\nfailed: {}'.format(xmlfile))
     
@@ -324,7 +322,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
         except RuntimeError:
             continue
     ###########################################################################
-    if cleanup:
+    if cleanup and os.path.exists(outname):
         shutil.rmtree(outname)
     print('done')
 
