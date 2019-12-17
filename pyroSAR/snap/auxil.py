@@ -448,7 +448,7 @@ def split(xmlfile, groups):
         # add a Write node to all dangling nodes
         counter = 0
         for node in new:
-            if new.successors(node.id) == [] and node.id != 'Write':
+            if new.successors(node.id) == [] and not node.id.startswith('Write'):
                 write = parse_node('Write')
                 new.insert_node(write, before=node.id)
                 id = str(position) if counter == 0 else '{}-{}'.format(position, counter)
