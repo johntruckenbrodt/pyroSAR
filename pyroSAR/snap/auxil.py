@@ -14,7 +14,7 @@ from pyroSAR._dev_config import LOOKUP
 from pyroSAR.examine import ExamineSnap
 
 from spatialist.auxil import gdal_translate
-from spatialist.ancillary import finder
+from spatialist.ancillary import finder, run
 
 import logging
 
@@ -63,15 +63,49 @@ def parse_node(name):
     
     Examples
     --------
-    >>> ml = parse_node('ThermalNoiseRemoval')
-    >>> print(ml.parameters)
+    >>> tnr = parse_node('ThermalNoiseRemoval')
+    >>> print(tnr.parameters)
     {'selectedPolarisations': None, 'removeThermalNoise': 'true', 'reIntroduceThermalNoise': 'false'}
     """
     name = name if name.endswith('.xml') else name + '.xml'
-    absname = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'recipes', 'nodes', name)
-    with open(absname, 'r') as workflow:
-        element = ET.fromstring(workflow.read())
-    return Node(element)
+    operator = os.path.splitext(name)[0]
+    abspath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')
+    os.makedirs(abspath, exist_ok=True)
+    absname = os.path.join(abspath, name)
+    
+    if not os.path.isfile(absname):
+        gpt = ExamineSnap().gpt
+        
+        cmd = [gpt, operator, '-h']
+        
+        out, err = run(cmd=cmd, void=False)
+        
+        graph = re.search('<graph id.*', out, flags=re.DOTALL).group()
+        tree = ET.fromstring(graph)
+        node = tree.find('node')
+        node.attrib['id'] = operator
+        if operator != 'Read':
+            source = node.find('.//sources')
+            child = source[0]
+            if child.tag == 'source':
+                child.tag = 'sourceProduct'
+            elif child.tag == 'sourceProducts':
+                child.tag = 'sourceProduct'
+                child2 = ET.SubElement(source, 'sourceProduct.1', {'refid': 'Read (2)'})
+            child.attrib['refid'] = 'Read'
+            child.text = None
+        
+        node = Node(node)
+        
+        with open(absname, 'w') as xml:
+            xml.write(str(node))
+        
+        return node
+    
+    else:
+        with open(absname, 'r') as workflow:
+            element = ET.fromstring(workflow.read())
+        return Node(element)
 
 
 def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=True):
@@ -432,7 +466,7 @@ def split(xmlfile, groups):
             
             if not resetSuccessorSource:
                 newnode.source = reset
-
+        
         # if possible, read the name of the SAR product for parsing names of temporary files
         # this was found necessary for SliceAssembly, which expects the names in a specific format
         products = [x.parameters['file'] for x in new['operator=Read']]
@@ -848,6 +882,7 @@ class Workflow(object):
 
         """
         outfile = outfile if outfile.endswith('.xml') else outfile + '.xml'
+        log.debug('writing {}'.format(outfile))
         with open(outfile, 'w') as out:
             out.write(self.__str__())
 
@@ -958,6 +993,8 @@ class Node(object):
         ------
         RuntimeError
         """
+        if isinstance(value, list) and len(value) == 1:
+            value = value[0]
         log.debug('setting the source of node {} to {}'.format(self.id, value))
         if isinstance(value, str):
             if isinstance(self.source, list):
