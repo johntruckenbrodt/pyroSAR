@@ -2066,7 +2066,7 @@ class Archive(object):
 
 
 # just parked here...
-class Archive_pg(object):
+class ArchivePg(object):
     """
     Utility for storing SAR image metadata in a spatialite database
 
@@ -2117,7 +2117,7 @@ class Archive_pg(object):
     >>>     print(archive.is_registered(scene.scene))
     """
 
-    def __init__(self, dbfile, driver='postgres', user='user', password='user', host='localhost', port=5432,
+    def __init__(self, dbfile, driver='postgres', user='postgres', password='1234', host='localhost', port=5432,
                  custom_fields=None):
 
         # hier kann man auch alles als dict ubergeben!!!!!!!!
