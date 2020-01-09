@@ -1507,11 +1507,84 @@ class TSX(ID):
         outdir = os.path.join(directory, os.path.basename(header))
         self._unpack(outdir, offset=header, overwrite=overwrite)
 
+
 def Archive(dbfile, driver='spatialite', user=None, password=None, host=None, port = None, custom_fields=None):
+    """
+    Utility for storing SAR image metadata in a spatialite or postgres database.
+
+    Parameters
+    ----------
+    dbfile: str
+        the database file. This file might either point to an existing database or will be created otherwise.
+        when driver is set to postgres this will define the database name
+    driver: str
+        (optional) driver to be used for the database. Can be either 'spatialite' or 'postgres'. Default is spatialite
+    user: str
+        (postgres only) username to access the database. Default: 'postgres'
+    password: str
+        (postgres only) password to access the database. Default: '1234'
+    host: str
+        (postgres only) host where the database is hostet. Default: 'localhost'
+    port: int
+        (postgres only) port number to the database. Defalut: 5432
+    custom_fields: dict
+        a dictionary containing additional non-standard database column names and data types;
+        the names must be attributes of the SAR scenes to be inserted (i.e. id.attr) or keys in their meta attribute
+        (i.e. id.meta['attr'])
+
+    Examples
+    ----------
+    Ingest all Sentinel-1 scenes in a directory and its sub-directories into a spatialite database:
+
+    >>> from pyroSAR import Archive, identify
+    >>> from spatialist.ancillary import finder
+    >>> dbfile = '/.../scenelist.db'
+    >>> archive_s1 = '/.../sentinel1/GRD'
+    >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*\.zip'], regex=True, recursive=True)
+    >>> with Archive(dbfile) as archive:
+    >>>     archive.insert(scenes_s1)
+
+    select all Sentinel-1 A/B scenes stored in a spatialite database, which
+     * overlap with a test site
+     * were acquired in Ground-Range-Detected (GRD) Interferometric Wide Swath (IW) mode before 2018
+     * contain a VV polarization image
+     * have not been processed to directory `outdir` before
+
+    >>> from pyroSAR import Archive
+    >>> from spatialist import Vector
+    >>> archive = Archive('/path/to/dbfile.db')
+    >>> site = Vector('/path/to/site.shp')
+    >>> outdir = '/path/to/processed/results'
+    >>> maxdate = '20171231T235959'
+    >>> selection_proc = archive.select(vectorobject=site, processdir=outdir,
+    >>>                                 maxdate=maxdate, sensor=('S1A', 'S1B'),
+    >>>                                 product='GRD', acquisition_mode='IW', vv=1)
+    >>> archive.close()
+
+    Alternatively, the `with` statement can be used.
+    In this case to just check whether one particular scene is already registered in a spatialite database:
+
+    >>> from pyroSAR import identify, Archive
+    >>> scene = identify('S1A_IW_SLC__1SDV_20150330T170734_20150330T170801_005264_006A6C_DA69.zip')
+    >>> with Archive('/path/to/dbfile.db') as archive:
+    >>>     print(archive.is_registered(scene.scene))
+
+    When driver is set to postgres this will create a postgres database at a given host and port:
+
+    >>> from pyroSAR import Archive, identify
+    >>> from spatialist.ancillary import finder
+    >>> dbfile = 'pyroSARdb'
+    >>> archive_s1 = '/.../sentinel1/GRD'
+    >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*\.zip'], regex=True, recursive=True)
+    >>> with Archive(dbfile, driver='postgres', user='user', password='user', host='localhost', port=5432) as archive:
+    >>>     archive.insert(scenes_s1)
+    """
+
     if driver == 'spatialite':
         return ArchiveSpatialite(dbfile, custom_fields)
     elif driver == 'postgres':
         return ArchivePostgres(dbfile, user, password, host, port, custom_fields)
+
 
 class ArchiveSpatialite(object):
     """
@@ -1530,12 +1603,12 @@ class ArchiveSpatialite(object):
     ----------
     Ingest all Sentinel-1 scenes in a directory and its sub-directories into the database:
     
-    >>> from pyroSAR import Archive, identify
+    >>> from pyroSAR import ArchiveSpatialite, identify
     >>> from spatialist.ancillary import finder
     >>> dbfile = '/.../scenelist.db'
     >>> archive_s1 = '/.../sentinel1/GRD'
     >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*\.zip'], regex=True, recursive=True)
-    >>> with Archive(dbfile) as archive:
+    >>> with ArchiveSpatialite(dbfile) as archive:
     >>>     archive.insert(scenes_s1)
     
     select all Sentinel-1 A/B scenes stored in the database, which
@@ -1544,9 +1617,9 @@ class ArchiveSpatialite(object):
      * contain a VV polarization image
      * have not been processed to directory `outdir` before
 
-    >>> from pyroSAR import Archive
+    >>> from pyroSAR import ArchiveSpatialite
     >>> from spatialist import Vector
-    >>> archive = Archive('/path/to/dbfile.db')
+    >>> archive = ArchiveSpatialite('/path/to/dbfile.db')
     >>> site = Vector('/path/to/site.shp')
     >>> outdir = '/path/to/processed/results'
     >>> maxdate = '20171231T235959'
@@ -1558,9 +1631,9 @@ class ArchiveSpatialite(object):
     Alternatively, the `with` statement can be used.
     In this case to just check whether one particular scene is already registered in the database:
 
-    >>> from pyroSAR import identify, Archive
+    >>> from pyroSAR import identify, ArchiveSpatialite
     >>> scene = identify('S1A_IW_SLC__1SDV_20150330T170734_20150330T170801_005264_006A6C_DA69.zip')
-    >>> with Archive('/path/to/dbfile.db') as archive:
+    >>> with ArchiveSpatialite('/path/to/dbfile.db') as archive:
     >>>     print(archive.is_registered(scene.scene))
     """
     
@@ -2070,15 +2143,22 @@ class ArchiveSpatialite(object):
         self.close()
 
 
-# just parked here...
 class ArchivePostgres(object):
     """
-    Utility for storing SAR image metadata in a spatialite database
+    Utility for storing SAR image metadata in a postgres database
 
     Parameters
     ----------
     dbfile: str
-        the database file. This file might either point to an existing database or will be created otherwise.
+        the database name. This might either point to an existing database or will be created otherwise.
+    user: str
+        username to access the database. Default: 'postgres'
+    password: str
+        password to access the database. Default: '1234'
+    host: str
+        host where the database is hostet. Default: 'localhost'
+    port: int
+        port number to the database. Defalut: 5432
     custom_fields: dict
         a dictionary containing additional non-standard database column names and data types;
         the names must be attributes of the SAR scenes to be inserted (i.e. id.attr) or keys in their meta attribute
@@ -2088,12 +2168,12 @@ class ArchivePostgres(object):
     ----------
     Ingest all Sentinel-1 scenes in a directory and its sub-directories into the database:
 
-    >>> from pyroSAR import Archive, identify
+    >>> from pyroSAR import ArchivePostgres, identify
     >>> from spatialist.ancillary import finder
-    >>> dbfile = '/.../scenelist.db'
+    >>> dbfile = 'pyroSARdb'
     >>> archive_s1 = '/.../sentinel1/GRD'
     >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*\.zip'], regex=True, recursive=True)
-    >>> with Archive(dbfile) as archive:
+    >>> with ArchivePostgres(dbfile, user='user', password='user', host='localhost', port=5432) as archive:
     >>>     archive.insert(scenes_s1)
 
     select all Sentinel-1 A/B scenes stored in the database, which
@@ -2102,9 +2182,9 @@ class ArchivePostgres(object):
      * contain a VV polarization image
      * have not been processed to directory `outdir` before
 
-    >>> from pyroSAR import Archive
+    >>> from pyroSAR import ArchivePostgres
     >>> from spatialist import Vector
-    >>> archive = Archive('/path/to/dbfile.db')
+    >>> archive = ArchivePostgres('pyroSARdb', user='user', password='user', host='localhost', port=5432)
     >>> site = Vector('/path/to/site.shp')
     >>> outdir = '/path/to/processed/results'
     >>> maxdate = '20171231T235959'
@@ -2116,40 +2196,29 @@ class ArchivePostgres(object):
     Alternatively, the `with` statement can be used.
     In this case to just check whether one particular scene is already registered in the database:
 
-    >>> from pyroSAR import identify, Archive
+    >>> from pyroSAR import identify, ArchivePostgres
     >>> scene = identify('S1A_IW_SLC__1SDV_20150330T170734_20150330T170801_005264_006A6C_DA69.zip')
-    >>> with Archive('/path/to/dbfile.db') as archive:
+    >>> with ArchivePostgres('pyroSARdb', user='user', password='user', host='localhost', port=5432) as archive:
     >>>     print(archive.is_registered(scene.scene))
     """
 
-    def __init__(self, dbfile, driver='postgres', user='user', password='user', host='localhost', port=5432,
-                 custom_fields=None):
+    def __init__(self, dbfile, user='postgres', password='1234', host='localhost', port=5432, custom_fields=None):
 
-        # hier kann man auch alles als dict ubergeben!!!!!!!!
-        # sqlite_db = {'drivername': 'sqlite', 'database': 'db.sqlite'}
-        # print(URL(**sqlite_db))
-        self.postgres_db = {'drivername': driver,
+        self.postgres_db = {'drivername': 'postgres',
                             'username': user,
                             'password': password,
                             'host': host,
                             'port': port,
                             'database': dbfile}
-        # print(URL(**postgres_db))
-        # print('postgresql://' + user + ':' + password + '@' + host + '/' + dbfile)
-        url = URL(**self.postgres_db)
-        self.engine = create_engine(url, echo=False)
+        self.engine = create_engine(URL(**self.postgres_db), echo=False)
         if not database_exists(self.engine.url):
             create_database(self.engine.url)
-            # activate postgis extension to be able to store geometry data
             self.engine.connect().execute('CREATE EXTENSION postgis')
-            if not database_exists(self.engine.url):
-                print('something went wrong in the init')
-
         self.conn = self.engine.connect()
         self.Session = sessionmaker(bind=self.engine)
         self.meta = MetaData(self.engine)
-
         self.custom_fields = custom_fields
+
         self.data_schema = Table('data', self.meta,
                                  Column('sensor', String),
                                  Column('orbit', String),
@@ -2170,6 +2239,7 @@ class ArchivePostgres(object):
                                  Column('hv', Integer),
                                  Column('vh', Integer),
                                  Column('bbox', Geometry('POLYGON', srid=4326)))
+
         if self.custom_fields is not None:
             for key, val in self.custom_fields.items():
                 if val == 'Integer':
@@ -2221,17 +2291,6 @@ class ArchivePostgres(object):
                 setattr(insertion, 'bbox', geom)
             elif attribute in ['hh', 'vv', 'hv', 'vh']:
                 setattr(insertion, attribute, int(attribute in pols))
-                # insertion['hh'] = int(attribute in pols)
-            # elif attribute in ['vv']:
-            #   setattr(insertion, 'vv', int(attribute in pols))
-            # insertion['vv'] = int(attribute in pols)
-            # elif attribute in ['hv']:
-            #  setattr(insertion, 'hv', int(attribute in pols))
-            #   #insertion['hv'] = int(attribute in pols)
-            # elif attribute in ['vh']:
-            #   setattr(insertion, 'vh', int(attribute in pols))
-            # insertion['vh'] = int(attribute in pols)
-
             else:
                 if hasattr(id, attribute):
                     attr = getattr(id, attribute)
@@ -2258,12 +2317,7 @@ class ArchivePostgres(object):
             scenes = self.Session().query(self.Duplicates.scene)
         else:
             raise ValueError("parameter 'table' must either be 'data' or 'duplicates'")
-        # cursor = self.conn.cursor()
-        # scenes = self.Session().query(self.Data.scene)
         files = [self.encode(x[0]) for x in scenes]
-        # print(scenes)
-        # cursor.execute('''SELECT scene FROM {}'''.format(table))
-        # files = [self.encode(x[0]) for x in scenes]
         return [x for x in files if not os.path.isfile(x)]
 
     def insert(self, scene_in, verbose=False, test=False):
@@ -2291,7 +2345,6 @@ class ArchivePostgres(object):
         if verbose:
             print('filtering scenes by name...')
         scenes = self.filter_scenelist(scene_in)
-        # print(scenes)
         if len(scenes) == 0:
             print('nothing to be done')
             return
@@ -2398,7 +2451,6 @@ class ArchivePostgres(object):
         -------
 
         """
-        # session = self.Session()
         for table in ['data', 'duplicates']:
             missing = self.__select_missing(table)
             for scene in missing:
@@ -2421,33 +2473,25 @@ class ArchivePostgres(object):
         ----------
         path: str
             the path of the folder for the shapefiles data and duplicates to be written
-            this will overwrite shapefiles
+            this will overwrite other files with the same name (data, duplicates)
 
         Returns
         -------
         """
-        # largely taken from:
-        # https://hub.packtpub.com/moving-spatial-data-one-format-another/https:
-
-        # folder to hold output Shapefiles
         destination_dir = os.path.realpath('../' + str(path))
-
-        # list of postGIS tables
         postgis_tables_list = self.get_tablenames()
 
-        # database connection parameters
         db_connection = """PG:host={0} port={1} user={2}
                 dbname={3} password={4} active_schema=public""".format(self.postgres_db['host'],
                                                                        self.postgres_db['port'],
                                                                        self.postgres_db['username'],
                                                                        self.postgres_db['database'],
                                                                        self.postgres_db['password'])
-        # check if destination directory exists
+
         if not os.path.isdir(destination_dir):
             os.mkdir(destination_dir)
         for table in postgis_tables_list:
-            subprocess.call(["ogr2ogr", "-f", "ESRI Shapefile", destination_dir,
-                             db_connection, table, "-overwrite"])
+            subprocess.call(["ogr2ogr", "-f", "ESRI Shapefile", destination_dir, db_connection, table, "-overwrite"])
             print("running ogr2ogr on table: " + table)
 
     def filter_scenelist(self, scenelist):
@@ -2468,14 +2512,9 @@ class ArchivePostgres(object):
         for item in scenelist:
             if not isinstance(item, (ID, str)):
                 raise IOError('items in scenelist must be of type "str" or pyroSAR.ID')
-        # cursor = self.conn.cursor()
-        # cursor.execute('SELECT scene FROM data')
         scenes_data = self.Session().query(self.Data.scene)
-        # print(scenes_data)
         registered = [os.path.basename(self.encode(x[0])) for x in scenes_data]
-        # print(registered)
         scenes_duplicates = self.Session().query(self.Duplicates.scene)
-        # cursor.execute('SELECT scene FROM duplicates')
         duplicates = [os.path.basename(self.encode(x[0])) for x in scenes_duplicates]
         names = [item.scene if isinstance(item, ID) else item for item in scenelist]
         filtered = [x for x, y in zip(scenelist, names) if os.path.basename(y) not in registered + duplicates]
@@ -2567,8 +2606,7 @@ class ArchivePostgres(object):
         failed = []
         double = []
         pbar = pb.ProgressBar(max_value=len(scenelist)).start()
-        # cursor = self.conn.cursor()
-        # session = self.Session()
+
         for i, scene in enumerate(scenelist):
             new = os.path.join(directory, os.path.basename(scene))
             if os.path.isfile(new):
@@ -2584,26 +2622,20 @@ class ArchivePostgres(object):
             if self.select(scene=scene) != 0:
                 table = 'data'
             else:
-                # session.query()
-                # query_duplicates = session.query(self.Duplicates.scene).filter(
-                #    self.Duplicates.scene == scene)
                 query_duplicates = self.conn.execute(
                     '''SELECT scene FROM duplicates WHERE scene='{0}' '''.format(scene))
-                # cursor.execute('SELECT scene FROM duplicates WHERE scene=?', (scene,))
                 if len(query_duplicates) != 0:
                     table = 'duplicates'
                 else:
                     table = None
             if table:
                 self.conn.execute('''UPDATE {0} SET scene= '{1}' WHERE scene='{2}' '''.format(table, new, scene))
-                # session.commit()
         pbar.finish()
         if len(failed) > 0:
             print('the following scenes could not be moved:\n{}'.format('\n'.join(failed)))
         if len(double) > 0:
             print('the following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
 
-    # solved by core by now
     def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None,
                recursive=False, polarizations=None, verbose=False, **args):
         """
@@ -2635,7 +2667,6 @@ class ArchivePostgres(object):
             the file names pointing to the selected scenes
 
         """
-
         arg_valid = [x for x in args.keys() if x in self.get_colnames()]
         arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
@@ -2687,20 +2718,17 @@ class ArchivePostgres(object):
         print(query)
         query_rs = self.conn.execute(query)
 
-        # whatever this does
         if processdir and os.path.isdir(processdir):
             scenes = [x for x in query_rs
                       if len(finder(processdir, [x[1]], regex=True, recursive=recursive)) == 0]
         else:
-
             scenes = query_rs
         ret = []
         for x in scenes:
             ret.append(self.encode(x[0]))
 
-        return ret  # [self.encode(x[0]) for x in scenes] somehow the inline for did not work...
+        return ret
 
-    # sieht auch nicht so einfach mit orm aus...
     def select_duplicates(self, outname_base=None, scene=None):
         """
         Select scenes from the duplicates table. In case both `outname_base` and `scene` are set to None all scenes in
@@ -2718,12 +2746,8 @@ class ArchivePostgres(object):
         list
             the selected scene(s)
         """
-        # session = self.Session()
-        # cursor = self.conn.cursor()
         if not outname_base and not scene:
-            # ret_stmnt = session.query(self.Duplicates)
             scenes = self.conn.execute('SELECT * from duplicates')
-            # cursor.execute('SELECT * from duplicates')
         else:
             cond = []
             arg = []
@@ -2736,8 +2760,6 @@ class ArchivePostgres(object):
             query = 'SELECT * from duplicates WHERE {}'.format(' AND '.join(cond))
             for a in arg:
                 query = query.replace('?', ''' '{0}' ''', 1).format(a)
-
-            # cursor.execute(query, tuple(arg))
             scenes = self.conn.execute(query)
 
         ret = []
@@ -2756,11 +2778,8 @@ class ArchivePostgres(object):
         tuple
             the number of scenes in (1) the main table and (2) the duplicates table
         """
-        # cursor = self.conn.cursor()
         r1 = self.Session().query(self.Data.outname_base).count()
-        # cursor.execute('''SELECT Count(*) FROM data''').fetchone()[0]
         r2 = self.Session().query(self.Duplicates.outname_base).count()
-        # cursor.execute('''SELECT Count(*) FROM duplicates''').fetchone()[0]
         return r1, r2
 
     def __enter__(self):
@@ -2777,12 +2796,25 @@ class ArchivePostgres(object):
         self.close()
 
     def drop_element(self, scene, table):
+        """
+        Drop an entry from the database.
+
+        Parameters
+        ----------
+        scene:
+            a SAR scene
+        table: str
+            either data or duplicates
+
+        Returns
+        -------
+        """
         if table == 'data':
             self.__drop_element_data(scene)
         elif table == 'duplicates':
             self.__drop_element_duplicates(scene)
         else:
-            print('drop methods implemeted only for data and duplictes')
+            print('only data or duplicates can be dropped')
 
     def __drop_element_data(self, scene):
         """
@@ -2796,7 +2828,6 @@ class ArchivePostgres(object):
         Returns
         -------
         """
-        # id = scene if isinstance(scene, ID) else identify(scene)
         delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
         self.conn.execute(delete_statement)
         print('entry with id {} was dropped!'.format(scene))
@@ -2813,12 +2844,22 @@ class ArchivePostgres(object):
         Returns
         -------
         """
-        # id = scene if isinstance(scene, ID) else identify(scene)
         delete_statement = self.duplicates_schema.delete().where(self.duplicates_schema.c.scene == scene)
         self.conn.execute(delete_statement)
         print('entry with id {} was dropped!'.format(scene))
 
     def drop_table(self, table):
+        """
+        Drop a table from the database.
+
+        Parameters
+        ----------
+        table: str
+            either data or duplicates
+
+        Returns
+        -------
+        """
         if table == 'data':
             self.__drop_table_data()
         elif table == 'duplicates':
