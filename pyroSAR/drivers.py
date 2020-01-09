@@ -1507,8 +1507,13 @@ class TSX(ID):
         outdir = os.path.join(directory, os.path.basename(header))
         self._unpack(outdir, offset=header, overwrite=overwrite)
 
+def Archive(dbfile, driver='spatialite', user=None, password=None, host=None, port = None, custom_fields=None):
+    if driver == 'spatialite':
+        return ArchiveSpatialite(dbfile, custom_fields)
+    elif driver == 'postgres':
+        return ArchivePostgres(dbfile, user, password, host, port, custom_fields)
 
-class Archive(object):
+class ArchiveSpatialite(object):
     """
     Utility for storing SAR image metadata in a spatialite database
 
@@ -2066,7 +2071,7 @@ class Archive(object):
 
 
 # just parked here...
-class Archive_pg(object):
+class ArchivePostgres(object):
     """
     Utility for storing SAR image metadata in a spatialite database
 
