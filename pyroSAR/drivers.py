@@ -1508,7 +1508,7 @@ class TSX(ID):
         self._unpack(outdir, offset=header, overwrite=overwrite)
 
 
-def Archive(dbfile, driver='spatialite', user=None, password=None, host=None, port = None, custom_fields=None):
+def Archive(dbfile, custom_fields=None, driver='spatialite', user=None, password=None, host=None, port = None):
     """
     Utility for storing SAR image metadata in a spatialite or postgres database.
 
