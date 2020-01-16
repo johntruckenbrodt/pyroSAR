@@ -2027,7 +2027,6 @@ class ArchiveSpatialite(object):
             the file names pointing to the selected scenes
 
         """
-
         arg_valid = [x for x in args.keys() if x in self.get_colnames()]
         arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
@@ -2202,7 +2201,8 @@ class ArchivePostgres(object):
     >>>     print(archive.is_registered(scene.scene))
     """
 
-    def __init__(self, dbfile, custom_fields=None, driver='sqlite', user='postgres', password='1234', host='localhost', port=5432):
+    def __init__(self, dbfile, custom_fields=None, driver='sqlite', user='postgres',
+                 password='1234', host='localhost', port=5432):
 
         self.driver = driver
         self.dbfile = dbfile
@@ -2280,9 +2280,13 @@ class ArchivePostgres(object):
         sys.stdout.flush()
 
     def __load_spatialite(self, dbapi_conn, connection_record):
-       dbapi_conn.enable_load_extension(True)
-       dbapi_conn.load_extension(
-           'mod_spatialite.so')
+        """
+        loads the mod_spatialite.so extension for SQLite, connection_record is a function and needed;
+        do not remove!
+        """
+        dbapi_conn.enable_load_extension(True)
+        dbapi_conn.load_extension(
+            'mod_spatialite.so')
 
     def __prepare_insertion(self, scene):
         """
@@ -2701,7 +2705,7 @@ class ArchivePostgres(object):
                 if isinstance(args[key], (float, int, str)):
                     arg_format.append('''{0}='{1}' '''.format(key, args[key]))
                 elif isinstance(args[key], (tuple, list)):
-                    arg_format.append('''{0} IN ('{1}')'''.format(key, ''' ', ' '''.join(map(str, args[key]))))
+                    arg_format.append('''{0} IN ('{1}')'''.format(key, "', '".join(map(str, args[key]))))
         if mindate:
             if re.search('[0-9]{8}T[0-9]{6}', mindate):
                 arg_format.append('start>=?')
