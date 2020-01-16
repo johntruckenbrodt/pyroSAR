@@ -46,7 +46,7 @@ from . import S1
 from .ERS import passdb_query
 from .xml_util import getNamespaces
 
-from spatialist import sqlite_setup, crsConvert, sqlite3, ogr2ogr, Vector, bbox
+from spatialist import sqlite_setup, crsConvert, sqlite3, ogr2ogr, Vector, bbox, sqlite_util
 from spatialist.ancillary import parse_literal, finder
 
 # new imports for postgres
@@ -2219,6 +2219,7 @@ class ArchivePostgres(object):
         self.engine = create_engine(URL(**self.url_dict), echo=False)
         if self.driver == 'sqlite':
             listen(self.engine, 'connect', self.__load_spatialite)
+
         if not database_exists(self.engine.url):
             if self.driver == 'sqlite':
                 self.engine.connect().execute('SELECT InitSpatialMetaData()')
@@ -2285,8 +2286,7 @@ class ArchivePostgres(object):
         do not remove!
         """
         dbapi_conn.enable_load_extension(True)
-        dbapi_conn.load_extension(
-            'mod_spatialite.so')
+        dbapi_conn.load_extension(sqlite_util.spatialite_setup())
 
     def __prepare_insertion(self, scene):
         """
