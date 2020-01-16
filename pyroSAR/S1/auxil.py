@@ -399,6 +399,7 @@ class OSV(object):
         print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
         if pbar:
             progress = pb.ProgressBar(max_value=len(downloads))
+        i = 0
         for remote, local, basename in downloads:
             infile = requests.get(remote)
             with zf.ZipFile(file=local,
@@ -409,7 +410,8 @@ class OSV(object):
                                  data=infile.content)
             infile.close()
             if pbar:
-                progress.update(1)
+                i += 1
+                progress.update(i)
         if pbar:
             progress.finish()
         self.clean_res()
