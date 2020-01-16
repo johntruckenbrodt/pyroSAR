@@ -162,7 +162,7 @@ class OSV(object):
         else:
             return self.outdir_res
     
-    def catch(self, sensor, osvtype='POE', start=None, stop=None, pbar=False):
+    def catch(self, sensor, osvtype='POE', start=None, stop=None):
         """
         check a server for files
 
@@ -179,8 +179,6 @@ class OSV(object):
             the date to start searching for files in format YYYYmmddTHHMMSS
         stop: str
             the date to stop searching for files in format YYYYmmddTHHMMSS
-        pbar: bool
-            add a progressbar?
 
         Returns
         -------
@@ -226,19 +224,12 @@ class OSV(object):
         query['validity_stop__lte'] = date_stop
         print('searching for new {} files'.format(osvtype))
         target = urlQueryParser(self.url, query).replace('%3A', ':')
-        progress = None
+        print(target)
         while target is not None:
             response = requests.get(target).json()
-            if progress is None and pbar:
-                print(target)
-                progress = pb.ProgressBar(max_value=response['count']).start()
             remotes = [item['remote_url'] for item in response['results']]
             collection += remotes
-            if progress is not None:
-                progress.update(len(collection))
             target = response['next']
-        if progress is not None:
-            progress.finish()
         if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
             collection = [x for x in collection
                           if self.date(x, 'start') > self.maxdate('POE', 'stop')]
