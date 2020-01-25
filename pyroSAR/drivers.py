@@ -1942,9 +1942,14 @@ class Archive(object):
         ret = sorted([self.encode(x) for x in col_names])
         return ret
     
-    def get_tablenames(self):
+    def get_tablenames(self, return_all=False):
         """
-        Return the names of all tables in the database except 'spatial_ref_sys'
+        Return the names of all tables in the database
+        
+         Parameters
+        ----------
+        path: bool
+            only gives tables data and duplicates on default. Set to True to get all other tables and views created automatically.
 
         Returns
         -------
@@ -1952,8 +1957,16 @@ class Archive(object):
             the table names
         """
         tables = sorted([self.encode(x) for x in self.meta.tables.keys()])
-        tables.remove('spatial_ref_sys')
-        return tables
+        if return_all:
+            return tables
+        else:
+            ret = []
+            if 'data' in tables:
+                ret.append('data')
+            if 'duplicates' in tables:
+                ret.append('duplicates')
+            return ret
+        
     
     def get_unique_directories(self):
         """
