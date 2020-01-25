@@ -2123,7 +2123,6 @@ class Archive(object):
         
         if verbose:
             print(query)
-        print(query)
         query_rs = self.conn.execute(query)
         
         if processdir and os.path.isdir(processdir):
@@ -2273,7 +2272,7 @@ class Archive(object):
         elif table == 'duplicates':
             self.__drop_table_duplictes()
         else:
-            print('drop methods implemeted only for data and duplictes')
+            print('drop methods implemented only for data and duplicates')
     
     def __drop_table_data(self):
         self.Data.__table__.drop(self.engine)
