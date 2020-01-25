@@ -1871,7 +1871,7 @@ class Archive(object):
         else:
             return string
     
-    def export2shp(self, path, shp_name='pyroSAR_scenes_shape_output'):
+    def export2shp(self, path):
         """
         export the database to a shapefile
 
@@ -1879,16 +1879,18 @@ class Archive(object):
         ----------
         path: str
             the path of the folder for the shapefile of data to be written
-            this will overwrite other files with the same name
-        shp_name: str
-            name for the shapefile to be written, Default: 'pyroSAR_scenes_shape_output'
-
+            this will overwrite other files with the same name.
+            If only a folder is given in path (path ends with '/'),
+            the default name of the shapefile is 'pyroSAR_data.shp'.
+            Otherwise '.shp' is appended to the path, if missing.
+            
         Returns
         -------
         """
-        destination_dir = os.path.realpath('../' + str(path))
-        if not os.path.isdir(destination_dir):
-            os.mkdir(destination_dir)
+        if path.endswith('/'):
+            path += 'pyroSAR_data.shp'
+        if not path.endswith('.shp'):
+            path += '.shp'
         
         if self.driver == 'sqlite':
             ogr2ogr(self.dbfile, path, options={'format': 'ESRI Shapefile'})
@@ -1899,7 +1901,7 @@ class Archive(object):
                                                                        self.url_dict['username'],
                                                                        self.url_dict['database'],
                                                                        self.url_dict['password'])
-            subprocess.call(["ogr2ogr", "-f", "ESRI Shapefile", destination_dir, db_connection, 'Data', "-overwrite"])
+            ogr2ogr(db_connection, path, options={'format': 'ESRI Shapefile'})
     
     def filter_scenelist(self, scenelist):
         """
