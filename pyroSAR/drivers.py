@@ -1664,6 +1664,12 @@ class Archive(object):
         """
         loads the mod_spatialite.so extension for SQLite, connection_record is a function and needed;
         do not remove!
+        Parameters
+        ----------
+        dbapi_conn:
+            db engine
+        connection_record:
+        
         """
         dbapi_conn.enable_load_extension(True)
         dbapi_conn.load_extension('mod_spatialite.so')
@@ -1677,7 +1683,7 @@ class Archive(object):
 
         Parameters
         ----------
-        scene:
+        scene: str or ID
             a SAR scene
 
          Returns
@@ -2229,7 +2235,7 @@ class Archive(object):
 
         Parameters
         ----------
-        scene:
+        scene: ID
             a SAR scene
         table: str
             either data or duplicates
@@ -2250,7 +2256,7 @@ class Archive(object):
 
         Parameters
         ----------
-        scene:
+        scene: ID
             a SAR scene
 
         Returns
@@ -2266,7 +2272,7 @@ class Archive(object):
 
         Parameters
         ----------
-        scene:
+        scene: ID
             a SAR scene
 
         Returns
