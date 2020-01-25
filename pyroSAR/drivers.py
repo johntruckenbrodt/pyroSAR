@@ -2286,7 +2286,7 @@ class Archive(object):
         do not remove!
         """
         dbapi_conn.enable_load_extension(True)
-        dbapi_conn.load_extension(str(sqlite_util.spatialite_setup()))
+        dbapi_conn.load_extension('mod_spatialite.so')
 
     def __prepare_insertion(self, scene):
         """
@@ -2294,10 +2294,15 @@ class Archive(object):
 
         * changes for postgres -> insertion is now an object of class Data
 
-        :param scene: a SAR scene
-        :return: the actual insert string and a tuple containing parameters for the command, e.g.
-        execute('''INSERT INTO data(a, b) VALUES(?, ?)''', (1, 2))
-        where '?' is a placeholder for a value in the following tuple
+
+        Parameters
+        ----------
+        scene:
+            a SAR scene
+
+         Returns
+        -------
+        object of class Data, insert string
         """
         id = scene if isinstance(scene, ID) else identify(scene)
         pols = [x.lower() for x in id.polarizations]
@@ -2554,7 +2559,8 @@ class Archive(object):
             the column names of the data table
         """
         col_names = self.Data.__table__.columns.keys()
-        return sorted([self.encode(x) for x in col_names])
+        ret = sorted([self.encode(x) for x in col_names])
+        return ret
 
     def get_tablenames(self):
         """
