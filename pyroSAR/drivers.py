@@ -1510,7 +1510,7 @@ class TSX(ID):
 
 class Archive(object):
     """
-    Utility for storing SAR image metadata in a postgres database
+    Utility for storing SAR image metadata in a database
 
     Parameters
     ----------
@@ -1596,7 +1596,9 @@ class Archive(object):
                              'host': host,
                              'port': port,
                              'database': dbfile}
+            
         self.engine = create_engine(URL(**self.url_dict), echo=False)
+        
         if self.driver == 'sqlite':
             listen(self.engine, 'connect', self.__load_spatialite)
         
@@ -1662,8 +1664,8 @@ class Archive(object):
     
     def __load_spatialite(self, dbapi_conn, connection_record):
         """
-        loads the mod_spatialite.so extension for SQLite, connection_record is a function and needed;
-        do not remove!
+        loads the spatialite extension for SQLite
+        
         Parameters
         ----------
         dbapi_conn:
@@ -1677,9 +1679,6 @@ class Archive(object):
     def __prepare_insertion(self, scene):
         """
         read scene metadata and parse a string for inserting it into the database
-
-        * changes for postgres -> insertion is now an object of class Data
-
 
         Parameters
         ----------
@@ -1973,7 +1972,6 @@ class Archive(object):
                 ret.append('duplicates')
             return ret
         
-    
     def get_unique_directories(self):
         """
         Get a list of directories containing registered scenes
@@ -2067,9 +2065,9 @@ class Archive(object):
             pbar.finish()
         if verbose:
             if len(failed) > 0:
-                print('the following scenes could not be moved:\n{}'.format('\n'.join(failed)))
+                print('The following scenes could not be moved:\n{}'.format('\n'.join(failed)))
             if len(double) > 0:
-                print('the following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
+                print('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
     
     def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None,
                recursive=False, polarizations=None, verbose=False, **args):
@@ -2244,43 +2242,46 @@ class Archive(object):
         -------
         """
         if table == 'data':
-            self.__drop_element_data(scene)
+            delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
         elif table == 'duplicates':
-            self.__drop_element_duplicates(scene)
+            delete_statement = self.duplicates_schema.delete().where(self.duplicates_schema.c.scene == scene)
         else:
             print('only data or duplicates can be dropped')
-    
-    def __drop_element_data(self, scene):
-        """
-        Drop an entry from the database.
-
-        Parameters
-        ----------
-        scene: ID
-            a SAR scene
-
-        Returns
-        -------
-        """
-        delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
-        self.conn.execute(delete_statement)
-        print('entry with id {} was dropped!'.format(scene))
-    
-    def __drop_element_duplicates(self, scene):
-        """
-        Drop an entry from the database.
-
-        Parameters
-        ----------
-        scene: ID
-            a SAR scene
-
-        Returns
-        -------
-        """
-        delete_statement = self.duplicates_schema.delete().where(self.duplicates_schema.c.scene == scene)
-        self.conn.execute(delete_statement)
-        print('entry with id {} was dropped!'.format(scene))
+        if delete_statement:
+            self.conn.execute(delete_statement)
+            print('Entry with id {} was dropped!'.format(scene))
+            
+    # def __drop_element_data(self, scene):
+    #     """
+    #     Drop an entry from the database.
+    #
+    #     Parameters
+    #     ----------
+    #     scene: ID
+    #         a SAR scene
+    #
+    #     Returns
+    #     -------
+    #     """
+    #     delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
+    #     self.conn.execute(delete_statement)
+    #     print('entry with id {} was dropped!'.format(scene))
+    #
+    # def __drop_element_duplicates(self, scene):
+    #     """
+    #     Drop an entry from the database.
+    #
+    #     Parameters
+    #     ----------
+    #     scene: ID
+    #         a SAR scene
+    #
+    #     Returns
+    #     -------
+    #     """
+    #     delete_statement = self.duplicates_schema.delete().where(self.duplicates_schema.c.scene == scene)
+    #     self.conn.execute(delete_statement)
+    #     print('entry with id {} was dropped!'.format(scene))
     
     def drop_table(self, table):
         """
@@ -2295,17 +2296,17 @@ class Archive(object):
         -------
         """
         if table == 'data':
-            self.__drop_table_data()
+            self.Data.__table__.drop(self.engine)
         elif table == 'duplicates':
-            self.__drop_table_duplictes()
+            self.Duplicates.__table__.drop(self.engine)
         else:
             print('drop methods implemented only for data and duplicates')
     
-    def __drop_table_data(self):
-        self.Data.__table__.drop(self.engine)
-    
-    def __drop_table_duplictes(self):
-        self.Duplicates.__table__.drop(self.engine)
+    # def __drop_table_data(self):
+    #     self.Data.__table__.drop(self.engine)
+    #
+    # def __drop_table_duplicates(self):
+    #     self.Duplicates.__table__.drop(self.engine)
     
     def drop_database(self):
         """
