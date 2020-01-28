@@ -1607,7 +1607,7 @@ class Archive(object):
                 self.engine.connect().execute('SELECT InitSpatialMetaData()')
             if self.driver == 'postgres':
                 create_database(self.engine.url)
-                self.engine.connect().execute('CREATE EXTENSION postgis')
+                self.engine.connect().execute('CREATE EXTENSION postgis;')
         
         self.conn = self.engine.connect()
         self.Session = sessionmaker(bind=self.engine)
@@ -2137,8 +2137,13 @@ class Archive(object):
             if isinstance(vectorobject, Vector):
                 vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
                 site_geom = vectorobject.convert2wkt(set3D=False)[0]
-                arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
-                vals.append(site_geom)
+                if self.driver == 'postgres':
+                    arg_format.append("st_intersects(bbox, 'SRID=4326; {}')".format(
+                        site_geom
+                    ))
+                else:
+                    arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
+                    vals.append(site_geom)
             else:
                 print('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
         
@@ -2318,7 +2323,6 @@ class Archive(object):
         Returns
         -------
         """
-        self.conn.close()
         self.close()
         drop_database(self.engine.url)
         print('Database dropped')
