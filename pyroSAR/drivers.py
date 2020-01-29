@@ -1892,11 +1892,16 @@ class Archive(object):
         Returns
         -------
         """
-        if path.endswith('/'):
-            path += 'pyroSAR_data.shp'
-        if not path.endswith('.shp'):
-            path += '.shp'
-        
+        head, tail = os.path.split(path)
+        if not os.path.exists(head):
+            os.mkdir(head)
+        if len(tail) == 0:
+            path = os.path.join(head, 'pyroSAR_data.shp')
+        else:
+            root, ext = os.path.splitext(path)
+            if len(ext) == 0:
+                path = os.path.join(root, '.shp')
+                
         if self.driver == 'sqlite':
             ogr2ogr(self.dbfile, path, options={'format': 'ESRI Shapefile'})
         if self.driver == 'postgres':

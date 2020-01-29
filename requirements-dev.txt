@@ -12,7 +12,6 @@ GeoAlchemy2
 
 #Testing requirements
 pytest
-pytest-postgresql
 
 #Documentation requirements
 sphinx
