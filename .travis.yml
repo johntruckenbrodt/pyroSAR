@@ -14,7 +14,7 @@ env:
     - PGPORT=5432
 
 addons:
-  postgresql: 9.6
+  postgresql: 12
   apt:
     sources:
       - sourceline: 'ppa:ubuntugis/ppa'
