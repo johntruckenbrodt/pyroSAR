@@ -48,8 +48,8 @@ install:
 #before_script:
 #  - travis_wait 40 . ./pyroSAR/install/download_testdata.sh
 
-#before_script:
-#  - psql -c 'create database travis_ci_test;' -U postgres
+before_script:
+  - psql -U postgres -c "create extension postgis"
 
 script:
   - coverage run --source pyroSAR/ -m pytest
