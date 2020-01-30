@@ -39,6 +39,11 @@ def parse_command(command, indent='    '):
         # for all other commands stderr is just appended to stdout
         out += err
     
+    pattern = r'([\w]+ (?:has been|was) re(?:named to|placed by)(?: the ISP program|) [\w]+)'
+    match = re.search(pattern, out)
+    if match:
+        raise DeprecationWarning(match.groups()[0])
+    
     if re.search(r"Can't locate FILE/Path\.pm in @INC", out):
         raise RuntimeError('unable to parse Perl script')
     ###########################################
@@ -52,7 +57,9 @@ def parse_command(command, indent='    '):
                        'cc_monitoring': [('...', '<...>')],
                        'comb_interfs': [('combi_out', 'combi_int')],
                        'coord_to_sarpix': [('north/lat', 'north_lat'),
-                                           ('east/lon', 'east_lon')],
+                                           ('east/lon', 'east_lon'),
+                                           ('SLC_par', '<SLC_MLI_par>'),
+                                           ('SLC/MLI_par', 'SLC_MLI_par')],
                        'base_calc': [('plt_flg', 'plt_flag'),
                                      ('pltflg', 'plt_flag')],
                        'base_init': [('<base>', '<baseline>')],
@@ -76,6 +83,7 @@ def parse_command(command, indent='    '):
                        'hsi_color_scale': [('[chip]', '[chip_width]')],
                        'HUYNEN_DEC': [('T11_0', 'T11')],
                        'interf_SLC': [('  SLC2_pa  ', '  SLC2_par  ')],
+                       'ionosphere_mitigation': [('<SLC1> <ID1>', '<ID1>')],
                        'landsat2dem': [('<DEM>', '<image>')],
                        'line_interp': [('input file', 'data_in'),
                                        ('output file', 'data_out')],
@@ -115,6 +123,7 @@ def parse_command(command, indent='    '):
                        'mosaic': [('<..>', '<...>'),
                                   ('DEM_parout', 'DEM_par_out')],
                        'multi_class_mapping': [('...', '<...>')],
+                       'multi_look_geo': [('geo_SLC', 'SLC')],
                        'multi_look_MLI': [('MLI in_par', 'MLI_in_par')],
                        'offset_fit': [('interact_flag', 'interact_mode')],
                        'offset_plot_az': [('rmin', 'r_min'),
@@ -123,10 +132,16 @@ def parse_command(command, indent='    '):
                        'par_ASAR': [('ASAR/ERS_file', 'ASAR_ERS_file')],
                        'par_EORC_JERS_SLC': [('slc', 'SLC')],
                        'par_ERSDAC_PALSAR': [('VEXCEL_SLC_par', 'ERSDAC_SLC_par')],
+                       'par_ESA_JERS_SEASAT_SLC': [('[slc]', '[SLC]')],
+                       'par_ICEYE_GRD': [('<GeoTIFF>', '<GeoTIFF> <XML>'),
+                                         ('[mli]', '[MLI]')],
+                       'par_ICEYE_SLC': [('[slc]', '[SLC]')],
                        'par_MSP': [('SLC/MLI_par', 'SLC_MLI_par')],
                        'par_SIRC': [('UTC/MET', 'UTC_MET')],
                        'par_TX_GRD': [('COSAR', 'GeoTIFF')],
-                       'par_UAVSAR_SLC': [('SLC/MLI_par', 'SLC_MLI_par')],
+                       'par_UAVSAR_SLC': [('SLC/MLC_in', 'SLC_MLC_in'),
+                                          ('SLC/MLI_par', 'SLC_MLI_par'),
+                                          ('SLC/MLI_out', 'SLC_MLI_out')],
                        'par_UAVSAR_geo': [('SLC/MLI_par', 'SLC_MLI_par')],
                        'product': [('wgt_flg', 'wgt_flag')],
                        'radcal_MLI': [('MLI_PAR', 'MLI_par')],
@@ -136,9 +151,9 @@ def parse_command(command, indent='    '):
                        'ras2jpg': [('{', '{{'),
                                    ('}', '}}')],
                        'ras_data_pt': [('pdata1', 'pdata')],
-                       'ras_to_rgb': [('<red channel>', '<red_channel>'),
-                                      ('<green channel>', '<green_channel>'),
-                                      ('<blue channel>', '<blue_channel>')],
+                       'ras_to_rgb': [('red channel', 'red_channel'),
+                                      ('green channel', 'green_channel'),
+                                      ('blue channel', 'blue_channel')],
                        'rascc_mask_thinning': [('...', '[...]')],
                        'rashgt': [('m/cycle', 'm_cycle')],
                        'rashgt_shd': [('m/cycle', 'm_cycle'),
@@ -148,6 +163,7 @@ def parse_command(command, indent='    '):
                        'ras_ras': [('r_lin/log', 'r_lin_log'),
                                    ('g_lin/log', 'g_lin_log'),
                                    ('b_lin/log', 'b_lin_log')],
+                       'ras_ratio_dB': [('[min_cc] [max_cc] [scale] [exp]', '[min_value] [max_value] [dB_offset]')],
                        'rasSLC': [('[header]', '[hdrsz]')],
                        'ratio': [('wgt_flg', 'wgt_flag')],
                        'restore_float': [('input file', 'data_in'),
@@ -155,6 +171,11 @@ def parse_command(command, indent='    '):
                                          ('interpolation_limit', 'interp_limit')],
                        'S1_OPOD_vec': [('SLC_PAR', 'SLC_par')],
                        'single_class_mapping': [('>...', '> <...>')],
+                       'ScanSAR_burst_cc_ad': [('bx', 'box_min'),
+                                               ('by', 'box_max')],
+                       'ScanSAR_burst_to_mosaic': [('DATA_tab_ref', 'data_tab_ref'),
+                                                   ('[mflg] [dtype]', '[mflg]')],
+                       'ScanSAR_full_aperture_SLC': [('SLCR_dir', 'SLC2_dir')],
                        'scale_base': [('SLC-1_par-2', 'SLC1_par-2')],
                        'SLC_interp_lt': [('SLC-2', 'SLC2'),
                                          ('blksz', 'blk_size')],
@@ -162,7 +183,9 @@ def parse_command(command, indent='    '):
                                     ('SLC2Rs_par', 'SLC-2Rs_par')],
                        'SLC_interp_map': [('coffs2_sm', 'coffs_sm')],
                        'srtm_mosaic': [('<lon>', '<lon2>')],
+                       'SSI_INT_S1': [('<SLC2> <par2>', '<SLC_tab2>')],
                        'texture': [('weights_flag', 'wgt_flag')],
+                       'ts_rate': [('sim_flg', 'sim_flag')],
                        'TX_SLC_preproc': [('TX_list', 'TSX_list')],
                        'uchar2float': [('infile', 'data_in'),
                                        ('outfile', 'data_out')],
@@ -522,11 +545,6 @@ def parse_module(bindir, outfile):
         raise OSError('directory does not exist: {}'.format(bindir))
     
     excludes = ['coord_trans',  # doesn't take any parameters and is interactive
-                'interp_cpx',  # replaced by interp_data
-                'interp_real',  # replaced by interp_data
-                'par_RSI',  # replaced by par_RSI_ERS
-                'par_RSI_RSAT',  # replaced by par_RSAT_SLC
-                'PRI_to_MLI',  # replaced by radcal_MLI
                 'RSAT2_SLC_preproc',  # takes option flags
                 'mk_ASF_CEOS_list',  # "cannot create : Directory nonexistent"
                 '2PASS_UNW',  # parameter name inconsistencies
@@ -543,6 +561,8 @@ def parse_module(bindir, outfile):
                 fun = parse_command(cmd)
             except RuntimeError as e:
                 failed.append('{0}: {1}'.format(basename, str(e)))
+                continue
+            except DeprecationWarning:
                 continue
             except:
                 failed.append('{0}: {1}'.format(basename, 'error yet to be assessed'))

@@ -2047,6 +2047,8 @@ class Archive(object):
             the file locations
         directory: str
             a folder to which the files are moved
+        verbose: bool
+            should status information and a progress bar be printed into the console?
 
         Returns
         -------
@@ -2061,7 +2063,7 @@ class Archive(object):
             pbar = pb.ProgressBar(max_value=len(scenelist)).start()
         else:
             pbar = None
-            
+
         for i, scene in enumerate(scenelist):
             new = os.path.join(directory, os.path.basename(scene))
             if os.path.isfile(new):
@@ -2085,7 +2087,9 @@ class Archive(object):
                 else:
                     table = None
             if table:
+
                 self.conn.execute('''UPDATE {0} SET scene= '{1}' WHERE scene='{2}' '''.format(table, new, scene))
+
         if pbar is not None:
             pbar.finish()
         if verbose:
@@ -2093,6 +2097,7 @@ class Archive(object):
                 print('The following scenes could not be moved:\n{}'.format('\n'.join(failed)))
             if len(double) > 0:
                 print('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
+
     
     def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None,
                recursive=False, polarizations=None, verbose=False, **args):

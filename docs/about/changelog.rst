@@ -309,3 +309,11 @@ Ancillary Tools
 general
 -------
 - bug fixes and documentation improvements
+
+0.10.1 / 2019-12-12
+===================
+
+GAMMA API
+---------
+
+- :ref:`Command API <gamma-command-api>` compatibility with GAMMA version 20191203
