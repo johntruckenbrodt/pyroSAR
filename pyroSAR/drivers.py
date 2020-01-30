@@ -50,14 +50,18 @@ from spatialist import sqlite_setup, crsConvert, sqlite3, ogr2ogr, Vector, bbox,
 from spatialist.ancillary import parse_literal, finder
 
 # new imports for postgres
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, select
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine.url import URL
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy_utils import database_exists, create_database, drop_database
 from geoalchemy2 import Geometry
+import psycopg2
 import subprocess
+#check server connectivity
+import socket
+import time
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines', 'orbitNumber_abs', 'orbitNumber_rel', 'cycleNumber', 'frameNumber']
@@ -1581,10 +1585,15 @@ class Archive(object):
     >>>     archive.insert(scenes_s1)
     """
     
-    def __init__(self, dbfile, custom_fields=None, driver='sqlite', user='postgres',
+    def __init__(self, dbfile, custom_fields=None, postgres=False, user='postgres',
                  password='1234', host='localhost', port=5432):
-        
-        self.driver = driver
+        if postgres == False:
+            self.driver = 'sqlite'
+        else:
+            self.driver = 'postgres'
+            if not checkHost(host, port):
+                sys.exit('Server not found!')
+            
         self.dbfile = dbfile
         if self.driver == 'sqlite':
             self.url_dict = {'drivername': self.driver,
@@ -2449,3 +2458,28 @@ def parse_date(x):
         raise ValueError('unknown time format; check function parse_date')
     else:
         raise ValueError('input must be either a string or a datetime object')
+
+
+
+# from Ben Curtis (github: Fmstrat):
+def isOpen(ip, port):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(3)
+        try:
+                s.connect((ip, int(port)))
+                s.shutdown(socket.SHUT_RDWR)
+                return True
+        except:
+                return False
+        finally:
+                s.close()
+
+def checkHost(ip, port):
+        ipup = False
+        for i in range(2):
+                if isOpen(ip, port):
+                        ipup = True
+                        break
+                else:
+                        time.sleep(5)
+        return ipup
