@@ -10,9 +10,10 @@ env:
     - PIP_WHEEL_DIR=$HOME/.cache/pip/wheels
     - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
     - TESTDATA_DIR=$HOME/testdata
+    - PGUSER=postgres
+    - PGPORT=5432
 
 addons:
-  postgresql: 9.6
   apt:
     sources:
       - sourceline: 'ppa:ubuntugis/ppa'
@@ -44,6 +45,9 @@ install:
 
 #before_script:
 #  - travis_wait 40 . ./pyroSAR/install/download_testdata.sh
+
+before_script:
+  - psql -c 'create database travis_ci_test;' -U postgres
 
 script:
   - coverage run --source pyroSAR/ -m pytest
