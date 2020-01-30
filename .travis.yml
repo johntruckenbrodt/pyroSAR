@@ -12,6 +12,7 @@ env:
     - TESTDATA_DIR=$HOME/testdata
 
 addons:
+  postgresql: 9.6
   apt:
     sources:
       - sourceline: 'ppa:ubuntugis/ppa'
@@ -21,6 +22,9 @@ addons:
       - libsqlite3-mod-spatialite
       - libproj-dev
       - python3-dev
+
+services:
+  - postgresql
 
 python:
   - '3.7'
