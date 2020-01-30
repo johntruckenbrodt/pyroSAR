@@ -59,7 +59,7 @@ from sqlalchemy_utils import database_exists, create_database, drop_database
 from geoalchemy2 import Geometry
 import psycopg2
 import subprocess
-#check server connectivity
+# check server connectivity
 import socket
 import time
 from pathlib import Path
@@ -1594,7 +1594,7 @@ class Archive(object):
             self.driver = 'postgres'
             if not checkHost(host, port):
                 sys.exit('Server not found!')
-            
+        
         self.dbfile = dbfile
         if self.driver == 'sqlite':
             self.url_dict = {'drivername': self.driver,
@@ -1686,8 +1686,7 @@ class Archive(object):
         did_something = False
         dbapi_conn.enable_load_extension(True)
         for option in ['mod_spatialite', 'mod_spatialite.so', 'mod_spatialite.dll']:
-            if Path(option).is_file() and did_something == False:
-                print(option +' IS A FILE')
+            if Path(option).is_file() and not did_something:
                 try:
                     
                     dbapi_conn.load_extension(option)
@@ -1696,8 +1695,8 @@ class Archive(object):
                     did_something = False
                     #print('{0}: {1}'.format(option, str(e)))
                     continue
-        #if not did_something:
-        #    dbapi_conn.load_extension('mod_spatialite.so')
+        if not did_something:
+            dbapi_conn.load_extension('mod_spatialite')
     
     def __prepare_insertion(self, scene):
         """
@@ -1997,7 +1996,7 @@ class Archive(object):
             if 'duplicates' in tables:
                 ret.append('duplicates')
             return ret
-        
+    
     def get_unique_directories(self):
         """
         Get a list of directories containing registered scenes
