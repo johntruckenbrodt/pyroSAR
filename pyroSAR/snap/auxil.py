@@ -111,7 +111,6 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
     workflow = Workflow(xmlfile)
     write = workflow['Write']
     outname = write.parameters['file']
-    infile = workflow['Read'].parameters['file']
     workers = [x.id for x in workflow if x.operator not in ['Read', 'Write']]
     message = ' -> '.join(workers)
     gpt_exec = None
@@ -143,7 +142,6 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
             # '-Dsnap.dataio.bigtiff.compression.quality=0.75'
         ])
     cmd.append(xmlfile)
-    print(cmd)
     # execute the workflow
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     out, err = proc.communicate()
@@ -236,11 +234,12 @@ def gpt(xmlfile, groups=None, cleanup=True,
     outname = write.parameters['file']
     suffix = workflow.suffix
     format = write.parameters['formatName']
-    dem_name = workflow.tree.find('.//demName').text
-    if dem_name == 'External DEM':
-        dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
-    else:
-        dem_nodata = 0
+    dem_name = workflow.tree.find('.//demName')
+    if dem_name is not None:
+        if dem_name.text == 'External DEM':
+            dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
+        else:
+            dem_nodata = 0
     
     if 'Remove-GRD-Border-Noise' in workflow.ids and removeS1BorderNoiseMethod == 'pyroSAR':
         if 'SliceAssembly' in workflow.operators:
@@ -281,7 +280,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
         else:
             execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
     except RuntimeError as e:
-        if cleanup:
+        if cleanup and os.path.exists(outname):
             shutil.rmtree(outname)
         raise RuntimeError(str(e) + '\nfailed: {}'.format(xmlfile))
     
@@ -324,7 +323,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
         except RuntimeError:
             continue
     ###########################################################################
-    if cleanup:
+    if cleanup and os.path.exists(outname):
         shutil.rmtree(outname)
     print('done')
 
@@ -364,9 +363,9 @@ def is_consistent(workflow):
 def split(xmlfile, groups):
     """
     split a workflow file into groups and write them to separate workflows including source and write target linking.
-    The new workflows are written to a sub-directory 'temp' of the target directory defined in the input's 'Write' node.
-    Each new workflow is parametrized with a Read and Write node if they don't already exist. Temporary outputs are
-    written to BEAM-DIMAP files named after the workflow suffix sequence.
+    The new workflows are written to a sub-directory `temp` of the target directory defined in the input's `Write` node.
+    Each new workflow is parameterized with a `Read` and `Write` node if they don't already exist. Temporary outputs are
+    written to `BEAM-DIMAP` files named after the workflow suffix sequence.
     
     Parameters
     ----------
@@ -448,7 +447,7 @@ def split(xmlfile, groups):
         # add a Write node to all dangling nodes
         counter = 0
         for node in new:
-            if new.successors(node.id) == [] and node.id != 'Write':
+            if new.successors(node.id) == [] and not node.id.startswith('Write'):
                 write = parse_node('Write')
                 new.insert_node(write, before=node.id)
                 id = str(position) if counter == 0 else '{}-{}'.format(position, counter)
@@ -483,7 +482,7 @@ def groupbyWorkers(xmlfile, n=2):
     list
         a list of lists each containing the IDs of all nodes belonging to the groups including Read and Write nodes;
         this list can e.g. be passed to function :func:`split` to split the workflow into new sub-workflow files based
-        on the newly created groups
+        on the newly created groups or directly to function :func:`gpt`, which will call :func:`split` internally.
     """
     workflow = Workflow(xmlfile)
     workers_id = [x.id for x in workflow if x.operator not in ['Read', 'Write']]
