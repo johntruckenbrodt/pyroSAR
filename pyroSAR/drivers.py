@@ -62,6 +62,7 @@ import subprocess
 #check server connectivity
 import socket
 import time
+from pathlib import Path
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines', 'orbitNumber_abs', 'orbitNumber_rel', 'cycleNumber', 'frameNumber']
@@ -1587,7 +1588,7 @@ class Archive(object):
     
     def __init__(self, dbfile, custom_fields=None, postgres=False, user='postgres',
                  password='1234', host='localhost', port=5432):
-        if postgres == False:
+        if not postgres:
             self.driver = 'sqlite'
         else:
             self.driver = 'postgres'
@@ -1682,8 +1683,21 @@ class Archive(object):
         connection_record:
         
         """
+        did_something = False
         dbapi_conn.enable_load_extension(True)
-        dbapi_conn.load_extension('mod_spatialite.so')
+        for option in ['mod_spatialite', 'mod_spatialite.so', 'mod_spatialite.dll']:
+            if Path(option).is_file() and did_something == False:
+                print(option +' IS A FILE')
+                try:
+                    
+                    dbapi_conn.load_extension(option)
+                    did_something = True
+                except sqlite3.OperationalError as e:
+                    did_something = False
+                    #print('{0}: {1}'.format(option, str(e)))
+                    continue
+        #if not did_something:
+        #    dbapi_conn.load_extension('mod_spatialite.so')
     
     def __prepare_insertion(self, scene):
         """
@@ -1904,13 +1918,11 @@ class Archive(object):
         head, tail = os.path.split(path)
         if not os.path.exists(head):
             os.mkdir(head)
-        if len(tail) == 0:
-            path = os.path.join(head, 'pyroSAR_data.shp')
-        else:
-            root, ext = os.path.splitext(path)
-            if len(ext) == 0:
-                path = os.path.join(root, '.shp')
-                
+
+        root, ext = os.path.splitext(path)
+        if len(ext) == 0:
+            path = os.path.join(root, '.shp')
+        
         if self.driver == 'sqlite':
             ogr2ogr(self.dbfile, path, options={'format': 'ESRI Shapefile'})
         if self.driver == 'postgres':
@@ -2460,26 +2472,26 @@ def parse_date(x):
         raise ValueError('input must be either a string or a datetime object')
 
 
-
 # from Ben Curtis (github: Fmstrat):
 def isOpen(ip, port):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(3)
-        try:
-                s.connect((ip, int(port)))
-                s.shutdown(socket.SHUT_RDWR)
-                return True
-        except:
-                return False
-        finally:
-                s.close()
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(3)
+    try:
+        s.connect((ip, int(port)))
+        s.shutdown(socket.SHUT_RDWR)
+        return True
+    except:
+        return False
+    finally:
+        s.close()
+
 
 def checkHost(ip, port):
-        ipup = False
-        for i in range(2):
-                if isOpen(ip, port):
-                        ipup = True
-                        break
-                else:
-                        time.sleep(5)
-        return ipup
+    ipup = False
+    for i in range(2):
+        if isOpen(ip, port):
+            ipup = True
+            break
+        else:
+            time.sleep(5)
+    return ipup
