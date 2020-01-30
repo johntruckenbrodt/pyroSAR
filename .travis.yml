@@ -14,6 +14,7 @@ env:
     - PGPORT=5432
 
 addons:
+  postgresql: 9.6
   apt:
     sources:
       - sourceline: 'ppa:ubuntugis/ppa'
@@ -23,6 +24,7 @@ addons:
       - libsqlite3-mod-spatialite
       - libproj-dev
       - python3-dev
+      - postgresql-9.6-postgis-2.3
 
 services:
   - postgresql
@@ -46,8 +48,8 @@ install:
 #before_script:
 #  - travis_wait 40 . ./pyroSAR/install/download_testdata.sh
 
-before_script:
-  - psql -c 'create database travis_ci_test;' -U postgres
+#before_script:
+#  - psql -c 'create database travis_ci_test;' -U postgres
 
 script:
   - coverage run --source pyroSAR/ -m pytest
