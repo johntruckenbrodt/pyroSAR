@@ -24,7 +24,7 @@ addons:
       - libsqlite3-mod-spatialite
       - libproj-dev
       - python3-dev
-      - postgresql-9.6-postgis-2.3
+      - postgresql-12-postgis-2.5
 
 services:
   - postgresql
