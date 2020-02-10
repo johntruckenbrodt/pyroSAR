@@ -11,7 +11,7 @@ env:
     - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
     - TESTDATA_DIR=$HOME/testdata
     - PGUSER=postgres
-    - PGPORT=5432
+    - PGPORT=8080
 
 addons:
   postgresql: 9.6
