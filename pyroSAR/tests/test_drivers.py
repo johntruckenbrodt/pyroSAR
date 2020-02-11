@@ -181,7 +181,7 @@ def test_archive(tmpdir, testdata, appveyor):
 def test_archive_postgres(tmpdir, testdata, appveyor):
     id = pyroSAR.identify(testdata['s1'])
     if not appveyor:
-        db = pyroSAR.Archive('test', postgres=True, port=8080)
+        db = pyroSAR.Archive('test', postgres=True, port=5432)
         db.insert(testdata['s1'], verbose=False)
         assert all(isinstance(x, str) for x in db.get_tablenames())
         assert all(isinstance(x, str) for x in db.get_colnames())
@@ -200,19 +200,19 @@ def test_archive_postgres(tmpdir, testdata, appveyor):
         with pytest.raises(IOError):
             db.filter_scenelist([1])
         db.close()
-        with pyroSAR.Archive('test', postgres=True, port=8080) as db:
+        with pyroSAR.Archive('test', postgres=True, port=5432) as db:
             assert db.size == (1, 0)
             shp = os.path.join(str(tmpdir), 'db.shp')
             db.export2shp(shp)
         assert Vector(shp).nfeatures == 1
         db.drop_database()
         with pytest.raises(OSError):
-            with pyroSAR.Archive('test', postgres=True, port=8080) as db:
+            with pyroSAR.Archive('test', postgres=True, port=5432) as db:
                 db.import_outdated(testdata['archive_old'])
         db.drop_database()
         with pytest.raises(SystemExit) as pytest_wrapped_e:
             pyroSAR.Archive('test', postgres=True, user='hello_world', port=7080)
         assert pytest_wrapped_e.type == SystemExit
         #with pytest.raises(SystemExit) as pytest_wrapped_e:
-        #    pyroSAR.Archive('test', postgres=True, user='hello_world', port=8080)
+        #    pyroSAR.Archive('test', postgres=True, user='hello_world', port=5432)
         #assert pytest_wrapped_e.type == SystemExit
