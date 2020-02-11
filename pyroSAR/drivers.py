@@ -1707,7 +1707,7 @@ class Archive(object):
             #
         elif platform.system() == 'Windows':
             dbapi_conn.load_extension('mod_spatialite.dll')
-        elif platform.system() == 'Unix':
+        else:
             dbapi_conn.load_extension('mod_spatialite')
         # else: # will never be reached
         #     # or do it like this? now with .dylib (should be the right one for mac, but .so works also seemingly
