@@ -1694,8 +1694,8 @@ class Archive(object):
         
         dbapi_conn.enable_load_extension(True)
         # check which platform and use according mod_spatialite
-        if platform.system() == 'Darwin':
-            for option in ['mod_spatialite.so', 'mod_spatialite.dylib']:
+        if platform.system() == 'Linux':
+            for option in ['mod_spatialite.so', 'mod_spatialite', 'mod_spatialite.dylib']:
                 try:
             
                     dbapi_conn.load_extension(option)
@@ -1703,9 +1703,18 @@ class Archive(object):
                 except sqlite3.OperationalError:
             
                     continue
-            #dbapi_conn.load_extension('mod_spatialite.so')
-            #
+        elif platform.system() == 'Darwin':
+            for option in ['mod_spatialite.so', 'mod_spatialite', 'mod_spatialite.dylib']:
+                try:
+            
+                    dbapi_conn.load_extension(option)
+        
+                except sqlite3.OperationalError:
+            
+                    continue
+  
         elif platform.system() == 'Windows':
+            sqlite_util.spatialite_setup()
             dbapi_conn.load_extension('mod_spatialite.dll')
         else:
             dbapi_conn.load_extension('mod_spatialite')
