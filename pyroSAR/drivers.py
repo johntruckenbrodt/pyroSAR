@@ -1590,7 +1590,7 @@ class Archive(object):
             self.driver = 'sqlite'
         else:
             self.driver = 'postgres'
-            if not check_host(host, port):
+            if not self.check_host(host, port):
                 sys.exit('Server not found!')
         
         # create dict, with which a URL to the db is created
@@ -1695,7 +1695,7 @@ class Archive(object):
         dbapi_conn.enable_load_extension(True)
         # check which platform and use according mod_spatialite
         if platform.system() == 'Linux':
-            for option in ['mod_spatialite.so', 'mod_spatialite', 'mod_spatialite.dylib']:
+            for option in ['mod_spatialite', 'mod_spatialite.so']:
                 try:
             
                     dbapi_conn.load_extension(option)
@@ -1950,9 +1950,8 @@ class Archive(object):
         path: str
             the path of the folder for the shapefile of data to be written
             this will overwrite other files with the same name.
-            If only a folder is given in path (path ends with '/'),
-            the default name of the shapefile is 'pyroSAR_data.shp'.
-            Otherwise '.shp' is appended to the path, if missing.
+            If a folder is given in path (path ends with '/') it is created if not existing.
+            If the file extension is missing '.shp' is added.
             
         Returns
         -------
@@ -2226,6 +2225,7 @@ class Archive(object):
                 print('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
         
         query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
+        # the query gets assembled stepwise here
         for val in vals:
             query = query.replace('?', ''' '{0}' ''', 1).format(val)
         
@@ -2377,6 +2377,29 @@ class Archive(object):
         drop_database(self.engine.url)
         print('Database dropped')
 
+    # from Ben Curtis (github: Fmstrat):
+    def is_open(self, ip, port):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(3)
+        try:
+            s.connect((ip, int(port)))
+            s.shutdown(socket.SHUT_RDWR)
+            return True
+        except:
+            return False
+        finally:
+            s.close()
+
+    def check_host(self, ip, port):
+        ipup = False
+        for i in range(2):
+            if self.is_open(ip, port):
+                ipup = True
+                break
+            else:
+                time.sleep(5)
+        return ipup
+
 
 def findfiles(scene, pattern, include_folders=False):
     """
@@ -2496,26 +2519,3 @@ def parse_date(x):
         raise ValueError('input must be either a string or a datetime object')
 
 
-# from Ben Curtis (github: Fmstrat):
-def is_open(ip, port):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(3)
-    try:
-        s.connect((ip, int(port)))
-        s.shutdown(socket.SHUT_RDWR)
-        return True
-    except:
-        return False
-    finally:
-        s.close()
-
-
-def check_host(ip, port):
-    ipup = False
-    for i in range(2):
-        if is_open(ip, port):
-            ipup = True
-            break
-        else:
-            time.sleep(5)
-    return ipup
