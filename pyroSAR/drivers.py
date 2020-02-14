@@ -630,7 +630,6 @@ class ID(object):
             else:
                 archive.extractall(directory)
                 archive.close()
-        
         else:
             print('unpacking is only supported for TAR and ZIP archives')
             return

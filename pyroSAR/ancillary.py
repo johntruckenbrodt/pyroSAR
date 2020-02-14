@@ -266,3 +266,29 @@ def hasarg(func, arg):
         does the function take this as argument?
     """
     return arg in getargs(func)
+
+
+def windows_fileprefix(func, path, exc_info):
+    """
+    Helper function for :func:`shutil.rmtree` to exceed Windows' file name length limit of 256 characters.
+    See `here <https://stackoverflow.com/questions/36219317/pathname-too-long-to-open>`_ for details.
+
+    Parameters
+    ----------
+    func: function
+        the function to be executed, i.e. :func:`shutil.rmtree`
+    path: str
+        the path to be deleted
+    exc_info: tuple
+        execution info as returned by :func:`sys.exc_info`
+
+    Returns
+    -------
+
+    Examples
+    --------
+    >>> import shutil
+    >>> from pyroSAR.ancillary import windows_fileprefix
+    >>> shutil.rmtree('/path', onerror=windows_fileprefix)
+    """
+    func(u'\\\\?\\' + path)
