@@ -1517,7 +1517,8 @@ class Archive(object):
     Parameters
     ----------
     dbfile: str
-        the database name. This might either point to an existing database or will be created otherwise.
+        the filename for the SpatiaLite database. This might either point to an existing database or will be created otherwise.
+        If postgres is set to True, this will be the name for the PostgreSQL database.
     custom_fields: dict
         a dictionary containing additional non-standard database column names and data types;
         the names must be attributes of the SAR scenes to be inserted (i.e. id.attr) or keys in their meta attribute
@@ -1590,7 +1591,7 @@ class Archive(object):
             self.driver = 'sqlite'
         else:
             self.driver = 'postgres'
-            if not self.check_host(host, port):
+            if not self.__check_host(host, port):
                 sys.exit('Server not found!')
         
         # create dict, with which a URL to the db is created
@@ -1704,7 +1705,7 @@ class Archive(object):
             
                     continue
         elif platform.system() == 'Darwin':
-            for option in ['mod_spatialite.so', 'mod_spatialite', 'mod_spatialite.dylib']:
+            for option in ['mod_spatialite.so']:#, 'mod_spatialite.dylib']:
                 try:
             
                     dbapi_conn.load_extension(option)
@@ -1930,8 +1931,7 @@ class Archive(object):
         for table in ['data', 'duplicates']:
             missing = self.__select_missing(table)
             for scene in missing:
-                print(scene)
-                print(table)
+                print('Removing missing scene from database table {0}: {1}'.format(table, scene))
                 self.drop_element(scene, table)
     
     @staticmethod
@@ -2025,8 +2025,9 @@ class Archive(object):
         
          Parameters
         ----------
-        path: bool
-            only gives tables data and duplicates on default. Set to True to get all other tables and views created automatically.
+        return_all: bool
+            only gives tables data and duplicates on default.
+            Set to True to get all other tables and views created automatically.
 
         Returns
         -------
@@ -2335,7 +2336,7 @@ class Archive(object):
         elif table == 'duplicates':
             delete_statement = self.duplicates_schema.delete().where(self.duplicates_schema.c.scene == scene)
         else:
-            print('only data or duplicates can be dropped')
+            raise ValueError("Only entries from table 'data' or 'duplicates' can be dropped")
         if delete_statement:
             # core SQL execution
             self.conn.execute(delete_statement)
@@ -2360,7 +2361,7 @@ class Archive(object):
         elif table == 'duplicates':
             self.Duplicates.__table__.drop(self.engine)
         else:
-            print('drop methods implemented only for data and duplicates')
+            raise ValueError("Only tables 'data' and 'duplicates' can be dropped")
     
     
     def drop_database(self):
@@ -2377,8 +2378,24 @@ class Archive(object):
         drop_database(self.engine.url)
         print('Database dropped')
 
-    # from Ben Curtis (github: Fmstrat):
-    def is_open(self, ip, port):
+    # :
+    def __is_open(self, ip, port):
+        """
+        Checks server connection, from Ben Curtis (github: Fmstrat)
+
+        Parameters
+        ----------
+        ip: str
+            ip of the server
+        port: str
+            port of the server
+
+        Returns
+        -------
+        bool:
+            is the server reachable?
+            
+        """
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(3)
         try:
@@ -2390,10 +2407,25 @@ class Archive(object):
         finally:
             s.close()
 
-    def check_host(self, ip, port):
+    def __check_host(self, ip, port):
+        """
+        Calls __is_open() on ip and port, from Ben Curtis (github: Fmstrat)
+
+        Parameters
+        ----------
+        ip: str
+            ip of the server
+        port: str
+            port of the server
+
+        Returns
+        -------
+        bool:
+            is the server reachable?
+        """
         ipup = False
         for i in range(2):
-            if self.is_open(ip, port):
+            if self.__is_open(ip, port):
                 ipup = True
                 break
             else:

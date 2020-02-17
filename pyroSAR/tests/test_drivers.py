@@ -178,6 +178,7 @@ def test_archive(tmpdir, testdata, appveyor):
             with pyroSAR.Archive(dbfile) as db:
                 db.import_outdated(testdata['archive_old'])
 
+
 def test_archive_postgres(tmpdir, testdata, appveyor):
     id = pyroSAR.identify(testdata['s1'])
     if not appveyor:
@@ -204,15 +205,12 @@ def test_archive_postgres(tmpdir, testdata, appveyor):
             assert db.size == (1, 0)
             shp = os.path.join(str(tmpdir), 'db.shp')
             db.export2shp(shp)
+            db.drop_database()
         assert Vector(shp).nfeatures == 1
-        db.drop_database()
         with pytest.raises(OSError):
             with pyroSAR.Archive('test', postgres=True, port=5432) as db:
                 db.import_outdated(testdata['archive_old'])
-        db.drop_database()
+                db.drop_database()
         with pytest.raises(SystemExit) as pytest_wrapped_e:
             pyroSAR.Archive('test', postgres=True, user='hello_world', port=7080)
         assert pytest_wrapped_e.type == SystemExit
-        #with pytest.raises(SystemExit) as pytest_wrapped_e:
-        #    pyroSAR.Archive('test', postgres=True, user='hello_world', port=5432)
-        #assert pytest_wrapped_e.type == SystemExit
