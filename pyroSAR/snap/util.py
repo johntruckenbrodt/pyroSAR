@@ -1,6 +1,6 @@
 ####################################################################
 # Convenience functions for SAR image batch processing with ESA SNAP
-# John Truckenbrodt, 2016-2019
+# John Truckenbrodt, 2016-2020
 ####################################################################
 import os
 import pyroSAR
@@ -15,7 +15,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             removeS1ThermalNoise=True, offset=None,
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
             basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True,
-            gpt_exceptions=None, gpt_args=None, returnWF=False,
+            gpt_exceptions=None, gpt_args=None, returnWF=False, nodataValueAtSea=True,
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             speckleFilter=False, refarea='gamma0'):
     """
@@ -89,6 +89,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
     returnWF: bool
         return the full name of the written workflow XML file?
+    nodataValueAtSea: bool
+        mask pixels acquired over sea? The sea mask depends on the selected DEM.
     demResamplingMethod: str
         one of the following:
          - 'NEAREST_NEIGHBOUR'
@@ -519,6 +521,11 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     workflow.set_par('demResamplingMethod', demResamplingMethod)
     workflow.set_par('imgResamplingMethod', imgResamplingMethod)
+    ############################################
+    ############################################
+    # additional parameter settings applied to the whole workflow
+    
+    workflow.set_par('nodataValueAtSea', nodataValueAtSea)
     ############################################
     ############################################
     # write workflow to file and optionally execute it
