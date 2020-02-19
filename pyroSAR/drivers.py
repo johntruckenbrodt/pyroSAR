@@ -1698,25 +1698,32 @@ class Archive(object):
         if platform.system() == 'Linux':
             for option in ['mod_spatialite', 'mod_spatialite.so']:
                 try:
-            
+                    
                     dbapi_conn.load_extension(option)
-        
+                
                 except sqlite3.OperationalError:
-            
+                    
                     continue
         elif platform.system() == 'Darwin':
-            for option in ['mod_spatialite.so']:#, 'mod_spatialite.dylib']:
+            for option in ['mod_spatialite.so']:  # , 'mod_spatialite.dylib']:
                 try:
-            
+                    
                     dbapi_conn.load_extension(option)
-        
+                
                 except sqlite3.OperationalError:
-            
+                    
                     continue
-  
+        
         elif platform.system() == 'Windows':
             sqlite_util.spatialite_setup()
-            dbapi_conn.load_extension('mod_spatialite.dll')
+            for option in ['mod_spatialite.dll', 'mod_spatialite']:
+                try:
+                    
+                    dbapi_conn.load_extension(option)
+                
+                except sqlite3.OperationalError:
+                    
+                    continue
         else:
             dbapi_conn.load_extension('mod_spatialite')
         # else: # will never be reached
@@ -1730,7 +1737,6 @@ class Archive(object):
         #         except sqlite3.OperationalError as e:
         #
         #             continue
-        
     
     def __prepare_insertion(self, scene):
         """
@@ -1770,7 +1776,7 @@ class Archive(object):
                 value = attr() if inspect.ismethod(attr) else attr
                 setattr(insertion, str(attribute), value)
         
-        return insertion #return the Data object
+        return insertion  # return the Data object
     
     def __select_missing(self, table):
         """
@@ -1960,10 +1966,11 @@ class Archive(object):
         head, tail = os.path.split(path)
         if not os.path.exists(head):
             os.mkdir(head)
-
+        
         root, ext = os.path.splitext(path)
         if len(ext) == 0:
-            path = os.path.join(root, '.shp')
+            # path = os.path.join(root, '.shp') this will result in a separation between filename and extension
+            path = root + '.shp'
         
         # uses spatialist.ogr2ogr to write shps with given path (or db connection)
         if self.driver == 'sqlite':
@@ -1995,7 +2002,7 @@ class Archive(object):
         for item in scenelist:
             if not isinstance(item, (ID, str)):
                 raise IOError('items in scenelist must be of type "str" or pyroSAR.ID')
-            
+        
         # ORM query, get all scenes locations
         scenes_data = self.Session().query(self.Data.scene)
         registered = [os.path.basename(self.encode(x[0])) for x in scenes_data]
@@ -2341,8 +2348,7 @@ class Archive(object):
             # core SQL execution
             self.conn.execute(delete_statement)
             print('Entry with id {} was dropped!'.format(scene))
-            
- 
+    
     def drop_table(self, table):
         """
         Drop a table from the database.
@@ -2363,7 +2369,6 @@ class Archive(object):
         else:
             raise ValueError("Only tables 'data' and 'duplicates' can be dropped")
     
-    
     def drop_database(self):
         """
         Drops the database.
@@ -2377,8 +2382,7 @@ class Archive(object):
         # SQLAlchemy-utils function to drop db, causes some warnings, but works
         drop_database(self.engine.url)
         print('Database dropped')
-
-    # :
+    
     def __is_open(self, ip, port):
         """
         Checks server connection, from Ben Curtis (github: Fmstrat)
@@ -2406,7 +2410,7 @@ class Archive(object):
             return False
         finally:
             s.close()
-
+    
     def __check_host(self, ip, port):
         """
         Calls __is_open() on ip and port, from Ben Curtis (github: Fmstrat)
@@ -2549,5 +2553,3 @@ def parse_date(x):
         raise ValueError('unknown time format; check function parse_date')
     else:
         raise ValueError('input must be either a string or a datetime object')
-
-
