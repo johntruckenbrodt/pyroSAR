@@ -1589,6 +1589,10 @@ class Archive(object):
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
+            # catch if .db extension is missing
+            root, ext = os.path.splitext(dbfile)
+            if len(ext) == 0:
+                dbfile = root + '.db'
         else:
             self.driver = 'postgres'
             if not self.__check_host(host, port):
