@@ -60,6 +60,7 @@ from geoalchemy2 import Geometry
 import socket
 import time
 import platform
+import subprocess
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines', 'orbitNumber_abs', 'orbitNumber_rel', 'cycleNumber', 'frameNumber']
@@ -1846,9 +1847,11 @@ class Archive(object):
         if verbose:
             print('inserting scenes into temporary database...')
             pbar = pb.ProgressBar(max_value=len(scenes))
-        # Create Session object
-        session = self.Session()
+        
         for i, id in enumerate(scenes):
+            # Create Session object for each iteration,
+            # else is_registered cannot account for duplicates within the current scenelist
+            session = self.Session()
             insert_string = self.__prepare_insertion(id)
             if not self.is_registered(id):
                 # add inserts to session
@@ -1863,18 +1866,28 @@ class Archive(object):
             
             if pbar is not None:
                 pbar.update(i + 1)
+            if not test:
+                if verbose:
+                    print('committing transactions to permanent database...')
+                # commit changes of the session
+                session.commit()
+            else:
+                if verbose:
+                    print('reverting temporary database changes...')
+                # roll back changes of the session
+                session.rollback()
         if pbar is not None:
             pbar.finish()
-        if not test:
-            if verbose:
-                print('committing transactions to permanent database...')
-            # commit changes of the session
-            session.commit()
-        else:
-            if verbose:
-                print('reverting temporary database changes...')
-            # roll back changes of the session
-            session.rollback()
+        # if not test:
+        #     if verbose:
+        #         print('committing transactions to permanent database...')
+        #     # commit changes of the session
+        #     session.commit()
+        # else:
+        #     if verbose:
+        #         print('reverting temporary database changes...')
+        #     # roll back changes of the session
+        #     session.rollback()
         print('{} scenes registered regularly'.format(counter_regulars))
         print('{} duplicates registered'.format(counter_duplicates))
         if len(list_duplicates) != 0:
@@ -1896,9 +1909,9 @@ class Archive(object):
         """
         id = scene if isinstance(scene, ID) else identify(scene)
         # ORM query, where scene equals id.scene, return first
-        exists_data = self.Session().query(self.Data.scene).filter(self.Data.scene == id.scene).first()
-        exists_duplicates = self.Session().query(self.Duplicates.scene).filter(
-            self.Duplicates.scene == id.scene).first()
+        exists_data = self.Session().query(self.Data.outname_base).filter(self.Data.outname_base == id.outname_base()).first()
+        exists_duplicates = self.Session().query(self.Duplicates.outname_base).filter(
+            self.Duplicates.outname_base == id.outname_base()).first()
         in_data = False
         in_dup = False
         if exists_data:
@@ -1923,8 +1936,8 @@ class Archive(object):
         """
         id = scene if isinstance(scene, ID) else identify(scene)
         # ORM query as in is registered
-        exists_duplicates = self.Session().query(self.Duplicates.scene).filter(
-            self.Duplicates.scene == id.scene).first()
+        exists_duplicates = self.Session().query(self.Duplicates.outname_base).filter(
+            self.Duplicates.outname_base == id.outname_base()).first()
         in_dup = False
         if exists_duplicates:
             in_dup = len(exists_duplicates) != 0
@@ -1951,7 +1964,7 @@ class Archive(object):
         else:
             return string
     
-    def export2shp(self, path):
+    def export2shp(self, path, table='data'):
         """
         export the database to a shapefile
 
@@ -1966,6 +1979,10 @@ class Archive(object):
         Returns
         -------
         """
+        if table not in ['data', 'duplicates']:
+            print('Only data and duplicates can be exported!')
+            return
+            
         # creates folder if not present, adds .shp if not within the path
         head, tail = os.path.split(path)
         if not os.path.exists(head):
@@ -1978,7 +1995,10 @@ class Archive(object):
         
         # uses spatialist.ogr2ogr to write shps with given path (or db connection)
         if self.driver == 'sqlite':
-            ogr2ogr(self.dbfile, path, options={'format': 'ESRI Shapefile'})
+            # ogr2ogr(self.dbfile, path, options={'format': 'ESRI Shapefile'})
+            subprocess.call(["ogr2ogr", "-f", "ESRI Shapefile", path,
+                             self.dbfile, table])
+           
         if self.driver == 'postgres':
             db_connection = """PG:host={0} port={1} user={2}
                 dbname={3} password={4} active_schema=public""".format(self.url_dict['host'],
@@ -1986,7 +2006,9 @@ class Archive(object):
                                                                        self.url_dict['username'],
                                                                        self.url_dict['database'],
                                                                        self.url_dict['password'])
-            ogr2ogr(db_connection, path, options={'format': 'ESRI Shapefile'})
+            # ogr2ogr(db_connection, path, options={'format': 'ESRI Shapefile'})
+            subprocess.call(["ogr2ogr", "-f", "ESRI Shapefile", path,
+                             db_connection, table])
     
     def filter_scenelist(self, scenelist):
         """
@@ -2166,7 +2188,7 @@ class Archive(object):
         ----------
         vectorobject: :class:`~spatialist.vector.Vector`
             a geometry with which the scenes need to overlap
-        mindate:str
+        mindate: str
             the minimum acquisition date in format YYYYmmddTHHMMSS
         maxdate: str
             the maximum acquisition date in format YYYYmmddTHHMMSS
