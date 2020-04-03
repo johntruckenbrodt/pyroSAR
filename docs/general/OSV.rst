@@ -52,7 +52,8 @@ This method internally uses the methods described above with a time span limited
     from pyroSAR import identify
     scene = 'S1A_IW_GRDH_1SDV_20180101T170648_20180101T170713_019964_021FFD_DA78.zip'
     id = identify(scene)
-    id.getOSV(outdir='/path/to/osvdir', osvType='POE')
+    id.getOSV(outdir='/path/to/osvdir', osvType='POE', returnMatch=True)
+    print(match)
 
 **approach 3: direct download and scene metadata update**
 

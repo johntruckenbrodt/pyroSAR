@@ -1282,7 +1282,7 @@ class SAFE(ID):
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def getOSV(self, osvdir=None, osvType='POE'):
+    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False):
         """
         download Orbit State Vector files for the scene
 
@@ -1293,10 +1293,14 @@ class SAFE(ID):
             if no directory is defined, the standard SNAP auxdata location is used
         osvType: {'POE', 'RES'}
             the type of orbit file either 'POE', 'RES' or a list of both
+        returnMatch: bool
+            return the best matching orbit file?
 
         Returns
         -------
-
+        str or None
+            the best matching OSV file if `returnMatch` is True or None otherwise
+        
         See Also
         --------
         :class:`pyroSAR.S1.OSV`
@@ -1318,6 +1322,11 @@ class SAFE(ID):
                 if len(files) == 0:
                     files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after)
                 osv.retrieve(files)
+        
+        if returnMatch:
+            with S1.OSV(osvdir) as osv:
+                match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
+            return match
     
     def quicklook(self, outname, format='kmz'):
         if format != 'kmz':
