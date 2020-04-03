@@ -12,7 +12,7 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR',
-            removeS1ThermalNoise=True, offset=None,
+            removeS1ThermalNoise=True, offset=None, allow_RES_OSV=False,
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
             basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True,
             gpt_exceptions=None, gpt_args=None, returnWF=False, nodataValueAtSea=True,
@@ -55,6 +55,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     offset: tuple, optional
         A tuple defining offsets for left, right, top and bottom in pixels, e.g. (100, 100, 0, 0); this variable is
         overridden if a shapefile is defined. Default is None.
+    allow_RES_OSV: bool
+        (only applies to Sentinel-1) Also allow the less accurate RES orbit files to be used?
+        The function first tries to download a POE file for the scene.
+        If this fails and RES files are allowed, it will download the RES file.
+        The selected OSV type is written to the workflow XML file.
+        Processing is aborted if the correction fails (Apply-Orbit-File parameter continueOnFail set to false).
     externalDEMFile: str or None, optional
         The absolute path to an external DEM file. Default is None.
     externalDEMNoDataValue: int, float or None, optional
@@ -254,9 +260,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     orbitType = orbit_lookup[formatName]
     if formatName == 'ENVISAT' and id.acquisition_mode == 'WSM':
         orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
-    
+    if formatName == 'SENTINEL-1':
+        match = id.getOSV(osvType='POE', returnMatch=True)
+        if match is None and allow_RES_OSV:
+            id.getOSV(osvType='RES')
+            orbitType = 'Sentinel Restituted (Auto Download)'
     orb = workflow['Apply-Orbit-File']
     orb.parameters['orbitType'] = orbitType
+    orb.parameters['continueOnFail'] = False
     ############################################
     # calibration node configuration
     # print('-- configuring Calibration Node')
