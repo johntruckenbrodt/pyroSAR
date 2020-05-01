@@ -89,8 +89,11 @@ class Storage(dict):
 # LOOKUP
 # ==============================================================================
 snap_suffix = {'Apply-Orbit-File': 'Orb',
+               'Back-Geocoding': 'BG',
                'Calibration': 'Cal',
                'Cross-Correlation': '',
+               'GoldsteinPhaseFiltering': 'GPF',
+               'Interferogram': 'I',
                'LinearToFromdB': 'dB',
                'Multilook': 'ML',
                'Read': '',
@@ -98,11 +101,14 @@ snap_suffix = {'Apply-Orbit-File': 'Orb',
                'SAR-Simulation': 'Sim',
                'SARSim-Terrain-Correction': 'TC',
                'SliceAssembly': '',
+               'SnaphuExport': 'snaphu',
                'Speckle-Filter': 'SF',
                'Subset': '',
                'Terrain-Correction': 'TC',
                'Terrain-Flattening': 'TF',
                'ThermalNoiseRemoval': 'tnr',
+               'TOPSAR-Split': 'TSS',
+               'TOPSAR-Deburst': 'TSD'
                'Write': ''}
 
 snap = Storage(suffix=snap_suffix)
