@@ -12,6 +12,7 @@ from osgeo.gdalconst import GA_Update
 from pyroSAR import identify
 from pyroSAR._dev_config import LOOKUP
 from pyroSAR.examine import ExamineSnap
+from pyroSAR.ancillary import windows_fileprefix
 
 from spatialist.auxil import gdal_translate
 from spatialist.ancillary import finder, run
@@ -214,7 +215,7 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
             if os.path.isfile(outname + '.tif'):
                 os.remove(outname + '.tif')
             elif os.path.isdir(outname):
-                shutil.rmtree(outname)
+                shutil.rmtree(outname, onerror=windows_fileprefix)
         raise RuntimeError(submessage.format(out, err, os.path.basename(xmlfile), proc.returncode))
 
 
@@ -315,7 +316,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
             execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
     except RuntimeError as e:
         if cleanup and os.path.exists(outname):
-            shutil.rmtree(outname)
+            shutil.rmtree(outname, onerror=windows_fileprefix)
         raise RuntimeError(str(e) + '\nfailed: {}'.format(xmlfile))
     
     if format == 'ENVI':
@@ -358,7 +359,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
             continue
     ###########################################################################
     if cleanup and os.path.exists(outname):
-        shutil.rmtree(outname)
+        shutil.rmtree(outname, onerror=windows_fileprefix)
     print('done')
 
 
@@ -481,7 +482,7 @@ def split(xmlfile, groups):
         # add a Write node to all dangling nodes
         counter = 0
         for node in new:
-            if new.successors(node.id) == [] and node.id != 'Write':
+            if new.successors(node.id) == [] and not node.id.startswith('Write'):
                 write = parse_node('Write')
                 new.insert_node(write, before=node.id)
                 id = str(position) if counter == 0 else '{}-{}'.format(position, counter)

@@ -52,7 +52,8 @@ This method internally uses the methods described above with a time span limited
     from pyroSAR import identify
     scene = 'S1A_IW_GRDH_1SDV_20180101T170648_20180101T170713_019964_021FFD_DA78.zip'
     id = identify(scene)
-    id.getOSV(outdir='/path/to/osvdir', osvType='POE')
+    id.getOSV(outdir='/path/to/osvdir', osvType='POE', returnMatch=True)
+    print(match)
 
 **approach 3: direct download and scene metadata update**
 
@@ -87,3 +88,31 @@ The parameter `allow_RES_OSV` can be used to allow processing with `RES` files i
             targetres=20,
             osvdir='/path/to/osvdir',
             allow_RES_OSV=False)
+
+Similarly, the function :func:`pyroSAR.snap.util.geocode` also automatically downloads OSV files and chooses the best
+matching OSV type for processing.
+
+.. code-block:: python
+
+    from pyroSAR.snap import geocode
+    scene = 'S1A_IW_GRDH_1SDV_20180101T170648_20180101T170713_019964_021FFD_DA78.zip'
+    geocode(scene=scene,
+            outdir='outdir',
+            allow_RES_OSV=True)
+
+In contrast to the GAMMA function the OSV download directory cannot be set because of the fixed SNAP auxiliary data
+location. The type of the available OSV file is written to the workflow XML file for processing:
+
+.. code-block:: xml
+
+    <node id="Apply-Orbit-File">
+        <operator>Apply-Orbit-File</operator>
+        <sources>
+            <sourceProduct refid="Read"/>
+        </sources>
+        <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+            <orbitType>Sentinel Restituted (Auto Download)</orbitType>
+            <polyDegree>3</polyDegree>
+            <continueOnFail>false</continueOnFail>
+        </parameters>
+    </node>

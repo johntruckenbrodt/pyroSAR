@@ -630,7 +630,6 @@ class ID(object):
             else:
                 archive.extractall(directory)
                 archive.close()
-        
         else:
             print('unpacking is only supported for TAR and ZIP archives')
             return
@@ -1283,7 +1282,7 @@ class SAFE(ID):
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def getOSV(self, osvdir=None, osvType='POE'):
+    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False):
         """
         download Orbit State Vector files for the scene
 
@@ -1294,10 +1293,14 @@ class SAFE(ID):
             if no directory is defined, the standard SNAP auxdata location is used
         osvType: {'POE', 'RES'}
             the type of orbit file either 'POE', 'RES' or a list of both
+        returnMatch: bool
+            return the best matching orbit file?
 
         Returns
         -------
-
+        str or None
+            the best matching OSV file if `returnMatch` is True or None otherwise
+        
         See Also
         --------
         :class:`pyroSAR.S1.OSV`
@@ -1319,6 +1322,11 @@ class SAFE(ID):
                 if len(files) == 0:
                     files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after)
                 osv.retrieve(files)
+        
+        if returnMatch:
+            with S1.OSV(osvdir) as osv:
+                match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
+            return match
     
     def quicklook(self, outname, format='kmz'):
         if format != 'kmz':
@@ -1857,7 +1865,7 @@ class Archive(object):
                 scenes.append(row['scene'])
             self.insert(scenes, verbose=verbose)
     
-    def move(self, scenelist, directory):
+    def move(self, scenelist, directory, verbose=False):
         """
         Move a list of files while keeping the database entries up to date.
         If a scene is registered in the database (in either the data or duplicates table),
@@ -1869,6 +1877,8 @@ class Archive(object):
             the file locations
         directory: str
             a folder to which the files are moved
+        verbose: bool
+            should status information and a progress bar be printed into the console?
 
         Returns
         -------
@@ -1877,7 +1887,10 @@ class Archive(object):
             raise RuntimeError('directory cannot be written to')
         failed = []
         double = []
-        pbar = pb.ProgressBar(max_value=len(scenelist)).start()
+        if verbose:
+            pbar = pb.ProgressBar(max_value=len(scenelist)).start()
+        else:
+            pbar = None
         cursor = self.conn.cursor()
         for i, scene in enumerate(scenelist):
             new = os.path.join(directory, os.path.basename(scene))
@@ -1890,7 +1903,8 @@ class Archive(object):
                 failed.append(scene)
                 continue
             finally:
-                pbar.update(i + 1)
+                if pbar is not None:
+                    pbar.update(i + 1)
             if self.select(scene=scene) != 0:
                 table = 'data'
             else:
@@ -1902,11 +1916,13 @@ class Archive(object):
             if table:
                 cursor.execute('UPDATE {} SET scene=? WHERE scene=?'.format(table), (new, scene))
                 self.conn.commit()
-        pbar.finish()
-        if len(failed) > 0:
-            print('the following scenes could not be moved:\n{}'.format('\n'.join(failed)))
-        if len(double) > 0:
-            print('the following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
+        if pbar is not None:
+            pbar.finish()
+        if verbose:
+            if len(failed) > 0:
+                print('the following scenes could not be moved:\n{}'.format('\n'.join(failed)))
+            if len(double) > 0:
+                print('the following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
     
     def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None,
                recursive=False, polarizations=None, verbose=False, **args):
