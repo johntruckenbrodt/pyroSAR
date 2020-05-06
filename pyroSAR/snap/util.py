@@ -68,7 +68,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         specified external DEM.
     externalDEMApplyEGM: bool, optional
         Apply Earth Gravitational Model to external DEM? Default is True.
-    terainFlattening: bool
+    terrainFlattening: bool
         apply topographic normalization on the data?
     basename_extensions: list of str
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
