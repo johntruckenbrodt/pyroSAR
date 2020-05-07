@@ -1,6 +1,8 @@
 <node id="TOPSAR-Split">
     <operator>TOPSAR-Split</operator>
-    <sources/>
+    <sources>
+        <sourceProduct refid="Read"/>
+    </sources>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
       <subswath>IW1</subswath>
       <selectedPolarisations>VH</selectedPolarisations>
