@@ -1,4 +1,4 @@
-<node id="Read">
+<node id="TOPSAR-Split">
     <operator>TOPSAR-Split</operator>
     <sources/>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
