@@ -4,13 +4,10 @@
     <sourceProduct refid="Multilook"/>
 </sources>
 <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <statCostMode>DEFO</statCostMode>
-      <initMethod>MST</initMethod>
-      <numberOfTileRows>10</numberOfTileRows>
-      <numberOfTileCols>10</numberOfTileCols>
-      <numberOfProcessors>4</numberOfProcessors>
-      <rowOverlap>200</rowOverlap>
-      <colOverlap>200</colOverlap>
-      <tileCostThreshold>500</tileCostThreshold>
+     <alpha>1.0</alpha>
+      <FFTSizeString>64</FFTSizeString>
+      <windowSizeString>3</windowSizeString>
+      <useCoherenceMask>false</useCoherenceMask>
+      <coherenceThreshold>0.2</coherenceThreshold>
 </parameters>
 </node>
