@@ -4,7 +4,6 @@
     <sourceProduct refid="Multilook"/>
 </sources>
 <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <targetFolder/>
       <statCostMode>DEFO</statCostMode>
       <initMethod>MST</initMethod>
       <numberOfTileRows>10</numberOfTileRows>
