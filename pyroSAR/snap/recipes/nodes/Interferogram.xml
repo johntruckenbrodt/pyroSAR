@@ -1,0 +1,24 @@
+<node id="Interferogram">
+<operator>Interferogram</operator>
+<sources>
+    <sourceProduct refid="Back-Geocoding"/>
+</sources>
+<parameters class="com.bc.ceres.binding.dom.XppDomElement">
+    <subtractFlatEarthPhase>true</subtractFlatEarthPhase>
+    <srpPolynomialDegree>5</srpPolynomialDegree>
+    <srpNumberPoints>501</srpNumberPoints>
+    <orbitDegree>3</orbitDegree>
+    <includeCoherence>true</includeCoherence>
+    <cohWinAz>2</cohWinAz>
+    <cohWinRg>10</cohWinRg>
+    <squarePixel>true</squarePixel>
+    <subtractTopographicPhase>false</subtractTopographicPhase>
+    <demName>GETASSE30</demName>
+    <externalDEMFile/>
+    <externalDEMNoDataValue>0.0</externalDEMNoDataValue>
+    <externalDEMApplyEGM>true</externalDEMApplyEGM>
+    <tileExtensionPercent>100</tileExtensionPercent>
+    <outputElevation>false</outputElevation>
+    <outputLatLon>false</outputLatLon>
+</parameters>
+</node>

@@ -1,0 +1,9 @@
+<node id="TOPSAR-Deburst">
+<operator>TOPSAR-Deburst</operator>
+<sources>
+    <sourceProduct refid="Interferogram"/>
+</sources>
+<parameters class="com.bc.ceres.binding.dom.XppDomElement">
+    <selectedPolarisations>VH</selectedPolarisations>
+</parameters>
+</node>

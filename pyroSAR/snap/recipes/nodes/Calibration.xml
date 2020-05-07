@@ -1,0 +1,19 @@
+<node id="Calibration">
+<operator>Calibration</operator>
+<sources>
+    <sourceProduct refid="Subset"/>
+</sources>
+<parameters class="com.bc.ceres.binding.dom.XppDomElement">
+    <sourceBands/>
+    <auxFile>Latest Auxiliary File</auxFile>
+    <externalAuxFile/>
+    <outputImageInComplex>false</outputImageInComplex>
+    <outputImageScaleInDb>false</outputImageScaleInDb>
+    <createGammaBand>false</createGammaBand>
+    <createBetaBand>false</createBetaBand>
+    <selectedPolarisations>VH</selectedPolarisations>
+    <outputSigmaBand>true</outputSigmaBand>
+    <outputGammaBand>false</outputGammaBand>
+    <outputBetaBand>false</outputBetaBand>
+</parameters>
+</node>

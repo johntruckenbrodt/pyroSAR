@@ -1,0 +1,11 @@
+<node id="Apply-Orbit-File">
+<operator>Apply-Orbit-File</operator>
+<sources>
+    <sourceProduct refid="Read"/>
+</sources>
+<parameters class="com.bc.ceres.binding.dom.XppDomElement">
+    <orbitType>Sentinel Precise (Auto Download)</orbitType>
+    <polyDegree>3</polyDegree>
+    <continueOnFail>true</continueOnFail>
+</parameters>
+</node>

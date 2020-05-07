@@ -1,0 +1,16 @@
+<node id="TopoPhaseRemoval">
+<operator>TopoPhaseRemoval</operator>
+<sources>
+    <sourceProduct refid="TOPSAR-Deburst"/>
+</sources>
+<parameters class="com.bc.ceres.binding.dom.XppDomElement">
+    <orbitDegree>3</orbitDegree>
+    <demName>GETASSE30</demName>
+    <externalDEMFile/>
+    <externalDEMNoDataValue>0.0</externalDEMNoDataValue>
+    <tileExtensionPercent>100</tileExtensionPercent>
+    <outputTopoPhaseBand>false</outputTopoPhaseBand>
+    <outputElevationBand>false</outputElevationBand>
+    <outputLatLonBands>false</outputLatLonBands>
+</parameters>
+</node>

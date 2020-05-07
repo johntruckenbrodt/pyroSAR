@@ -1,0 +1,13 @@
+<node id="GoldsteinPhaseFiltering">
+<operator>GoldsteinPhaseFiltering</operator>
+<sources>
+    <sourceProduct refid="Multilook"/>
+</sources>
+<parameters class="com.bc.ceres.binding.dom.XppDomElement">
+    <alpha>1.0</alpha>
+    <FFTSizeString>64</FFTSizeString>
+    <windowSizeString>3</windowSizeString>
+    <useCoherenceMask>false</useCoherenceMask>
+    <coherenceThreshold>0.2</coherenceThreshold>
+</parameters>
+</node>

@@ -1,0 +1,18 @@
+<node id="Back-Geocoding">
+<operator>Back-Geocoding</operator>
+<sources>
+    <sourceProduct refid="Calibration"/>
+    <sourceProduct.1 refid="Calibration(2)"/>
+</sources>
+<parameters class="com.bc.ceres.binding.dom.XppDomElement">
+    <demName>GETASSE30</demName>
+    <demResamplingMethod>BICUBIC_INTERPOLATION</demResamplingMethod>
+    <externalDEMFile/>
+    <externalDEMNoDataValue>0.0</externalDEMNoDataValue>
+    <resamplingType>BISINC_5_POINT_INTERPOLATION</resamplingType>
+    <maskOutAreaWithoutElevation>true</maskOutAreaWithoutElevation>
+    <outputRangeAzimuthOffset>false</outputRangeAzimuthOffset>
+    <outputDerampDemodPhase>true</outputDerampDemodPhase>
+    <disableReramp>false</disableReramp>
+</parameters>
+</node>
