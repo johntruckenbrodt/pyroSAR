@@ -97,6 +97,21 @@ def parse_node(name):
         
         node = Node(node)
         
+        parameters = node.parameters.keys()
+        out += '-P'
+        for parameter in parameters:
+            p1 = r'-P{}.*?-P'.format(parameter)
+            p2 = r"Default\ value\ is '([a-zA-Z0-9 ._]+)'"
+            r1 = re.search(p1, out, re.S)
+            if r1:
+                sub = r1.group()
+                r2 = re.search(p2, sub)
+                if r2:
+                    value = r2.groups()[0]
+                    node.parameters[parameter] = value
+                    continue
+            node.parameters[parameter] = None
+        
         with open(absname, 'w') as xml:
             xml.write(str(node))
         
