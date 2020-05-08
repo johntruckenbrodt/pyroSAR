@@ -10,7 +10,6 @@ from osgeo import gdal
 from osgeo.gdalconst import GA_Update
 
 from pyroSAR import identify
-from pyroSAR._dev_config import LOOKUP
 from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import windows_fileprefix
 
@@ -866,7 +865,8 @@ class Workflow(object):
         for name in names:
             if name not in names_unique:
                 names_unique.append(name)
-        suffix = '_'.join(filter(None, [LOOKUP.snap.suffix[x] for x in names_unique]))
+        config = ExamineSnap()
+        suffix = '_'.join(filter(None, [config.get_suffix(x) for x in names_unique]))
         return suffix
     
     def write(self, outfile):
