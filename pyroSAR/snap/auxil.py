@@ -928,10 +928,11 @@ class Node(object):
     
     def __set_source(self, key, value):
         source = self.element.find('.//sources/{}'.format(key))
-        if source is not None:
-            source.attrib['refid'] = value
+        if source is None:
+            child = ET.SubElement(self.element.find('.//sources'),
+                                  key, {'refid': value})
         else:
-            raise RuntimeError('cannot set source on {} node'.format(self.operator))
+            source.attrib['refid'] = value
     
     @property
     def id(self):
