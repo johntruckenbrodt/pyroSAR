@@ -5,7 +5,6 @@
     <sourceProduct.1 refid="Calibration(2)"/>
     <sourceProduct.2 refid="Calibration(3)"/>
     <sourceProduct.3 refid="Calibration(4)"/>
-    <sourceProduct.4 refid="Calibration(5)"/>
 </sources>
 <parameters class="com.bc.ceres.binding.dom.XppDomElement">
     <demName>GETASSE30</demName>
