@@ -47,14 +47,18 @@ def parse_recipe(name):
     return Workflow(absname)
 
 
-def parse_node(name):
+def parse_node(name, use_existing=True):
     """
-    parse a XML node recipe
+    parse an XML node recipe. The XML representation and parameter default values are read from the docstring of an
+    individual node by calling `gpt <node> -h`. The result is then written to an XML text file under
+    `$HOME/.pyroSAR/snap/nodes` which is subsequently read for parsing instead of again calling `gpt`.
     
     Parameters
     ----------
     name: str
         the name of the processing node, e.g. Terrain-Correction
+    use_existing: bool
+        use an existing XML text file or force re-parsing the gpt docstring and overwriting the XML file?
 
     Returns
     -------
@@ -73,7 +77,7 @@ def parse_node(name):
     os.makedirs(abspath, exist_ok=True)
     absname = os.path.join(abspath, name)
     
-    if not os.path.isfile(absname):
+    if not os.path.isfile(absname) or not use_existing:
         gpt = ExamineSnap().gpt
         
         cmd = [gpt, operator, '-h']
@@ -84,24 +88,27 @@ def parse_node(name):
         tree = ET.fromstring(graph)
         node = tree.find('node')
         node.attrib['id'] = operator
+        # add a second source product entry for multi-source nodes
+        # multi-source nodes are those with an entry 'sourceProducts' instead of 'sourceProduct'
+        # exceptions are registered in this list:
+        multisource = ['Back-Geocoding']
         if operator != 'Read':
             source = node.find('.//sources')
             child = source[0]
-            if child.tag == 'source':
-                child.tag = 'sourceProduct'
-            elif child.tag == 'sourceProducts':
-                child.tag = 'sourceProduct'
+            if child.tag == 'sourceProducts' or operator in multisource:
                 child2 = ET.SubElement(source, 'sourceProduct.1', {'refid': 'Read (2)'})
+            child.tag = 'sourceProduct'
             child.attrib['refid'] = 'Read'
             child.text = None
         
         node = Node(node)
         
+        # read the default values from the parameter documentation
         parameters = node.parameters.keys()
         out += '-P'
         for parameter in parameters:
             p1 = r'-P{}.*?-P'.format(parameter)
-            p2 = r"Default\ value\ is '([a-zA-Z0-9 ._]+)'"
+            p2 = r"Default\ value\ is '([a-zA-Z0-9 ._\(\)]+)'"
             r1 = re.search(p1, out, re.S)
             if r1:
                 sub = r1.group()
