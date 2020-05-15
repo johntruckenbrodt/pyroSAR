@@ -295,10 +295,11 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             tf.parameters['sourceBands'] = 'Beta0'
         else:
             tf.parameters['sourceBands'] = bandnames['beta0']
-        if externalDEMFile is None:
-            tf.parameters['reGridMethod'] = True
-        else:
-            tf.parameters['reGridMethod'] = False
+        if 'reGridMethod' in tf.parameters.keys():
+            if externalDEMFile is None:
+                tf.parameters['reGridMethod'] = True
+            else:
+                tf.parameters['reGridMethod'] = False
         last = tf.id
     ############################################
     # speckle filtering node configuration
@@ -397,7 +398,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         raise RuntimeError('scaling must be  a string of either "dB", "db" or "linear"')
     
     if scaling in ['dB', 'db']:
-        lin2db = parse_node('lin2db')
+        lin2db = parse_node('LinearToFromdB')
         workflow.insert_node(lin2db, before=tc.id)
         lin2db.parameters['sourceBands'] = bandnames[refarea]
     

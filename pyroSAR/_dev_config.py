@@ -88,28 +88,7 @@ class Storage(dict):
 # ==============================================================================
 # LOOKUP
 # ==============================================================================
-snap_suffix = {'Apply-Orbit-File': 'Orb',
-               'Calibration': 'Cal',
-               'Cross-Correlation': '',
-               'LinearToFromdB': 'dB',
-               'Multilook': 'ML',
-               'Read': '',
-               'Remove-GRD-Border-Noise': 'bnr',
-               'SAR-Simulation': 'Sim',
-               'SARSim-Terrain-Correction': 'TC',
-               'SliceAssembly': '',
-               'Speckle-Filter': 'SF',
-               'Subset': '',
-               'Terrain-Correction': 'TC',
-               'Terrain-Flattening': 'TF',
-               'ThermalNoiseRemoval': 'tnr',
-               'Write': ''}
-
-snap = Storage(suffix=snap_suffix)
-
-LOOKUP = Storage(snap=snap,
-
-                 attributes={'sensor': 'TEXT',
+LOOKUP = Storage(attributes={'sensor': 'TEXT',
                              'orbit': 'TEXT',
                              'acquisition_mode': 'TEXT',
                              'start': 'TEXT',

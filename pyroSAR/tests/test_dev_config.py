@@ -18,10 +18,6 @@ class TestStorage:
 
 
 class TestLookup:
-    def test_suffix(self):
-        assert LOOKUP.snap.suffix['Apply-Orbit-File'] == 'Orb'
-        assert LOOKUP.snap.suffix['Terrain-Correction'] == 'TC'
-    
     def test_attributes(self):
         assert LOOKUP.attributes['sensor'] == 'TEXT'
         assert LOOKUP.attributes['vh'] == 'INTEGER'
@@ -34,8 +30,6 @@ class TestSTORAGE:
         assert STORAGE.URL.auxcal.ers == URL.auxcal.ers
     
     def test_STORAGE_LOOKUP(self):
-        assert LOOKUP.snap.suffix['Apply-Orbit-File'] == STORAGE.LOOKUP.snap.suffix['Apply-Orbit-File']
-        assert LOOKUP.snap.suffix['Terrain-Correction'] == STORAGE.LOOKUP.snap.suffix['Terrain-Correction'] == 'TC'
         assert LOOKUP.attributes['sensor'] == STORAGE.LOOKUP.attributes['sensor']
         assert LOOKUP.attributes['vh'] == STORAGE.LOOKUP.attributes['vh']
 
