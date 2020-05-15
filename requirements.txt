@@ -5,3 +5,7 @@ scoop
 spatialist==0.4
 pyyaml
 requests
+psycopg2
+SQLAlchemy
+SQLAlchemy-Utils
+GeoAlchemy2
