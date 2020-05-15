@@ -55,14 +55,6 @@ calling the GPT command line tool:
 
     gpt('outname_proc.xml')
 
-.. note::
-
-    the list of nodes that can currently be parsed by :func:`~pyroSAR.snap.auxil.parse_node` is by no means complete.
-    This is because each node needs to be stored as an XML file in pyroSAR's source code, which is currently only done
-    for those required by function :func:`~pyroSAR.snap.util.geocode`.
-    See `here <https://github.com/johntruckenbrodt/pyroSAR/tree/master/pyroSAR/snap/recipes/nodes>`_ for a list of
-    supported nodes.
-
 **workflow splitting**
 
 Simple workflows like the one shown above take only a few seconds to process, but the more processing nodes are added,
@@ -91,9 +83,9 @@ function :func:`~pyroSAR.snap.auxil.split`. In this case, two workflows would be
 - `Read` -> `ThermalNoiseRemoval` -> `Write`
 - `Read` -> `Remove-GRD-Border-Noise` -> `Write`
 
-These new files can then be executed in sequence with intermediate `BEAM-DIMAP`
+These new files are then executed in sequence with intermediate `BEAM-DIMAP`
 files written in the same directory as the sub-workflow XML files. After processing this directory is deleted unless
-parameter ``cleanup`` is set to ``False``.
+parameter ``cleanup`` of function :func:`~pyroSAR.snap.auxil.gpt` is set to ``False``.
 
 **backwards compatibility**
 
