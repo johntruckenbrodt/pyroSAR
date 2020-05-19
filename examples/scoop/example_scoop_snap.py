@@ -11,7 +11,7 @@ from spatialist.ancillary import finder
 """
 This script is an example usage for processing Sentinel-1 scenes with SNAP
 
-Run this script by calling the 'start_gamma.sh' scipt.
+Run this script by calling the 'start_gamma.sh' script.
 
 The following tasks are performed:
 - a directory is scanned for valid Sentinel-1 scenes
