@@ -1591,7 +1591,7 @@ class Archive(object):
     When providing 'postgres' as driver, a PostgreSQL database will be created at a given host.
     Additional arguments are required.
 
-        >>> from pyroSAR import Archive, identify
+    >>> from pyroSAR import Archive, identify
     >>> from spatialist.ancillary import finder
     >>> dbfile = 'scenelist_db'
     >>> archive_s1 = '/.../sentinel1/GRD'
@@ -2071,7 +2071,7 @@ class Archive(object):
         """
         Return the names of all tables in the database
         
-         Parameters
+        Parameters
         ----------
         return_all: bool
             only gives tables data and duplicates on default.
