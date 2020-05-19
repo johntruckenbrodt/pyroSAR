@@ -1,7 +1,16 @@
-####################################################################
+###############################################################################
 # Convenience functions for SAR image batch processing with ESA SNAP
-# John Truckenbrodt, 2016-2020
-####################################################################
+
+# Copyright (c) 2016-2020, the pyroSAR Developers.
+
+# This file is part of the pyroSAR Project. It is subject to the
+# license terms in the LICENSE.txt file found in the top-level
+# directory of this distribution and at
+# https://github.com/johntruckenbrodt/pyroSAR/blob/master/LICENSE.txt.
+# No part of the pyroSAR project, including this file, may be
+# copied, modified, propagated, or distributed except according
+# to the terms contained in the LICENSE.txt file.
+###############################################################################
 import os
 import pyroSAR
 from ..ancillary import multilook_factors
