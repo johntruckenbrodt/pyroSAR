@@ -9,7 +9,7 @@ dependencies:
   - spatialist==0.5
   - pyyaml
   - requests
-  - psycopg
+  - psycopg2
   - sqlalchemy
   - sqlalchemy-utils
-  - geoalchemy
+  - geoalchemy2
