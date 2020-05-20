@@ -1549,9 +1549,8 @@ class Archive(object):
         required for postgres driver: host where the database is hosted. Default: 'localhost'
     port: int
         required for postgres driver: port number to the database. Default: 5432
-    add_table_schemas: :obj:`sqlalchemy.schema` or :obj:`list` of  :obj:`sqlalchemy.schema`
-        Table schemas provided here will be added to the database. Notice that columns using Geometry must have setting
-        management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
+   
+       
 
 
     Examples
@@ -1604,7 +1603,7 @@ class Archive(object):
     """
     
     def __init__(self, dbfile, custom_fields=None, postgres=False, user='postgres',
-                 password='1234', host='localhost', port=5432, add_table_schemas=None):
+                 password='1234', host='localhost', port=5432):
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
@@ -1693,17 +1692,7 @@ class Archive(object):
             self.data_schema.create(self.engine)
         if not self.engine.dialect.has_table(self.engine, 'duplicates'):
             self.duplicates_schema.create(self.engine)
-        if add_table_schemas != None:
-            if isinstance(add_table_schemas, list):
-                for schema in add_table_schemas:
-                    schema.metadata = self.meta
-                    if not self.engine.dialect.has_table(self.engine, str(schema)):
-                        schema.create(self.engine)
-            else:
-                schema = add_table_schemas
-                schema.metadata = self.meta
-                if not self.engine.dialect.has_table(self.engine, str(schema)):
-                    schema.create(self.engine)
+       
         
         # reflect tables from (by now) existing db, make some variables available within self
         self.Base = automap_base(metadata=self.meta)
@@ -1716,6 +1705,31 @@ class Archive(object):
         sys.stdout.write('\rchecking for missing scenes..done\n')
         sys.stdout.flush()
     
+    def add_tables(self, tables):
+        """
+        Add tables to the database per :class:`sqlalchemy.schema.Table`
+        Tables provided here will be added to the database. Notice that columns using Geometry must have setting
+        management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
+        
+        Parameters
+        ----------
+        tables: :class:`sqlalchemy.schema.Table` or :obj:`list` of :class:`sqlalchemy.schema.Table`
+            Tables provided here will be added to the database. Notice that columns using Geometry must have setting
+            management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
+        """
+        if isinstance(tables, list):
+            for table in tables:
+                table.metadata = self.meta
+                if not self.engine.dialect.has_table(self.engine, str(table)):
+                    table.create(self.engine)
+        else:
+            table = tables
+            table.metadata = self.meta
+            if not self.engine.dialect.has_table(self.engine, str(table)):
+                table.create(self.engine)
+        self.Base = automap_base(metadata=self.meta)
+        self.Base.prepare(self.engine, reflect=True)
+                
     def __load_spatialite(self, dbapi_conn, connection_record):
         """
         loads the spatialite extension for SQLite, not to be used outside the init()
@@ -2099,16 +2113,23 @@ class Archive(object):
         list
             the table names
         """
+        all_tables = ['ElementaryGeometries', 'SpatialIndex', 'geometry_columns', 'geometry_columns_auth',
+                      'geometry_columns_field_infos', 'geometry_columns_statistics', 'geometry_columns_time',
+                      'idx_data_bbox', 'idx_data_bbox_node', 'idx_data_bbox_parent', 'idx_data_bbox_rowid',
+                      'spatial_ref_sys', 'spatial_ref_sys_aux', 'spatialite_history', 'sql_statements_log',
+                      'sqlite_sequence', 'views_geometry_columns', 'views_geometry_columns_auth',
+                      'views_geometry_columns_field_infos', 'views_geometry_columns_statistics',
+                      'virts_geometry_columns', 'virts_geometry_columns_auth', 'virts_geometry_columns_field_infos',
+                      'virts_geometry_columns_statistics']
         # get tablenames from metadata
         tables = sorted([self.encode(x) for x in self.meta.tables.keys()])
         if return_all:
             return tables
         else:
             ret = []
-            if 'data' in tables:
-                ret.append('data')
-            if 'duplicates' in tables:
-                ret.append('duplicates')
+            for i in tables:
+                if i not in all_tables:
+                    ret.append(i)
             return ret
     
     def get_unique_directories(self):

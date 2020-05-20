@@ -5,7 +5,16 @@ import tarfile as tf
 import os
 from datetime import datetime
 from spatialist import Vector
+from sqlalchemy import Table, MetaData, Column, Integer, String
+from geoalchemy2 import Geometry
 
+metadata = MetaData()
+
+mytable = Table("mytable", metadata,
+                Column('mytable_id', Integer, primary_key=True),
+                Column('value', String(50)),
+                Column('shape', Geometry('POLYGON', management=True, srid=4326)))
+           
 
 @pytest.fixture()
 def testcases():
@@ -165,6 +174,8 @@ def test_archive(tmpdir, testdata, appveyor):
         out = db.select(vv=1, acquisition_mode=('IW', 'EW'))
         assert len(out) == 1
         assert isinstance(out[0], str)
+        db.add_tables(mytable)
+        assert 'mytable' in db.get_tablenames()
         with pytest.raises(IOError):
             db.filter_scenelist([1])
         db.close()
@@ -198,6 +209,8 @@ def test_archive_postgres(tmpdir, testdata, appveyor):
         out = db.select(vv=1, acquisition_mode=('IW', 'EW'))
         assert len(out) == 1
         assert isinstance(out[0], str)
+        db.add_tables(mytable)
+        assert 'mytable' in db.get_tablenames()
         with pytest.raises(IOError):
             db.filter_scenelist([1])
         db.close()
