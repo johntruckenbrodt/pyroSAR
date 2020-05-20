@@ -178,8 +178,11 @@ def test_archive(tmpdir, testdata):
 
 
 def test_archive_postgres(tmpdir, testdata):
+    pguser = os.environ.get('PGUSER')
+    pgpassword = os.environ.get('PGPASSWORD')
+    
     id = pyroSAR.identify(testdata['s1'])
-    db = pyroSAR.Archive('test', postgres=True, port=5432)
+    db = pyroSAR.Archive('test', postgres=True, port=5432, user=pguser, password=pgpassword)
     db.insert(testdata['s1'], verbose=False)
     assert all(isinstance(x, str) for x in db.get_tablenames())
     assert all(isinstance(x, str) for x in db.get_colnames())
@@ -198,14 +201,14 @@ def test_archive_postgres(tmpdir, testdata):
     with pytest.raises(IOError):
         db.filter_scenelist([1])
     db.close()
-    with pyroSAR.Archive('test', postgres=True, port=5432) as db:
+    with pyroSAR.Archive('test', postgres=True, port=5432, user=pguser, password=pgpassword) as db:
         assert db.size == (1, 0)
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
         db.drop_database()
     assert Vector(shp).nfeatures == 1
     with pytest.raises(OSError):
-        with pyroSAR.Archive('test', postgres=True, port=5432) as db:
+        with pyroSAR.Archive('test', postgres=True, port=5432, user=pguser, password=pgpassword) as db:
             db.import_outdated(testdata['archive_old'])
             db.drop_database()
     with pytest.raises(SystemExit) as pytest_wrapped_e:
