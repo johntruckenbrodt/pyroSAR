@@ -1674,12 +1674,17 @@ class Archive(object):
             self.data_schema.create(self.engine)
         if not self.engine.dialect.has_table(self.engine, 'duplicates'):
             self.duplicates_schema.create(self.engine)
-        if add_table_schemes:
+        if add_table_schemes != None:
             if isinstance(add_table_schemes, list):
                 for scheme in add_table_schemes:
                     scheme.metadata = self.meta
-                    if not self.engine.dialect.has_table(self.engine, scheme.__tablename__):
+                    if not self.engine.dialect.has_table(self.engine, str(scheme)):
                         scheme.create(self.engine)
+            else:
+                scheme = add_table_schemes
+                scheme.metadata = self.meta
+                if not self.engine.dialect.has_table(self.engine, str(scheme)):
+                    scheme.create(self.engine)
         
         # reflect tables from (by now) existing db, make some variables available within self
         self.Base = automap_base(metadata=self.meta)
@@ -1758,7 +1763,7 @@ class Archive(object):
         scene: str or ID
             a SAR scene
 
-         Returns
+        Returns
         -------
         object of class Data, insert string
         """
