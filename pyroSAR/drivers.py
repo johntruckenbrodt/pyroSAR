@@ -1534,6 +1534,8 @@ class Archive(object):
         required for postgres driver: host where the database is hosted. Default: 'localhost'
     port: int
         required for postgres driver: port number to the database. Default: 5432
+    add_table_schemas: :obj:`sqlalchemy.schema` or :obj:`list` of  :obj:`sqlalchemy.schema`
+        Table schemas provided here will be
 
 
     Examples
@@ -1586,7 +1588,7 @@ class Archive(object):
     """
     
     def __init__(self, dbfile, custom_fields=None, postgres=False, user='postgres',
-                 password='1234', host='localhost', port=5432, add_table_schemes=None):
+                 password='1234', host='localhost', port=5432, add_table_schemas=None):
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
@@ -1674,17 +1676,17 @@ class Archive(object):
             self.data_schema.create(self.engine)
         if not self.engine.dialect.has_table(self.engine, 'duplicates'):
             self.duplicates_schema.create(self.engine)
-        if add_table_schemes != None:
-            if isinstance(add_table_schemes, list):
-                for scheme in add_table_schemes:
-                    scheme.metadata = self.meta
-                    if not self.engine.dialect.has_table(self.engine, str(scheme)):
-                        scheme.create(self.engine)
+        if add_table_schemas != None:
+            if isinstance(add_table_schemas, list):
+                for schema in add_table_schemas:
+                    schema.metadata = self.meta
+                    if not self.engine.dialect.has_table(self.engine, str(schema)):
+                        schema.create(self.engine)
             else:
-                scheme = add_table_schemes
-                scheme.metadata = self.meta
-                if not self.engine.dialect.has_table(self.engine, str(scheme)):
-                    scheme.create(self.engine)
+                schema = add_table_schemas
+                schema.metadata = self.meta
+                if not self.engine.dialect.has_table(self.engine, str(schema)):
+                    schema.create(self.engine)
         
         # reflect tables from (by now) existing db, make some variables available within self
         self.Base = automap_base(metadata=self.meta)
