@@ -1586,7 +1586,7 @@ class Archive(object):
     """
     
     def __init__(self, dbfile, custom_fields=None, postgres=False, user='postgres',
-                 password='1234', host='localhost', port=5432):
+                 password='1234', host='localhost', port=5432, add_table_schemes=None):
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
@@ -1657,12 +1657,12 @@ class Archive(object):
         # add custom fields
         if self.custom_fields is not None:
             for key, val in self.custom_fields.items():
-                if val == 'Integer':
+                if val in ['Integer', 'integer', 'int']:
                     self.data_schema.append_column(Column(key, Integer))
-                elif val == 'String':
+                elif val in ['String', 'string', 'str']:
                     self.data_schema.append_column(Column(key, String))
                 else:
-                    print('Value in dict custom_fields must be "Integer" or "String"!')
+                    print('Value in dict custom_fields must be "integer" or "string"!')
         
         # schema for duplicates
         self.duplicates_schema = Table('duplicates', self.meta,
@@ -1674,6 +1674,12 @@ class Archive(object):
             self.data_schema.create(self.engine)
         if not self.engine.dialect.has_table(self.engine, 'duplicates'):
             self.duplicates_schema.create(self.engine)
+        if add_table_schemes:
+            if isinstance(add_table_schemes, list):
+                for scheme in add_table_schemes:
+                    scheme.metadata = self.meta
+                    if not self.engine.dialect.has_table(self.engine, scheme.__tablename__):
+                        scheme.create(self.engine)
         
         # reflect tables from (by now) existing db, make some variables available within self
         self.Base = automap_base(metadata=self.meta)
@@ -1975,6 +1981,8 @@ class Archive(object):
             this will overwrite other files with the same name.
             If a folder is given in path (path ends with '/') it is created if not existing.
             If the file extension is missing '.shp' is added.
+        table:
+            the selected table to be exported, can be either 'data' or 'duplicates'.
             
         Returns
         -------
