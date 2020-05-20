@@ -4,9 +4,7 @@ import sys
 
 # Create .pyrosar in HOME - Directory
 directory = os.path.join(os.path.expanduser('~'), '.pyrosar')
-
-if not os.path.exists(directory):
-    os.makedirs(directory)
+os.makedirs(directory, exist_ok=True)
 
 directory = os.path.abspath(os.path.dirname(__file__))
 if sys.version_info >= (3, 0):
@@ -31,7 +29,7 @@ setup(name='pyroSAR',
       install_requires=['progressbar2',
                         'pathos>=0.2',
                         'numpy',
-                        'spatialist==0.4',
+                        'spatialist==0.5',
                         'pyyaml',
                         'requests',
                         'psycopg2',
