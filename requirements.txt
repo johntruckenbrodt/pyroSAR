@@ -1,7 +1,10 @@
 progressbar2
 pathos>=0.2
 numpy
-scoop
 spatialist==0.4
 pyyaml
 requests
+psycopg2
+SQLAlchemy
+SQLAlchemy-Utils
+GeoAlchemy2

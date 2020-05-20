@@ -1,8 +1,0 @@
-<node id="Read">
-    <operator>Read</operator>
-    <sources/>
-    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-        <file/>
-        <formatName/>
-    </parameters>
-</node>

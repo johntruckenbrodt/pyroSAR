@@ -1,3 +1,16 @@
+###############################################################################
+# Examination of SAR processing software
+
+# Copyright (c) 2019-2020, the pyroSAR Developers.
+
+# This file is part of the pyroSAR Project. It is subject to the
+# license terms in the LICENSE.txt file found in the top-level
+# directory of this distribution and at
+# https://github.com/johntruckenbrodt/pyroSAR/blob/master/LICENSE.txt.
+# No part of the pyroSAR project, including this file, may be
+# copied, modified, propagated, or distributed except according
+# to the terms contained in the LICENSE.txt file.
+###############################################################################
 import ast
 import json
 import os
@@ -34,6 +47,9 @@ class ExamineSnap(object):
         # define some attributes which identify SNAP
         self.identifiers = ['path', 'gpt', 'etc', 'auxdata']
         
+        # a list of relevant sections
+        self.sections = ['SNAP', 'OUTPUT', 'SNAP_SUFFIX']
+        
         # try reading all necessary attributes from the config file
         # print('reading config..')
         self.__read_config()
@@ -46,8 +62,7 @@ class ExamineSnap(object):
         # if the auxdatapath attribute was not yet set, create a default directory
         if not hasattr(self, 'auxdatapath'):
             self.auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
-            if not os.path.isdir(self.auxdatapath):
-                os.makedirs(self.auxdatapath)
+            os.makedirs(self.auxdatapath, exist_ok=True)
         
         # if the SNAP auxdata properties attribute was not yet identified,
         # point it to the default file delivered with pyroSAR
@@ -55,6 +70,13 @@ class ExamineSnap(object):
             # print('using default properties file..')
             template = os.path.join('snap', 'data', 'snap.auxdata.properties')
             self.properties = pkg_resources.resource_filename(__name__, template)
+        
+        if not hasattr(self, 'suffices'):
+            template = os.path.join('snap', 'data', 'snap.suffices.properties')
+            fname_suffices = pkg_resources.resource_filename(__name__, template)
+            with open(fname_suffices, 'r') as infile:
+                content = infile.read().split('\n')
+            self.__suffices = {k: v for k, v in [x.split('=') for x in content]}
         
         # update the snap properties; this reads the 'properties' file and looks for any changes,
         # which are then updated for the object
@@ -146,7 +168,13 @@ class ExamineSnap(object):
         if 'OUTPUT' in config.sections:
             snap_properties = config['OUTPUT']
         if len(snap_properties.keys()) > 0:
-            setattr(self, 'snap_properties', snap_properties)
+            self.snap_properties = snap_properties
+        
+        suffices = {}
+        if 'SNAP_SUFFIX' in config.sections:
+            suffices = config['SNAP_SUFFIX']
+        if len(suffices.keys()) > 0:
+            self.__suffices = suffices
     
     def __read_config_attr(self, attr, section):
         """
@@ -178,7 +206,7 @@ class ExamineSnap(object):
                     setattr(self, attr, val)
     
     def __update_config(self):
-        for section in ['SNAP', 'OUTPUT', 'URL']:
+        for section in self.sections:
             if section not in config.sections:
                 # print('creating section {}..'.format(section))
                 config.add_section(section)
@@ -189,6 +217,9 @@ class ExamineSnap(object):
         
         for key, value in self.snap_properties.items():
             self.__update_config_attr(key, value, 'OUTPUT')
+        
+        for key in sorted(self.__suffices.keys()):
+            self.__update_config_attr(key, self.__suffices[key], 'SNAP_SUFFIX')
     
     @staticmethod
     def __update_config_attr(attr, value, section):
@@ -225,8 +256,34 @@ class ExamineSnap(object):
                         .replace('${demPath}', demPath) \
                         .replace('${landCoverPath}', landCoverPath) \
                         .replace('\\', '/')
-                    if not key in self.snap_properties.keys() or self.snap_properties[key] != value:
+                    if key not in self.snap_properties.keys() or self.snap_properties[key] != value:
                         self.snap_properties[key] = value
+    
+    def get_suffix(self, operator):
+        """
+        get the file name suffix for an operator
+        
+        Parameters
+        ----------
+        operator: str
+            the name of the operator
+
+        Returns
+        -------
+        str
+            the file suffix
+        
+        Examples
+        --------
+        >>> from pyroSAR.examine import ExamineSnap
+        >>> config = ExamineSnap()
+        >>> print(config.get_suffix('Terrain-Flattening'))
+        'TF'
+        """
+        if operator in self.__suffices.keys():
+            return self.__suffices[operator]
+        else:
+            return None
 
 
 class ExamineGamma(object):

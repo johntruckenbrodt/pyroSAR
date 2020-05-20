@@ -55,7 +55,7 @@ extensions = [
 ]
 
 # autodoc_default_flags = ['members']
-autosummary_generate = False
+autosummary_generate = []
 
 # explicitly link to documentation of the spatialist version installed alongside pyroSAR,
 # which is defined in setup.py and requirements.txt

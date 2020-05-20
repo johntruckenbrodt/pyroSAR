@@ -1,3 +1,16 @@
+###############################################################################
+# pyroSAR SNAP API tools
+
+# Copyright (c) 2017-2020, the pyroSAR Developers.
+
+# This file is part of the pyroSAR Project. It is subject to the
+# license terms in the LICENSE.txt file found in the top-level
+# directory of this distribution and at
+# https://github.com/johntruckenbrodt/pyroSAR/blob/master/LICENSE.txt.
+# No part of the pyroSAR project, including this file, may be
+# copied, modified, propagated, or distributed except according
+# to the terms contained in the LICENSE.txt file.
+###############################################################################
 import os
 import re
 import shutil
@@ -10,11 +23,11 @@ from osgeo import gdal
 from osgeo.gdalconst import GA_Update
 
 from pyroSAR import identify
-from pyroSAR._dev_config import LOOKUP
 from pyroSAR.examine import ExamineSnap
+from pyroSAR.ancillary import windows_fileprefix
 
 from spatialist.auxil import gdal_translate
-from spatialist.ancillary import finder
+from spatialist.ancillary import finder, run
 
 import logging
 
@@ -47,14 +60,18 @@ def parse_recipe(name):
     return Workflow(absname)
 
 
-def parse_node(name):
+def parse_node(name, use_existing=True):
     """
-    parse a XML node recipe
+    parse an XML node recipe. The XML representation and parameter default values are read from the docstring of an
+    individual node by calling `gpt <node> -h`. The result is then written to an XML text file under
+    `$HOME/.pyroSAR/snap/nodes` which is subsequently read for parsing instead of again calling `gpt`.
     
     Parameters
     ----------
     name: str
         the name of the processing node, e.g. Terrain-Correction
+    use_existing: bool
+        use an existing XML text file or force re-parsing the gpt docstring and overwriting the XML file?
 
     Returns
     -------
@@ -63,15 +80,67 @@ def parse_node(name):
     
     Examples
     --------
-    >>> ml = parse_node('ThermalNoiseRemoval')
-    >>> print(ml.parameters)
+    >>> tnr = parse_node('ThermalNoiseRemoval')
+    >>> print(tnr.parameters)
     {'selectedPolarisations': None, 'removeThermalNoise': 'true', 'reIntroduceThermalNoise': 'false'}
     """
     name = name if name.endswith('.xml') else name + '.xml'
-    absname = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'recipes', 'nodes', name)
-    with open(absname, 'r') as workflow:
-        element = ET.fromstring(workflow.read())
-    return Node(element)
+    operator = os.path.splitext(name)[0]
+    abspath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')
+    os.makedirs(abspath, exist_ok=True)
+    absname = os.path.join(abspath, name)
+    
+    if not os.path.isfile(absname) or not use_existing:
+        gpt = ExamineSnap().gpt
+        
+        cmd = [gpt, operator, '-h']
+        
+        out, err = run(cmd=cmd, void=False)
+        
+        graph = re.search('<graph id.*', out, flags=re.DOTALL).group()
+        tree = ET.fromstring(graph)
+        node = tree.find('node')
+        node.attrib['id'] = operator
+        # add a second source product entry for multi-source nodes
+        # multi-source nodes are those with an entry 'sourceProducts' instead of 'sourceProduct'
+        # exceptions are registered in this list:
+        multisource = ['Back-Geocoding']
+        if operator != 'Read':
+            source = node.find('.//sources')
+            child = source[0]
+            if child.tag == 'sourceProducts' or operator in multisource:
+                child2 = ET.SubElement(source, 'sourceProduct.1', {'refid': 'Read (2)'})
+            child.tag = 'sourceProduct'
+            child.attrib['refid'] = 'Read'
+            child.text = None
+        
+        node = Node(node)
+        
+        # read the default values from the parameter documentation
+        parameters = node.parameters.keys()
+        out += '-P'
+        for parameter in parameters:
+            p1 = r'-P{}.*?-P'.format(parameter)
+            p2 = r"Default\ value\ is '([a-zA-Z0-9 ._\(\)]+)'"
+            r1 = re.search(p1, out, re.S)
+            if r1:
+                sub = r1.group()
+                r2 = re.search(p2, sub)
+                if r2:
+                    value = r2.groups()[0]
+                    node.parameters[parameter] = value
+                    continue
+            node.parameters[parameter] = None
+        
+        with open(absname, 'w') as xml:
+            xml.write(str(node))
+        
+        return node
+    
+    else:
+        with open(absname, 'r') as workflow:
+            element = ET.fromstring(workflow.read())
+        return Node(element)
 
 
 def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=True):
@@ -180,7 +249,7 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
             if os.path.isfile(outname + '.tif'):
                 os.remove(outname + '.tif')
             elif os.path.isdir(outname):
-                shutil.rmtree(outname)
+                shutil.rmtree(outname, onerror=windows_fileprefix)
         raise RuntimeError(submessage.format(out, err, os.path.basename(xmlfile), proc.returncode))
 
 
@@ -281,7 +350,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
             execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
     except RuntimeError as e:
         if cleanup and os.path.exists(outname):
-            shutil.rmtree(outname)
+            shutil.rmtree(outname, onerror=windows_fileprefix)
         raise RuntimeError(str(e) + '\nfailed: {}'.format(xmlfile))
     
     if format == 'ENVI':
@@ -324,7 +393,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
             continue
     ###########################################################################
     if cleanup and os.path.exists(outname):
-        shutil.rmtree(outname)
+        shutil.rmtree(outname, onerror=windows_fileprefix)
     print('done')
 
 
@@ -432,7 +501,7 @@ def split(xmlfile, groups):
             
             if not resetSuccessorSource:
                 newnode.source = reset
-
+        
         # if possible, read the name of the SAR product for parsing names of temporary files
         # this was found necessary for SliceAssembly, which expects the names in a specific format
         products = [x.parameters['file'] for x in new['operator=Read']]
@@ -831,7 +900,8 @@ class Workflow(object):
         for name in names:
             if name not in names_unique:
                 names_unique.append(name)
-        suffix = '_'.join(filter(None, [LOOKUP.snap.suffix[x] for x in names_unique]))
+        config = ExamineSnap()
+        suffix = '_'.join(filter(None, [config.get_suffix(x) for x in names_unique]))
         return suffix
     
     def write(self, outfile):
@@ -848,6 +918,7 @@ class Workflow(object):
 
         """
         outfile = outfile if outfile.endswith('.xml') else outfile + '.xml'
+        log.debug('writing {}'.format(outfile))
         with open(outfile, 'w') as out:
             out.write(self.__str__())
 
@@ -877,10 +948,11 @@ class Node(object):
     
     def __set_source(self, key, value):
         source = self.element.find('.//sources/{}'.format(key))
-        if source is not None:
-            source.attrib['refid'] = value
+        if source is None:
+            child = ET.SubElement(self.element.find('.//sources'),
+                                  key, {'refid': value})
         else:
-            raise RuntimeError('cannot set source on {} node'.format(self.operator))
+            source.attrib['refid'] = value
     
     @property
     def id(self):
@@ -958,6 +1030,8 @@ class Node(object):
         ------
         RuntimeError
         """
+        if isinstance(value, list) and len(value) == 1:
+            value = value[0]
         log.debug('setting the source of node {} to {}'.format(self.id, value))
         if isinstance(value, str):
             if isinstance(self.source, list):

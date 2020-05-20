@@ -1,7 +1,16 @@
-##############################################################
+###############################################################################
 # general utilities for Sentinel-1
-# John Truckenbrodt 2016-2019
-##############################################################
+
+# Copyright (c) 2016-2020, the pyroSAR Developers.
+
+# This file is part of the pyroSAR Project. It is subject to the
+# license terms in the LICENSE.txt file found in the top-level
+# directory of this distribution and at
+# https://github.com/johntruckenbrodt/pyroSAR/blob/master/LICENSE.txt.
+# No part of the pyroSAR project, including this file, may be
+# copied, modified, propagated, or distributed except according
+# to the terms contained in the LICENSE.txt file.
+###############################################################################
 
 import os
 import re
@@ -224,17 +233,12 @@ class OSV(object):
         query['validity_stop__lte'] = date_stop
         print('searching for new {} files'.format(osvtype))
         target = urlQueryParser(self.url, query).replace('%3A', ':')
-        pbar = None
+        print(target)
         while target is not None:
             response = requests.get(target).json()
-            if pbar is None:
-                print(target)
-                pbar = pb.ProgressBar(max_value=response['count']).start()
             remotes = [item['remote_url'] for item in response['results']]
             collection += remotes
-            pbar.update(len(collection))
             target = response['next']
-        pbar.finish()
         if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
             collection = [x for x in collection
                           if self.date(x, 'start') > self.maxdate('POE', 'stop')]
@@ -368,7 +372,7 @@ class OSV(object):
                 best = self.match(sensor=sensor, timestamp=timestamp, osvtype='RES')
             return best
     
-    def retrieve(self, files):
+    def retrieve(self, files, pbar=False):
         """
         download a list of remote files into the respective subdirectories, i.e. POEORB or RESORB
 
@@ -376,6 +380,8 @@ class OSV(object):
         ----------
         files: list
             a list of remotely existing OSV files as returned by method :meth:`catch`
+        pbar: bool
+            add a progressbar?
 
         Returns
         -------
@@ -391,17 +397,23 @@ class OSV(object):
         if len(downloads) == 0:
             return
         print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
-        with pb.ProgressBar(max_value=len(downloads)) as pbar:
-            for remote, local, basename in downloads:
-                infile = requests.get(remote)
-                with zf.ZipFile(file=local,
-                                mode='w',
-                                compression=zf.ZIP_DEFLATED) \
-                        as outfile:
-                    outfile.writestr(zinfo_or_arcname=basename,
-                                     data=infile.content)
-                infile.close()
-                pbar.update(1)
+        if pbar:
+            progress = pb.ProgressBar(max_value=len(downloads))
+        i = 0
+        for remote, local, basename in downloads:
+            infile = requests.get(remote)
+            with zf.ZipFile(file=local,
+                            mode='w',
+                            compression=zf.ZIP_DEFLATED) \
+                    as outfile:
+                outfile.writestr(zinfo_or_arcname=basename,
+                                 data=infile.content)
+            infile.close()
+            if pbar:
+                i += 1
+                progress.update(i)
+        if pbar:
+            progress.finish()
         self.clean_res()
     
     def sortByDate(self, files, datetype='start'):

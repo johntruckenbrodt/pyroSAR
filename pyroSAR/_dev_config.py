@@ -1,4 +1,17 @@
 # -*- coding: utf-8 -*-
+###############################################################################
+# pyroSAR configuration handling
+
+# Copyright (c) 2018-2020, the pyroSAR Developers.
+
+# This file is part of the pyroSAR Project. It is subject to the
+# license terms in the LICENSE.txt file found in the top-level
+# directory of this distribution and at
+# https://github.com/johntruckenbrodt/pyroSAR/blob/master/LICENSE.txt.
+# No part of the pyroSAR project, including this file, may be
+# copied, modified, propagated, or distributed except according
+# to the terms contained in the LICENSE.txt file.
+###############################################################################
 import os
 import sys
 import json
@@ -88,28 +101,7 @@ class Storage(dict):
 # ==============================================================================
 # LOOKUP
 # ==============================================================================
-snap_suffix = {'Apply-Orbit-File': 'Orb',
-               'Calibration': 'Cal',
-               'Cross-Correlation': '',
-               'LinearToFromdB': 'dB',
-               'Multilook': 'ML',
-               'Read': '',
-               'Remove-GRD-Border-Noise': 'bnr',
-               'SAR-Simulation': 'Sim',
-               'SARSim-Terrain-Correction': 'TC',
-               'SliceAssembly': '',
-               'Speckle-Filter': 'SF',
-               'Subset': '',
-               'Terrain-Correction': 'TC',
-               'Terrain-Flattening': 'TF',
-               'ThermalNoiseRemoval': 'tnr',
-               'Write': ''}
-
-snap = Storage(suffix=snap_suffix)
-
-LOOKUP = Storage(snap=snap,
-
-                 attributes={'sensor': 'TEXT',
+LOOKUP = Storage(attributes={'sensor': 'TEXT',
                              'orbit': 'TEXT',
                              'acquisition_mode': 'TEXT',
                              'start': 'TEXT',

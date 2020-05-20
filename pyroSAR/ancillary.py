@@ -1,9 +1,18 @@
-##############################################################
+###############################################################################
 # ancillary routines for software pyroSAR
-# John Truckenbrodt 2014-2019
-##############################################################
+
+# Copyright (c) 2014-2020, the pyroSAR Developers.
+
+# This file is part of the pyroSAR Project. It is subject to the
+# license terms in the LICENSE.txt file found in the top-level
+# directory of this distribution and at
+# https://github.com/johntruckenbrodt/pyroSAR/blob/master/LICENSE.txt.
+# No part of the pyroSAR project, including this file, may be
+# copied, modified, propagated, or distributed except according
+# to the terms contained in the LICENSE.txt file.
+###############################################################################
 """
-This script gathers central functions and classes for general pyroSAR applications.
+This module gathers central functions and classes for general pyroSAR applications.
 """
 import os
 import re
@@ -266,3 +275,29 @@ def hasarg(func, arg):
         does the function take this as argument?
     """
     return arg in getargs(func)
+
+
+def windows_fileprefix(func, path, exc_info):
+    """
+    Helper function for :func:`shutil.rmtree` to exceed Windows' file name length limit of 256 characters.
+    See `here <https://stackoverflow.com/questions/36219317/pathname-too-long-to-open>`_ for details.
+
+    Parameters
+    ----------
+    func: function
+        the function to be executed, i.e. :func:`shutil.rmtree`
+    path: str
+        the path to be deleted
+    exc_info: tuple
+        execution info as returned by :func:`sys.exc_info`
+
+    Returns
+    -------
+
+    Examples
+    --------
+    >>> import shutil
+    >>> from pyroSAR.ancillary import windows_fileprefix
+    >>> shutil.rmtree('/path', onerror=windows_fileprefix)
+    """
+    func(u'\\\\?\\' + path)
