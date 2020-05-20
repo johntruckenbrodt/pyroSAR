@@ -53,11 +53,11 @@ from . import S1
 from .ERS import passdb_query
 from .xml_util import getNamespaces
 
-from spatialist import sqlite_setup, crsConvert, sqlite3, ogr2ogr, Vector, bbox, sqlite_util
+from spatialist import crsConvert, sqlite3, Vector, bbox, sqlite_util
 from spatialist.ancillary import parse_literal, finder
 
 # new imports for postgres
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, select
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine.url import URL
@@ -1710,7 +1710,7 @@ class Archive(object):
         dbapi_conn:
             db engine
         connection_record:
-        
+            not sure what it does but it is needed
         """
         
         dbapi_conn.enable_load_extension(True)
@@ -1924,7 +1924,8 @@ class Archive(object):
         """
         id = scene if isinstance(scene, ID) else identify(scene)
         # ORM query, where scene equals id.scene, return first
-        exists_data = self.Session().query(self.Data.outname_base).filter(self.Data.outname_base == id.outname_base()).first()
+        exists_data = self.Session().query(self.Data.outname_base).filter(
+            self.Data.outname_base == id.outname_base()).first()
         exists_duplicates = self.Session().query(self.Duplicates.outname_base).filter(
             self.Duplicates.outname_base == id.outname_base()).first()
         in_data = False
@@ -1986,34 +1987,34 @@ class Archive(object):
         Parameters
         ----------
         path: str
-            the path of the folder for the shapefile of data to be written
-            this will overwrite other files with the same name.
-            If a folder is given in path (path ends with '/') it is created if not existing.
+            the path of the shapefile to be written.
+            This will overwrite other files with the same name.
+            If a folder is given in path it is created if not existing.
             If the file extension is missing '.shp' is added.
-            
+        table: str
+            the table to write to the shapefile; either 'data' (default) or 'duplicates'
+        
         Returns
         -------
         """
         if table not in ['data', 'duplicates']:
             print('Only data and duplicates can be exported!')
             return
-            
-        # creates folder if not present, adds .shp if not within the path
-        head, tail = os.path.split(path)
-        if not os.path.exists(head):
-            os.mkdir(head)
         
-        root, ext = os.path.splitext(path)
-        if len(ext) == 0:
-            # path = os.path.join(root, '.shp') this will result in a separation between filename and extension
-            path = root + '.shp'
+        # add the .shp extension if missing
+        if not path.endswith('.shp'):
+            path += '.shp'
+        
+        # creates folder if not present, adds .shp if not within the path
+        dirname = os.path.dirname(path)
+        os.makedirs(dirname, exist_ok=True)
         
         # uses spatialist.ogr2ogr to write shps with given path (or db connection)
         if self.driver == 'sqlite':
             # ogr2ogr(self.dbfile, path, options={'format': 'ESRI Shapefile'})
-            subprocess.call(["ogr2ogr", "-f", "ESRI Shapefile", path,
+            subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
                              self.dbfile, table])
-           
+        
         if self.driver == 'postgres':
             db_connection = """PG:host={0} port={1} user={2}
                 dbname={3} password={4} active_schema=public""".format(self.url_dict['host'],
@@ -2022,7 +2023,7 @@ class Archive(object):
                                                                        self.url_dict['database'],
                                                                        self.url_dict['password'])
             # ogr2ogr(db_connection, path, options={'format': 'ESRI Shapefile'})
-            subprocess.call(["ogr2ogr", "-f", "ESRI Shapefile", path,
+            subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
                              db_connection, table])
     
     def filter_scenelist(self, scenelist):
