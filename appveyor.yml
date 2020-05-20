@@ -20,6 +20,11 @@ install:
   # Cygwin's git breaks conda-build. (See https://github.com/conda-forge/conda-smithy-feedstock/pull/2.)
   - rmdir C:\cygwin /s /q
 
+  # install PostGIS
+  - appveyor DownloadFile  https://winnie.postgis.net/download/windows/appveyor/postgis-pg96-binaries-3.0w64gcc48.zip
+  - 7z x postgis-pg96-binaries-3.0w64gcc48.zip
+  - xcopy /e /y /q postgis-pg96-binaries-3.0w64gcc48 C:\Progra~1\PostgreSQL\9.6
+
   # activate conda
   - call %CONDA_INSTALL_LOCN%\Scripts\activate.bat
 
