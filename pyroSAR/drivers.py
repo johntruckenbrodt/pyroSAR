@@ -1,8 +1,15 @@
-##############################################################
+###############################################################################
 # Reading and Organizing system for SAR images
-# John Truckenbrodt, Felix Cremer 2016-2019
-##############################################################
+# Copyright (c) 2016-2020, the pyroSAR Developers.
 
+# This file is part of the pyroSAR Project. It is subject to the
+# license terms in the LICENSE.txt file found in the top-level
+# directory of this distribution and at
+# https://github.com/johntruckenbrodt/pyroSAR/blob/master/LICENSE.txt.
+# No part of the pyroSAR project, including this file, may be
+# copied, modified, propagated, or distributed except according
+# to the terms contained in the LICENSE.txt file.
+###############################################################################
 """
 This is the core module of package pyroSAR.
 It contains the drivers for the different SAR image formats and offers
@@ -46,11 +53,11 @@ from . import S1
 from .ERS import passdb_query
 from .xml_util import getNamespaces
 
-from spatialist import sqlite_setup, crsConvert, sqlite3, ogr2ogr, Vector, bbox, sqlite_util
+from spatialist import crsConvert, sqlite3, Vector, bbox, sqlite_util
 from spatialist.ancillary import parse_literal, finder
 
 # new imports for postgres
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, select
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine.url import URL
@@ -643,7 +650,6 @@ class ID(object):
             else:
                 archive.extractall(directory)
                 archive.close()
-        
         else:
             print('unpacking is only supported for TAR and ZIP archives')
             return
@@ -1296,7 +1302,7 @@ class SAFE(ID):
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def getOSV(self, osvdir=None, osvType='POE'):
+    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False):
         """
         download Orbit State Vector files for the scene
 
@@ -1307,10 +1313,14 @@ class SAFE(ID):
             if no directory is defined, the standard SNAP auxdata location is used
         osvType: {'POE', 'RES'}
             the type of orbit file either 'POE', 'RES' or a list of both
+        returnMatch: bool
+            return the best matching orbit file?
 
         Returns
         -------
-
+        str or None
+            the best matching OSV file if `returnMatch` is True or None otherwise
+        
         See Also
         --------
         :class:`pyroSAR.S1.OSV`
@@ -1332,6 +1342,11 @@ class SAFE(ID):
                 if len(files) == 0:
                     files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after)
                 osv.retrieve(files)
+        
+        if returnMatch:
+            with S1.OSV(osvdir) as osv:
+                match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
+            return match
     
     def quicklook(self, outname, format='kmz'):
         if format != 'kmz':
@@ -1578,7 +1593,7 @@ class Archive(object):
     When providing 'postgres' as driver, a PostgreSQL database will be created at a given host.
     Additional arguments are required.
 
-        >>> from pyroSAR import Archive, identify
+    >>> from pyroSAR import Archive, identify
     >>> from spatialist.ancillary import finder
     >>> dbfile = 'scenelist_db'
     >>> archive_s1 = '/.../sentinel1/GRD'
@@ -1708,7 +1723,7 @@ class Archive(object):
         dbapi_conn:
             db engine
         connection_record:
-        
+            not sure what it does but it is needed
         """
         
         dbapi_conn.enable_load_extension(True)
@@ -1922,7 +1937,8 @@ class Archive(object):
         """
         id = scene if isinstance(scene, ID) else identify(scene)
         # ORM query, where scene equals id.scene, return first
-        exists_data = self.Session().query(self.Data.outname_base).filter(self.Data.outname_base == id.outname_base()).first()
+        exists_data = self.Session().query(self.Data.outname_base).filter(
+            self.Data.outname_base == id.outname_base()).first()
         exists_duplicates = self.Session().query(self.Duplicates.outname_base).filter(
             self.Duplicates.outname_base == id.outname_base()).first()
         in_data = False
@@ -1984,36 +2000,34 @@ class Archive(object):
         Parameters
         ----------
         path: str
-            the path of the folder for the shapefile of data to be written
-            this will overwrite other files with the same name.
-            If a folder is given in path (path ends with '/') it is created if not existing.
+            the path of the shapefile to be written.
+            This will overwrite other files with the same name.
+            If a folder is given in path it is created if not existing.
             If the file extension is missing '.shp' is added.
-        table:
-            the selected table to be exported, can be either 'data' or 'duplicates'.
-            
+        table: str
+            the table to write to the shapefile; either 'data' (default) or 'duplicates'
+        
         Returns
         -------
         """
         if table not in ['data', 'duplicates']:
             print('Only data and duplicates can be exported!')
             return
-            
-        # creates folder if not present, adds .shp if not within the path
-        head, tail = os.path.split(path)
-        if not os.path.exists(head):
-            os.mkdir(head)
         
-        root, ext = os.path.splitext(path)
-        if len(ext) == 0:
-            # path = os.path.join(root, '.shp') this will result in a separation between filename and extension
-            path = root + '.shp'
+        # add the .shp extension if missing
+        if not path.endswith('.shp'):
+            path += '.shp'
+        
+        # creates folder if not present, adds .shp if not within the path
+        dirname = os.path.dirname(path)
+        os.makedirs(dirname, exist_ok=True)
         
         # uses spatialist.ogr2ogr to write shps with given path (or db connection)
         if self.driver == 'sqlite':
             # ogr2ogr(self.dbfile, path, options={'format': 'ESRI Shapefile'})
-            subprocess.call(["ogr2ogr", "-f", "ESRI Shapefile", path,
+            subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
                              self.dbfile, table])
-           
+        
         if self.driver == 'postgres':
             db_connection = """PG:host={0} port={1} user={2}
                 dbname={3} password={4} active_schema=public""".format(self.url_dict['host'],
@@ -2022,7 +2036,7 @@ class Archive(object):
                                                                        self.url_dict['database'],
                                                                        self.url_dict['password'])
             # ogr2ogr(db_connection, path, options={'format': 'ESRI Shapefile'})
-            subprocess.call(["ogr2ogr", "-f", "ESRI Shapefile", path,
+            subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
                              db_connection, table])
     
     def filter_scenelist(self, scenelist):
@@ -2071,7 +2085,7 @@ class Archive(object):
         """
         Return the names of all tables in the database
         
-         Parameters
+        Parameters
         ----------
         return_all: bool
             only gives tables data and duplicates on default.
