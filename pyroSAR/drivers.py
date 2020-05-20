@@ -1550,7 +1550,8 @@ class Archive(object):
     port: int
         required for postgres driver: port number to the database. Default: 5432
     add_table_schemas: :obj:`sqlalchemy.schema` or :obj:`list` of  :obj:`sqlalchemy.schema`
-        Table schemas provided here will be
+        Table schemas provided here will be added to the database. Notice that columns using Geometry must have setting
+        management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
 
 
     Examples
