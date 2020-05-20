@@ -53,7 +53,7 @@ from . import S1
 from .ERS import passdb_query
 from .xml_util import getNamespaces
 
-from spatialist import crsConvert, sqlite3, Vector, bbox, sqlite_util, sqlite_setup
+from spatialist import crsConvert, sqlite3, Vector, bbox, sqlite_util
 from spatialist.ancillary import parse_literal, finder
 
 # new imports for postgres
@@ -1633,8 +1633,8 @@ class Archive(object):
         
         # call to ____load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
-            sqlite_setup(dbfile, ['spatialite'])
-            #listen(self.engine, 'connect', self.__load_spatialite)
+            # sqlite_setup(dbfile, ['spatialite'])
+            listen(self.engine, 'connect', self.__load_spatialite)
         
         # if database is new, (create postgres-db and) enable spatial extension
         if not database_exists(self.engine.url):
@@ -1728,6 +1728,7 @@ class Archive(object):
         """
         
         dbapi_conn.enable_load_extension(True)
+        
         # check which platform and use according mod_spatialite
         if platform.system() == 'Linux':
             for option in ['mod_spatialite', 'mod_spatialite.so']:
