@@ -2084,19 +2084,20 @@ class Archive(object):
         filtered = [x for x, y in zip(scenelist, names) if os.path.basename(y) not in registered + duplicates]
         return filtered
     
-    def get_colnames(self):
+    def get_colnames(self, table='data'):
         """
-        Return the names of the database table.
+        Return the names of a columns of a table.
 
         Returns
         -------
         list
-            the column names of the data table
+            the column names of the chosen table
         """
-        # get colnames from Data object
-        col_names = self.Data.__table__.columns.keys()
-        ret = sorted([self.encode(x) for x in col_names])
-        return ret
+        # get all columns of one table, but shows geometry columns not correctly
+        table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
+        col_names = table_info.c.keys()
+        
+        return sorted([self.encode(x) for x in col_names])
     
     def get_tablenames(self, return_all=False):
         """
