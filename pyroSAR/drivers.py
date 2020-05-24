@@ -2405,7 +2405,7 @@ class Archive(object):
     
     def drop_element(self, scene, table):
         """
-        Drop an entry from the database.
+        Drop an entry from the database. TODO: adapt for more tables
 
         Parameters
         ----------
@@ -2431,7 +2431,7 @@ class Archive(object):
     
     def drop_table(self, table):
         """
-        Drop a table from the database.
+        Drop a table from the database. TODO: adapt for more tables
 
         Parameters
         ----------
@@ -2444,8 +2444,12 @@ class Archive(object):
         if table == 'data':
             # ORM object function
             self.Data.__table__.drop(self.engine)
+            self.Base = automap_base(metadata=self.meta)
+            self.Base.prepare(self.engine, reflect=True)
         elif table == 'duplicates':
             self.Duplicates.__table__.drop(self.engine)
+            self.Base = automap_base(metadata=self.meta)
+            self.Base.prepare(self.engine, reflect=True)
         else:
             raise ValueError("Only tables 'data' and 'duplicates' can be dropped")
     
