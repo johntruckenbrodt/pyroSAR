@@ -1615,7 +1615,7 @@ class Archive(object):
             if len(ext) == 0:
                 dbfile = root + '.db'
         else:
-            self.driver = 'postgres'
+            self.driver = 'postgresql'
             if not self.__check_host(host, port):
                 sys.exit('Server not found!')
         
@@ -1623,7 +1623,7 @@ class Archive(object):
         if self.driver == 'sqlite':
             self.url_dict = {'drivername': self.driver,
                              'database': dbfile}
-        if self.driver == 'postgres':
+        if self.driver == 'postgresql':
             self.url_dict = {'drivername': self.driver,
                              'username': user,
                              'password': password,
@@ -1642,14 +1642,14 @@ class Archive(object):
         
         # if database is new, (create postgres-db and) enable spatial extension
         if not database_exists(self.engine.url):
-            if self.driver == 'postgres':
+            if self.driver == 'postgresql':
                 log.debug('creating new PostgreSQL database')
                 create_database(self.engine.url)
             log.debug('enabling spatial extension for new database')
             self.conn = self.engine.connect()
             if self.driver == 'sqlite':
                 self.conn.execute(select([func.InitSpatialMetaData(1)]))
-            elif self.driver == 'postgres':
+            elif self.driver == 'postgresql':
                 self.conn.execute('CREATE EXTENSION postgis;')
         else:
             self.conn = self.engine.connect()
@@ -2014,7 +2014,7 @@ class Archive(object):
             subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
                              self.dbfile, table])
         
-        if self.driver == 'postgres':
+        if self.driver == 'postgresql':
             db_connection = """PG:host={0} port={1} user={2}
                 dbname={3} password={4} active_schema=public""".format(self.url_dict['host'],
                                                                        self.url_dict['port'],
@@ -2263,7 +2263,7 @@ class Archive(object):
                 vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
                 site_geom = vectorobject.convert2wkt(set3D=False)[0]
                 # postgres has a different way to store geometries
-                if self.driver == 'postgres':
+                if self.driver == 'postgresql':
                     arg_format.append("st_intersects(bbox, 'SRID=4326; {}')".format(
                         site_geom
                     ))
