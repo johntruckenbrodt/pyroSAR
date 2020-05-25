@@ -1640,18 +1640,19 @@ class Archive(object):
             log.debug('loading spatialite extension')
             listen(target=self.engine, identifier='connect', fn=self.__load_spatialite)
         
-        # connect to db (core)
-        self.conn = self.engine.connect()
-        
         # if database is new, (create postgres-db and) enable spatial extension
         if not database_exists(self.engine.url):
+            if self.driver == 'postgres':
+                log.debug('creating new PostgreSQL database')
+                create_database(self.engine.url)
             log.debug('enabling spatial extension for new database')
+            self.conn = self.engine.connect()
             if self.driver == 'sqlite':
                 self.conn.execute(select([func.InitSpatialMetaData(1)]))
-            if self.driver == 'postgres':
-                create_database(self.engine.url)
+            elif self.driver == 'postgres':
                 self.conn.execute('CREATE EXTENSION postgis;')
-        
+        else:
+            self.conn = self.engine.connect()
         # create Session (ORM) and get metadata
         self.Session = sessionmaker(bind=self.engine)
         self.meta = MetaData(self.engine)
