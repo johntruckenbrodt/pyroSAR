@@ -1921,6 +1921,7 @@ class Archive(object):
                     print('reverting temporary database changes...')
                 # roll back changes of the session
                 session.rollback()
+            session.close()
         if pbar is not None:
             pbar.finish()
         # if not test:
