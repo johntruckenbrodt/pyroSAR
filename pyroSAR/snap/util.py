@@ -21,7 +21,7 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR',
-            removeS1ThermalNoise=True, offset=None, allow_RES_OSV=False,
+            removeS1ThermalNoise=True, offset=None, allow_RES_OSV=False, demName='SRTM 1Sec HGT',
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
             basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True,
             gpt_exceptions=None, gpt_args=None, returnWF=False, nodataValueAtSea=True,
@@ -70,8 +70,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         If this fails and RES files are allowed, it will download the RES file.
         The selected OSV type is written to the workflow XML file.
         Processing is aborted if the correction fails (Apply-Orbit-File parameter continueOnFail set to false).
+    demName: str
+        the name of the auto-download DEM. Default is 'SRTM 1Sec HGT'. Is ignored when `externalDEMFile` is not None.
     externalDEMFile: str or None, optional
-        The absolute path to an external DEM file. Default is None.
+        The absolute path to an external DEM file. Default is None. Overrides `demName`.
     externalDEMNoDataValue: int, float or None, optional
         The no data value of the external DEM. If not specified (default) the function will try to read it from the
         specified external DEM.
@@ -506,12 +508,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             raise RuntimeError('specified externalDEMFile does not exist')
         dempar['demName'] = 'External DEM'
     else:
-        # SRTM 1arcsec is only available between -58 and +60 degrees.
-        # If the scene exceeds those latitudes SRTM 3arcsec is selected.
-        if id.getCorners()['ymax'] > 60 or id.getCorners()['ymin'] < -58:
-            dempar['demName'] = 'SRTM 3Sec'
-        else:
-            dempar['demName'] = 'SRTM 1Sec HGT'
+        dempar['demName'] = demName
         dempar['externalDEMFile'] = None
         dempar['externalDEMNoDataValue'] = 0
     
