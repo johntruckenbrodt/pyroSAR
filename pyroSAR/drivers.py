@@ -60,6 +60,7 @@ from spatialist.ancillary import parse_literal, finder
 from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.sql import select, func
 from sqlalchemy.engine.url import URL
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy_utils import database_exists, create_database, drop_database
@@ -68,6 +69,10 @@ import socket
 import time
 import platform
 import subprocess
+
+from ctypes import util
+import logging
+log = logging.getLogger(__name__)
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
              'spacing', 'samples', 'lines', 'orbitNumber_abs', 'orbitNumber_rel', 'cycleNumber', 'frameNumber']
@@ -1610,7 +1615,7 @@ class Archive(object):
             if len(ext) == 0:
                 dbfile = root + '.db'
         else:
-            self.driver = 'postgres'
+            self.driver = 'postgresql'
             if not self.__check_host(host, port):
                 sys.exit('Server not found!')
         
@@ -1618,7 +1623,7 @@ class Archive(object):
         if self.driver == 'sqlite':
             self.url_dict = {'drivername': self.driver,
                              'database': dbfile}
-        if self.driver == 'postgres':
+        if self.driver == 'postgresql':
             self.url_dict = {'drivername': self.driver,
                              'username': user,
                              'password': password,
@@ -1627,22 +1632,28 @@ class Archive(object):
                              'database': dbfile}
         
         # create engine, containing URL and driver
+        log.debug('starting DB engine for {}'.format(URL(**self.url_dict)))
         self.engine = create_engine(URL(**self.url_dict), echo=False)
         
         # call to ____load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
-            listen(self.engine, 'connect', self.__load_spatialite)
+            log.debug('loading spatialite extension')
+            listen(target=self.engine, identifier='connect', fn=self.__load_spatialite)
         
         # if database is new, (create postgres-db and) enable spatial extension
         if not database_exists(self.engine.url):
-            if self.driver == 'sqlite':
-                self.engine.connect().execute('SELECT InitSpatialMetaData()')
-            if self.driver == 'postgres':
+            if self.driver == 'postgresql':
+                log.debug('creating new PostgreSQL database')
                 create_database(self.engine.url)
-                self.engine.connect().execute('CREATE EXTENSION postgis;')
-        
-        # connect to db (core), create Session (ORM) and get metadata
-        self.conn = self.engine.connect()
+            log.debug('enabling spatial extension for new database')
+            self.conn = self.engine.connect()
+            if self.driver == 'sqlite':
+                self.conn.execute(select([func.InitSpatialMetaData(1)]))
+            elif self.driver == 'postgresql':
+                self.conn.execute('CREATE EXTENSION postgis;')
+        else:
+            self.conn = self.engine.connect()
+        # create Session (ORM) and get metadata
         self.Session = sessionmaker(bind=self.engine)
         self.meta = MetaData(self.engine)
         self.custom_fields = custom_fields
@@ -1686,8 +1697,10 @@ class Archive(object):
         
         # create tables if not existing
         if not self.engine.dialect.has_table(self.engine, 'data'):
+            log.debug("creating DB table 'data'")
             self.data_schema.create(self.engine)
         if not self.engine.dialect.has_table(self.engine, 'duplicates'):
+            log.debug("creating DB table 'duplicates'")
             self.duplicates_schema.create(self.engine)
         
         # reflect tables from (by now) existing db, make some variables available within self
@@ -1701,7 +1714,8 @@ class Archive(object):
         sys.stdout.write('\rchecking for missing scenes..done\n')
         sys.stdout.flush()
     
-    def __load_spatialite(self, dbapi_conn, connection_record):
+    @staticmethod
+    def __load_spatialite(dbapi_conn, connection_record):
         """
         loads the spatialite extension for SQLite, not to be used outside the init()
         
@@ -1710,40 +1724,25 @@ class Archive(object):
         dbapi_conn:
             db engine
         connection_record:
-            not sure what it does but it is needed
+            not sure what it does but it is needed by :func:`sqlalchemy.event.listen`
         """
-        
         dbapi_conn.enable_load_extension(True)
         # check which platform and use according mod_spatialite
         if platform.system() == 'Linux':
             for option in ['mod_spatialite', 'mod_spatialite.so']:
                 try:
-                    
                     dbapi_conn.load_extension(option)
-                
                 except sqlite3.OperationalError:
-                    
                     continue
         elif platform.system() == 'Darwin':
             for option in ['mod_spatialite.so']:  # , 'mod_spatialite.dylib']:
                 try:
-                    
                     dbapi_conn.load_extension(option)
-                
                 except sqlite3.OperationalError:
-                    
                     continue
-        
         elif platform.system() == 'Windows':
             sqlite_util.spatialite_setup()
-            for option in ['mod_spatialite.dll', 'mod_spatialite']:
-                try:
-                    
-                    dbapi_conn.load_extension(option)
-                
-                except sqlite3.OperationalError:
-                    
-                    continue
+            dbapi_conn.load_extension('mod_spatialite')
         else:
             dbapi_conn.load_extension('mod_spatialite')
         # else: # will never be reached
@@ -2015,7 +2014,7 @@ class Archive(object):
             subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
                              self.dbfile, table])
         
-        if self.driver == 'postgres':
+        if self.driver == 'postgresql':
             db_connection = """PG:host={0} port={1} user={2}
                 dbname={3} password={4} active_schema=public""".format(self.url_dict['host'],
                                                                        self.url_dict['port'],
@@ -2264,7 +2263,7 @@ class Archive(object):
                 vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
                 site_geom = vectorobject.convert2wkt(set3D=False)[0]
                 # postgres has a different way to store geometries
-                if self.driver == 'postgres':
+                if self.driver == 'postgresql':
                     arg_format.append("st_intersects(bbox, 'SRID=4326; {}')".format(
                         site_geom
                     ))
@@ -2347,8 +2346,10 @@ class Archive(object):
             the number of scenes in (1) the main table and (2) the duplicates table
         """
         # ORM query
-        r1 = self.Session().query(self.Data.outname_base).count()
-        r2 = self.Session().query(self.Duplicates.outname_base).count()
+        session = self.Session()
+        r1 = session.query(self.Data.outname_base).count()
+        r2 = session.query(self.Duplicates.outname_base).count()
+        session.close()
         return r1, r2
     
     def __enter__(self):
@@ -2425,7 +2426,8 @@ class Archive(object):
         drop_database(self.engine.url)
         print('Database dropped')
     
-    def __is_open(self, ip, port):
+    @staticmethod
+    def __is_open(ip, port):
         """
         Checks server connection, from Ben Curtis (github: Fmstrat)
 
@@ -2461,7 +2463,7 @@ class Archive(object):
         ----------
         ip: str
             ip of the server
-        port: str
+        port: str or int
             port of the server
 
         Returns
