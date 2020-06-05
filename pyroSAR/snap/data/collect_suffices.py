@@ -32,6 +32,7 @@ Feel free to contact me if you have ideas on how to improve this!
 def main():
     # some arbitrary directory for the source code
     workdir = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap_code')
+    os.makedirs(workdir, exist_ok=True)
     
     # the name of the Java properties file containing the operator-suffix lookup
     outfile = 'snap.suffices.properties'
@@ -85,7 +86,7 @@ def main():
     print('found {} matching operators'.format(len(collect)))
     
     with open(outfile, 'w') as out:
-        out.write('\n'.join(sorted(collect)))
+        out.write('\n'.join(sorted(collect, key=str.lower)))
 
 
 if __name__ == '__main__':
