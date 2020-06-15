@@ -1620,17 +1620,21 @@ class Archive(object):
         # create dict, with which a URL to the db is created
         if self.driver == 'sqlite':
             self.url_dict = {'drivername': self.driver,
-                             'database': dbfile}
+                             'database': dbfile,
+                             'query': {'charset': 'utf8'},
+                             }
         if self.driver == 'postgres':
             self.url_dict = {'drivername': self.driver,
                              'username': user,
                              'password': password,
                              'host': host,
                              'port': port,
-                             'database': dbfile}
+                             'database': dbfile,
+                             'query': {'charset': 'utf8'},
+                             }
         
         # create engine, containing URL and driver
-        self.engine = create_engine(URL(**self.url_dict), echo=False)
+        self.engine = create_engine(URL(**self.url_dict), encoding="utf8", echo=False)
         
         # call to ____load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
