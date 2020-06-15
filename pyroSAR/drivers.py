@@ -1706,7 +1706,7 @@ class Archive(object):
         sys.stdout.write('\rchecking for missing scenes..done\n')
         sys.stdout.flush()
     
-    def add_tables(self, tables):
+    def add_tables(self, tables, verbose=False):
         """
         Add tables to the database per :class:`sqlalchemy.schema.Table`
         Tables provided here will be added to the database. Notice that columns using Geometry must have setting
@@ -1717,6 +1717,8 @@ class Archive(object):
         tables: :class:`sqlalchemy.schema.Table` or :obj:`list` of :class:`sqlalchemy.schema.Table`
             Tables provided here will be added to the database. Notice that columns using Geometry must have setting
             management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
+        verbose: bool
+            print info
         """
         created = []
         if isinstance(tables, list):
@@ -1731,7 +1733,8 @@ class Archive(object):
             if not self.engine.dialect.has_table(self.engine, str(table)):
                 table.create(self.engine)
                 created.append(str(table))
-        print('Created table(s) {}.'.format(', '.join(created)))
+        if verbose:
+            print('Created table(s) {}.'.format(', '.join(created)))
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
                 
