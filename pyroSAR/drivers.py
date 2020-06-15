@@ -58,6 +58,7 @@ from spatialist.ancillary import parse_literal, finder
 
 # new imports for postgres
 from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String
+from sqlalchemy.sql import select, func
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine.url import URL
@@ -1639,7 +1640,7 @@ class Archive(object):
         # if database is new, (create postgres-db and) enable spatial extension
         if not database_exists(self.engine.url):
             if self.driver == 'sqlite':
-                self.engine.connect().execute('SELECT InitSpatialMetaData()')
+                self.engine.connect().execute(select([func.InitSpatialMetaData(1)]))
             if self.driver == 'postgres':
                 create_database(self.engine.url)
                 self.engine.connect().execute('CREATE EXTENSION postgis;')
@@ -1717,16 +1718,20 @@ class Archive(object):
             Tables provided here will be added to the database. Notice that columns using Geometry must have setting
             management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
         """
+        created = []
         if isinstance(tables, list):
             for table in tables:
                 table.metadata = self.meta
                 if not self.engine.dialect.has_table(self.engine, str(table)):
                     table.create(self.engine)
+                    created.append(str(table))
         else:
             table = tables
             table.metadata = self.meta
             if not self.engine.dialect.has_table(self.engine, str(table)):
                 table.create(self.engine)
+                created.append(str(table))
+        print('Created table(s) {}.'.format(', '.join(created)))
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
                 
