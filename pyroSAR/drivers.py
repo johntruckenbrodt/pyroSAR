@@ -1697,7 +1697,6 @@ class Archive(object):
             self.data_schema.create(self.engine)
         if not self.engine.dialect.has_table(self.engine, 'duplicates'):
             self.duplicates_schema.create(self.engine)
-       
         
         # reflect tables from (by now) existing db, make some variables available within self
         self.Base = automap_base(metadata=self.meta)
@@ -1741,7 +1740,7 @@ class Archive(object):
             print('Created table(s) {}.'.format(', '.join(created)))
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
-                
+    
     def __load_spatialite(self, dbapi_conn, connection_record):
         """
         loads the spatialite extension for SQLite, not to be used outside the init()
@@ -2129,7 +2128,6 @@ class Archive(object):
         """
         all_tables = ['ElementaryGeometries', 'SpatialIndex', 'geometry_columns', 'geometry_columns_auth',
                       'geometry_columns_field_infos', 'geometry_columns_statistics', 'geometry_columns_time',
-                      'idx_data_bbox', 'idx_data_bbox_node', 'idx_data_bbox_parent', 'idx_data_bbox_rowid',
                       'spatial_ref_sys', 'spatial_ref_sys_aux', 'spatialite_history', 'sql_statements_log',
                       'sqlite_sequence', 'views_geometry_columns', 'views_geometry_columns_auth',
                       'views_geometry_columns_field_infos', 'views_geometry_columns_statistics',
@@ -2142,7 +2140,7 @@ class Archive(object):
         else:
             ret = []
             for i in tables:
-                if i not in all_tables:
+                if i not in all_tables and 'idx_' not in i:
                     ret.append(i)
             return ret
     
