@@ -2456,7 +2456,7 @@ class Archive(object):
         """
         if table in self.get_tablenames(return_all=True):
             table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
-            table_info.__table__.drop(self.engine)
+            table_info.drop(self.engine)
             if verbose:
                 print('Table {} dropped from database.'.format(table))
         else:
