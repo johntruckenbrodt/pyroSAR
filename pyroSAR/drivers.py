@@ -2440,29 +2440,29 @@ class Archive(object):
             self.conn.execute(delete_statement)
             print('Entry with id {} was dropped!'.format(scene))
     
-    def drop_table(self, table):
+    def drop_table(self, table, verbose=False):
         """
-        Drop a table from the database. TODO: adapt for more tables
+        Drop a table from the database.
 
         Parameters
         ----------
         table: str
-            either data or duplicates
+            tablename
+        verbose: bool
+            print additional info to console
 
         Returns
         -------
         """
-        if table == 'data':
-            # ORM object function
-            self.Data.__table__.drop(self.engine)
-            self.Base = automap_base(metadata=self.meta)
-            self.Base.prepare(self.engine, reflect=True)
-        elif table == 'duplicates':
-            self.Duplicates.__table__.drop(self.engine)
-            self.Base = automap_base(metadata=self.meta)
-            self.Base.prepare(self.engine, reflect=True)
+        if table in self.get_tablenames(return_all=True):
+            table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
+            table_info.__table__.drop(self.engine)
+            if verbose:
+                print('Table {} dropped from database.'.format(table))
         else:
-            raise ValueError("Only tables 'data' and 'duplicates' can be dropped")
+            raise ValueError("Table {} is not registered in the database!".format(table))
+        self.Base = automap_base(metadata=self.meta)
+        self.Base.prepare(self.engine, reflect=True)
     
     def drop_database(self):
         """
