@@ -41,6 +41,8 @@ def parse_command(command, indent='    '):
     """
     # run the command without passing arguments to just catch its usage description
     command = which(command)
+    if command is None:
+        raise OSError('command does not exist')
     command_base = os.path.basename(command)
     proc = sp.Popen(command, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True)
     out, err = proc.communicate()
@@ -66,7 +68,11 @@ def parse_command(command, indent='    '):
                        'adapt_filt': [('low_snr_thr', 'low_SNR_thr')],
                        'atm_mod2': [('rpt', 'report'),
                                     ('[mode]', '[model_atm]'),
-                                    ('model     atm', 'model_atm atm')],
+                                    ('[model]', '[model_atm]'),
+                                    ('model     atm', 'model_atm atm'),
+                                    ],
+                       'atm_mod_2d': [('xref', 'rref'),
+                                      ('yref', 'azref')],
                        'cc_monitoring': [('...', '<...>')],
                        'comb_interfs': [('combi_out', 'combi_int')],
                        'coord_to_sarpix': [('north/lat', 'north_lat'),
@@ -106,9 +112,15 @@ def parse_command(command, indent='    '):
                        'map_section': [('n1', 'north1'),
                                        ('e1', 'east1'),
                                        ('n2', 'north2'),
-                                       ('e2', 'east2')],
+                                       ('e2', 'east2'),
+                                       ('[coord]', '[coords]')],
                        'mask_class': [('...', '<...>')],
                        'mk_2d_im_geo': [('exponent', 'exp')],
+                       'mk_adf2_2d': [('[alpha_max [', '[alpha_max] ['),
+                                      ('-m MLI_dir', 'mli_dir'),
+                                      ('-s scale', 'scale'),
+                                      ('-e exp', 'exponent'),
+                                      ('-u', 'update')],
                        'mk_base_calc': [('<RSLC_tab>', '<SLC_tab>')],
                        'mk_cpd_all': [('dtab', 'data_tab')],
                        'mk_cpx_ref_2d': [('diff_tab', 'cpx_tab')],
@@ -136,7 +148,8 @@ def parse_command(command, indent='    '):
                        'mosaic': [('<..>', '<...>'),
                                   ('DEM_parout', 'DEM_par_out')],
                        'multi_class_mapping': [('...', '<...>')],
-                       'multi_look_geo': [('geo_SLC', 'SLC')],
+                       'multi_look_geo': [('geo_SLC', 'SLC'),
+                                          ('SLC/MLI', ('SLC_MLI'))],
                        'multi_look_MLI': [('MLI in_par', 'MLI_in_par')],
                        'offset_fit': [('interact_flag', 'interact_mode')],
                        'offset_plot_az': [('rmin', 'r_min'),
@@ -156,6 +169,7 @@ def parse_command(command, indent='    '):
                                           ('SLC/MLI_par', 'SLC_MLI_par'),
                                           ('SLC/MLI_out', 'SLC_MLI_out')],
                        'par_UAVSAR_geo': [('SLC/MLI_par', 'SLC_MLI_par')],
+                       'phase_sim': [('sim       (', 'sim_unw   (')],
                        'product': [('wgt_flg', 'wgt_flag')],
                        'radcal_MLI': [('MLI_PAR', 'MLI_par')],
                        'radcal_PRI': [('GRD_PAR', 'GRD_par'),
@@ -182,6 +196,8 @@ def parse_command(command, indent='    '):
                        'restore_float': [('input file', 'data_in'),
                                          ('output file', 'data_out'),
                                          ('interpolation_limit', 'interp_limit')],
+                       'S1_coreg_TOPS_no_refinement': [('RLK', 'rlks'),
+                                                       ('AZLK', 'azlks')],
                        'S1_OPOD_vec': [('SLC_PAR', 'SLC_par')],
                        'single_class_mapping': [('>...', '> <...>')],
                        'ScanSAR_burst_cc_ad': [('bx', 'box_min'),
@@ -194,6 +210,7 @@ def parse_command(command, indent='    '):
                                          ('blksz', 'blk_size')],
                        'SLC_intf': [('SLC1s_par', 'SLC-1s_par'),
                                     ('SLC2Rs_par', 'SLC-2Rs_par')],
+                       'SLC_intf_geo2': [('cc        (', 'CC        (')],
                        'SLC_interp_map': [('coffs2_sm', 'coffs_sm')],
                        'srtm_mosaic': [('<lon>', '<lon2>')],
                        'SSI_INT_S1': [('<SLC2> <par2>', '<SLC_tab2>')],
@@ -245,7 +262,8 @@ def parse_command(command, indent='    '):
     ###########################################
     # add parameters missing in the usage argument lists
     
-    appends = {'SLC_interp_S1_TOPS': ['mode', 'order'],
+    appends = {'mk_adf2_2d': ['cc_min', 'cc_max', 'mli_dir', 'scale', 'exponent', 'update'],
+               'SLC_interp_S1_TOPS': ['mode', 'order'],
                'SLC_interp_map': ['mode', 'order']}
     
     if command_base in appends.keys():
@@ -364,6 +382,17 @@ def parse_command(command, indent='    '):
     if command_base == '2PASS_INT':
         fun_def = fun_def.replace(command_base, 'TWO_PASS_INT')
     ######################################################################################
+    # special handling of flag args
+    flag_args = {'mk_adf2_2d': [('mli_dir', '-m', None),
+                                ('scale', '-s', None),
+                                ('exponent', '-e', None),
+                                ('update', '-u', False)]}
+    
+    # replace arg default like arg='-' with arg=None or arg=False
+    if command_base in flag_args:
+        for arg in flag_args[command_base]:
+            fun_def = re.sub('{}=\'-\''.format(arg[0]), '{0}={1}'.format(arg[0], arg[2]), fun_def)
+    ######################################################################################
     # create the process call argument string
     
     # a '-' in the parameter name is replaced with '_'
@@ -390,11 +419,26 @@ def parse_command(command, indent='    '):
         .replace('-', '_') \
         .replace(', def,', ', drm,')
     
+    # create the process argument list string
+    cmd_str = "cmd = ['{command}', {args_cmd}]".format(command=command, args_cmd=argstr_process)
+    
+    # special handling of optional flag args
+    # the args are removed from the cmd list and flags (plus values) added if not None or True
+    # e.g. '-u' if update=True or '-m /path' if mli_dir='/path'
+    if command_base in flag_args:
+        args = []
+        for arg in flag_args[command_base]:
+            cmd_str = cmd_str.replace(', {}'.format(arg[0]), '')
+            args.append(arg[0])
+            cmd_str += "\nif {a} is not {d}:\n{i}cmd.append('{k}')" \
+                .format(i=indent, d=arg[2], k=arg[1], a=arg[0])
+            if arg[2] is None:
+                cmd_str += '\n{i}cmd.append({a})'.format(i=indent, a=arg[0])
+    
     # create the process call string
-    fun_proc = "process(['{command}', {args_cmd}], logpath=logpath, outdir=outdir{inlist}, shellscript=shellscript)" \
-        .format(command=command,
-                args_cmd=argstr_process,
-                inlist=', inlist=inlist' if command_base in inlist else '')
+    proc_str = "process(cmd, logpath=logpath, outdir=outdir{inlist}, shellscript=shellscript)" \
+        .format(inlist=', inlist=inlist' if command_base in inlist else '')
+    fun_proc = '{0}\n{1}'.format(cmd_str, proc_str)
     
     if command_base == 'lin_comb_cpx':
         fun_proc = fun_proc.replace('factors_r, factors_i', 'zip(factors_r, factors_i)')
