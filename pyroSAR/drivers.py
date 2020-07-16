@@ -2443,7 +2443,7 @@ class Archive(object):
     def drop_table(self, table, verbose=False):
         """
         Drop a table from the database.
-
+        
         Parameters
         ----------
         table: str
@@ -2455,8 +2455,15 @@ class Archive(object):
         -------
         """
         if table in self.get_tablenames(return_all=True):
-            table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
-            table_info.drop(self.engine)
+            # this removes the idx tables and entries in geometry_columns for sqlite databases
+            if self.driver == 'sqlite':
+                tab_with_geom = [rowproxy[0] for rowproxy
+                                 in self.conn.execute("SELECT f_table_name FROM geometry_columns")]
+                if table in tab_with_geom:
+                    self.conn.execute("SELECT DropGeoTable('" + table + "')")
+            else:
+                table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
+                table_info.drop(self.engine)
             if verbose:
                 print('Table {} dropped from database.'.format(table))
         else:
