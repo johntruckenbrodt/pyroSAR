@@ -369,3 +369,13 @@ Auxiliary Data Handling
 general
 -------
 - bug fixes, new automated tests, documentation improvements
+
+0.11.1 / 2020-07-17
+===================
+
+- bug fixes
+
+GAMMA API
+---------
+
+- :ref:`Command API <gamma-command-api>` compatibility with GAMMA version 20200713
