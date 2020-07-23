@@ -1830,7 +1830,7 @@ class Archive(object):
         """
         if verbose:
             length = len(scene_in) if isinstance(scene_in, list) else 1
-            print('...got {0} scene{1}'.format(length, 's' if len(scene_in) > 1 else ''))
+            print('...got {0} scene{1}'.format(length, 's' if length > 1 else ''))
         if isinstance(scene_in, (ID, str)):
             scene_in = [scene_in]
         if not isinstance(scene_in, list):
