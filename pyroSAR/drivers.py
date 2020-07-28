@@ -941,16 +941,22 @@ class CEOS_PSR(ID):
         p0 = 0
         p1 = struct.unpack('>i', led[8:12])[0]
         fileDescriptor = led[p0:p1]
+        # dataSetSummary
         dss_n = int(fileDescriptor[180:186])
         dss_l = int(fileDescriptor[186:192])
+        # mapProjectionData
         mpd_n = int(fileDescriptor[192:198])
         mpd_l = int(fileDescriptor[198:204])
+        # platformPositionData
         ppd_n = int(fileDescriptor[204:210])
         ppd_l = int(fileDescriptor[210:216])
+        # attitudeData
         adr_n = int(fileDescriptor[216:222])
         adr_l = int(fileDescriptor[222:228])
+        # radiometricData
         rdr_n = int(fileDescriptor[228:234])
         rdr_l = int(fileDescriptor[234:240])
+        # dataQualitySummary
         dqs_n = int(fileDescriptor[252:258])
         dqs_l = int(fileDescriptor[258:264])
         meta['sensor'] = {'AL1': 'PSR1', 'AL2': 'PSR2'}[fileDescriptor[48:51].decode('utf-8')]
@@ -1056,10 +1062,20 @@ class CEOS_PSR(ID):
         
         scene_id = dataSetSummary[20:52].decode('ascii')
         
-        pattern = r'(?P<sat_id>[A-Z0-9]{5})' \
-                  r'(?P<orbitNumber>[0-9]{5})' \
-                  r'(?P<frameNumber>[0-9]{4})-' \
-                  r'(?P<obs_day>[0-9]{6})[ ]{11}'
+        if meta['sensor'] == 'PSR1':
+            pattern = r'(?P<sat_id>[A-Z]{2})' \
+                      r'(?P<sensor_id>[A-Z]{3})' \
+                      r'(?P<sensor_id_sub>[A-Z]{1})' \
+                      r'(?P<orbitNumber>[0-9]{5})' \
+                      r'(?P<frameNumber>[0-9]{4})'
+        elif meta['sensor'] == 'PSR2':
+            pattern = r'(?P<sat_id>[A-Z0-9]{5})' \
+                      r'(?P<orbitNumber>[0-9]{5})' \
+                      r'(?P<frameNumber>[0-9]{4})-' \
+                      r'(?P<obs_day>[0-9]{6})[ ]{11}'
+        else:
+            raise ValueError('sensor must be either PSR1 or PSR2; is: {}'.format(meta['sensor']))
+        
         match = re.match(re.compile(pattern), scene_id)
         
         orbitsPerCycle = {'PSR1': 671, 'PSR2': 207}[meta['sensor']]
