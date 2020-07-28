@@ -26,6 +26,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True,
             gpt_exceptions=None, gpt_args=None, returnWF=False, nodataValueAtSea=True,
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
+            alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
             speckleFilter=False, refarea='gamma0'):
     """
     wrapper function for geocoding SAR images using ESA SNAP
@@ -133,6 +134,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - 'beta0'
          - 'gamma0'
          - 'sigma0'
+    alignToStandardGrid: bool
+        align all processed images to a common grid?
+    standardGridOriginX: int or float
+        the x origin value for grid alignment
+    standardGridOriginY: int or float
+        the y origin value for grid alignment
     
     Returns
     -------
@@ -332,7 +339,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         last = sf.id
     ############################################
     # configuration of node sequence for specific geocoding approaches
-    # print('-- configuring geocoding approach Nodes')
+    
     if geocoding_type == 'Range-Doppler':
         tc = parse_node('Terrain-Correction')
         workflow.insert_node(tc, before=last)
@@ -349,6 +356,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     else:
         raise RuntimeError('geocode_type not recognized')
     
+    tc.parameters['alignToStandardGrid'] = alignToStandardGrid
+    tc.parameters['standardGridOriginX'] = standardGridOriginX
+    tc.parameters['standardGridOriginY'] = standardGridOriginY
     ############################################
     # Multilook node configuration
     
