@@ -806,9 +806,11 @@ class CEOS_PSR(ID):
         * PSR2
 
     PALSAR-1:
-        Reference:
-            NEB-070062B: ALOS/PALSAR Level 1.1/1.5 product Format description
-            (`JAXA 2009 <https://www.eorc.jaxa.jp/ALOS/en/doc/fdata/PALSAR_x_Format_EL.pdf>`_)
+        References:
+            * NEB-01006: ALOS/PALSAR Level 1 Product Format Description
+              (`JAXA 2006 <https://www.eorc.jaxa.jp/ALOS/en/doc/fdata/PALSAR_L10_J_ENa.zip>`_)
+            * NEB-070062B: ALOS/PALSAR Level 1.1/1.5 Product Format Description
+              (`JAXA 2009 <https://www.eorc.jaxa.jp/ALOS/en/doc/fdata/PALSAR_x_Format_EL.pdf>`_)
         Products / processing levels:
             * 1.0
             * 1.1
@@ -1085,27 +1087,41 @@ class CEOS_PSR(ID):
         meta['cycleNumber'] = meta['orbitNumber_abs'] // orbitsPerCycle + 1
         meta['frameNumber'] = int(match.group('frameNumber'))
         
-        meta['lines'] = int(dataSetSummary[324:332]) * 2
-        meta['samples'] = int(dataSetSummary[332:340]) * 2
+        try:
+            meta['lines'] = int(dataSetSummary[324:332]) * 2
+        except ValueError:
+            meta['lines'] = None
+        try:
+            meta['samples'] = int(dataSetSummary[332:340]) * 2
+        except ValueError:
+            meta['samples'] = None
         meta['incidence'] = float(dataSetSummary[484:492])
         meta['wavelength'] = float(dataSetSummary[500:516]) * 100  # in cm
         meta['proc_facility'] = dataSetSummary[1046:1062].strip()
         meta['proc_system'] = dataSetSummary[1062:1070].strip()
         meta['proc_version'] = dataSetSummary[1070:1078].strip()
         
-        azlks = float(dataSetSummary[1174:1190])
-        rlks = float(dataSetSummary[1190:1206])
-        meta['looks'] = (rlks, azlks)
+        try:
+            azlks = float(dataSetSummary[1174:1190])
+            rlks = float(dataSetSummary[1190:1206])
+            meta['looks'] = (rlks, azlks)
+        except ValueError:
+            meta['looks'] = (None, None)
         
         meta['orbit'] = dataSetSummary[1534:1542].decode('utf-8').strip()[0]
         
-        spacing_azimuth = float(dataSetSummary[1686:1702])
-        spacing_range = float(dataSetSummary[1702:1718])
-        meta['spacing'] = (spacing_range, spacing_azimuth)
+        try:
+            spacing_azimuth = float(dataSetSummary[1686:1702])
+            spacing_range = float(dataSetSummary[1702:1718])
+            meta['spacing'] = (spacing_range, spacing_azimuth)
+        except ValueError:
+            meta['spacing'] = (None, None)
         ################################################################################################################
         # read radiometric data record
-        
-        meta['k_dB'] = float(radiometricData[20:36])
+        if len(radiometricData) > 0:
+            meta['k_dB'] = float(radiometricData[20:36])
+        else:
+            meta['k_dB'] = None
         ################################################################################################################
         # additional notes
         
