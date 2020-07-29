@@ -1674,7 +1674,7 @@ class Archive(object):
         # call to ____load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
             log.debug('loading spatialite extension')
-            listen(target=self.engine, identifier='connect', fn=self.__load_spatialite)
+            listen(self.engine, 'connect', self.__load_spatialite)
         
         # if database is new, (create postgres-db and) enable spatial extension
         if not database_exists(self.engine.url):
