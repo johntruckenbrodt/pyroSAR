@@ -1,0 +1,15 @@
+name: ps_test
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - progressbar2
+  - pathos>=0.2
+  - numpy
+  - spatialist==0.5
+  - pyyaml
+  - requests
+  - psycopg2
+  - sqlalchemy
+  - sqlalchemy-utils
+  - geoalchemy2

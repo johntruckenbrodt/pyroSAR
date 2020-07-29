@@ -2,8 +2,25 @@
 Installation
 ############
 
-First we need to install pip. On Windows pip is installed together with Anaconda, on Linux you can easily install it
-via command line:
+conda
+=====
+
+Starting with version 0.11, pyroSAR is also distributed via conda-forge and can easily be installed with
+
+::
+
+    conda install --channel conda-forge pyroSAR
+
+This is by far the easiest way to work with pyroSAR on any operating system.
+
+pip
+===
+
+Installation with pip is also supported and offers the advantage to install intermediate development stages directly
+from the GitHub repository. Mind however that several dependencies like GDAL cannot fully be installed this way.
+See further below for detailed Linux dependency installation instructions.
+
+Installation of pip (Linux):
 
 ::
 
@@ -30,9 +47,7 @@ Once everything is set up, pyroSAR is ready to be installed:
 
 Dependencies
 ============
-If you are using Windows, the easiest way to work with pyroSAR and Python in general is by using
-`Anaconda <https://www.anaconda.com/download/>`_. It comes with all basic requirements of pyroSAR.
-The more specific instructions below are intended for Linux users.
+The more specific instructions below are intended for Linux users who like to work outside of the Anaconda environment.
 
 GDAL
 ----

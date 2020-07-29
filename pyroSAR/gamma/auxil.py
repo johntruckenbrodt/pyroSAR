@@ -325,7 +325,8 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
             sh.write(line + '\n\n')
     
     # create an environment containing the locations of all GAMMA submodules to be passed ot the subprocess calls
-    gammaenv = {'GAMMA_HOME': ExamineGamma().home}
+    gammaenv = os.environ.copy()
+    gammaenv['GAMMA_HOME'] = ExamineGamma().home
     for module in ['DIFF', 'DISP', 'IPTA', 'ISP', 'LAT']:
         loc = os.path.join(gammaenv['GAMMA_HOME'], module)
         if os.path.isdir(loc):

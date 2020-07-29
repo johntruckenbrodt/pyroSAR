@@ -12,6 +12,7 @@ env:
     - TESTDATA_DIR=$HOME/testdata
     - PGUSER=postgres
     - PGPORT=5432
+    - PGPASSWORD=
 
 addons:
   postgresql: 9.6

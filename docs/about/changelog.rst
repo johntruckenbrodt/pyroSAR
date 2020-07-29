@@ -317,3 +317,65 @@ GAMMA API
 ---------
 
 - :ref:`Command API <gamma-command-api>` compatibility with GAMMA version 20191203
+
+0.11 / 2020-05-29
+=================
+
+Drivers
+-------
+
+- :class:`pyroSAR.drivers.Archive`: completely restructured to use the `SQLAlchemy <https://www.sqlalchemy.org/>`_
+  Object Relational Mapper (ORM). This makes it possible to switch between SQLite+Spatialite and PostgreSQL+PostGIS
+  database backends.
+
+- :meth:`pyroSAR.drivers.SAFE.getOSV`: new argument `returnMatch` to also return the name of an OSV file instead of just
+  downloading it.
+
+SNAP API
+--------
+
+- arbitrary nodes can now be parsed. Before, only a small selection of nodes (those used by function
+  :func:`~pyroSAR.snap.util.geocode`) were available. Now, any node and its default parametrization can be parsed to XML
+  from the GPT documentation by internally calling e.g.:
+
+    ::
+
+        gpt Terrain-Flattening -h
+
+  The parsed XML representation is saved for faster future reuse. See function :func:`~pyroSAR.snap.auxil.parse_node`
+  for details. In all cases the standard SNAP file suffix is used for output products, e.g. `_TF` for
+  `Terrain-Flattening`.
+
+- multi-source nodes like `SliceAssembly` now take any number of sources, not just two.
+  See class :class:`~pyroSAR.snap.auxil.Node`.
+
+- function :func:`pyroSAR.snap.util.geocode`:
+
+  + new argument `nodataValueAtSea` to decide whether sea areas are masked out.
+    Depends on the quality of the sea mask in the input DEM.
+  + automatically download required Sentinel-1 Orbit State Vector (OSV) files.
+  + new argument `allow_RES_OSV` to decide whether to allow usage of the less accurate Sentinel-1 RES OSV files in
+    case the POE file is not available yet.
+  + new argument `demName` to choose the type of the auto-downloaded DEM.
+
+Auxiliary Data Handling
+-----------------------
+
+- class :class:`pyroSAR.S1.OSV`:
+
+  + removed progressbar from method :meth:`~pyroSAR.S1.OSV.catch` and made it optional in method
+    :meth:`~pyroSAR.S1.OSV.retrieve` with new argument `pbar`
+
+general
+-------
+- bug fixes, new automated tests, documentation improvements
+
+0.11.1 / 2020-07-17
+===================
+
+- bug fixes
+
+GAMMA API
+---------
+
+- :ref:`Command API <gamma-command-api>` compatibility with GAMMA version 20200713
