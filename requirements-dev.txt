@@ -1,7 +1,7 @@
 progressbar2
 pathos>=0.2
 numpy
-spatialist
+spatialist==0.5
 pyyaml
 requests
 psycopg2
