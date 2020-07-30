@@ -2123,7 +2123,7 @@ class Archive(object):
     
     def get_colnames(self, table='data'):
         """
-        Return the names of a columns of a table.
+        Return the names of all columns of a table.
 
         Returns
         -------
@@ -2441,31 +2441,21 @@ class Archive(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
     
-    def drop_element(self, scene, table):
+    def drop_element(self, scene):
         """
-        Drop an entry from the database. TODO: adapt for more tables
+        Drop a scene from the data table.
 
         Parameters
         ----------
         scene: ID
             a SAR scene
-        table: str
-            either data or duplicates
 
         Returns
         -------
         """
-        if table == 'data':
-            # using schema to create SQL syntax
-            delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
-        elif table == 'duplicates':
-            delete_statement = self.duplicates_schema.delete().where(self.duplicates_schema.c.scene == scene)
-        else:
-            raise ValueError("Only entries from table 'data' or 'duplicates' can be dropped")
-        if delete_statement:
-            # core SQL execution
-            self.conn.execute(delete_statement)
-            print('Entry with id {} was dropped!'.format(scene))
+        delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
+        self.conn.execute(delete_statement)
+        print('Entry with id {} was dropped!'.format(scene))
     
     def drop_table(self, table, verbose=False):
         """
