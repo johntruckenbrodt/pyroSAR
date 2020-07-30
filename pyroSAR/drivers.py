@@ -1783,7 +1783,7 @@ class Archive(object):
         self.Base.prepare(self.engine, reflect=True)
     
     @staticmethod
-    def __load_spatialite(self, dbapi_conn, connection_record):
+    def __load_spatialite(dbapi_conn, connection_record):
         """
         loads the spatialite extension for SQLite, not to be used outside the init()
         
