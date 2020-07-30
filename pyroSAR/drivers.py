@@ -1664,7 +1664,6 @@ class Archive(object):
                              'host': host,
                              'port': port,
                              'database': dbfile,
-                             'query': {'charset': 'utf8'},
                              }
         
         # create engine, containing URL and driver
