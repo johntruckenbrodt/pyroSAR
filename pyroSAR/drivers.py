@@ -1898,47 +1898,42 @@ class Archive(object):
         if verbose:
             print('inserting scenes into temporary database...')
             pbar = pb.ProgressBar(max_value=len(scenes))
-        
+        basenames = []
+        insertions = []
+        session = self.Session()
         for i, id in enumerate(scenes):
-            # Create Session object for each iteration,
-            # else is_registered cannot account for duplicates within the current scenelist
-            session = self.Session()
-            insert_string = self.__prepare_insertion(id)
-            if not self.is_registered(id):
-                # add inserts to session
-                session.add(insert_string)
+            basename = id.outname_base()
+            if not self.is_registered(id) and basename not in basenames:
+                insertion = self.__prepare_insertion(id)
+                insertions.append(insertion)
                 counter_regulars += 1
             elif not self.__is_registered_in_duplicates(id):
-                # add inserts to duplicates to session
-                session.add(self.Duplicates(outname_base=id.outname_base(), scene=id.scene))
+                insertion = self.Duplicates(outname_base=basename, scene=id.scene)
+                insertions.append(insertion)
                 counter_duplicates += 1
             else:
                 list_duplicates.append(id.outname_base())
             
             if pbar is not None:
                 pbar.update(i + 1)
-            if not test:
-                if verbose:
-                    print('committing transactions to permanent database...')
-                # commit changes of the session
-                session.commit()
-            else:
-                if verbose:
-                    print('reverting temporary database changes...')
-                # roll back changes of the session
-                session.rollback()
+            basenames.append(basename)
+        
         if pbar is not None:
             pbar.finish()
-        # if not test:
-        #     if verbose:
-        #         print('committing transactions to permanent database...')
-        #     # commit changes of the session
-        #     session.commit()
-        # else:
-        #     if verbose:
-        #         print('reverting temporary database changes...')
-        #     # roll back changes of the session
-        #     session.rollback()
+        
+        session.add_all(insertions)
+        
+        if not test:
+            if verbose:
+                print('committing transactions to permanent database...')
+            # commit changes of the session
+            session.commit()
+        else:
+            if verbose:
+                print('rolling back temporary database changes...')
+            # roll back changes of the session
+            session.rollback()
+        
         print('{} scenes registered regularly'.format(counter_regulars))
         print('{} duplicates registered'.format(counter_duplicates))
         if len(list_duplicates) != 0:
