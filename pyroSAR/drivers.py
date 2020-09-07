@@ -2419,7 +2419,7 @@ class Archive(object):
             delete_statement = self.duplicates_schema.delete().where(self.duplicates_schema.c.scene == scene)
         else:
             raise ValueError("Only entries from table 'data' or 'duplicates' can be dropped")
-        if delete_statement:
+        if delete_statement is not None:
             # core SQL execution
             self.conn.execute(delete_statement)
             print('Entry with id {} was dropped!'.format(scene))
