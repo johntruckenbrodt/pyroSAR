@@ -490,7 +490,7 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
     .. figure:: figures/S1_bnr.png
         :scale: 30%
 
-        Demonstration of the border nose removal for a vertical left image border. The area under the respective lines
+        Demonstration of the border noise removal for a vertical left image border. The area under the respective lines
         covers pixels considered valid, everything above will be masked out. The blue line is the result of the noise
         removal as recommended by ESA, in which a lot of noise is still present. The red line is the over-simplified
         result using the Visvalingam-Whyatt method of poly-line vertex reduction. The green line is the final result
