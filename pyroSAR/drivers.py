@@ -72,6 +72,7 @@ import subprocess
 
 from ctypes import util
 import logging
+
 log = logging.getLogger(__name__)
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
@@ -1586,6 +1587,8 @@ class Archive(object):
         required for postgres driver: host where the database is hosted. Default: 'localhost'
     port: int
         required for postgres driver: port number to the database. Default: 5432
+    cleanup: bool
+        check whether all registered scenes exist and remove missing entries?
 
 
     Examples
@@ -1638,7 +1641,7 @@ class Archive(object):
     """
     
     def __init__(self, dbfile, custom_fields=None, postgres=False, user='postgres',
-                 password='1234', host='localhost', port=5432):
+                 password='1234', host='localhost', port=5432, cleanup=True):
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
@@ -1741,10 +1744,12 @@ class Archive(object):
         self.Data = self.Base.classes.data
         self.Duplicates = self.Base.classes.duplicates
         self.dbfile = dbfile
-        sys.stdout.write('\rchecking for missing scenes..')
-        self.cleanup()
-        sys.stdout.write('\rchecking for missing scenes..done\n')
-        sys.stdout.flush()
+        
+        if cleanup:
+            sys.stdout.write('\rchecking for missing scenes..')
+            self.cleanup()
+            sys.stdout.write('\rchecking for missing scenes..done\n')
+            sys.stdout.flush()
     
     @staticmethod
     def __load_spatialite(dbapi_conn, connection_record):
