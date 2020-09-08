@@ -438,7 +438,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=1,
             func_interp=2, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
             cleanup=True, normalization_method=2, export_extra=None, basename_extensions=None,
-            removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR'):
+            removeS1BorderNoise=True, removeS1BorderNoiseMethod='gamma'):
     """
     general function for geocoding SAR images with GAMMA
     
@@ -496,20 +496,21 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         the topographic normalization approach to be used
          - 1: first geocoding, then terrain flattening
          - 2: first terrain flattening, then geocoding; see `Small 2011 <https://doi.org/10.1109/Tgrs.2011.2120616>`_
-    export_extra: list or None
+    export_extra: list of str or None
         a list of image file IDs to be exported to outdir
          - format is GeoTiff if the file is geocoded and ENVI otherwise. Non-geocoded images can be converted via Gamma
            command data2tiff yet the output was found impossible to read with GIS software
          - scaling of SAR image products is applied as defined by parameter `scaling`
          - see Notes for ID options
-    basename_extensions: list of str
+    basename_extensions: list of str or None
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
-    removeS1BorderNoise: bool, optional
+    removeS1BorderNoise: bool
         Enables removal of S1 GRD border noise (default).
     removeS1BorderNoiseMethod: str
         the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
+         - 'gamma': the GAMMA implementation of https://doi.org/10.1109/jstars.2017.2787650
     
     Returns
     -------
@@ -622,13 +623,16 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if not os.path.isdir(path_log):
         os.makedirs(path_log)
     
-    if scene.sensor in ['S1A', 'S1B'] and removeS1BorderNoise:
+    if scene.sensor in ['S1A', 'S1B'] and removeS1BorderNoise and removeS1BorderNoiseMethod != 'gamma':
         print('removing border noise..')
         scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
     
     print('converting scene to GAMMA format..')
+    if removeS1BorderNoise and removeS1BorderNoiseMethod != 'gamma':
+        removeS1BorderNoise = False
     convert2gamma(scene, scene.scene, logpath=path_log, outdir=scene.scene,
-                  basename_extensions=basename_extensions, shellscript=shellscript)
+                  basename_extensions=basename_extensions, shellscript=shellscript,
+                  S1_bnr=removeS1BorderNoise)
     
     if scene.sensor in ['S1A', 'S1B']:
         print('updating orbit state vectors..')
