@@ -495,7 +495,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     normalization_method: {1, 2}
         the topographic normalization approach to be used
          - 1: first geocoding, then terrain flattening
-         - 2: first terrain flattening, then geocoding; see `Small 2011 <https://doi.org/10.1109/Tgrs.2011.2120616>`_
+         - 2: first terrain flattening, then geocoding; see :cite:`Small2011`
     export_extra: list of str or None
         a list of image file IDs to be exported to outdir
          - format is GeoTiff if the file is geocoded and ENVI otherwise. Non-geocoded images can be converted via Gamma
@@ -510,7 +510,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
-         - 'gamma': the GAMMA implementation of https://doi.org/10.1109/jstars.2017.2787650
+         - 'gamma': the GAMMA implementation of :cite:`Ali2018`
     
     Returns
     -------
@@ -572,6 +572,11 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         
         Workflow diagram for function geocode using normalization method 2 for processing a Sentinel-1 Ground Range
         Detected (GRD) scene to radiometrically terrain corrected (RTC) backscatter.
+    
+    References
+    ----------
+    .. bibliography:: references.bib
+        :style: plain
     """
     if normalization_method == 2 and func_interp != 2:
         raise RuntimeError('parameter func_interp must be set to 2 if normalization_method is set to 2; '
