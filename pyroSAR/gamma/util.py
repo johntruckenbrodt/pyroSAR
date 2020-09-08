@@ -1,7 +1,7 @@
 ###############################################################################
 # universal core routines for processing SAR images with GAMMA
 
-# Copyright (c) 2014-2019, the pyroSAR Developers.
+# Copyright (c) 2014-2020, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
