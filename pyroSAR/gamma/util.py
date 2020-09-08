@@ -110,7 +110,7 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
         raise NotImplementedError('calibration for class {} is not implemented yet'.format(type(id).__name__))
 
 
-def convert2gamma(id, directory, S1_noiseremoval=True, basename_extensions=None,
+def convert2gamma(id, directory, S1_tnr=True, basename_extensions=None,
                   logpath=None, outdir=None, shellscript=None):
     """
     general function for converting SAR images to GAMMA format
@@ -121,8 +121,8 @@ def convert2gamma(id, directory, S1_noiseremoval=True, basename_extensions=None,
         an SAR scene object of type pyroSAR.ID or any subclass
     directory: str
         the output directory for the converted images
-    S1_noiseremoval: bool
-        only Sentinel-1: should noise removal be applied to the image?
+    S1_tnr: bool
+        only Sentinel-1: should thermal noise removal be applied to the image?
     basename_extensions: list of str
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     logpath: str or None
@@ -257,7 +257,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True, basename_extensions=None,
             # L1 GRD product: thermal noise already subtracted, specify xml_noise to add back thermal noise
             # SLC products: specify noise file to remove noise
             # xml_noise = '-': noise file not specified
-            if (S1_noiseremoval and product == 'slc') or (not S1_noiseremoval and product == 'grd'):
+            if (S1_tnr and product == 'slc') or (not S1_tnr and product == 'grd'):
                 xml_noise = os.path.join(id.scene, 'annotation', 'calibration', 'noise-' + base)
             else:
                 xml_noise = '-'
