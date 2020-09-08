@@ -110,7 +110,8 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
         raise NotImplementedError('calibration for class {} is not implemented yet'.format(type(id).__name__))
 
 
-def convert2gamma(id, directory, S1_tnr=True, basename_extensions=None,
+def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
+                  basename_extensions=None,
                   logpath=None, outdir=None, shellscript=None):
     """
     general function for converting SAR images to GAMMA format
@@ -123,6 +124,9 @@ def convert2gamma(id, directory, S1_tnr=True, basename_extensions=None,
         the output directory for the converted images
     S1_tnr: bool
         only Sentinel-1: should thermal noise removal be applied to the image?
+    S1_bnr: bool
+        only Sentinel-1 GRD: should border noise removal be applied to the image?
+        This is available since version 20191203, for older versions this argument is ignored.
     basename_extensions: list of str
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     logpath: str or None
@@ -284,6 +288,11 @@ def convert2gamma(id, directory, S1_tnr=True, basename_extensions=None,
                 pars['TOPS_par'] = outname + '.tops_par'
                 isp.par_S1_SLC(**pars)
             else:
+                if hasarg(isp.par_S1_GRD, 'edge_flag'):
+                    if S1_bnr:
+                        pars['edge_flag'] = 2
+                    else:
+                        pars['edge_flag'] = 0
                 pars['MLI'] = outname
                 pars['MLI_par'] = outname + '.par'
                 isp.par_S1_GRD(**pars)
