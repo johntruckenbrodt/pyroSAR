@@ -172,10 +172,13 @@ def test_archive(tmpdir, testdata):
     out = db.select(vv=1, acquisition_mode=('IW', 'EW'))
     assert len(out) == 1
     assert isinstance(out[0], str)
-    entry_to_remove = db.select(mindate='20141001T192312', maxdate='20201001T192312')
-    db.drop_element(entry_to_remove[0])
-    assert db.select(mindate='20141001T192312', maxdate='20201001T192312') == []
-    db.insert(entry_to_remove[0], verbose=False)
+    
+    db.insert(testdata['s1_3'], verbose=False)
+    db.insert(testdata['s1_4'], verbose=False)
+    db.drop_element(testdata['s1_3'])
+    assert db.size == (2, 0)
+    db.drop_element(testdata['s1_4'])
+
     db.add_tables(mytable)
     assert 'mytable' in db.get_tablenames()
     with pytest.raises(IOError):

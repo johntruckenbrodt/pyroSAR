@@ -2485,16 +2485,18 @@ class Archive(object):
         
         # check if there is a duplicate
         if len(entry_duplicates_scene) == 1:
-            # insert scene from duplicates into data
-            self.insert(entry_duplicates_scene[0])
+            
         
             # remove entry from duplicates
             delete_statement_dup = self.duplicates_schema.delete().where(
                 self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
             self.conn.execute(delete_statement_dup)
+
+            # insert scene from duplicates into data
+            self.insert(entry_duplicates_scene[0])
             
-            return_sentence += ' and entry with outname_base \n{} \nwas moved from duplicates into data table'.format(
-                entry_data_outname_base[0])
+            return_sentence += ' and entry with outname_base \n{} \nand scene \n{} \nwas moved from duplicates into data table'.format(
+                entry_data_outname_base[0], entry_duplicates_scene[0])
      
         print(return_sentence + '!')
     
