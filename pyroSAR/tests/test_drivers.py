@@ -172,7 +172,6 @@ def test_archive(tmpdir, testdata):
     out = db.select(vv=1, acquisition_mode=('IW', 'EW'))
     assert len(out) == 1
     assert isinstance(out[0], str)
-    print('this is the selected scene to be removed:')
     entry_to_remove = db.select(mindate='20141001T192312', maxdate='20201001T192312')
     db.drop_element(entry_to_remove[0])
     assert db.select(mindate='20141001T192312', maxdate='20201001T192312') == []
