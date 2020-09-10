@@ -2441,21 +2441,65 @@ class Archive(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
     
-    def drop_element(self, scene):
+    def drop_element(self, scene, with_duplicates=False):
         """
         Drop a scene from the data table.
+        If duplicates table contains matching entry, it will be moved to the data table.
 
         Parameters
         ----------
         scene: ID
             a SAR scene
+        with_duplicates: bool
+            True: delete matching entry in duplicates table
+            False: move matching entry from duplicates into data table
 
         Returns
         -------
         """
+        # save outname_base from to be deleted entry
+        search = self.data_schema.select().where(self.data_schema.c.scene == scene)
+        entry_data_outname_base = []
+        for rowproxy in self.conn.execute(search):
+            entry_data_outname_base.append((rowproxy[12]))
+        # print(entry_data_outname_base)
+        
+        # delete entry in data table
         delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
         self.conn.execute(delete_statement)
-        print('Entry with id {} was dropped!'.format(scene))
+        
+        return_sentence = 'Entry with scene-id: \n{} \nwas dropped from data'.format(scene)
+        
+        # with_duplicates == True, delete entry from duplicates
+        if with_duplicates:
+            delete_statement_dup = self.duplicates_schema.delete().where(
+                self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
+            self.conn.execute(delete_statement_dup)
+
+            print(return_sentence + ' and duplicates!'.format(scene))
+            return
+        
+        # else select scene info matching outname_base from duplicates
+        select_in_duplicates_statement = self.duplicates_schema.select().where(
+            self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
+        entry_duplicates_scene = []
+        for rowproxy in self.conn.execute(select_in_duplicates_statement):
+            entry_duplicates_scene.append((rowproxy[1]))
+        
+        # check if there is a duplicate
+        if len(entry_duplicates_scene) == 1:
+            # insert scene from duplicates into data
+            self.insert(entry_duplicates_scene[0])
+        
+            # remove entry from duplicates
+            delete_statement_dup = self.duplicates_schema.delete().where(
+                self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
+            self.conn.execute(delete_statement_dup)
+            
+            return_sentence += ' and entry with outname_base \n{} \nwas moved from duplicates into data table'.format(
+                entry_data_outname_base[0])
+     
+        print(return_sentence + '!')
     
     def drop_table(self, table, verbose=False):
         """
