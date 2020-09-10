@@ -189,7 +189,7 @@ def test_archive(tmpdir, testdata):
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
     assert Vector(shp).nfeatures == 1
-    os.remove(dbfile)
+    db.drop_database()
     with pytest.raises(OSError):
         with pyroSAR.Archive(dbfile) as db:
             db.import_outdated(testdata['archive_old'])
