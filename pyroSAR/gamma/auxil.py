@@ -1,7 +1,7 @@
 ###############################################################################
 # general GAMMA utilities
 
-# Copyright (c) 2014-2019, Stefan Engelhardt, the pyroSAR Developers.
+# Copyright (c) 2014-2020, Stefan Engelhardt, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -303,8 +303,10 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
         log = logfile
     else:
         log = os.path.join(logpath, os.path.basename(cmd[0]) + '.log') if logpath else None
+    gamma_home = ExamineGamma().home
     if shellscript is not None:
         if not os.path.isfile(shellscript):
+            # create an empty file
             with open(shellscript, 'w') as init:
                 pass
         line = ' '.join([str(x) for x in dissolve(cmd)])
@@ -318,15 +320,16 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
                 if is_new:
                     ts = datetime.now().strftime('%a %b %d %H:%M:%S %Y')
                     sh.write('# this script was created automatically by pyroSAR on {}\n\n'.format(ts))
-                    sh.write('export base={}\n\n'.format(outdir))
+                    sh.write('export base={}\n'.format(outdir))
+                    sh.write('export GAMMA_HOME={}\n\n'.format(gamma_home))
                     sh.write(content)
-                line = line.replace(outdir, '$base')
+                line = line.replace(outdir, '$base').replace(gamma_home, '$GAMMA_HOME')
             sh.seek(0, 2)  # set pointer to the end of the file
             sh.write(line + '\n\n')
     
-    # create an environment containing the locations of all GAMMA submodules to be passed ot the subprocess calls
+    # create an environment containing the locations of all GAMMA submodules to be passed to the subprocess calls
     gammaenv = os.environ.copy()
-    gammaenv['GAMMA_HOME'] = ExamineGamma().home
+    gammaenv['GAMMA_HOME'] = gamma_home
     for module in ['DIFF', 'DISP', 'IPTA', 'ISP', 'LAT']:
         loc = os.path.join(gammaenv['GAMMA_HOME'], module)
         if os.path.isdir(loc):

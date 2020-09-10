@@ -72,6 +72,7 @@ import subprocess
 
 from ctypes import util
 import logging
+
 log = logging.getLogger(__name__)
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
@@ -1586,6 +1587,8 @@ class Archive(object):
         required for postgres driver: host where the database is hosted. Default: 'localhost'
     port: int
         required for postgres driver: port number to the database. Default: 5432
+    cleanup: bool
+        check whether all registered scenes exist and remove missing entries?
 
 
     Examples
@@ -1638,7 +1641,7 @@ class Archive(object):
     """
     
     def __init__(self, dbfile, custom_fields=None, postgres=False, user='postgres',
-                 password='1234', host='localhost', port=5432):
+                 password='1234', host='localhost', port=5432, cleanup=True):
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
@@ -1655,20 +1658,18 @@ class Archive(object):
         if self.driver == 'sqlite':
             self.url_dict = {'drivername': self.driver,
                              'database': dbfile,
-                             'query': {'charset': 'utf8'},
-                             }
+                             'query': {'charset': 'utf8'}}
         if self.driver == 'postgresql':
             self.url_dict = {'drivername': self.driver,
                              'username': user,
                              'password': password,
                              'host': host,
                              'port': port,
-                             'database': dbfile,
-                             }
+                             'database': dbfile}
         
         # create engine, containing URL and driver
         log.debug('starting DB engine for {}'.format(URL(**self.url_dict)))
-        self.engine = create_engine(URL(**self.url_dict), encoding="utf8", echo=False)
+        self.engine = create_engine(URL(**self.url_dict), echo=False)
         
         # call to ____load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
@@ -1744,10 +1745,12 @@ class Archive(object):
         self.Data = self.Base.classes.data
         self.Duplicates = self.Base.classes.duplicates
         self.dbfile = dbfile
-        sys.stdout.write('\rchecking for missing scenes..')
-        self.cleanup()
-        sys.stdout.write('\rchecking for missing scenes..done\n')
-        sys.stdout.flush()
+        
+        if cleanup:
+            sys.stdout.write('\rchecking for missing scenes..')
+            self.cleanup()
+            sys.stdout.write('\rchecking for missing scenes..done\n')
+            sys.stdout.flush()
     
     def add_tables(self, tables, verbose=False):
         """
@@ -1928,48 +1931,42 @@ class Archive(object):
         if verbose:
             print('inserting scenes into temporary database...')
             pbar = pb.ProgressBar(max_value=len(scenes))
-        
+        basenames = []
+        insertions = []
+        session = self.Session()
         for i, id in enumerate(scenes):
-            # Create Session object for each iteration,
-            # else is_registered cannot account for duplicates within the current scenelist
-            session = self.Session()
-            insert_string = self.__prepare_insertion(id)
-            if not self.is_registered(id):
-                # add inserts to session
-                session.add(insert_string)
+            basename = id.outname_base()
+            if not self.is_registered(id) and basename not in basenames:
+                insertion = self.__prepare_insertion(id)
+                insertions.append(insertion)
                 counter_regulars += 1
             elif not self.__is_registered_in_duplicates(id):
-                # add inserts to duplicates to session
-                session.add(self.Duplicates(outname_base=id.outname_base(), scene=id.scene))
+                insertion = self.Duplicates(outname_base=basename, scene=id.scene)
+                insertions.append(insertion)
                 counter_duplicates += 1
             else:
                 list_duplicates.append(id.outname_base())
             
             if pbar is not None:
                 pbar.update(i + 1)
-            if not test:
-                if verbose:
-                    print('committing transactions to permanent database...')
-                # commit changes of the session
-                session.commit()
-            else:
-                if verbose:
-                    print('reverting temporary database changes...')
-                # roll back changes of the session
-                session.rollback()
-            session.close()
+            basenames.append(basename)
+        
         if pbar is not None:
             pbar.finish()
-        # if not test:
-        #     if verbose:
-        #         print('committing transactions to permanent database...')
-        #     # commit changes of the session
-        #     session.commit()
-        # else:
-        #     if verbose:
-        #         print('reverting temporary database changes...')
-        #     # roll back changes of the session
-        #     session.rollback()
+        
+        session.add_all(insertions)
+        
+        if not test:
+            if verbose:
+                print('committing transactions to permanent database...')
+            # commit changes of the session
+            session.commit()
+        else:
+            if verbose:
+                print('rolling back temporary database changes...')
+            # roll back changes of the session
+            session.rollback()
+        
         print('{} scenes registered regularly'.format(counter_regulars))
         print('{} duplicates registered'.format(counter_duplicates))
         if len(list_duplicates) != 0:

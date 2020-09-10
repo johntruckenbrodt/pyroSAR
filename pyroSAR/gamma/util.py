@@ -1,7 +1,7 @@
 ###############################################################################
 # universal core routines for processing SAR images with GAMMA
 
-# Copyright (c) 2014-2019, the pyroSAR Developers.
+# Copyright (c) 2014-2020, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -110,7 +110,8 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
         raise NotImplementedError('calibration for class {} is not implemented yet'.format(type(id).__name__))
 
 
-def convert2gamma(id, directory, S1_noiseremoval=True, basename_extensions=None,
+def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
+                  basename_extensions=None,
                   logpath=None, outdir=None, shellscript=None):
     """
     general function for converting SAR images to GAMMA format
@@ -121,8 +122,11 @@ def convert2gamma(id, directory, S1_noiseremoval=True, basename_extensions=None,
         an SAR scene object of type pyroSAR.ID or any subclass
     directory: str
         the output directory for the converted images
-    S1_noiseremoval: bool
-        only Sentinel-1: should noise removal be applied to the image?
+    S1_tnr: bool
+        only Sentinel-1: should thermal noise removal be applied to the image?
+    S1_bnr: bool
+        only Sentinel-1 GRD: should border noise removal be applied to the image?
+        This is available since version 20191203, for older versions this argument is ignored.
     basename_extensions: list of str
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     logpath: str or None
@@ -257,7 +261,7 @@ def convert2gamma(id, directory, S1_noiseremoval=True, basename_extensions=None,
             # L1 GRD product: thermal noise already subtracted, specify xml_noise to add back thermal noise
             # SLC products: specify noise file to remove noise
             # xml_noise = '-': noise file not specified
-            if (S1_noiseremoval and product == 'slc') or (not S1_noiseremoval and product == 'grd'):
+            if (S1_tnr and product == 'slc') or (not S1_tnr and product == 'grd'):
                 xml_noise = os.path.join(id.scene, 'annotation', 'calibration', 'noise-' + base)
             else:
                 xml_noise = '-'
@@ -284,6 +288,11 @@ def convert2gamma(id, directory, S1_noiseremoval=True, basename_extensions=None,
                 pars['TOPS_par'] = outname + '.tops_par'
                 isp.par_S1_SLC(**pars)
             else:
+                if hasarg(isp.par_S1_GRD, 'edge_flag'):
+                    if S1_bnr:
+                        pars['edge_flag'] = 2
+                    else:
+                        pars['edge_flag'] = 0
                 pars['MLI'] = outname
                 pars['MLI_par'] = outname + '.par'
                 isp.par_S1_GRD(**pars)
@@ -429,7 +438,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=1,
             func_interp=2, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
             cleanup=True, normalization_method=2, export_extra=None, basename_extensions=None,
-            removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR'):
+            removeS1BorderNoise=True, removeS1BorderNoiseMethod='gamma'):
     """
     general function for geocoding SAR images with GAMMA
     
@@ -486,21 +495,22 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     normalization_method: {1, 2}
         the topographic normalization approach to be used
          - 1: first geocoding, then terrain flattening
-         - 2: first terrain flattening, then geocoding; see `Small 2011 <https://doi.org/10.1109/Tgrs.2011.2120616>`_
-    export_extra: list or None
+         - 2: first terrain flattening, then geocoding; see :cite:`Small2011`
+    export_extra: list of str or None
         a list of image file IDs to be exported to outdir
          - format is GeoTiff if the file is geocoded and ENVI otherwise. Non-geocoded images can be converted via Gamma
            command data2tiff yet the output was found impossible to read with GIS software
          - scaling of SAR image products is applied as defined by parameter `scaling`
          - see Notes for ID options
-    basename_extensions: list of str
+    basename_extensions: list of str or None
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
-    removeS1BorderNoise: bool, optional
+    removeS1BorderNoise: bool
         Enables removal of S1 GRD border noise (default).
     removeS1BorderNoiseMethod: str
         the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
+         - 'gamma': the GAMMA implementation of :cite:`Ali2018`
     
     Returns
     -------
@@ -562,6 +572,11 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         
         Workflow diagram for function geocode using normalization method 2 for processing a Sentinel-1 Ground Range
         Detected (GRD) scene to radiometrically terrain corrected (RTC) backscatter.
+    
+    References
+    ----------
+    .. bibliography:: references.bib
+        :style: plain
     """
     if normalization_method == 2 and func_interp != 2:
         raise RuntimeError('parameter func_interp must be set to 2 if normalization_method is set to 2; '
@@ -613,13 +628,16 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if not os.path.isdir(path_log):
         os.makedirs(path_log)
     
-    if scene.sensor in ['S1A', 'S1B'] and removeS1BorderNoise:
+    if scene.sensor in ['S1A', 'S1B'] and removeS1BorderNoise and removeS1BorderNoiseMethod != 'gamma':
         print('removing border noise..')
         scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
     
     print('converting scene to GAMMA format..')
+    if removeS1BorderNoise and removeS1BorderNoiseMethod != 'gamma':
+        removeS1BorderNoise = False
     convert2gamma(scene, scene.scene, logpath=path_log, outdir=scene.scene,
-                  basename_extensions=basename_extensions, shellscript=shellscript)
+                  basename_extensions=basename_extensions, shellscript=shellscript,
+                  S1_bnr=removeS1BorderNoise)
     
     if scene.sensor in ['S1A', 'S1B']:
         print('updating orbit state vectors..')

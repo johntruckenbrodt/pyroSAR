@@ -39,7 +39,7 @@ before_install:
   - export PATH=$PATH:/opt/snap/bin
 
 install:
-  - pip install --ignore-installed six # install six inside the venv since the system version is too old
+  - pip install --ignore-installed six certifi # install packages inside the venv if the system version is too old
   - pip install numpy
   - pip install GDAL==$(gdal-config --version) --global-option=build_ext --global-option="$(gdal-config --cflags)"
   - pip install -r requirements-dev.txt
