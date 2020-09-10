@@ -2326,7 +2326,7 @@ class Archive(object):
         
         return ret
     
-    def select_duplicates(self, outname_base=None, scene=None):
+    def select_duplicates(self, outname_base=None, scene=None, value='id'):
         """
         Select scenes from the duplicates table. In case both `outname_base` and `scene` are set to None all scenes in
         the table are returned, otherwise only those that match the attributes `outname_base` and `scene` if they are not None.
@@ -2337,12 +2337,21 @@ class Archive(object):
             the basename of the scene
         scene: str
             the scene name
+        value: str
+            the return value; either 'id' or 'scene'
 
         Returns
         -------
         list
             the selected scene(s)
         """
+        if value == 'id':
+            key = 0
+        elif value == 'scene':
+            key = 1
+        else:
+            raise ValueError("argument 'value' must be either 0 or 1")
+        
         if not outname_base and not scene:
             # core SQL execution
             scenes = self.conn.execute('SELECT * from duplicates')
@@ -2363,7 +2372,7 @@ class Archive(object):
         
         ret = []
         for x in scenes:
-            ret.append(self.encode(x[0]))
+            ret.append(self.encode(x[key]))
         
         return ret
     
