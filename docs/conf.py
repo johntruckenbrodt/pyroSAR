@@ -63,7 +63,9 @@ version_spatialist = get_distribution('spatialist').version
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
                        'spatialist': ('https://spatialist.readthedocs.io/en/v{}'
-                                      .format(version_spatialist), None)}
+                                      .format(version_spatialist), None),
+                       'sqlalchemy': ('https://docs.sqlalchemy.org/en/latest/', None),
+                       }
 
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True

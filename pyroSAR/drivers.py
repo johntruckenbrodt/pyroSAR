@@ -1657,7 +1657,8 @@ class Archive(object):
         # create dict, with which a URL to the db is created
         if self.driver == 'sqlite':
             self.url_dict = {'drivername': self.driver,
-                             'database': dbfile}
+                             'database': dbfile,
+                             'query': {'charset': 'utf8'}}
         if self.driver == 'postgresql':
             self.url_dict = {'drivername': self.driver,
                              'username': user,
@@ -1718,12 +1719,12 @@ class Archive(object):
         # add custom fields
         if self.custom_fields is not None:
             for key, val in self.custom_fields.items():
-                if val == 'Integer':
+                if val in ['Integer', 'integer', 'int']:
                     self.data_schema.append_column(Column(key, Integer))
-                elif val == 'String':
+                elif val in ['String', 'string', 'str']:
                     self.data_schema.append_column(Column(key, String))
                 else:
-                    print('Value in dict custom_fields must be "Integer" or "String"!')
+                    print('Value in dict custom_fields must be "integer" or "string"!')
         
         # schema for duplicates
         self.duplicates_schema = Table('duplicates', self.meta,
@@ -1750,6 +1751,38 @@ class Archive(object):
             self.cleanup()
             sys.stdout.write('\rchecking for missing scenes..done\n')
             sys.stdout.flush()
+    
+    def add_tables(self, tables, verbose=False):
+        """
+        Add tables to the database per :class:`sqlalchemy.schema.Table`
+        Tables provided here will be added to the database. Notice that columns using Geometry must have setting
+        management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
+        
+        Parameters
+        ----------
+        tables: :class:`sqlalchemy.schema.Table` or :obj:`list` of :class:`sqlalchemy.schema.Table`
+            Tables provided here will be added to the database. Notice that columns using Geometry must have setting
+            management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
+        verbose: bool
+            print info
+        """
+        created = []
+        if isinstance(tables, list):
+            for table in tables:
+                table.metadata = self.meta
+                if not self.engine.dialect.has_table(self.engine, str(table)):
+                    table.create(self.engine)
+                    created.append(str(table))
+        else:
+            table = tables
+            table.metadata = self.meta
+            if not self.engine.dialect.has_table(self.engine, str(table)):
+                table.create(self.engine)
+                created.append(str(table))
+        if verbose:
+            print('Created table(s) {}.'.format(', '.join(created)))
+        self.Base = automap_base(metadata=self.meta)
+        self.Base.prepare(self.engine, reflect=True)
     
     @staticmethod
     def __load_spatialite(dbapi_conn, connection_record):
@@ -1803,7 +1836,7 @@ class Archive(object):
         scene: str or ID
             a SAR scene
 
-         Returns
+        Returns
         -------
         object of class Data, insert string
         """
@@ -2085,19 +2118,20 @@ class Archive(object):
         filtered = [x for x, y in zip(scenelist, names) if os.path.basename(y) not in registered + duplicates]
         return filtered
     
-    def get_colnames(self):
+    def get_colnames(self, table='data'):
         """
-        Return the names of the database table.
+        Return the names of all columns of a table.
 
         Returns
         -------
         list
-            the column names of the data table
+            the column names of the chosen table
         """
-        # get colnames from Data object
-        col_names = self.Data.__table__.columns.keys()
-        ret = sorted([self.encode(x) for x in col_names])
-        return ret
+        # get all columns of one table, but shows geometry columns not correctly
+        table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
+        col_names = table_info.c.keys()
+        
+        return sorted([self.encode(x) for x in col_names])
     
     def get_tablenames(self, return_all=False):
         """
@@ -2114,16 +2148,22 @@ class Archive(object):
         list
             the table names
         """
+        all_tables = ['ElementaryGeometries', 'SpatialIndex', 'geometry_columns', 'geometry_columns_auth',
+                      'geometry_columns_field_infos', 'geometry_columns_statistics', 'geometry_columns_time',
+                      'spatial_ref_sys', 'spatial_ref_sys_aux', 'spatialite_history', 'sql_statements_log',
+                      'sqlite_sequence', 'views_geometry_columns', 'views_geometry_columns_auth',
+                      'views_geometry_columns_field_infos', 'views_geometry_columns_statistics',
+                      'virts_geometry_columns', 'virts_geometry_columns_auth', 'virts_geometry_columns_field_infos',
+                      'virts_geometry_columns_statistics']
         # get tablenames from metadata
         tables = sorted([self.encode(x) for x in self.meta.tables.keys()])
         if return_all:
             return tables
         else:
             ret = []
-            if 'data' in tables:
-                ret.append('data')
-            if 'duplicates' in tables:
-                ret.append('duplicates')
+            for i in tables:
+                if i not in all_tables and 'idx_' not in i:
+                    ret.append(i)
             return ret
     
     def get_unique_directories(self):
@@ -2407,51 +2447,98 @@ class Archive(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
     
-    def drop_element(self, scene, table):
+    def drop_element(self, scene, with_duplicates=False):
         """
-        Drop an entry from the database.
+        Drop a scene from the data table.
+        If duplicates table contains matching entry, it will be moved to the data table.
 
         Parameters
         ----------
         scene: ID
             a SAR scene
-        table: str
-            either data or duplicates
+        with_duplicates: bool
+            True: delete matching entry in duplicates table
+            False: move matching entry from duplicates into data table
 
         Returns
         -------
         """
-        if table == 'data':
-            # using schema to create SQL syntax
-            delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
-        elif table == 'duplicates':
-            delete_statement = self.duplicates_schema.delete().where(self.duplicates_schema.c.scene == scene)
-        else:
-            raise ValueError("Only entries from table 'data' or 'duplicates' can be dropped")
-        if delete_statement is not None:
-            # core SQL execution
-            self.conn.execute(delete_statement)
-            print('Entry with id {} was dropped!'.format(scene))
+        # save outname_base from to be deleted entry
+        search = self.data_schema.select().where(self.data_schema.c.scene == scene)
+        entry_data_outname_base = []
+        for rowproxy in self.conn.execute(search):
+            entry_data_outname_base.append((rowproxy[12]))
+        # print(entry_data_outname_base)
+        
+        # delete entry in data table
+        delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
+        self.conn.execute(delete_statement)
+        
+        return_sentence = 'Entry with scene-id: \n{} \nwas dropped from data'.format(scene)
+        
+        # with_duplicates == True, delete entry from duplicates
+        if with_duplicates:
+            delete_statement_dup = self.duplicates_schema.delete().where(
+                self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
+            self.conn.execute(delete_statement_dup)
+
+            print(return_sentence + ' and duplicates!'.format(scene))
+            return
+        
+        # else select scene info matching outname_base from duplicates
+        select_in_duplicates_statement = self.duplicates_schema.select().where(
+            self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
+        entry_duplicates_scene = []
+        for rowproxy in self.conn.execute(select_in_duplicates_statement):
+            entry_duplicates_scene.append((rowproxy[1]))
+        
+        # check if there is a duplicate
+        if len(entry_duplicates_scene) == 1:
+            
+        
+            # remove entry from duplicates
+            delete_statement_dup = self.duplicates_schema.delete().where(
+                self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
+            self.conn.execute(delete_statement_dup)
+
+            # insert scene from duplicates into data
+            self.insert(entry_duplicates_scene[0])
+            
+            return_sentence += ' and entry with outname_base \n{} \nand scene \n{} \nwas moved from duplicates into data table'.format(
+                entry_data_outname_base[0], entry_duplicates_scene[0])
+     
+        print(return_sentence + '!')
     
-    def drop_table(self, table):
+    def drop_table(self, table, verbose=False):
         """
         Drop a table from the database.
 
         Parameters
         ----------
         table: str
-            either data or duplicates
+            tablename
+        verbose: bool
+            print additional info to console
 
         Returns
         -------
         """
-        if table == 'data':
-            # ORM object function
-            self.Data.__table__.drop(self.engine)
-        elif table == 'duplicates':
-            self.Duplicates.__table__.drop(self.engine)
+        if table in self.get_tablenames(return_all=True):
+            # this removes the idx tables and entries in geometry_columns for sqlite databases
+            if self.driver == 'sqlite':
+                tab_with_geom = [rowproxy[0] for rowproxy
+                                 in self.conn.execute("SELECT f_table_name FROM geometry_columns")]
+                if table in tab_with_geom:
+                    self.conn.execute("SELECT DropGeoTable('" + table + "')")
+            else:
+                table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
+                table_info.drop(self.engine)
+            if verbose:
+                print('Table {} dropped from database.'.format(table))
         else:
-            raise ValueError("Only tables 'data' and 'duplicates' can be dropped")
+            raise ValueError("Table {} is not registered in the database!".format(table))
+        self.Base = automap_base(metadata=self.meta)
+        self.Base.prepare(self.engine, reflect=True)
     
     def drop_database(self):
         """
