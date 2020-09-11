@@ -299,7 +299,9 @@ def gpt(xmlfile, groups=None, cleanup=True,
     """
     
     workflow = Workflow(xmlfile)
+    read = workflow['Read']
     write = workflow['Write']
+    scene = identify(read.parameters['file'])
     outname = write.parameters['file']
     suffix = workflow.suffix
     format = write.parameters['formatName']
@@ -310,13 +312,14 @@ def gpt(xmlfile, groups=None, cleanup=True,
         else:
             dem_nodata = 0
     
-    if 'Remove-GRD-Border-Noise' in workflow.ids and removeS1BorderNoiseMethod == 'pyroSAR':
+    if 'Remove-GRD-Border-Noise' in workflow.ids \
+            and removeS1BorderNoiseMethod == 'pyroSAR' \
+            and scene.meta['IPF_version'] < 2.9:
         if 'SliceAssembly' in workflow.operators:
             raise RuntimeError("pyroSAR's custom border noise removal is not yet implemented for multiple scene inputs")
         xmlfile = os.path.join(outname,
                                os.path.basename(xmlfile.replace('_bnr', '')))
-        if not os.path.isdir(outname):
-            os.makedirs(outname)
+        os.makedirs(outname, exist_ok=True)
         # border noise removal is done outside of SNAP and the node is thus removed from the workflow
         del workflow['Remove-GRD-Border-Noise']
         # remove the node name from the groups
@@ -328,9 +331,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
                 del groups[i]
             else:
                 i += 1
-        # identify the input scene, unpack it and perform the custom border noise removal
-        read = workflow['Read']
-        scene = identify(read.parameters['file'])
+        # unpack the scene if necessary and perform the custom border noise removal
         print('unpacking scene')
         if scene.compression is not None:
             scene.unpack(outname)
