@@ -332,7 +332,8 @@ def gpt(xmlfile, groups=None, cleanup=True,
         read = workflow['Read']
         scene = identify(read.parameters['file'])
         print('unpacking scene')
-        scene.unpack(outname)
+        if scene.compression is not None:
+            scene.unpack(outname)
         print('removing border noise..')
         scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
         # change the name of the input file to that of the unpacked archive
