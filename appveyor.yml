@@ -54,9 +54,8 @@ install:
   - echo %PATH%
 
   # Configure the VM.
-  - conda env create --file environment.yml
-  - conda install --name ps_test --yes coveralls coverage pytest
-  - conda activate ps_test
+  - conda env create --file environment-dev.yml
+  - conda activate ps_test_dev
   - python setup.py install
 
 # Skip .NET project specific build phase.
