@@ -2440,9 +2440,9 @@ class Archive(object):
         """
         close the database connection
         """
-        # close ORM Session and core connection
         self.Session().close()
         self.conn.close()
+        self.engine.dispose()
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
