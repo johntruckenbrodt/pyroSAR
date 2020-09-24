@@ -65,6 +65,7 @@ intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
                        'spatialist': ('https://spatialist.readthedocs.io/en/v{}'
                                       .format(version_spatialist), None),
                        'sqlalchemy': ('https://docs.sqlalchemy.org/en/latest/', None),
+                       'sqlalchemy-utils': ('https://sqlalchemy-utils.readthedocs.io/en/latest/', None)
                        }
 
 napoleon_google_docstring = False

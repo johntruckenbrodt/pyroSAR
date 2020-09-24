@@ -30,6 +30,7 @@ Drivers
         findfiles
         getFileObj
         parse_date
+        drop_archive
 
 SNAP Processing
 ===============

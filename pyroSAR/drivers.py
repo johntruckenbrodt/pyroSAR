@@ -2604,7 +2604,10 @@ def drop_archive(archive):
 
     Returns
     -------
-
+    
+    See Also
+    --------
+    :func:`sqlalchemy_utils.functions.drop_database()`
     """
     url = archive.url
     archive.close()
