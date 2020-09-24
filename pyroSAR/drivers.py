@@ -70,7 +70,6 @@ import time
 import platform
 import subprocess
 
-from ctypes import util
 import logging
 
 log = logging.getLogger(__name__)
@@ -1669,7 +1668,8 @@ class Archive(object):
         
         # create engine, containing URL and driver
         log.debug('starting DB engine for {}'.format(URL(**self.url_dict)))
-        self.engine = create_engine(URL(**self.url_dict), echo=False)
+        self.url = URL(**self.url_dict)
+        self.engine = create_engine(self.url, echo=False)
         
         # call to ____load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
@@ -2481,7 +2481,7 @@ class Archive(object):
             delete_statement_dup = self.duplicates_schema.delete().where(
                 self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
             self.conn.execute(delete_statement_dup)
-
+            
             print(return_sentence + ' and duplicates!'.format(scene))
             return
         
@@ -2494,19 +2494,17 @@ class Archive(object):
         
         # check if there is a duplicate
         if len(entry_duplicates_scene) == 1:
-            
-        
             # remove entry from duplicates
             delete_statement_dup = self.duplicates_schema.delete().where(
                 self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
             self.conn.execute(delete_statement_dup)
-
+            
             # insert scene from duplicates into data
             self.insert(entry_duplicates_scene[0])
             
             return_sentence += ' and entry with outname_base \n{} \nand scene \n{} \nwas moved from duplicates into data table'.format(
                 entry_data_outname_base[0], entry_duplicates_scene[0])
-     
+        
         print(return_sentence + '!')
     
     def drop_table(self, table, verbose=False):
@@ -2539,20 +2537,6 @@ class Archive(object):
             raise ValueError("Table {} is not registered in the database!".format(table))
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
-    
-    def drop_database(self):
-        """
-        Drops the database.
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        """
-        # SQLAlchemy-utils function to drop db, causes some warnings, but works
-        drop_database(self.engine.url)
-        print('Database dropped')
     
     @staticmethod
     def __is_open(ip, port):
@@ -2607,6 +2591,24 @@ class Archive(object):
             else:
                 time.sleep(5)
         return ipup
+
+
+def drop_archive(archive):
+    """
+    drop (delete) a scene database
+    
+    Parameters
+    ----------
+    archive: pyroSAR.drivers.Archive
+        the database to be deleted
+
+    Returns
+    -------
+
+    """
+    url = archive.url
+    archive.close()
+    drop_database(url)
 
 
 def findfiles(scene, pattern, include_folders=False):

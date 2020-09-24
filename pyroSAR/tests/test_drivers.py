@@ -14,7 +14,7 @@ mytable = Table("mytable", metadata,
                 Column('mytable_id', Integer, primary_key=True),
                 Column('value', String(50)),
                 Column('shape', Geometry('POLYGON', management=True, srid=4326)))
-           
+
 
 @pytest.fixture()
 def testcases():
@@ -178,7 +178,7 @@ def test_archive(tmpdir, testdata):
     db.drop_element(testdata['s1_3'])
     assert db.size == (2, 0)
     db.drop_element(testdata['s1_4'])
-
+    
     db.add_tables(mytable)
     assert 'mytable' in db.get_tablenames()
     with pytest.raises(IOError):
@@ -188,8 +188,9 @@ def test_archive(tmpdir, testdata):
         assert db.size == (1, 0)
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
+        pyroSAR.drop_archive(db)
+        assert not os.path.isfile(dbfile)
     assert Vector(shp).nfeatures == 1
-    db.drop_database()
     with pytest.raises(OSError):
         with pyroSAR.Archive(dbfile) as db:
             db.import_outdated(testdata['archive_old'])
@@ -225,12 +226,12 @@ def test_archive_postgres(tmpdir, testdata):
         assert db.size == (1, 0)
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
-        db.drop_database()
+        pyroSAR.drop_archive(db)
     assert Vector(shp).nfeatures == 1
     with pytest.raises(OSError):
         with pyroSAR.Archive('test', postgres=True, port=5432, user=pguser, password=pgpassword) as db:
             db.import_outdated(testdata['archive_old'])
-            db.drop_database()
+            pyroSAR.drop_archive(db)
     with pytest.raises(SystemExit) as pytest_wrapped_e:
         pyroSAR.Archive('test', postgres=True, user='hello_world', port=7080)
     assert pytest_wrapped_e.type == SystemExit
