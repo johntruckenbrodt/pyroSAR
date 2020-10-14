@@ -488,10 +488,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                    'localIncidenceAngle',
                    'projectedLocalIncidenceAngle',
                    'DEM']
-        write = parse_node('Write')
-        workflow.insert_node(write, before=tc.id, resetSuccessorSource=False)
-        write.parameters['file'] = outname
-        write.parameters['formatName'] = format
+        #write = parse_node('Write')
+        #workflow.insert_node(write, before=tc.id, resetSuccessorSource=False)
+        #write.parameters['file'] = outname
+        #write.parameters['formatName'] = format
         for item in export_extra:
             if item not in options:
                 raise RuntimeError("ID '{}' not valid for argument 'export_extra'".format(item))
