@@ -19,7 +19,7 @@ from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, get_egm96_look
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
 
-def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
+def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, copyMetadata=True, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR',
             removeS1ThermalNoise=True, offset=None, allow_RES_OSV=False, demName='SRTM 1Sec HGT',
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
@@ -50,6 +50,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         processed.
     shapefile: str or :py:class:`~spatialist.vector.Vector`, optional
         A vector geometry for subsetting the SAR scene to a test site. Default is None.
+    copyMetadata: bool
+        Set if metadata is retained after the subset operation, necessary if a calibration node follows.
     scaling: {'dB', 'db', 'linear'}, optional
         Should the output be in linear or decibel scaling? Default is 'dB'.
     geocoding_type: {'Range-Doppler', 'SAR simulation cross correlation'}, optional
@@ -456,6 +458,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         workflow.insert_node(subset, before=read.id)
         subset.parameters['region'] = [0, 0, id.samples, id.lines]
         subset.parameters['geoRegion'] = wkt
+        if copyMetadata:
+            subset.parameters['copyMetadata'] = 'True'
+        else:
+            subset.parameters['copyMetadata'] = 'False'
     ############################################
     # (optionally) configure subset node for pixel offsets
     if offset and not shapefile:
