@@ -23,7 +23,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR',
             removeS1ThermalNoise=True, offset=None, allow_RES_OSV=False, demName='SRTM 1Sec HGT',
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
-            basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True, tmp_folder=None,
+            basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True, tmpdir=None,
             gpt_exceptions=None, gpt_args=None, returnWF=False, nodataValueAtSea=True,
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
@@ -98,7 +98,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         the number of workers executed together in one gpt call
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
-    tmp_folder: str
+    tmpdir: str
         path of custom temporary directory, useful to separate output folder and temp folder
     gpt_exceptions: dict
         a dictionary to override the configured GPT executable for certain operators;
@@ -574,7 +574,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             groups = groupbyWorkers(outname + '_proc.xml', groupsize)
             gpt(outname + '_proc.xml', groups=groups, cleanup=cleanup,
                 gpt_exceptions=gpt_exceptions, gpt_args=gpt_args,
-                removeS1BorderNoiseMethod=removeS1BorderNoiseMethod,tmp_folder=tmp_folder)
+                removeS1BorderNoiseMethod=removeS1BorderNoiseMethod,tmpdir=tmpdir)
         except RuntimeError as e:
             print(str(e))
             with open(outname + '_error.log', 'w') as log:

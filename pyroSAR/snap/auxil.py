@@ -255,7 +255,7 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
 
 def gpt(xmlfile, groups=None, cleanup=True,
         gpt_exceptions=None, gpt_args=None,
-        removeS1BorderNoiseMethod='pyroSAR', basename_extensions=None, tmp_folder=None):
+        removeS1BorderNoiseMethod='pyroSAR', basename_extensions=None, tmpdir=None):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
     Input is a readily formatted workflow XML file as
@@ -345,7 +345,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
     print('executing node sequence{}..'.format('s' if groups is not None else ''))
     try:
         if groups is not None:
-            subs = split(xmlfile, groups, tmp_folder)
+            subs = split(xmlfile, groups, tmpdir)
             for sub in subs:
                 execute(sub, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
         else:
@@ -431,7 +431,7 @@ def is_consistent(workflow):
     return all(check)
 
 
-def split(xmlfile, groups, tmp_folder=None):
+def split(xmlfile, groups, tmpdir=None):
     """
     split a workflow file into groups and write them to separate workflows including source and write target linking.
     The new workflows are written to a sub-directory `temp` of the target directory defined in the input's `Write` node.
@@ -457,10 +457,10 @@ def split(xmlfile, groups, tmp_folder=None):
     workflow = Workflow(xmlfile)
     write = workflow['Write']
     out = write.parameters['file']
-    if tmp_folder is None:
+    if tmpdir is None:
         tmp = os.path.join(out, 'temp')
     else:
-        tmp = tmp_folder
+        tmp = tmpdir
     if not os.path.isdir(tmp):
         os.makedirs(tmp)
     
