@@ -36,7 +36,7 @@ from spatialist import haversine
 from spatialist.ancillary import union, finder
 
 from ..S1 import OSV
-from ..drivers import ID, CEOS_ERS, CEOS_PSR, ESA, SAFE, TSX, identify
+from ..drivers import ID, CEOS_ERS, CEOS_PSR, EORC_PSR, ESA, SAFE, TSX, identify
 from . import ISPPar, Namespace, par2hdr
 from ..ancillary import multilook_factors, hasarg
 from pyroSAR.examine import ExamineSnap
@@ -81,6 +81,26 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
                                outdir=outdir,
                                shellscript=shellscript)
                 par2hdr(image + '_cal.par', image + '_cal.hdr')
+
+    elif isinstance(id, EORC_PSR):
+        for image in id.getGammaImages(directory):
+            pol = re.search('[HV]{2}', os.path.basename(image)).group(0)
+            if image.endswith('_mli'):
+                isp.radcal_MLI(MLI=image,
+                               MLI_par=image + '.par',
+                               OFF_par='-',
+                               CMLI=image + '_cal',
+                               antenna='-',
+                               rloss_flag=0,
+                               ant_flag=0,
+                               refarea_flag=2,
+                               sc_dB=0,
+                               K_dB=-83.0,
+                               pix_area='pix_ell_'+pol,
+                               logpath=logpath,
+                               outdir=outdir,
+                               shellscript=shellscript)
+                par2hdr(image + '.par', image + '_cal.hdr')
     
     elif isinstance(id, ESA):
         k_db = {'ASAR': 55., 'ERS1': 58.24, 'ERS2': 59.75}[id.sensor]
@@ -211,6 +231,29 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                                          outdir=outdir,
                                          shellscript=shellscript)
             par2hdr(outname + '.par', outname + '.hdr')
+
+    elif isinstance(id, EORC_PSR):
+        images = id.findfiles('^sar.')
+        facter_m = id.findfiles('facter_m.dat')
+        led = id.findfiles('LED-ALOS2')
+
+        for image in images:
+            polarization = re.search('[HV]{2}', os.path.basename(image)).group(0)
+            outname_base = id.outname_base(extensions=basename_extensions)
+            outname_base = '{}_{}'.format(outname_base, polarization)
+            outname = os.path.join(directory, outname_base)
+
+            isp.par_KC_PALSAR_slr(facter_m=facter_m,
+                                    CEOS_leader=led,
+                                    SLC_par=outname + '.par',
+                                    pol=polarization,
+                                    pls_mode=2,
+                                    KC_data=image,
+                                    pwr=outname + '_mli',
+                                    logpath=logpath,
+                                    outdir=outdir,
+                                    shellscript=shellscript)
+            par2hdr(outname + '_mli.par', outname + '_mli.hdr')
     
     elif isinstance(id, ESA):
         """
@@ -438,7 +481,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
 def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=1,
             func_interp=2, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
             cleanup=True, normalization_method=2, export_extra=None, basename_extensions=None,
-            removeS1BorderNoise=True, removeS1BorderNoiseMethod='gamma'):
+            removeS1BorderNoise=True, removeS1BorderNoiseMethod='gamma', refine_LUT=False):
     """
     general function for geocoding SAR images with GAMMA
     
@@ -511,6 +554,8 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
          - 'gamma': the GAMMA implementation of :cite:`Ali2018`
+    refine_LUT: bool
+        should the LUT for geocoding be refined using pixel area normalization?
     
     Returns
     -------
@@ -589,7 +634,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     else:
         raise RuntimeError("'scene' must be of type str or pyroSAR.ID")
     
-    if scene.sensor not in ['S1A', 'S1B']:
+    if scene.sensor not in ['S1A', 'S1B', 'PALSAR-2']:
         raise IOError('this method is currently only available for Sentinel-1. Please stay tuned...')
     
     if sarSimCC:
@@ -652,20 +697,25 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
             print('orbit state vector correction failed for scene {}'.format(scene.scene))
             return
     
-    calibrate(scene, scene.scene, logpath=path_log, outdir=scene.scene, shellscript=shellscript)
+    if scene.sensor not 'PALSAR-2':       
+        print('calibrating...')
+        calibrate(scene, scene.scene, logpath=path_log, outdir=scene.scene, shellscript=shellscript)
+        images = [x for x in scene.getGammaImages(scene.scene) if x.endswith('_grd') or x.endswith('_slc_cal')]
     
-    images = [x for x in scene.getGammaImages(scene.scene) if x.endswith('_grd') or x.endswith('_slc_cal')]
-    
-    products = list(images)
-    
-    print('multilooking..')
-    for image in images:
-        multilook(infile=image, outfile=image + '_mli', targetres=targetres,
-                  logpath=path_log, outdir=scene.scene, shellscript=shellscript)
-    
-    images = [x + '_mli' for x in images]
-    products.extend(images)
-    
+        products = list(images)
+
+        print('multilooking..')
+        for image in images:
+            multilook(infile=image, outfile=image + '_mli', targetres=targetres,
+                    logpath=path_log, outdir=scene.scene, shellscript=shellscript)
+        
+        images = [x + '_mli' for x in images]
+        products.extend(images)
+
+    else:
+        images = [x for x in scene.getGammaImages(scene.scene) if x.endswith('_mli')]
+        products = list(images)
+
     master = images[0]
     
     # create output names for files to be written
@@ -770,8 +820,11 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         # newer versions of Gamma enable creating the ratio of ellipsoid based
         # pixel area and DEM-facet pixel area directly with command pixel_area
         if hasarg(diff.pixel_area, 'sigma0_ratio'):
-            n.appreciate(['pix_fine'])
-            n.depreciate(['pix_area_sigma0'])
+            if refine_LUT:
+                n.appreciate(['pix_fine'],['pix_area_sigma0'])
+            else:
+                n.appreciate(['pix_fine'])
+                n.depreciate(['pix_area_sigma0'])
             diff.pixel_area(MLI_par=master + '.par',
                             DEM_par=n.dem_seg_geo + '.par',
                             DEM=n.dem_seg_geo,
@@ -784,6 +837,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                             outdir=scene.scene,
                             shellscript=shellscript)
             par2hdr(master + '.par', n.pix_fine + '.hdr')
+            if refine_LUT:
+                par2hdr(master + '.par', n.pix_area_sigma0 + '.hdr')
+            
         else:
             n.appreciate(['pix_area_sigma0', 'pix_ellip_sigma0', 'pix_fine'])
             # actual illuminated area as obtained from integrating DEM-facets (pix_area_sigma0 | pix_area_gamma0)
@@ -824,6 +880,112 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         for image in images:
             # sigma0 = MLI * ellip_pix_sigma0 / pix_area_sigma0
             # gamma0 = MLI * ellip_pix_sigma0 / pix_area_gamma0
+            if refine_LUT == True:
+                '''
+                LUT refinement procedure for PALSAR-2 Path data
+                '''
+                print('refining LUT...')
+                # ellipsoid-based pixel area (ellip_pix_sigma0)
+                isp.radcal_MLI(MLI=image,
+                            MLI_par=image + '.par',
+                            OFF_par='-',
+                            CMLI=image + '_cal',
+                            antenna = '-',
+                            rloss_flag = 0,
+                            ant_flag = 0,
+                            refarea_flag = 1,  
+                            sc_dB = 0,
+                            K_dB = -83.0,
+                            pix_area = image + '_pix_ell',
+                            logpath=path_log,
+                            outdir=scene.scene,
+                            shellscript=shellscript)
+                par2hdr(master + '.par', image + '_pix_ell' + '.hdr')
+                par2hdr(master + '.par', image + '_cal.hdr')
+                # Refinement of geocoding lookup table
+                diff.create_diff_par(PAR_1 = image + '.par',
+                            PAR_2 = '-',
+                            DIFF_par = image + '_diff.par',
+                            PAR_type = 1,
+                            iflg = 0,
+                            logpath=path_log,
+                            outdir=scene.scene,
+                            shellscript=shellscript)
+                # Refinement Lookuptable 
+                # for "shift" data offset window size enlarged twice to 512 and 256, for data without shift 256 128
+                diff.offset_pwrm(MLI_1 = n.pix_area_sigma0,
+                            MLI_2 = image,
+                            DIFF_par = image + '_diff.par',
+                            offs = image + '_offs',
+                            ccp = image + '_snr',
+                            rwin = 512,
+                            azwin = 256,
+                            offsets = image + '_offsets.txt',
+                            n_ovr = 2,
+                            nr = 64,
+                            naz = 32,
+                            thres = 0.2,
+                            logpath=path_log,
+                            outdir=scene.scene,
+                            shellscript=shellscript)
+                #par2hdr(master + '.par', master + '_offs' + '.hdr')
+                diff.offset_fitm(offs = image + '_offs',
+                            ccp = image + '_snr',
+                            DIFF_par = image + '_diff.par',
+                            coffs = image + '_coffs',
+                            coffsets = image + '_coffsets',
+                            thres = 0.2,
+                            npoly = 4,
+                            logpath=path_log,
+                            outdir=scene.scene,
+                            shellscript=shellscript)
+                # Updating of the look-up table
+                diff.gc_map_fine(gc_in = lut_final,
+                            width = sim_width,
+                            DIFF_par = image + '_diff.par',
+                            gc_out = lut_final + '.fine',
+                            ref_flg = 1,
+                            logpath=path_log,
+                            outdir=scene.scene,
+                            shellscript=shellscript)
+                # Reproduce pixel area estimate
+                diff.pixel_area(MLI_par=image + '.par',
+                            DEM_par=n.dem_seg_geo + '.par',
+                            DEM=n.dem_seg_geo,
+                            lookup_table=lut_final + '.fine', #lut_final
+                            ls_map=n.ls_map_geo,
+                            inc_map=n.inc_geo,
+                            pix_sigma0=n.pix_area_sigma0,
+                            sigma0_ratio=n.pix_fine, # '-'
+                            logpath=path_log,
+                            outdir=scene.scene,
+                            shellscript=shellscript)
+                par2hdr(master + '.par', image + '_pix_sigma0' + '.hdr')
+                # Resample dem to rdc geometry
+                diff.geocode(lookup_table = lut_final + '.fine', #lut_final
+                            data_in = n.dem_seg_geo,
+                            width_in = dem_width,
+                            data_out = n.dem_seg_geo + '.rdc',
+                            width_out = master_par.range_samples,
+                            nlines_out = master_par.azimuth_lines,
+                            interp_mode = 0,
+                            dtype = 0,
+                            logpath=path_log,
+                            outdir=scene.scene,
+                            shellscript=shellscript)
+                # Calculate pixel area normalization factor, i.e., the ratio of the pixel area assuming
+                lat.ratio(d1 = image + '_pix_ell',
+                            d2 = n.pix_area_sigma0,
+                            ratio = n.pix_fine,
+                            width = master_par.range_samples,
+                            bx = 1,
+                            by = 1,
+                            logpath = path_log,
+                            outdir = scene.scene,
+                            shellscript = shellscript)
+                par2hdr(master + '.par', n.pix_fine + '.hdr')
+                lut_final=lut_final+'.fine'
+                
             lat.product(data_1=image,
                         data_2=n.pix_fine,
                         product=image + '_pan',
@@ -836,7 +998,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
             par2hdr(master + '.par', image + '_pan.hdr')
             diff.geocode_back(data_in=image + '_pan',
                               width_in=master_par.range_samples,
-                              lookup_table=lut_final,
+                              lookup_table=lut_final, 
                               data_out=image + '_pan_geo',
                               width_out=sim_width,
                               interp_mode=func_geoback,

@@ -116,7 +116,11 @@ class ISPPar(object):
             par_file.close()
 
         if hasattr(self, 'date'):
-            self.date = '{}-{:02d}-{:02d}T{:02d}:{:02d}:{:02f}'.format(*self.date)
+            try:
+                self.date = '{}-{:02d}-{:02d}T{:02d}:{:02d}:{:02f}'.format(*self.date)
+            except:
+                # for only date available
+                self.date = '{}-{:02d}-{:02d}'.format(*self.date)
     
     def __enter__(self):
         return self
