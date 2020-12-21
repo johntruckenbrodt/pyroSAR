@@ -431,12 +431,18 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # print('-- configuring Subset Node')
     if shapefile:
         # print('--- read')
-        shp = shapefile.clone() if isinstance(shapefile, Vector) else Vector(shapefile)
-        # reproject the geometry to WGS 84 latlon
-        # print('--- reproject')
-        shp.reproject(4326)
-        ext = shp.extent
-        shp.close()
+        if isinstance(shapefile, dict):
+            ext = shapefile
+        else:
+            if isinstance(shapefile, Vector):
+                shp = shapefile.clone()
+            elif isinstance(shapefile, str):
+                shp = Vector(shapefile)
+            # reproject the geometry to WGS 84 latlon
+            # print('--- reproject')
+            shp.reproject(4326)
+            ext = shp.extent
+            shp.close()
         # add an extra buffer of 0.01 degrees
         buffer = 0.01
         ext['xmin'] -= buffer
