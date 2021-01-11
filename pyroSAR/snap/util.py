@@ -82,7 +82,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         Apply Earth Gravitational Model to external DEM? Default is True.
     terrainFlattening: bool
         apply topographic normalization on the data?
-    basename_extensions: list of str
+    basename_extensions: list of str or None
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     test: bool, optional
         If set to True the workflow xml file is only written and not executed. Default is False.
@@ -96,7 +96,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         the number of workers executed together in one gpt call
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
-    gpt_exceptions: dict
+    gpt_exceptions: dict or None
         a dictionary to override the configured GPT executable for certain operators;
         each (sub-)workflow containing this operator will be executed with the define executable;
         
