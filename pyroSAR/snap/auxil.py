@@ -497,9 +497,11 @@ def split(xmlfile, groups):
             if isinstance(sources, list):
                 sources_new_pos = [list(node_lookup.values()).index(x) for x in sources]
                 sources_new = [list(node_lookup.keys())[x] for x in sources_new_pos]
-                newnode = new.insert_node(node, before=sources_new, void=False)
+                newnode = new.insert_node(node.copy(), before=sources_new, void=False,
+                                          resetSuccessorSource=False)
             else:
-                newnode = new.insert_node(node, void=False)
+                newnode = new.insert_node(node.copy(), void=False,
+                                          resetSuccessorSource=False)
             node_lookup[newnode.id] = id_old
             
             if not resetSuccessorSource:
@@ -519,9 +521,10 @@ def split(xmlfile, groups):
         # add a Write node to all dangling nodes
         counter = 0
         for node in new:
-            if new.successors(node.id) == [] and not node.id.startswith('Write'):
+            dependants = [x for x in workflow.successors(node.id) if not x.startswith('Write') and not x in group]
+            if node.operator != 'Read' and len(dependants) > 0:
                 write = parse_node('Write')
-                new.insert_node(write, before=node.id)
+                new.insert_node(write, before=node.id, resetSuccessorSource=False)
                 id = str(position) if counter == 0 else '{}-{}'.format(position, counter)
                 tmp_out = os.path.join(tmp, '{}_tmp{}.dim'.format(basename, id))
                 prod_tmp[node_lookup[node.id]] = tmp_out
