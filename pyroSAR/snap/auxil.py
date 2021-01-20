@@ -1,7 +1,7 @@
 ###############################################################################
 # pyroSAR SNAP API tools
 
-# Copyright (c) 2017-2020, the pyroSAR Developers.
+# Copyright (c) 2017-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -13,6 +13,7 @@
 ###############################################################################
 import os
 import re
+import copy
 import shutil
 import requests
 import subprocess as sp
@@ -955,6 +956,16 @@ class Node(object):
                                   key, {'refid': value})
         else:
             source.attrib['refid'] = value
+    
+    def copy(self):
+        """
+        
+        Returns
+        -------
+        Node
+            a copy of the Node object
+        """
+        return Node(copy.deepcopy(self.element))
     
     @property
     def id(self):
