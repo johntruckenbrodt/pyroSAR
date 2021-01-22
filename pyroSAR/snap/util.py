@@ -19,11 +19,11 @@ from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, get_egm96_look
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 
 
-def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
+def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, copyMetadata=True, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR',
             removeS1ThermalNoise=True, offset=None, allow_RES_OSV=False, demName='SRTM 1Sec HGT',
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
-            basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True,
+            basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True, tmpdir=None,
             gpt_exceptions=None, gpt_args=None, returnWF=False, nodataValueAtSea=True,
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
@@ -50,6 +50,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         processed.
     shapefile: str or :py:class:`~spatialist.vector.Vector`, optional
         A vector geometry for subsetting the SAR scene to a test site. Default is None.
+    copyMetadata: bool
+        Set if metadata is retained after the subset operation, necessary if a calibration node follows.
     scaling: {'dB', 'db', 'linear'}, optional
         Should the output be in linear or decibel scaling? Default is 'dB'.
     geocoding_type: {'Range-Doppler', 'SAR simulation cross correlation'}, optional
@@ -96,6 +98,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         the number of workers executed together in one gpt call
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
+    tmpdir: str
+        path of custom temporary directory, useful to separate output folder and temp folder
     gpt_exceptions: dict or None
         a dictionary to override the configured GPT executable for certain operators;
         each (sub-)workflow containing this operator will be executed with the define executable;
@@ -277,11 +281,11 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     orbitType = orbit_lookup[formatName]
     if formatName == 'ENVISAT' and id.acquisition_mode == 'WSM':
         orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
-    if formatName == 'SENTINEL-1':
-        match = id.getOSV(osvType='POE', returnMatch=True)
-        if match is None and allow_RES_OSV:
-            id.getOSV(osvType='RES')
-            orbitType = 'Sentinel Restituted (Auto Download)'
+#     if formatName == 'SENTINEL-1':
+#         match = id.getOSV(osvType='POE', returnMatch=True)
+#         if match is None and allow_RES_OSV:
+#             id.getOSV(osvType='RES')
+#             orbitType = 'Sentinel Restituted (Auto Download)'
     orb = workflow['Apply-Orbit-File']
     orb.parameters['orbitType'] = orbitType
     orb.parameters['continueOnFail'] = False
@@ -427,12 +431,18 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # print('-- configuring Subset Node')
     if shapefile:
         # print('--- read')
-        shp = shapefile.clone() if isinstance(shapefile, Vector) else Vector(shapefile)
-        # reproject the geometry to WGS 84 latlon
-        # print('--- reproject')
-        shp.reproject(4326)
-        ext = shp.extent
-        shp.close()
+        if isinstance(shapefile, dict):
+            ext = shapefile
+        else:
+            if isinstance(shapefile, Vector):
+                shp = shapefile.clone()
+            elif isinstance(shapefile, str):
+                shp = Vector(shapefile)
+            # reproject the geometry to WGS 84 latlon
+            # print('--- reproject')
+            shp.reproject(4326)
+            ext = shp.extent
+            shp.close()
         # add an extra buffer of 0.01 degrees
         buffer = 0.01
         ext['xmin'] -= buffer
@@ -456,6 +466,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         workflow.insert_node(subset, before=read.id)
         subset.parameters['region'] = [0, 0, id.samples, id.lines]
         subset.parameters['geoRegion'] = wkt
+        if copyMetadata:
+            subset.parameters['copyMetadata'] = 'True'
+        else:
+            subset.parameters['copyMetadata'] = 'False'
     ############################################
     # (optionally) configure subset node for pixel offsets
     if offset and not shapefile:
@@ -566,7 +580,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             groups = groupbyWorkers(outname + '_proc.xml', groupsize)
             gpt(outname + '_proc.xml', groups=groups, cleanup=cleanup,
                 gpt_exceptions=gpt_exceptions, gpt_args=gpt_args,
-                removeS1BorderNoiseMethod=removeS1BorderNoiseMethod)
+                removeS1BorderNoiseMethod=removeS1BorderNoiseMethod,tmpdir=tmpdir)
         except RuntimeError as e:
             print(str(e))
             with open(outname + '_error.log', 'w') as log:
