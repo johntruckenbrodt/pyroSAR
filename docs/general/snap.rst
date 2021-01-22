@@ -94,3 +94,38 @@ node's XML description its default is used by SNAP during processing. If, howeve
 workflow that is no longer supported by SNAP, the processing will be terminated. This can easily happen if the workflow
 was created by an older version of SNAP. pyroSAR reads the error messages and, if an unknown parameter is mentioned,
 deletes this parameter from the workflow, saves it to a new file and executes it instead.
+
+**troubleshooting**
+
+SNAP as well as pyroSAR's SNAP API are constantly being developed and bugs are unfortunately inevitable.
+This section is intended to guide users to better interpret errors and unexpected behaviour.
+
+*The process is running but seems inactive without any progress.*
+
+This might be related to SNAP's inability to download needed DEM tiles.
+SNAP will be stuck in a loop infinitely trying to download the missing tiles.
+This can be identified by directly running gpt in the command line.
+However, by operating gpt through a Python subprocess, it is not possible to see those command line messages.
+Only after a process has terminated, all messages can be retrieved and be written to log or error files.
+
+A simple approach to interpret such a behaviour is to first create a workflow XML file with
+:func:`~pyroSAR.snap.util.geocode`'s parameter ``test=True`` (so that only the XML is written but it is not executed):
+
+.. code-block:: python
+
+    from pyroSAR.snap import geocode
+    geocode(scene='S1A_IW_GRDH_1SDV_20200720T023849_20200720T023914_033532_03E2B5_2952.zip',
+            outdir='/test', test=True)
+
+
+and then run gpt on it directly in the shell (i.e. outside of Python):
+
+::
+
+    gpt /test/S1A__IW___D_20200720T023849_VV_Orb_ML_TC_proc.xml
+
+This way one can directly see gpt's status, which in this case might be
+
+::
+
+    SEVERE: org.esa.snap.core.dataop.dem.ElevationFile: java.lang.reflect.InvocationTargetException

@@ -1,7 +1,7 @@
 ###############################################################################
 # pyroSAR SNAP API tools
 
-# Copyright (c) 2017-2020, the pyroSAR Developers.
+# Copyright (c) 2017-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -13,6 +13,7 @@
 ###############################################################################
 import os
 import re
+import copy
 import shutil
 import requests
 import subprocess as sp
@@ -499,9 +500,11 @@ def split(xmlfile, groups, tmpdir=None):
             if isinstance(sources, list):
                 sources_new_pos = [list(node_lookup.values()).index(x) for x in sources]
                 sources_new = [list(node_lookup.keys())[x] for x in sources_new_pos]
-                newnode = new.insert_node(node, before=sources_new, void=False)
+                newnode = new.insert_node(node.copy(), before=sources_new, void=False,
+                                          resetSuccessorSource=False)
             else:
-                newnode = new.insert_node(node, void=False)
+                newnode = new.insert_node(node.copy(), void=False,
+                                          resetSuccessorSource=False)
             node_lookup[newnode.id] = id_old
             
             if not resetSuccessorSource:
@@ -521,9 +524,10 @@ def split(xmlfile, groups, tmpdir=None):
         # add a Write node to all dangling nodes
         counter = 0
         for node in new:
-            if new.successors(node.id) == [] and not node.id.startswith('Write'):
+            dependants = [x for x in workflow.successors(node.id) if not x.startswith('Write') and not x in group]
+            if node.operator != 'Read' and len(dependants) > 0:
                 write = parse_node('Write')
-                new.insert_node(write, before=node.id)
+                new.insert_node(write, before=node.id, resetSuccessorSource=False)
                 id = str(position) if counter == 0 else '{}-{}'.format(position, counter)
                 tmp_out = os.path.join(tmp, '{}_tmp{}.dim'.format(basename, id))
                 prod_tmp[node_lookup[node.id]] = tmp_out
@@ -958,6 +962,16 @@ class Node(object):
                                   key, {'refid': value})
         else:
             source.attrib['refid'] = value
+    
+    def copy(self):
+        """
+        
+        Returns
+        -------
+        Node
+            a copy of the Node object
+        """
+        return Node(copy.deepcopy(self.element))
     
     @property
     def id(self):
