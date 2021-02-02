@@ -1,7 +1,7 @@
 ###############################################################################
 # parse Gamma command docstrings to Python functions
 
-# Copyright (c) 2015-2019, the pyroSAR Developers.
+# Copyright (c) 2015-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -54,10 +54,10 @@ def parse_command(command, indent='    '):
         # for all other commands stderr is just appended to stdout
         out += err
     
-    pattern = r'([\w]+ (?:has been|was) re(?:named to|placed by)(?: the ISP program|) [\w]+)'
+    pattern = r'([\w\.]+ (?:has been|was) re(?:named to|placed(?: that [ \*\n]*|) by)(?: the ISP program|) [\w\.]+)'
     match = re.search(pattern, out)
     if match:
-        raise DeprecationWarning(match.groups()[0])
+        raise DeprecationWarning('\n' + out)
     
     if re.search(r"Can't locate FILE/Path\.pm in @INC", out):
         raise RuntimeError('unable to parse Perl script')
@@ -73,7 +73,9 @@ def parse_command(command, indent='    '):
                                     ],
                        'atm_mod_2d': [('xref', 'rref'),
                                       ('yref', 'azref')],
+                       'atm_mod_2d_pt': [('[sigma_min]', '[sigma_max]')],
                        'cc_monitoring': [('...', '<...>')],
+                       'cct_sp_pt': [('pcct_sp_pt', 'pcct_sp')],
                        'comb_interfs': [('combi_out', 'combi_int')],
                        'coord_to_sarpix': [('north/lat', 'north_lat'),
                                            ('east/lon', 'east_lon'),
@@ -100,7 +102,9 @@ def parse_command(command, indent='    '):
                                    ('alpha       (output)', 'alpha2      (output)')],
                        'histogram_ras': [('mean/stdev', 'mean_stdev')],
                        'hsi_color_scale': [('[chip]', '[chip_width]')],
-                       'HUYNEN_DEC': [('T11_0', 'T11')],
+                       'HUYNEN_DEC': [('T11_0', 'T11'),
+                                      ('<T12> <T13> <T11>', '<T11> <T12> <T13>'),
+                                      ('HUYNEN_DEC:', '***')],
                        'interf_SLC': [('  SLC2_pa  ', '  SLC2_par  ')],
                        'ionosphere_mitigation': [('<SLC1> <ID1>', '<ID1>')],
                        'landsat2dem': [('<DEM>', '<image>')],
@@ -115,6 +119,8 @@ def parse_command(command, indent='    '):
                                        ('e2', 'east2'),
                                        ('[coord]', '[coords]')],
                        'mask_class': [('...', '<...>')],
+                       'mcf_pt': [('<azlks>', '[azlks]'),
+                                  ('<rlks>', '[rlks]')],
                        'mk_2d_im_geo': [('exponent', 'exp')],
                        'mk_adf2_2d': [('[alpha_max [', '[alpha_max] ['),
                                       ('-m MLI_dir', 'mli_dir'),
@@ -136,7 +142,17 @@ def parse_command(command, indent='    '):
                        'mk_itab': [('<offset>', '<start>')],
                        'mk_hgt_2d': [('m/cycle', 'm_cycle')],
                        'mk_pol2rec_2d': [('data_tab', 'DIFF_tab'),
-                                         ('<type> <rmli>', '<type>')],
+                                         ('<type> <rmli>', '<dtype>'),
+                                         ('<dtype> <rmli>', '<dtype>'),
+                                         ('type           input', 'dtype          input'),
+                                         ('\n    Options:\n', ''),
+                                         ('-s scale', 'scale'),
+                                         ('-e exp', 'exponent'),
+                                         ('-a min', 'min'),
+                                         ('-b max', 'max'),
+                                         ('-R rmax', 'rmax'),
+                                         ('-m mode', 'mode'),
+                                         ('-u', 'update')],
                        'mk_rasdt_all': [('RMLI_image', 'MLI'),
                                         ('MLI_image', 'MLI')],
                        'mk_rasmph_all': [('RMLI_image', 'MLI'),
@@ -243,26 +259,10 @@ def parse_command(command, indent='    '):
     arg_opt_raw = [re.sub(r'[^\w.-]*', '', x) for x in re.findall(r'[^[]*\[([^]]*)\]', usage)]
     
     ###########################################
-    # remove parameters from the usage description which are not documented
-    removes = {'diplane_helix': ['image_format'],
-               'dis_data': ['term'],
-               'dis_ipta': ['term'],
-               'kml_pt': ['start_f1', 'start_f2'],
-               'phase_sum': ['nmin'],
-               'pt2d': ['wflg'],
-               'ras_clist': ['mflg'],
-               'temp_log_var': ['norm_pow']}
-    
-    if command_base in removes.keys():
-        for var in removes[command_base]:
-            arg_opt_raw.remove(var)
-    
-    if command_base == 'res_map':
-        arg_req_raw.remove('report_file')
-    ###########################################
     # add parameters missing in the usage argument lists
     
     appends = {'mk_adf2_2d': ['cc_min', 'cc_max', 'mli_dir', 'scale', 'exponent', 'update'],
+               'mk_pol2rec_2d': ['scale', 'exponent', 'min', 'max', 'rmax', 'mode', 'update'],
                'SLC_interp_S1_TOPS': ['mode', 'order'],
                'SLC_interp_map': ['mode', 'order']}
     
@@ -272,55 +272,55 @@ def parse_command(command, indent='    '):
     ###########################################
     # define parameter replacements; this is intended for parameters which are to be aggregated into a list parameter
     replacements = {'cc_monitoring': [(['nfiles', 'f1', 'f2', '...'],
-                                       'files',
-                                       'a list of input data files (float)')],
+                                       ['files'],
+                                       ['a list of input data files (float)'])],
                     'dis_data': [(['nstack', 'pdata1', '...'],
-                                  'pdata',
-                                  'a list of point data stack files')],
+                                  ['pdata'],
+                                  ['a list of point data stack files'])],
                     'lin_comb': [(['nfiles', 'f1', 'f2', '...'],
-                                  'files',
-                                  'a list of input data files (float)'),
+                                  ['files'],
+                                  ['a list of input data files (float)']),
                                  (['factor1', 'factor2', '...'],
-                                  'factors',
-                                  'a list of factors to multiply the input files with')],
+                                  ['factors'],
+                                  ['a list of factors to multiply the input files with'])],
                     'lin_comb_cpx': [(['nfiles', 'f1', 'f2', '...'],
-                                      'files',
-                                      'a list of input data files (float)'),
+                                      ['files'],
+                                      ['a list of input data files (float)']),
                                      (['factor1_r', 'factor2_r', '...'],
-                                      'factors_r',
-                                      'a list of real part factors to multiply the input files with'),
+                                      ['factors_r'],
+                                      ['a list of real part factors to multiply the input files with']),
                                      (['factor1_i', 'factor2_i'],
-                                      'factors_i',
-                                      'a list of imaginary part factors to multiply the input files with')],
+                                      ['factors_i'],
+                                      ['a list of imaginary part factors to multiply the input files with'])],
                     'mask_class': [(['n_class', 'class_1', '...', 'class_n'],
-                                    'class_values',
-                                    'a list of class map values')],
+                                    ['class_values'],
+                                    ['a list of class map values'])],
                     'mosaic': [(['nfiles', 'data_in1', 'DEM_par1', 'data_in2', 'DEM_par2', '...', '...'],
                                 ['data_in_list', 'DEM_par_list'],
                                 ['a list of input data files',
                                  'a list of DEM/MAP parameter files for each data file'])],
                     'multi_class_mapping': [(['nfiles', 'f1', 'f2', '...', 'fn'],
-                                             'files',
-                                             'a list of input data files (float)')],
+                                             ['files'],
+                                             ['a list of input data files (float)'])],
                     'rascc_mask_thinning': [(['thresh_1', '...', 'thresh_nmax'],
-                                             'thresholds',
-                                             'a list of thresholds sorted from smallest to '
-                                             'largest scale sampling reduction')],
+                                             ['thresholds'],
+                                             ['a list of thresholds sorted from smallest to '
+                                              'largest scale sampling reduction'])],
                     'single_class_mapping': [(['nfiles', 'f1', '...', 'fn'],
-                                              'files',
-                                              'a list of point data stack files'),
+                                              ['files'],
+                                              ['a list of point data stack files']),
                                              (['lt1', 'ltn'],
-                                              'thres_lower',
-                                              'a list of lower thresholds for the files'),
+                                              ['thres_lower'],
+                                              ['a list of lower thresholds for the files']),
                                              (['ut1', 'utn'],
-                                              'thres_upper',
-                                              'a list of upper thresholds for the files')],
+                                              ['thres_upper'],
+                                              ['a list of upper thresholds for the files'])],
                     'validate': [(['nclass1', 'class1_1', 'class1_2', '...', 'class1_n'],
-                                  'classes_map',
-                                  'a list of class values for the map data file (max. 16), 0 for all'),
+                                  ['classes_map'],
+                                  ['a list of class values for the map data file (max. 16), 0 for all']),
                                  (['nclass2', 'class2_1', 'class2_2', '...', 'class2_n'],
-                                  'classes_inv',
-                                  'a list of class values for the inventory data file (max. 16), 0 for all')]}
+                                  ['classes_inv'],
+                                  ['a list of class values for the inventory data file (max. 16), 0 for all'])]}
     
     if '..' in usage and command_base not in replacements.keys():
         raise RuntimeError('the command contains multi-args which were not properly parsed')
@@ -360,11 +360,6 @@ def parse_command(command, indent='    '):
     if command_base in inlist:
         arg_req.append('inlist')
     
-    # print('header_raw: \n{}\n'.format(header))
-    # print('usage_raw: \n{}\n'.format(usage))
-    # print('required args: {}\n'.format(', '.join(arg_req)))
-    # print('optional args: {}\n'.format(', '.join(arg_opt)))
-    # print('double args: {}\n'.format(', '.join(double)))
     ######################################################################################
     # create the function argument string for the Python function
     
@@ -386,7 +381,14 @@ def parse_command(command, indent='    '):
     flag_args = {'mk_adf2_2d': [('mli_dir', '-m', None),
                                 ('scale', '-s', None),
                                 ('exponent', '-e', None),
-                                ('update', '-u', False)]}
+                                ('update', '-u', False)],
+                 'mk_pol2rec_2d': [('scale', '-s', None),
+                                   ('exp', '-e', None),
+                                   ('min', '-a', None),
+                                   ('max', '-b', None),
+                                   ('rmax', '-R', None),
+                                   ('mode', '-m', None),
+                                   ('update', '-u', False)]}
     
     # replace arg default like arg='-' with arg=None or arg=False
     if command_base in flag_args:
@@ -403,19 +405,19 @@ def parse_command(command, indent='    '):
     proc_args = arg_req + arg_opt
     if command_base in inlist:
         proc_args.remove('inlist')
-    
+    proc_args_tmp = list(proc_args)
     # insert the length of a list argument as a proc arg
     if command_base in replacements.keys() and command_base != 'rascc_mask_thinning':
         key = replacements[command_base][0][1]
         if isinstance(key, list):
             key = key[0]
-        proc_args.insert(proc_args.index(key), 'len({})'.format(key))
+        proc_args_tmp.insert(proc_args_tmp.index(key), 'len({})'.format(key))
     
     if command_base == 'validate':
-        index = proc_args.index('classes_inv')
-        proc_args.insert(index, 'len(classes_inv)')
+        index = proc_args_tmp.index('classes_inv')
+        proc_args_tmp.insert(index, 'len(classes_inv)')
     
-    argstr_process = ', '.join(proc_args) \
+    argstr_process = ', '.join(proc_args_tmp) \
         .replace('-', '_') \
         .replace(', def,', ', drm,')
     
@@ -447,8 +449,6 @@ def parse_command(command, indent='    '):
     elif command_base == 'single_class_mapping':
         fun_proc = fun_proc.replace('files, thres_lower, thres_upper', 'zip(files, thres_lower, thres_upper)')
     
-    # print('arg_str1: \n{}\n'.format(argstr_function))
-    # print('arg_str2: \n{}\n'.format(argstr_process))
     ######################################################################################
     # create the function docstring
     
@@ -465,25 +465,42 @@ def parse_command(command, indent='    '):
     
     # filter out all individual (parameter, description) docstring tuples
     doc_items = []
+    j = 0
+    done = []
     for i in range(0, len(starts) - 1):
         doc_raw = doc[starts[i]:starts[i + 1]]
-        doc_tuple = re.search(pattern, doc_raw, flags=re.DOTALL).groups()
-        doc_items.append(doc_tuple)
+        doc_list = list(re.search(pattern, doc_raw, flags=re.DOTALL).groups())
+        
+        if doc_list[0] not in proc_args:
+            if command_base in replacements.keys():
+                repl = replacements[command_base][0]
+                for k, item in enumerate(repl[1]):
+                    if item not in done:
+                        doc_items.append([item, repl[2][k]])
+                        done.append(item)
+                        j += 1
+            continue
+        
+        if doc_list[0] in done:
+            doc_items[-1][1] += doc_raw
+            continue
+        
+        while doc_list[0] != proc_args[j]:
+            doc_list_sub = [proc_args[j], 'not documented']
+            doc_items.append(doc_list_sub)
+            j += 1
+        
+        doc_items.append(doc_list)
+        done.append(doc_items[-1][0])
+        j += 1
+    
+    for k in range(j, len(proc_args)):
+        doc_items.append([proc_args[k], 'not documented'])
     
     # add a parameter inlist to the docstring tuples
     if command_base in inlist:
         pos = [x[0] for x in doc_items].index(arg_opt[0])
         doc_items.insert(pos, ('inlist', 'a list of arguments to be passed to stdin'))
-    
-    # insert the parameter replacements
-    if command_base in replacements.keys():
-        for old, new, description in replacements[command_base]:
-            index = [doc_items.index(x) for x in doc_items if x[0] == old[0]][0]
-            if isinstance(new, str):
-                doc_items.insert(index, (new, description))
-            else:
-                for i in reversed(range(0, len(new))):
-                    doc_items.insert(index, (new[i], description[i]))
     
     # remove the replaced parameters from the argument lists
     doc_items = [x for x in doc_items if x[0] in arg_req + arg_opt]
