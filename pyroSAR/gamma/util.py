@@ -1,7 +1,7 @@
 ###############################################################################
 # universal core routines for processing SAR images with GAMMA
 
-# Copyright (c) 2014-2020, the pyroSAR Developers.
+# Copyright (c) 2014-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -435,7 +435,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
                         shellscript=shellscript)
 
 
-def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=1,
+def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geoback=1,
             func_interp=2, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
             cleanup=True, normalization_method=2, export_extra=None, basename_extensions=None,
             removeS1BorderNoise=True, removeS1BorderNoiseMethod='gamma'):
@@ -448,7 +448,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         the SAR scene to be processed
     dem: str
         the reference DEM in GAMMA format
-    tempdir: str
+    tmpdir: str
         a temporary directory for writing intermediate files
     outdir: str
         the directory for the final GeoTiff output files
@@ -598,7 +598,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if export_extra is not None and not isinstance(export_extra, list):
         raise TypeError("parameter 'export_extra' must either be None or a list")
     
-    for dir in [tempdir, outdir]:
+    for dir in [tmpdir, outdir]:
         if not os.path.isdir(dir):
             os.makedirs(dir)
     
@@ -614,12 +614,12 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if scene.compression is not None:
         print('unpacking scene..')
         try:
-            scene.unpack(tempdir)
+            scene.unpack(tmpdir)
         except RuntimeError:
             print('scene was attempted to be processed before, exiting')
             return
     else:
-        scene.scene = os.path.join(tempdir, os.path.basename(scene.file))
+        scene.scene = os.path.join(tmpdir, os.path.basename(scene.file))
         os.makedirs(scene.scene)
     
     shellscript = os.path.join(scene.scene, scene.outname_base(extensions=basename_extensions) + '_commands.sh')
