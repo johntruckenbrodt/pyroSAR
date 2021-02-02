@@ -1,7 +1,7 @@
 ###############################################################################
 # Convenience functions for SAR image batch processing with ESA SNAP
 
-# Copyright (c) 2016-2020, the pyroSAR Developers.
+# Copyright (c) 2016-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -282,11 +282,13 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     orbitType = orbit_lookup[formatName]
     if formatName == 'ENVISAT' and id.acquisition_mode == 'WSM':
         orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
-#     if formatName == 'SENTINEL-1':
-#         match = id.getOSV(osvType='POE', returnMatch=True)
-#         if match is None and allow_RES_OSV:
-#             id.getOSV(osvType='RES')
-#             orbitType = 'Sentinel Restituted (Auto Download)'
+    
+    if formatName == 'SENTINEL-1':
+        match = id.getOSV(osvType='POE', returnMatch=True)
+        if match is None and allow_RES_OSV:
+            id.getOSV(osvType='RES')
+            orbitType = 'Sentinel Restituted (Auto Download)'
+    
     orb = workflow['Apply-Orbit-File']
     orb.parameters['orbitType'] = orbitType
     orb.parameters['continueOnFail'] = False
