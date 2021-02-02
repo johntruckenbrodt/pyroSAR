@@ -48,8 +48,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         The polarizations to be processed; can be a string for a single polarization, e.g. 'VV', or a list of several
         polarizations, e.g. ['VV', 'VH']. With the special value 'all' (default) all available polarizations are
         processed.
-    shapefile: str or :py:class:`~spatialist.vector.Vector`, optional
-        A vector geometry for subsetting the SAR scene to a test site. Default is None.
+    shapefile: str or :py:class:`~spatialist.vector.Vector` or dict or None
+        A vector geometry for subsetting the SAR scene to a test site.
     copyMetadata: bool
         Set if metadata is retained after the subset operation, necessary if a calibration node follows.
     scaling: {'dB', 'db', 'linear'}, optional
@@ -98,8 +98,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         the number of workers executed together in one gpt call
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
-    tmpdir: str
-        path of custom temporary directory, useful to separate output folder and temp folder
+    tmpdir: str or None
+        path of custom temporary directory, useful to separate output folder and temp folder. If `None`, the `outdir`
+        location will be used. The created subdirectory will be deleted after processing.
     gpt_exceptions: dict or None
         a dictionary to override the configured GPT executable for certain operators;
         each (sub-)workflow containing this operator will be executed with the define executable;
