@@ -1,7 +1,7 @@
 ###############################################################################
 # tools for handling auxiliary data in software pyroSAR
 
-# Copyright (c) 2019, the pyroSAR Developers.
+# Copyright (c) 2019-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -59,7 +59,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
         - 'SRTM 3Sec'
 
-          * url: http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF
+          * url: https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF
         
         - 'TDX90m'
         
@@ -107,8 +107,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
     
     Returns
     -------
-    list or str
-        the names of the obtained files or the name of the VRT file
+    list or None
+        the names of the obtained files or None if a VRT file was defined
     
     Examples
     --------
@@ -129,8 +129,9 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         
         # download the tiles and virtually combine them in an in-memory
         # VRT file subsetted to the extent of the SAR scene plus a buffer of 0.01 degrees
-        vrt = dem_autoload(geometries=[bbox], demType='SRTM 1Sec HGT',
-                           vrt='/vsimem/srtm1.vrt', buffer=0.01)
+        vrt = '/vsimem/srtm1.vrt'
+        dem_autoload(geometries=[bbox], demType='SRTM 1Sec HGT',
+                     vrt=vrt, buffer=0.01)
         
         # write the final GeoTiff file
         outname = scene.outname_base() + 'srtm1.tif'
@@ -140,7 +141,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         # including conversion from geoid to ellipsoid heights
         from pyroSAR.auxdata import dem_create
         outname = scene.outname_base() + 'srtm1_ellp.tif'
-        dem_create(src=vrt, dst=outname, t_srs=32632, tr=(30, 30), geoid_convert=True, geoid='EGM96')
+        dem_create(src=vrt, dst=outname, t_srs=32632, tr=(30, 30),
+                   geoid_convert=True, geoid='EGM96')
     """
     with DEMHandler(geometries) as handler:
         return handler.load(demType=demType,
@@ -439,8 +441,8 @@ class DEMHandler:
 
         Returns
         -------
-        list or str
-            the names of the obtained files or the name of the VRT file
+        list or None
+            the names of the obtained files or None if a VRT file was defined
         """
         keys = self.config.keys()
         if demType not in keys:
@@ -477,7 +479,7 @@ class DEMHandler:
                             vsi=self.config[demType]['vsi'],
                             extent=self.__commonextent(buffer),
                             nodata=nodata)
-            return vrt
+            return None
         return locals
     
     @staticmethod
@@ -497,6 +499,7 @@ class DEMHandler:
         str
             the sorted names of the remote files
         """
+        
         # generate sequence of integer coordinates marking the tie points of the individual tiles
         def intrange(extent, step):
             lat = range(int(float(extent['ymin']) // step) * step,
