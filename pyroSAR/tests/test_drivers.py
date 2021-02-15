@@ -184,12 +184,19 @@ def test_archive(tmpdir, testdata):
     with pytest.raises(IOError):
         db.filter_scenelist([1])
     db.close()
+
+
+def test_archive2(tmpdir, testdata):
+    dbfile = os.path.join(str(tmpdir), 'scenes.db')
     with pyroSAR.Archive(dbfile) as db:
+        db.insert(testdata['s1'], verbose=False)
         assert db.size == (1, 0)
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
-        pyroSAR.drop_archive(db)
-        assert not os.path.isfile(dbfile)
+        url = str(db.url)
+    
+    pyroSAR.drop_archive(url)
+    assert not os.path.isfile(dbfile)
     assert Vector(shp).nfeatures == 1
     with pytest.raises(OSError):
         with pyroSAR.Archive(dbfile) as db:
