@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2020, the pyroSAR Developers.
+# Copyright (c) 2016-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -2593,14 +2593,14 @@ class Archive(object):
         return ipup
 
 
-def drop_archive(archive):
+def drop_archive(archive_url):
     """
     drop (delete) a scene database
     
     Parameters
     ----------
-    archive: pyroSAR.drivers.Archive
-        the database to be deleted
+    archive_url: str
+        the database URL
 
     Returns
     -------
@@ -2608,10 +2608,14 @@ def drop_archive(archive):
     See Also
     --------
     :func:`sqlalchemy_utils.functions.drop_database()`
+    
+    Examples
+    --------
+    >>> with Archive(dbfile = 'test.db') as db:
+    >>>     url = str(db.url)
+    >>> drop_archive(url)
     """
-    url = archive.url
-    archive.close()
-    drop_database(url)
+    drop_database(archive_url)
 
 
 def findfiles(scene, pattern, include_folders=False):
