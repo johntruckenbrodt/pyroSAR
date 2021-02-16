@@ -2593,14 +2593,14 @@ class Archive(object):
         return ipup
 
 
-def drop_archive(archive_url):
+def drop_archive(archive):
     """
     drop (delete) a scene database
     
     Parameters
     ----------
-    archive_url: str
-        the database URL
+    archive: pyroSAR.drivers.Archive
+        the database to be deleted
 
     Returns
     -------
@@ -2611,11 +2611,19 @@ def drop_archive(archive_url):
     
     Examples
     --------
-    >>> with Archive(dbfile = 'test.db') as db:
-    >>>     url = str(db.url)
-    >>> drop_archive(url)
+    >>> pguser = os.environ.get('PGUSER')
+    >>> pgpassword = os.environ.get('PGPASSWORD')
+    
+    >>> db = Archive('test', postgres=True, port=5432, user=pguser, password=pgpassword)
+    >>> drop_archive(db)
     """
-    drop_database(archive_url)
+    if archive.driver == 'potsgresql':
+        url = archive.url
+        archive.close()
+        drop_database(url)
+    else:
+        raise RuntimeError('this function only works for PostgreSQL databases.'
+                           'For SQLite databases it is recommended to just delete the DB file.')
 
 
 def findfiles(scene, pattern, include_folders=False):
