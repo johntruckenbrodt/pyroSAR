@@ -2617,7 +2617,7 @@ def drop_archive(archive):
     >>> db = Archive('test', postgres=True, port=5432, user=pguser, password=pgpassword)
     >>> drop_archive(db)
     """
-    if archive.driver == 'potsgresql':
+    if archive.driver == 'postgresql':
         url = archive.url
         archive.close()
         drop_database(url)
