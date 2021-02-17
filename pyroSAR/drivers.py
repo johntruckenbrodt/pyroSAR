@@ -1339,7 +1339,7 @@ class SAFE(ID):
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False):
+    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True):
         """
         download Orbit State Vector files for the scene
 
@@ -1348,10 +1348,13 @@ class SAFE(ID):
         osvdir: str
             the directory of OSV files; subdirectories POEORB and RESORB are created automatically;
             if no directory is defined, the standard SNAP auxdata location is used
-        osvType: {'POE', 'RES'}
-            the type of orbit file either 'POE', 'RES' or a list of both
+        osvType: str or list
+            the type of orbit file either 'POE', 'RES' or a list of both;
+            if both are selected, the best matching file will be retrieved. I.e., POE if available and RES otherwise
         returnMatch: bool
             return the best matching orbit file?
+        useLocal: bool
+            use locally existing files and do not search for files online if the right file has been found?
 
         Returns
         -------
@@ -1368,17 +1371,25 @@ class SAFE(ID):
         before = (date - timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
         after = (date + timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
         
-        # download the files
+        if useLocal:
+            with S1.OSV(osvdir) as osv:
+                match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
+            if match is not None:
+                return match if returnMatch else None
+        
         if osvType in ['POE', 'RES']:
             with S1.OSV(osvdir) as osv:
                 files = osv.catch(sensor=self.sensor, osvtype=osvType, start=before, stop=after)
-                osv.retrieve(files)
+        
         elif sorted(osvType) == ['POE', 'RES']:
             with S1.OSV(osvdir) as osv:
                 files = osv.catch(sensor=self.sensor, osvtype='POE', start=before, stop=after)
                 if len(files) == 0:
                     files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after)
-                osv.retrieve(files)
+        else:
+            raise TypeError("osvType must either be 'POE', 'RES' or a list of both")
+        
+        osv.retrieve(files)
         
         if returnMatch:
             with S1.OSV(osvdir) as osv:

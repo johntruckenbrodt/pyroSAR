@@ -345,7 +345,7 @@ class OSV(object):
              - 'S1B'
         timestamp: str
             the time stamp in the format 'YYYmmddTHHMMSS'
-        osvtype: {'POE', 'RES'} or list
+        osvtype: str or list
             the type of orbit files required; either 'POE', 'RES' or a list of both
 
         Returns
