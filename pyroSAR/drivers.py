@@ -53,11 +53,11 @@ from . import S1
 from .ERS import passdb_query
 from .xml_util import getNamespaces
 
-from spatialist import crsConvert, sqlite3, Vector, bbox, sqlite_util
+from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder
 
 # new imports for postgres
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import select, func
@@ -1686,6 +1686,13 @@ class Archive(object):
         if self.driver == 'sqlite':
             log.debug('loading spatialite extension')
             listen(target=self.engine, identifier='connect', fn=self.__load_spatialite)
+            # check if loading was successful
+            try:
+                conn = self.engine.connect()
+                version = conn.execute('SELECT spatialite_version();')
+                conn.close()
+            except exc.OperationalError:
+                raise RuntimeError('could not load spatialite extension')
         
         # if database is new, (create postgres-db and) enable spatial extension
         if not database_exists(self.engine.url):
@@ -1821,22 +1828,8 @@ class Archive(object):
                     dbapi_conn.load_extension(option)
                 except sqlite3.OperationalError:
                     continue
-        elif platform.system() == 'Windows':
-            sqlite_util.spatialite_setup()
-            dbapi_conn.load_extension('mod_spatialite')
         else:
             dbapi_conn.load_extension('mod_spatialite')
-        # else: # will never be reached
-        #     # or do it like this? now with .dylib (should be the right one for mac, but .so works also seemingly
-        #     for option in ['mod_spatialite', 'mod_spatialite.so', 'mod_spatialite.dll', 'mod_spatialite.dylib']:
-        #
-        #         try:
-        #
-        #             dbapi_conn.load_extension(option)
-        #
-        #         except sqlite3.OperationalError as e:
-        #
-        #             continue
     
     def __prepare_insertion(self, scene):
         """
