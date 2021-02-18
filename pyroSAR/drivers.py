@@ -1175,7 +1175,7 @@ class CEOS_PSR(ID):
 class EORC_PSR(ID):
     """
     Handler class for ALOS-PALSAR data in (EORC) Path format
-
+    
     Sensors:
         * PALSAR-2
 
@@ -1254,8 +1254,8 @@ class EORC_PSR(ID):
         except (AttributeError):
             raise IndexError('start and stop time stamps cannot be extracted; see file facter_m.dat')
 
-        meta['start'] = str(header[6])+'T'+start_time
-        meta['stop'] = str(header[6])+'T'+stop_time
+        meta['start'] = str(header[6])#+'T'+start_time
+        meta['stop'] = str(header[6])#+'T'+stop_time
         ################################################################################################################
         # read file metadata
         meta['sensor'] = header[2]
@@ -1270,19 +1270,20 @@ class EORC_PSR(ID):
 
         meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
         # print(meta['corners'])
+        # epsg=header[]
         meta['projection'] = crsConvert(4918, 'wkt') #EPSG: 4918: ITRF97, GRS80
         ################################################################################################################
         # read data set summary record
 
         orbitsPerCycle = 207
         
-        meta['orbitNumber_abs'] = header[5]
-        meta['orbitNumber_rel'] = int(meta['orbitNumber_abs']) % orbitsPerCycle
-        meta['cycleNumber'] = header[7]
+        meta['orbitNumber_abs'] = header[7]
+        meta['orbitNumber_rel'] = header[7]
+        meta['cycleNumber'] = header[5]
         meta['frameNumber'] = ''
         
-        meta['lines'] = facter_m[51]
-        meta['samples'] = facter_m[50]
+        meta['lines'] = int(float(facter_m[51]))
+        meta['samples'] = int(float(facter_m[50]))
         meta['incidence'] = facter_m[119]
         meta['proc_facility'] = header[73]
 
