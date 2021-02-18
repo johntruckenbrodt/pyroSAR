@@ -93,14 +93,17 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
                                antenna='-',
                                rloss_flag=0,
                                ant_flag=0,
-                               refarea_flag=2,
+                               refarea_flag=1,
                                sc_dB=0,
                                K_dB=-83.0,
-                               pix_area='pix_ell_'+pol,
+                               pix_area=image + '_cal_pix_ell',
                                logpath=logpath,
                                outdir=outdir,
                                shellscript=shellscript)
                 par2hdr(image + '.par', image + '_cal.hdr')
+                par2hdr(image + '.par', image + '_cal_pix_ell' + '.hdr')
+                # rename parameter file 
+                os.rename(image + '.par', image + '_cal.par')
     
     elif isinstance(id, ESA):
         k_db = {'ASAR': 55., 'ERS1': 58.24, 'ERS2': 59.75}[id.sensor]
@@ -234,8 +237,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
 
     elif isinstance(id, EORC_PSR):
         images = id.findfiles('^sar.')
-        facter_m = id.findfiles('facter_m.dat')
-        led = id.findfiles('LED-ALOS2')
+        facter_m=id.findfiles('facter_m.dat')
+        led=id.findfiles('LED-ALOS2')
 
         for image in images:
             polarization = re.search('[HV]{2}', os.path.basename(image)).group(0)
@@ -245,7 +248,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
 
             isp.par_KC_PALSAR_slr(facter_m=facter_m,
                                     CEOS_leader=led,
-                                    SLC_par=outname + '.par',
+                                    SLC_par=outname + '_mli.par',
                                     pol=polarization,
                                     pls_mode=2,
                                     KC_data=image,
@@ -697,34 +700,35 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
             print('orbit state vector correction failed for scene {}'.format(scene.scene))
             return
     
-    if scene.sensor not 'PALSAR-2':       
-        print('calibrating...')
-        calibrate(scene, scene.scene, logpath=path_log, outdir=scene.scene, shellscript=shellscript)
-        images = [x for x in scene.getGammaImages(scene.scene) if x.endswith('_grd') or x.endswith('_slc_cal')]
-    
-        products = list(images)
+    print('calibrating...')
+    calibrate(scene, scene.scene, logpath=path_log, outdir=scene.scene, shellscript=shellscript)
+    images = [x for x in scene.getGammaImages(scene.scene) if x.endswith('_grd') or x.endswith('_slc_cal') or x.endswith('_mli_cal')] 
+         
+    products = list(images)
 
+    if scene.sensor in ['S1A', 'S1B']:
         print('multilooking..')
         for image in images:
+            
             multilook(infile=image, outfile=image + '_mli', targetres=targetres,
                     logpath=path_log, outdir=scene.scene, shellscript=shellscript)
         
         images = [x + '_mli' for x in images]
         products.extend(images)
-
-    else:
-        images = [x for x in scene.getGammaImages(scene.scene) if x.endswith('_mli')]
-        products = list(images)
-
+    
     master = images[0]
     
     # create output names for files to be written
     # appreciated files will be written
     # depreciated files will be set to '-' in the GAMMA function call and are thus not written
     n = Namespace(scene.scene, scene.outname_base(extensions=basename_extensions))
-    n.appreciate(['dem_seg_geo', 'lut_init', 'pix_geo', 'inc_geo', 'ls_map_geo'])
-    n.depreciate(['sim_sar_geo', 'u_geo', 'v_geo', 'psi_geo'])
-    
+    if scene.sensor in ['S1A', 'S1B']:
+        n.appreciate(['dem_seg_geo', 'lut_init', 'pix_geo', 'inc_geo', 'ls_map_geo'])
+        n.depreciate(['sim_sar_geo', 'u_geo', 'v_geo', 'psi_geo'])
+    else:
+        n.appreciate(['dem_seg_geo', 'lut_init', 'pix_geo', 'inc_geo', 'ls_map_geo', 'sim_sar_geo'])
+        n.depreciate(['u_geo', 'v_geo', 'psi_geo'])
+        
     # if sarSimCC:
     #     n.appreciate(['ccp', 'lut_fine'])
     
@@ -884,24 +888,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                 '''
                 LUT refinement procedure for PALSAR-2 Path data
                 '''
-                print('refining LUT...')
-                # ellipsoid-based pixel area (ellip_pix_sigma0)
-                isp.radcal_MLI(MLI=image,
-                            MLI_par=image + '.par',
-                            OFF_par='-',
-                            CMLI=image + '_cal',
-                            antenna = '-',
-                            rloss_flag = 0,
-                            ant_flag = 0,
-                            refarea_flag = 1,  
-                            sc_dB = 0,
-                            K_dB = -83.0,
-                            pix_area = image + '_pix_ell',
-                            logpath=path_log,
-                            outdir=scene.scene,
-                            shellscript=shellscript)
-                par2hdr(master + '.par', image + '_pix_ell' + '.hdr')
-                par2hdr(master + '.par', image + '_cal.hdr')
+                print('refining LUT of {}...'.format(image))
                 # Refinement of geocoding lookup table
                 diff.create_diff_par(PAR_1 = image + '.par',
                             PAR_2 = '-',
@@ -913,11 +900,11 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                             shellscript=shellscript)
                 # Refinement Lookuptable 
                 # for "shift" data offset window size enlarged twice to 512 and 256, for data without shift 256 128
-                diff.offset_pwrm(MLI_1 = n.pix_area_sigma0,
+                diff.offset_pwrm(MLI_1 = n.pix_area_sigma0, 
                             MLI_2 = image,
                             DIFF_par = image + '_diff.par',
                             offs = image + '_offs',
-                            ccp = image + '_snr',
+                            ccp = image + '_ccp',
                             rwin = 512,
                             azwin = 256,
                             offsets = image + '_offsets.txt',
@@ -930,7 +917,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                             shellscript=shellscript)
                 #par2hdr(master + '.par', master + '_offs' + '.hdr')
                 diff.offset_fitm(offs = image + '_offs',
-                            ccp = image + '_snr',
+                            ccp = image + '_ccp',
                             DIFF_par = image + '_diff.par',
                             coffs = image + '_coffs',
                             coffsets = image + '_coffsets',
@@ -961,29 +948,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                             outdir=scene.scene,
                             shellscript=shellscript)
                 par2hdr(master + '.par', image + '_pix_sigma0' + '.hdr')
-                # Resample dem to rdc geometry
-                diff.geocode(lookup_table = lut_final + '.fine', #lut_final
-                            data_in = n.dem_seg_geo,
-                            width_in = dem_width,
-                            data_out = n.dem_seg_geo + '.rdc',
-                            width_out = master_par.range_samples,
-                            nlines_out = master_par.azimuth_lines,
-                            interp_mode = 0,
-                            dtype = 0,
-                            logpath=path_log,
-                            outdir=scene.scene,
-                            shellscript=shellscript)
-                # Calculate pixel area normalization factor, i.e., the ratio of the pixel area assuming
-                lat.ratio(d1 = image + '_pix_ell',
-                            d2 = n.pix_area_sigma0,
-                            ratio = n.pix_fine,
-                            width = master_par.range_samples,
-                            bx = 1,
-                            by = 1,
-                            logpath = path_log,
-                            outdir = scene.scene,
-                            shellscript = shellscript)
-                par2hdr(master + '.par', n.pix_fine + '.hdr')
+                
                 lut_final=lut_final+'.fine'
                 
             lat.product(data_1=image,
