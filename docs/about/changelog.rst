@@ -379,3 +379,70 @@ GAMMA API
 ---------
 
 - :ref:`Command API <gamma-command-api>` compatibility with GAMMA version 20200713
+
+0.12 / 2021-02-19
+=================
+
+Drivers
+-------
+
+- :class:`pyroSAR.drivers.Archive`:
+
+  + new argument `cleanup` to automatically remove missing scenes from database on initialization
+  + method :meth:`~pyroSAR.drivers.Archive.insert`: improved insertion speed
+  + method :meth:`~pyroSAR.drivers.Archive.select_duplicates`: new argument `value`
+  + method :meth:`~pyroSAR.drivers.Archive.get_colnames`: new argument `table` to get column names from arbitrary
+    tables, not just the main `data` table
+  + method :meth:`~pyroSAR.drivers.Archive.drop_element`: option to remove scene from `data` and `duplicates` tables
+    simultaneously by removing argument `table` and adding argument `with_duplicates`
+  + method :meth:`~pyroSAR.drivers.Archive.drop_table`:
+
+    * new argument `verbose`
+    * remove arbitrary tables, not just `data` and `duplicates`
+
+  + method :meth:`~pyroSAR.drivers.Archive.drop_database`: replaced by new function :func:`pyroSAR.drivers.drop_archive`
+  + new method :meth:`~pyroSAR.drivers.Archive.add_tables` to add custom tables to a database
+  + bug fixes
+
+- :class:`pyroSAR.drivers.CEOS_PSR`:
+
+  + added support for ALOS-1 PALSAR
+  + added basic support for Level 1.0 data
+
+- :class:`pyroSAR.drivers.SAFE`:
+
+  + method :meth:`~pyroSAR.drivers.SAFE.getOSV`: new argument `useLocal` to not search online if local matching
+    files are found
+
+GAMMA API
+---------
+
+- :ref:`Command API <gamma-command-api>` compatibility with GAMMA version 20201216
+
+- function :func:`pyroSAR.gamma.convert2gamma`:
+
+  + renamed argument `S1_noiseremoval` to `S1_tnr` (thermal noise removal)
+  + new argument `S1_bnr` (border noise removal)
+
+- function :func:`pyroSAR.gamma.geocode`:
+
+  + new default ``removeS1BorderNoiseMethod='gamma'``
+  + renamed argument `tempdir` to `tmpdir`
+
+SNAP API
+--------
+
+- function :func:`pyroSAR.snap.util.geocode`:
+
+  + enable grid alignment with new arguments `alignToStandardGrid`, `standardGridOriginX` and `standardGridOriginY`
+  + new argument `tmpdir` to choose the location of temporarily created files
+  + bug fixes
+
+- function :func:`pyroSAR.snap.auxil.gpt`:
+
+  + perform custom pyroSAR S1 GRD border noise removal only if IPF<2.9
+
+Auxiliary Data Handling
+-----------------------
+
+- function :func:`pyroSAR.auxdata.dem_autoload`: return `None` if a VRT was defined
