@@ -844,9 +844,9 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                               outdir=scene.scene,
                               shellscript=shellscript)
             par2hdr(n.dem_seg_geo + '.par', image + '_pan_geo.hdr')
-            lat.sigma2gamma(pwr1=image + '_pan_geo',
+            lat.sigma2gamma(sigma0=image + '_pan_geo',
                             inc=n.inc_geo,
-                            gamma=image + '_{}'.format(method_suffix),
+                            gamma0=image + '_{}'.format(method_suffix),
                             width=sim_width,
                             logpath=path_log,
                             outdir=scene.scene,
