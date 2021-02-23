@@ -651,7 +651,7 @@ class Workflow(object):
         Parameters
         ----------
         id: str
-            the ID of  node
+            the ID of the node
         recursive: bool
             find successors recursively?
 
@@ -687,10 +687,12 @@ class Workflow(object):
 
         """
         
-        def reset(id, source):
+        def reset(id, source, excludes=None):
             if isinstance(source, list):
                 for item in source:
-                    reset(id, item)
+                    successors = self.successors(item)
+                    excludes = [x for x in successors if x in source]
+                    reset(id, item, excludes)
             else:
                 try:
                     # find the source nodes of the current node
@@ -701,6 +703,9 @@ class Workflow(object):
                     # delete the ID of the current node from the successors
                     if id in successors:
                         del successors[successors.index(id)]
+                    if excludes is not None:
+                        for item in excludes:
+                            del successors[successors.index(item)]
                     for successor in successors:
                         successor_source = self[successor].source
                         if isinstance(successor_source, list):

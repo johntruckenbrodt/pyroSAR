@@ -17,6 +17,7 @@ from ..ancillary import multilook_factors
 from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, get_egm96_lookup
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
+from spatialist.ancillary import dissolve
 
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
@@ -132,11 +133,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - 'Refined Lee'
          - 'Lee'
          - 'Lee Sigma'
-    refarea: str
-        one of the following:
-         - 'beta0'
-         - 'gamma0'
-         - 'sigma0'
+    refarea: str or list
+        'sigma0', 'gamma0' or a list of both
     alignToStandardGrid: bool
         align all processed images to a common grid?
     standardGridOriginX: int or float
@@ -296,16 +294,21 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     cal = workflow['Calibration']
     cal.parameters['selectedPolarisations'] = polarizations
     cal.parameters['sourceBands'] = bandnames['int']
+    if isinstance(refarea, str):
+        refarea = [refarea]
     if terrainFlattening:
-        if refarea != 'gamma0':
+        if 'gamma0' not in refarea:
             raise RuntimeError('if terrain flattening is applied refarea must be gamma0')
         cal.parameters['outputBetaBand'] = True
+        if 'sigma0' in refarea:
+            cal.parameters['outputSigmaBand'] = True
     else:
-        refarea_options = ['sigma0', 'beta0', 'gamma0']
-        if refarea not in refarea_options:
-            message = '{0} must be one of the following:\n- {1}'
-            raise ValueError(message.format('refarea', '\n- '.join(refarea_options)))
-        cal.parameters['output{}Band'.format(refarea[:-1].capitalize())] = True
+        refarea_options = ['sigma0', 'gamma0']
+        for opt in refarea:
+            if opt not in refarea_options:
+                message = '{0} must be one of the following:\n- {1}'
+                raise ValueError(message.format('refarea', '\n- '.join(refarea_options)))
+            cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
     last = cal.id
     ############################################
     # terrain flattening node configuration
@@ -339,20 +342,20 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             raise ValueError(message.format('speckleFilter', '\n- '.join(speckleFilter_options)))
         sf = parse_node('Speckle-Filter')
         workflow.insert_node(sf, before=last)
-        sf.parameters['sourceBands'] = bandnames[refarea]
+        sf.parameters['sourceBands'] = None
         sf.parameters['filter'] = speckleFilter
         last = sf.id
     ############################################
     # configuration of node sequence for specific geocoding approaches
-    
+    bands = dissolve([bandnames[opt] for opt in refarea])
     if geocoding_type == 'Range-Doppler':
         tc = parse_node('Terrain-Correction')
         workflow.insert_node(tc, before=last)
-        tc.parameters['sourceBands'] = bandnames[refarea]
+        tc.parameters['sourceBands'] = bands
     elif geocoding_type == 'SAR simulation cross correlation':
         sarsim = parse_node('SAR-Simulation')
         workflow.insert_node(sarsim, before=last)
-        sarsim.parameters['sourceBands'] = bandnames[refarea]
+        sarsim.parameters['sourceBands'] = bands
         
         workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
         
@@ -386,12 +389,11 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
         ml.parameters['sourceBands'] = None
-        # if cal.parameters['outputBetaBand']:
-        #     ml.parameters['sourceBands'] = bandnames['beta0']
-        # elif cal.parameters['outputGammaBand']:
-        #     ml.parameters['sourceBands'] = bandnames['gamma0']
-        # elif cal.parameters['outputSigmaBand']:
-        #     ml.parameters['sourceBands'] = bandnames['sigma0']
+    ############################################
+    if len(refarea) > 1 and terrainFlattening:
+        bm = parse_node('BandMerge')
+        bm.parameters['sourceBands'] = bands
+        workflow.insert_node(bm, before=[tf.source, tf.id])
     ############################################
     # specify spatial resolution and coordinate reference system of the output dataset
     # print('-- configuring CRS')
@@ -425,7 +427,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if scaling in ['dB', 'db']:
         lin2db = parse_node('LinearToFromdB')
         workflow.insert_node(lin2db, before=tc.id)
-        lin2db.parameters['sourceBands'] = bandnames[refarea]
+        lin2db.parameters['sourceBands'] = bands
     
     ############################################
     # (optionally) add subset node and add bounding box coordinates of defined shapefile
