@@ -364,6 +364,8 @@ def gpt(xmlfile, groups=None, cleanup=True,
             if re.search('[HV]{2}', item):
                 pol = re.search('[HV]{2}', item).group()
                 name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
+                if 'Sigma0' in item:
+                    name_new = name_new.replace('TF_', '')
             else:
                 base = os.path.splitext(os.path.basename(item))[0] \
                     .replace('elevation', 'DEM')
