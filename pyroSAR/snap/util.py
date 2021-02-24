@@ -390,11 +390,28 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ml.parameters['nRgLooks'] = rlks
         ml.parameters['sourceBands'] = None
     ############################################
+    # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
     if len(refarea) > 1 and terrainFlattening:
         bm = parse_node('BandMerge')
-        bm.parameters['sourceBands'] = bands
         workflow.insert_node(bm, before=[tf.source, tf.id])
-    ############################################
+        sources = bm.source
+        gamma_index = sources.index('Terrain-Flattening')
+        sigma_index = abs(gamma_index - 1)
+        s1_id = os.path.basename(os.path.splitext(id.scene)[0])
+        bands_long = []
+        for band in bands:
+            comp = [band + '::']
+            if shapefile is not None:
+                comp.append('Subset_')
+            comp.append(s1_id)
+            if band.startswith('Gamma'):
+                comp.append('_' + workflow.suffix(stop=sources[gamma_index]))
+            else:
+                comp.append('_' + workflow.suffix(stop=sources[sigma_index]))
+            bands_long.append(''.join(comp))
+        bm.parameters['sourceBands'] = bands_long
+        bm.parameters['geographicError'] = 0.0
+        ############################################
     # specify spatial resolution and coordinate reference system of the output dataset
     # print('-- configuring CRS')
     tc.parameters['pixelSpacingInMeter'] = tr
@@ -441,8 +458,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 shp = shapefile.clone()
             elif isinstance(shapefile, str):
                 shp = Vector(shapefile)
+            else:
+                raise TypeError("argument 'shapefile' must be either a dictionary, a Vector object or a string.")
             # reproject the geometry to WGS 84 latlon
-            # print('--- reproject')
             shp.reproject(4326)
             ext = shp.extent
             shp.close()
@@ -458,14 +476,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             inter = intersect(id.bbox(), bounds)
             if not inter:
                 raise RuntimeError('no bounding box intersection between shapefile and scene')
-            # print('--- close intersect')
             inter.close()
-            # print('--- get wkt')
             wkt = bounds.convert2wkt()[0]
         
-        # print('--- parse XML node')
         subset = parse_node('Subset')
-        # print('--- insert node')
         workflow.insert_node(subset, before=read.id)
         subset.parameters['region'] = [0, 0, id.samples, id.lines]
         subset.parameters['geoRegion'] = wkt
