@@ -486,7 +486,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # parametrize write node
     # print('-- configuring Write Node')
     # create a suffix for the output file to identify processing steps performed in the workflow
-    suffix = workflow.suffix
+    suffix = workflow.suffix()
     
     basename = os.path.join(outdir, id.outname_base(basename_extensions))
     extension = suffix if format == 'ENVI' else polarizations[0] + '_' + suffix

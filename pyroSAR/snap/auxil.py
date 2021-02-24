@@ -304,7 +304,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
     write = workflow['Write']
     scene = identify(read.parameters['file'])
     outname = write.parameters['file']
-    suffix = workflow.suffix
+    suffix = workflow.suffix()
     format = write.parameters['formatName']
     dem_name = workflow.tree.find('.//demName')
     if dem_name is not None:
@@ -899,9 +899,14 @@ class Workflow(object):
             if key in node.parameters.keys():
                 node.parameters[key] = value2str(value)
     
-    @property
-    def suffix(self):
+    def suffix(self, stop=None):
         """
+        Get the SNAP operator suffix sequence
+        
+        Parameters
+        ----------
+        stop: str
+            the ID of the last workflow node
         
         Returns
         -------
@@ -914,6 +919,8 @@ class Workflow(object):
         for name in names:
             if name not in names_unique:
                 names_unique.append(name)
+            if name == stop:
+                break
         config = ExamineSnap()
         suffix = '_'.join(filter(None, [config.get_suffix(x) for x in names_unique]))
         return suffix

@@ -33,7 +33,7 @@ def test_geocode(tmpdir, testdata):
     assert len(groups2) == 1
     split(xmlfile, groups)
     id = identify(scene)
-    basename = '{}_{}'.format(id.outname_base(), tree.suffix)
+    basename = '{}_{}'.format(id.outname_base(), tree.suffix())
     procdir = os.path.join(str(tmpdir), basename)
     assert os.path.isdir(procdir)
     tempdir = os.path.join(procdir, 'temp')
