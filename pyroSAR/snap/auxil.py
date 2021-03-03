@@ -99,6 +99,7 @@ def parse_node(name, use_existing=True):
         out, err = run(cmd=cmd, void=False)
         
         graph = re.search('<graph id.*', out, flags=re.DOTALL).group()
+        graph = re.sub(r'>\${.*', '/>', graph)  # remove placeholder values like ${value}
         tree = ET.fromstring(graph)
         node = tree.find('node')
         node.attrib['id'] = operator
