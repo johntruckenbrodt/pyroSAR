@@ -99,6 +99,7 @@ def parse_node(name, use_existing=True):
         out, err = run(cmd=cmd, void=False)
         
         graph = re.search('<graph id.*', out, flags=re.DOTALL).group()
+        graph = re.sub(r'>\${.*', '/>', graph)  # remove placeholder values like ${value}
         tree = ET.fromstring(graph)
         node = tree.find('node')
         node.attrib['id'] = operator
@@ -251,12 +252,16 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
                 os.remove(outname + '.tif')
             elif os.path.isdir(outname):
                 shutil.rmtree(outname, onerror=windows_fileprefix)
+            elif outname.endswith('.dim'):
+                os.remove(outname)
+                shutil.rmtree(outname.replace('.dim', '.data'),
+                              onerror=windows_fileprefix)
         raise RuntimeError(submessage.format(out, err, os.path.basename(xmlfile), proc.returncode))
 
 
-def gpt(xmlfile, groups=None, cleanup=True,
+def gpt(xmlfile, outdir, groups=None, cleanup=True,
         gpt_exceptions=None, gpt_args=None,
-        removeS1BorderNoiseMethod='pyroSAR', basename_extensions=None, tmpdir=None):
+        removeS1BorderNoiseMethod='pyroSAR', basename_extensions=None):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
     Input is a readily formatted workflow XML file as
@@ -271,6 +276,8 @@ def gpt(xmlfile, groups=None, cleanup=True,
     ----------
     xmlfile: str
         the name of the workflow XML file
+    outdir: str
+        the directory into which to write the final files
     groups: list
         a list of lists each containing IDs for individual nodes
     cleanup: bool
@@ -303,7 +310,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
     read = workflow['Read']
     write = workflow['Write']
     scene = identify(read.parameters['file'])
-    outname = write.parameters['file']
+    tmpname = write.parameters['file']
     suffix = workflow.suffix()
     format = write.parameters['formatName']
     dem_name = workflow.tree.find('.//demName')
@@ -318,9 +325,9 @@ def gpt(xmlfile, groups=None, cleanup=True,
             and scene.meta['IPF_version'] < 2.9:
         if 'SliceAssembly' in workflow.operators:
             raise RuntimeError("pyroSAR's custom border noise removal is not yet implemented for multiple scene inputs")
-        xmlfile = os.path.join(outname,
+        xmlfile = os.path.join(tmpname,
                                os.path.basename(xmlfile.replace('_bnr', '')))
-        os.makedirs(outname, exist_ok=True)
+        os.makedirs(tmpname, exist_ok=True)
         # border noise removal is done outside of SNAP and the node is thus removed from the workflow
         del workflow['Remove-GRD-Border-Noise']
         # remove the node name from the groups
@@ -335,7 +342,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
         # unpack the scene if necessary and perform the custom border noise removal
         print('unpacking scene')
         if scene.compression is not None:
-            scene.unpack(outname)
+            scene.unpack(tmpname)
         print('removing border noise..')
         scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
         # change the name of the input file to that of the unpacked archive
@@ -346,15 +353,18 @@ def gpt(xmlfile, groups=None, cleanup=True,
     print('executing node sequence{}..'.format('s' if groups is not None else ''))
     try:
         if groups is not None:
+            tmpdir = os.path.join(tmpname, 'tmp')
             subs = split(xmlfile, groups, tmpdir)
             for sub in subs:
                 execute(sub, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
         else:
             execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
     except RuntimeError as e:
-        if cleanup and os.path.exists(outname):
-            shutil.rmtree(outname, onerror=windows_fileprefix)
+        if cleanup and os.path.exists(tmpname):
+            shutil.rmtree(tmpname, onerror=windows_fileprefix)
         raise RuntimeError(str(e) + '\nfailed: {}'.format(xmlfile))
+    
+    outname = os.path.join(outdir, os.path.basename(tmpname))
     
     if format == 'ENVI':
         print('converting to GTiff')
@@ -389,15 +399,14 @@ def gpt(xmlfile, groups=None, cleanup=True,
             if id.sensor in ['S1A', 'S1B']:
                 manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
                 basename = id.outname_base(basename_extensions)
-                basename = '{0}_{1}_manifest.safe'.format(basename, suffix)
-                outdir = os.path.dirname(outname)
+                basename = '{0}_manifest.safe'.format(basename)
                 outname_manifest = os.path.join(outdir, basename)
                 with open(outname_manifest, 'wb') as out:
                     out.write(manifest.read())
         except RuntimeError:
             continue
     ###########################################################################
-    if cleanup and os.path.exists(outname):
+    if cleanup and os.path.exists(tmpname):
         shutil.rmtree(outname, onerror=windows_fileprefix)
     print('done')
 
@@ -434,7 +443,7 @@ def is_consistent(workflow):
     return all(check)
 
 
-def split(xmlfile, groups, tmpdir=None):
+def split(xmlfile, groups, outdir):
     """
     split a workflow file into groups and write them to separate workflows including source and write target linking.
     The new workflows are written to a sub-directory `temp` of the target directory defined in the input's `Write` node.
@@ -447,6 +456,8 @@ def split(xmlfile, groups, tmpdir=None):
         the workflow to be split
     groups: list
         a list of lists each containing IDs for individual nodes
+    outdir: str
+        the directory into which to write the XML workflows and the intermediate files created by them
 
     Returns
     -------
@@ -460,12 +471,7 @@ def split(xmlfile, groups, tmpdir=None):
     workflow = Workflow(xmlfile)
     write = workflow['Write']
     out = write.parameters['file']
-    if tmpdir is None:
-        tmp = os.path.join(out, 'temp')
-    else:
-        tmp = tmpdir
-    if not os.path.isdir(tmp):
-        os.makedirs(tmp)
+    os.makedirs(outdir, exist_ok=True)
     
     # the temporary XML files
     outlist = []
@@ -531,7 +537,7 @@ def split(xmlfile, groups, tmpdir=None):
                 write = parse_node('Write')
                 new.insert_node(write, before=node.id, resetSuccessorSource=False)
                 id = str(position) if counter == 0 else '{}-{}'.format(position, counter)
-                tmp_out = os.path.join(tmp, '{}_tmp{}.dim'.format(basename, id))
+                tmp_out = os.path.join(outdir, '{}_tmp{}.dim'.format(basename, id))
                 prod_tmp[node_lookup[node.id]] = tmp_out
                 prod_tmp_format[node_lookup[node.id]] = 'BEAM-DIMAP'
                 write.parameters['file'] = tmp_out
@@ -540,7 +546,7 @@ def split(xmlfile, groups, tmpdir=None):
         if not is_consistent(new):
             message = 'inconsistent group:\n {}'.format(' -> '.join(group))
             raise RuntimeError(message)
-        outname = os.path.join(tmp, '{}_tmp{}.xml'.format(basename, position))
+        outname = os.path.join(outdir, '{}_tmp{}.xml'.format(basename, position))
         new.write(outname)
         outlist.append(outname)
     return outlist
@@ -565,10 +571,16 @@ def groupbyWorkers(xmlfile, n=2):
         on the newly created groups or directly to function :func:`gpt`, which will call :func:`split` internally.
     """
     workflow = Workflow(xmlfile)
-    workers_id = [x.id for x in workflow if x.operator not in ['Read', 'Write']]
+    workers_id = [x.id for x in workflow if x.operator not in ['Read', 'Write', 'BandSelect']]
     readers_id = [x.id for x in workflow['operator=Read']]
     writers_id = [x.id for x in workflow['operator=Write']]
+    selects_id = [x.id for x in workflow['operator=BandSelect']]
     workers_groups = [workers_id[i:i + n] for i in range(0, len(workers_id), n)]
+    for item in selects_id:
+        source = workflow[item].source
+        for group in workers_groups:
+            if source in group:
+                group.insert(group.index(source) + 1, item)
     nodes_groups = []
     for group in workers_groups:
         newgroup = []
@@ -1037,7 +1049,8 @@ class Node(object):
         sources = []
         elements = self.element.findall('.//sources/')
         for element in elements:
-            sources.append(element.attrib['refid'])
+            if element.tag.startswith('sourceProduct'):
+                sources.append(element.attrib['refid'])
         
         if len(sources) == 0:
             return None
