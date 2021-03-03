@@ -397,8 +397,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
             if id.sensor in ['S1A', 'S1B']:
                 manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
                 basename = id.outname_base(basename_extensions)
-                basename = '{0}_{1}_manifest.safe'.format(basename, suffix)
-                outdir = os.path.dirname(outname)
+                basename = '{0}_manifest.safe'.format(basename)
                 outname_manifest = os.path.join(outdir, basename)
                 with open(outname_manifest, 'wb') as out:
                     out.write(manifest.read())
