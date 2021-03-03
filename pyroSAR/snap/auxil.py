@@ -570,10 +570,16 @@ def groupbyWorkers(xmlfile, n=2):
         on the newly created groups or directly to function :func:`gpt`, which will call :func:`split` internally.
     """
     workflow = Workflow(xmlfile)
-    workers_id = [x.id for x in workflow if x.operator not in ['Read', 'Write']]
+    workers_id = [x.id for x in workflow if x.operator not in ['Read', 'Write', 'BandSelect']]
     readers_id = [x.id for x in workflow['operator=Read']]
     writers_id = [x.id for x in workflow['operator=Write']]
+    selects_id = [x.id for x in workflow['operator=BandSelect']]
     workers_groups = [workers_id[i:i + n] for i in range(0, len(workers_id), n)]
+    for item in selects_id:
+        source = workflow[item].source
+        for group in workers_groups:
+            if source in group:
+                group.insert(group.index(source) + 1, item)
     nodes_groups = []
     for group in workers_groups:
         newgroup = []
