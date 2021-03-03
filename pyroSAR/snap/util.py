@@ -224,10 +224,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     else:
         raise RuntimeError('polarizations must be of type str or list')
     
-    format = 'GeoTiff-BigTIFF' if len(polarizations) == 1 and export_extra is None else 'ENVI'
-    # print(polarizations)
-    # print(format)
-    
     bandnames = dict()
     bandnames['int'] = ['Intensity_' + x for x in polarizations]
     bandnames['beta0'] = ['Beta0_' + x for x in polarizations]
@@ -485,14 +481,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # print('-- configuring Write Node')
     # create a suffix for the output file to identify processing steps performed in the workflow
     suffix = workflow.suffix
-    
-    basename = os.path.join(outdir, id.outname_base(basename_extensions))
-    extension = suffix if format == 'ENVI' else polarizations[0] + '_' + suffix
-    outname = basename + '_' + extension
+    if tmpdir is None:
+        tmpdir = outdir
+    basename = os.path.join(tmpdir, id.outname_base(basename_extensions))
+    outname = basename + '_' + suffix
     
     write = workflow['Write']
     write.parameters['file'] = outname
-    write.parameters['formatName'] = format
+    write.parameters['formatName'] = 'ENVI'
     ############################################
     ############################################
     if export_extra is not None:
@@ -503,7 +499,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         write = parse_node('Write')
         workflow.insert_node(write, before=tc.id, resetSuccessorSource=False)
         write.parameters['file'] = outname
-        write.parameters['formatName'] = format
+        write.parameters['formatName'] = 'ENVI'
         for item in export_extra:
             if item not in options:
                 raise RuntimeError("ID '{}' not valid for argument 'export_extra'".format(item))
@@ -578,7 +574,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             groups = groupbyWorkers(outname + '_proc.xml', groupsize)
             gpt(outname + '_proc.xml', groups=groups, cleanup=cleanup,
                 gpt_exceptions=gpt_exceptions, gpt_args=gpt_args,
-                removeS1BorderNoiseMethod=removeS1BorderNoiseMethod,tmpdir=tmpdir)
+                removeS1BorderNoiseMethod=removeS1BorderNoiseMethod, outdir=outdir)
         except RuntimeError as e:
             print(str(e))
             with open(outname + '_error.log', 'w') as log:
