@@ -1024,7 +1024,8 @@ class Node(object):
         sources = []
         elements = self.element.findall('.//sources/')
         for element in elements:
-            sources.append(element.attrib['refid'])
+            if element.tag.startswith('sourceProduct'):
+                sources.append(element.attrib['refid'])
         
         if len(sources) == 0:
             return None
