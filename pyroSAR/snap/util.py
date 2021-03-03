@@ -505,6 +505,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 raise RuntimeError("ID '{}' not valid for argument 'export_extra'".format(item))
             key = 'save{}{}'.format(item[0].upper(), item[1:])
             tc.parameters[key] = True
+        select = parse_node('BandSelect')
+        workflow.insert_node(select, after=write.id)
+        select.parameters['sourceBands'] = export_extra
     ############################################
     ############################################
     # select DEM type
