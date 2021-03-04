@@ -814,6 +814,12 @@ class Workflow(object):
         Node or None
             the new node or None, depending on arguement `void`
         """
+        ncopies = [x.operator for x in self.nodes()].count(node.operator)
+        if ncopies > 0:
+            node.id = '{0} ({1})'.format(node.operator, ncopies + 1)
+        else:
+            node.id = node.operator
+        
         if before is None and after is None and len(self) > 0:
             before = self[len(self) - 1].id
         if before and not after:
@@ -826,7 +832,6 @@ class Workflow(object):
             position = self.index(predecessor) + 1
             self.tree.insert(position, node.element)
             newnode = Node(self.tree[position])
-            self.refresh_ids()
             ####################################################
             # set the source product for the new node
             if newnode.operator != 'Read':
@@ -854,7 +859,6 @@ class Workflow(object):
         else:
             log.debug('inserting node {}'.format(node.id))
             self.tree.insert(len(self.tree) - 1, node.element)
-        self.refresh_ids()
         if not void:
             return node
     
@@ -880,6 +884,15 @@ class Workflow(object):
         return sorted(list(set([node.operator for node in self])))
     
     def refresh_ids(self):
+        """
+        Ensure unique IDs for all nodes. If two nodes with the same ID are found one is renamed to "ID (2)".
+        E.g. 2 x "Write" -> "Write", "Write (2)".
+        This method is no longer used and is just kept in case there is need for it in the future.
+        
+        Returns
+        -------
+
+        """
         counter = {}
         for node in self:
             operator = node.operator
