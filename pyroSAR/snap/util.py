@@ -93,6 +93,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - localIncidenceAngle
          - projectedLocalIncidenceAngle
          - DEM
+         - layoverShadowMask
     groupsize: int
         the number of workers executed together in one gpt call
     cleanup: bool
@@ -207,6 +208,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         formatName = 'SENTINEL-1'
     else:
         raise RuntimeError('sensor not supported (yet)')
+    
+    # several options like resampling are modified globally for the whole workflow at the end of this function
+    # this list gathers IDs of nodes for which this should not be done because they are configured individually
+    resampling_exceptions = []
     ######################
     # print('- assessing polarization selection')
     if isinstance(polarizations, str):
@@ -508,22 +513,48 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     ############################################
     if export_extra is not None:
-        options = ['incidenceAngleFromEllipsoid',
-                   'localIncidenceAngle',
-                   'projectedLocalIncidenceAngle',
-                   'DEM']
-        write = parse_node('Write')
-        workflow.insert_node(write, before=tc.id, resetSuccessorSource=False)
-        write.parameters['file'] = outname
-        write.parameters['formatName'] = 'ENVI'
+        tc_options = ['incidenceAngleFromEllipsoid',
+                      'localIncidenceAngle',
+                      'projectedLocalIncidenceAngle',
+                      'DEM']
+        tc_write = None
+        tc_selection = []
         for item in export_extra:
-            if item not in options:
+            if item in tc_options:
+                if tc_write is None:
+                    tc_write = parse_node('Write')
+                    workflow.insert_node(tc_write, before=tc.id, resetSuccessorSource=False)
+                    tc_write.parameters['file'] = outname
+                    tc_write.parameters['formatName'] = 'ENVI'
+                key = 'save{}{}'.format(item[0].upper(), item[1:])
+                tc.parameters[key] = True
+                tc_selection.append(item)
+            elif item == 'layoverShadowMask':
+                sarsim = parse_node('SAR-Simulation')
+                sarsim.parameters['saveLayoverShadowMask'] = True
+                workflow.insert_node(sarsim, after=tc.id, resetSuccessorSource=False)
+                sarsim_select = parse_node('BandSelect')
+                sarsim_select.parameters['sourceBands'] = 'layover_shadow_mask'
+                workflow.insert_node(sarsim_select, before=sarsim.id, resetSuccessorSource=False)
+                
+                sarsim_tc = parse_node('Terrain-Correction')
+                workflow.insert_node(sarsim_tc, before=sarsim_select.id)
+                sarsim_tc.parameters['alignToStandardGrid'] = alignToStandardGrid
+                sarsim_tc.parameters['standardGridOriginX'] = standardGridOriginX
+                sarsim_tc.parameters['standardGridOriginY'] = standardGridOriginY
+                sarsim_tc.parameters['imgResamplingMethod'] = 'NEAREST_NEIGHBOUR'
+                resampling_exceptions.append(sarsim_tc.id)
+                
+                sarsim_write = parse_node('Write')
+                sarsim_write.parameters['file'] = outname
+                sarsim_write.parameters['formatName'] = 'ENVI'
+                workflow.insert_node(sarsim_write, before=sarsim_tc.id, resetSuccessorSource=False)
+            else:
                 raise RuntimeError("ID '{}' not valid for argument 'export_extra'".format(item))
-            key = 'save{}{}'.format(item[0].upper(), item[1:])
-            tc.parameters[key] = True
-        select = parse_node('BandSelect')
-        workflow.insert_node(select, after=write.id)
-        select.parameters['sourceBands'] = export_extra
+        if len(tc_selection) > 0:
+            tc_select = parse_node('BandSelect')
+            workflow.insert_node(tc_select, after=tc_write.id)
+            tc_select.parameters['sourceBands'] = tc_selection
     ############################################
     ############################################
     # select DEM type
@@ -574,7 +605,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         raise ValueError(message.format('imgResamplingMethod', '\n- '.join(options)))
     
     workflow.set_par('demResamplingMethod', demResamplingMethod)
-    workflow.set_par('imgResamplingMethod', imgResamplingMethod)
+    workflow.set_par('imgResamplingMethod', imgResamplingMethod,
+                     exceptions=resampling_exceptions)
     ############################################
     ############################################
     # additional parameter settings applied to the whole workflow

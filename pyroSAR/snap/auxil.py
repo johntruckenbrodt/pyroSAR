@@ -371,7 +371,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
         for item in finder(outname, ['*.img'], recursive=False):
-            if re.search('[HV]{2}', item):
+            if re.search('ma0_[HV]{2}', item):
                 pol = re.search('[HV]{2}', item).group()
                 name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
                 if 'Sigma0' in item:
@@ -379,6 +379,8 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
             else:
                 base = os.path.splitext(os.path.basename(item))[0] \
                     .replace('elevation', 'DEM')
+                if re.search('layover_shadow_mask', base):
+                    base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
                 name_new = outname.replace(suffix, '{0}.tif'.format(base))
             nodata = dem_nodata if re.search('elevation', item) else 0
             translateoptions['noData'] = nodata
