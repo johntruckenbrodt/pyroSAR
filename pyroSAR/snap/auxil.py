@@ -908,7 +908,7 @@ class Workflow(object):
                 log.debug('renaming node {} to {}'.format(node.id, new))
                 node.id = new
     
-    def set_par(self, key, value):
+    def set_par(self, key, value, exceptions=None):
         """
         set a parameter for all nodes in the workflow
         
@@ -916,13 +916,18 @@ class Workflow(object):
         ----------
         key: str
             the parameter name
-        value
+        value: bool or int or float or str
+            the parameter value
+        exceptions: list
+            a list of node IDs whose parameters should not be changed
 
         Returns
         -------
 
         """
         for node in self:
+            if exceptions is not None and node.id in exceptions:
+                continue
             if key in node.parameters.keys():
                 node.parameters[key] = value2str(value)
     
