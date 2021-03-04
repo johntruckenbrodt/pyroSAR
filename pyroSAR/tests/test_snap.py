@@ -36,7 +36,7 @@ def test_geocode(tmpdir, testdata):
     basename = '{}_{}'.format(id.outname_base(), tree.suffix())
     procdir = os.path.join(str(tmpdir), basename)
     assert os.path.isdir(procdir)
-    tempdir = os.path.join(procdir, 'temp')
+    tempdir = os.path.join(procdir, 'tmp')
     assert os.path.isdir(tempdir)
     parts = finder(tempdir, ['*.xml'])
     assert len(parts) == 4

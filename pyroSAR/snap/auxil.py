@@ -445,7 +445,7 @@ def is_consistent(workflow):
     return all(check)
 
 
-def split(xmlfile, groups, outdir):
+def split(xmlfile, groups, outdir=None):
     """
     split a workflow file into groups and write them to separate workflows including source and write target linking.
     The new workflows are written to a sub-directory `temp` of the target directory defined in the input's `Write` node.
@@ -458,8 +458,10 @@ def split(xmlfile, groups, outdir):
         the workflow to be split
     groups: list
         a list of lists each containing IDs for individual nodes
-    outdir: str
-        the directory into which to write the XML workflows and the intermediate files created by them
+    outdir: str or None
+        the directory into which to write the XML workflows and the intermediate files created by them.
+        If None, the name will be created from the file name of the node with ID 'Write',
+        which is treated as a directory, and a subdirectory 'tmp'.
 
     Returns
     -------
@@ -472,7 +474,9 @@ def split(xmlfile, groups, outdir):
     """
     workflow = Workflow(xmlfile)
     write = workflow['Write']
-    out = write.parameters['file']
+    if outdir is None:
+        out = write.parameters['file']
+        outdir = os.path.join(out, 'tmp')
     os.makedirs(outdir, exist_ok=True)
     
     # the temporary XML files
