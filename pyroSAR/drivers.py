@@ -1339,7 +1339,7 @@ class SAFE(ID):
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True):
+    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=20):
         """
         download Orbit State Vector files for the scene
 
@@ -1355,6 +1355,8 @@ class SAFE(ID):
             return the best matching orbit file?
         useLocal: bool
             use locally existing files and do not search for files online if the right file has been found?
+        timeout: int or tuple or None
+            the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
 
         Returns
         -------
@@ -1372,17 +1374,17 @@ class SAFE(ID):
         after = (date + timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
         
         if useLocal:
-            with S1.OSV(osvdir) as osv:
+            with S1.OSV(osvdir, timeout=timeout) as osv:
                 match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
             if match is not None:
                 return match if returnMatch else None
         
         if osvType in ['POE', 'RES']:
-            with S1.OSV(osvdir) as osv:
+            with S1.OSV(osvdir, timeout=timeout) as osv:
                 files = osv.catch(sensor=self.sensor, osvtype=osvType, start=before, stop=after)
         
         elif sorted(osvType) == ['POE', 'RES']:
-            with S1.OSV(osvdir) as osv:
+            with S1.OSV(osvdir, timeout=timeout) as osv:
                 files = osv.catch(sensor=self.sensor, osvtype='POE', start=before, stop=after)
                 if len(files) == 0:
                     files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after)
@@ -1392,7 +1394,7 @@ class SAFE(ID):
         osv.retrieve(files)
         
         if returnMatch:
-            with S1.OSV(osvdir) as osv:
+            with S1.OSV(osvdir, timeout=timeout) as osv:
                 match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
             return match
     
