@@ -342,7 +342,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         raise NotImplementedError('conversion for class {} is not implemented yet'.format(type(id).__name__))
 
 
-def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shellscript=None):
+def correctOSV(id, osvdir=None, osvType='POE', timeout=20, logpath=None, outdir=None, shellscript=None):
     """
     correct GAMMA parameter files with orbit state vector information from dedicated OSV files;
     OSV files are downloaded automatically to either the defined `osvdir` or a sub-directory `osv` of the scene directory
@@ -355,13 +355,15 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
         the directory of OSV files; subdirectories POEORB and RESORB are created automatically
     osvType: {'POE', 'RES'}
         the OSV type to be used
+    timeout: int or tuple or None
+        the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
     logpath: str or None
         a directory to write command logfiles to
     outdir: str or None
         the directory to execute the command in
     shellscript: str or None
         a file to write the Gamma commands to in shell format
-
+    
     Returns
     -------
     
@@ -385,6 +387,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
     See Also
     --------
     :meth:`pyroSAR.drivers.SAFE.getOSV`
+    :class:`pyroSAR.S1.OSV`
     """
     
     if not isinstance(id, ID):
@@ -403,7 +406,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
             auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
         osvdir = os.path.join(auxdatapath, 'Orbits', 'Sentinel-1')
     try:
-        id.getOSV(osvdir, osvType)
+        id.getOSV(osvdir, osvType, timeout=timeout)
     except URLError:
         print('..no internet access')
     
@@ -414,7 +417,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
         timestamp = datetime.strptime(par.date, '%Y-%m-%dT%H:%M:%S.%f').strftime('%Y%m%dT%H%M%S')
     
     # find an OSV file matching the time stamp and defined OSV type(s)
-    with OSV(osvdir) as osv:
+    with OSV(osvdir, timeout=timeout) as osv:
         osvfile = osv.match(sensor=id.sensor, timestamp=timestamp, osvtype=osvType)
     if not osvfile:
         raise RuntimeError('no Orbit State Vector file found')
