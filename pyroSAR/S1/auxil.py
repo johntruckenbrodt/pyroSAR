@@ -93,6 +93,7 @@ class OSV(object):
                 auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
             osvdir = os.path.join(auxdatapath, 'Orbits', 'Sentinel-1')
         self.url = 'https://scihub.copernicus.eu/gnss/search/'
+        self.auth = ('gnssguest', 'gnssguest')
         self.outdir_poe = os.path.join(osvdir, 'POEORB')
         self.outdir_res = os.path.join(osvdir, 'RESORB')
         self.pattern = r'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
@@ -247,6 +248,10 @@ class OSV(object):
 
         def _parse_gnsssearch_json(search_dict):
             parsed_dict = {}
+            # Will return ['entry'] as dict if only one item
+            # If so just make a list
+            if isinstance(search_dict, dict):
+                search_dict = [search_dict]
             for entry in search_dict:
                 id = entry['id']
                 entry_dict = {}
@@ -278,22 +283,35 @@ class OSV(object):
                 parsed_dict[id] = entry_dict
             return parsed_dict
 
-        def _parse_gnsssearch_response(response):
-            search_dict = response.json()['feed']['entry']
-            parsed_dict = _parse_gnsssearch_json(search_dict)
+        def _parse_gnsssearch_response(response_json):
+            if 'entry' in response_json.keys():
+                search_dict = response_json['entry']
+                parsed_dict = _parse_gnsssearch_json(search_dict)
+            else:
+                parsed_dict = {}
             return parsed_dict
 
-        # TODO: Add back in page functionality
-        # while target is not None:
-        response = requests.get(target, auth=('gnssguest', 'gnssguest'))
+        response = requests.get(target, auth=self.auth)
         response.raise_for_status()
-        response_products = _parse_gnsssearch_response(response)
-        remotes = [item['href'] for id, item in response_products.items()]
-        collection += remotes
-        # target = response['next']
+        response_json = response.json()['feed']
+        total_results = response_json['opensearch:totalResults']
+        print('found {} OSV results'.format(total_results))
+        subquery = [link['href'] for link in response_json['link'] if link['rel'] == 'self'][0]
+        if int(total_results) > 10:
+            subquery = subquery.replace('rows=10','rows=100')
+        while subquery:
+            subquery_response = requests.get(subquery, auth=self.auth)
+            subquery_response.raise_for_status()
+            subquery_json = subquery_response.json()['feed']
+            subquery_products = _parse_gnsssearch_response(subquery_json)
+            collection += list(subquery_products.values())
+            if 'next' in [link['rel'] for link in subquery_json['link']]:
+                subquery = [link['href'] for link in subquery_json['link'] if link['rel'] == 'next'][0]
+            else:
+                subquery = None
         if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
             collection = [x for x in collection
-                          if self.date(x, 'start') > self.maxdate('POE', 'stop')]
+                          if self.date(x['filename'], 'start') > self.maxdate('POE', 'stop')]
         return collection
     
     def date(self, file, datetype):
@@ -424,7 +442,7 @@ class OSV(object):
                 best = self.match(sensor=sensor, timestamp=timestamp, osvtype='RES')
             return best
     
-    def retrieve(self, files, pbar=False):
+    def retrieve(self, products, pbar=False):
         """
         download a list of remote files into the respective subdirectories, i.e. POEORB or RESORB
 
@@ -439,10 +457,12 @@ class OSV(object):
         -------
         """
         downloads = []
-        for remote in files:
-            outdir = self._subdir(remote)
+        for product in products:
+            basename = product['filename']
+            remote = product['href']
+
+            outdir = self._subdir(basename)
             os.makedirs(outdir, exist_ok=True)
-            basename = os.path.basename(remote)
             local = os.path.join(outdir, basename) + '.zip'
             if not os.path.isfile(local):
                 downloads.append((remote, local, basename))
@@ -453,7 +473,7 @@ class OSV(object):
             progress = pb.ProgressBar(max_value=len(downloads))
         i = 0
         for remote, local, basename in downloads:
-            infile = requests.get(remote)
+            infile = requests.get(remote, auth=self.auth)
             with zf.ZipFile(file=local,
                             mode='w',
                             compression=zf.ZIP_DEFLATED) \
