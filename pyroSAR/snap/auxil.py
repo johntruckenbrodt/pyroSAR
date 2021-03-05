@@ -100,7 +100,11 @@ def parse_node(name, use_existing=True):
         
         graph = re.search('<graph id.*', out, flags=re.DOTALL).group()
         graph = re.sub(r'>\${.*', '/>', graph)  # remove placeholder values like ${value}
+        graph = re.sub(r'<\.\.\./>.*', '', graph)  # remove <.../> placeholders
         tree = ET.fromstring(graph)
+        for elt in tree.iter():
+            if elt.text in ['string', 'double', 'integer', 'float']:
+                elt.text = None
         node = tree.find('node')
         node.attrib['id'] = operator
         # add a second source product entry for multi-source nodes
@@ -1059,7 +1063,10 @@ class Node(object):
             the processing parameters of the node
         """
         params = self.element.find('.//parameters')
-        return Par(params)
+        if self.operator == 'BandMaths':
+            return Par_BandMath(params)
+        else:
+            return Par(params)
     
     @property
     def source(self):
@@ -1185,6 +1192,21 @@ class Par(object):
             the parameter values as from :meth:`dict.values()`
         """
         return [x.text for x in self.__element.findall('./')]
+
+
+class Par_BandMath(Par):
+    def __init__(self, element):
+        self.__element = element
+        super(Par_BandMath, self).__init__(element)
+    
+    def __getitem__(self, item):
+        if item in ['variables', 'targetBands']:
+            out = []
+            for x in self.__element.findall('.//{}'.format(item[:-1])):
+                out.append(Par(x))
+            return out
+        else:
+            raise ValueError("can only get items 'variables' and 'targetBands'")
 
 
 def value2str(value):
