@@ -194,7 +194,7 @@ class OSV(object):
         Returns
         -------
         list
-            the URLs of the remote OSV files
+            the product dictionary of the remote OSV files, with href
         """
         # a dictionary for storing the url arguments
         query = {}
@@ -241,8 +241,6 @@ class OSV(object):
             query_elem = '{}:{}'.format(keyword,value)
             query_list.append(query_elem)
         query_str = ' '.join(query_list)
-        # TODO: Limit is 10 items per returned response, should add in a 
-        # way to iterate over pages like previously existed
         target = '{}?q={}&format=json'.format(self.url, query_str)
         print(target)
 
@@ -444,12 +442,12 @@ class OSV(object):
     
     def retrieve(self, products, pbar=False):
         """
-        download a list of remote files into the respective subdirectories, i.e. POEORB or RESORB
+        download a list of product dictionaries into the respective subdirectories, i.e. POEORB or RESORB
 
         Parameters
         ----------
         files: list
-            a list of remotely existing OSV files as returned by method :meth:`catch`
+            a list of remotely existing OSV product dictionaries as returned by method :meth:`catch`
         pbar: bool
             add a progressbar?
 
@@ -458,6 +456,8 @@ class OSV(object):
         """
         downloads = []
         for product in products:
+            if ['filename','href'] not in product.keys():
+                raise RuntimeError("product dictionaries must contain 'filename' and 'href' keys")
             basename = product['filename']
             remote = product['href']
 
