@@ -100,7 +100,11 @@ def parse_node(name, use_existing=True):
         
         graph = re.search('<graph id.*', out, flags=re.DOTALL).group()
         graph = re.sub(r'>\${.*', '/>', graph)  # remove placeholder values like ${value}
+        graph = re.sub(r'<\.\.\./>.*', '', graph)  # remove <.../> placeholders
         tree = ET.fromstring(graph)
+        for elt in tree.iter():
+            if elt.text in ['string', 'double', 'integer', 'float']:
+                elt.text = None
         node = tree.find('node')
         node.attrib['id'] = operator
         # add a second source product entry for multi-source nodes
@@ -311,7 +315,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
     write = workflow['Write']
     scene = identify(read.parameters['file'])
     tmpname = write.parameters['file']
-    suffix = workflow.suffix
+    suffix = workflow.suffix()
     format = write.parameters['formatName']
     dem_name = workflow.tree.find('.//demName')
     if dem_name is not None:
@@ -371,12 +375,16 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
         for item in finder(outname, ['*.img'], recursive=False):
-            if re.search('[HV]{2}', item):
+            if re.search('ma0_[HV]{2}', item):
                 pol = re.search('[HV]{2}', item).group()
                 name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
+                if 'Sigma0' in item:
+                    name_new = name_new.replace('TF_', '')
             else:
                 base = os.path.splitext(os.path.basename(item))[0] \
                     .replace('elevation', 'DEM')
+                if re.search('layover_shadow_mask', base):
+                    base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
                 name_new = outname.replace(suffix, '{0}.tif'.format(base))
             nodata = dem_nodata if re.search('elevation', item) else 0
             translateoptions['noData'] = nodata
@@ -441,7 +449,7 @@ def is_consistent(workflow):
     return all(check)
 
 
-def split(xmlfile, groups, outdir):
+def split(xmlfile, groups, outdir=None):
     """
     split a workflow file into groups and write them to separate workflows including source and write target linking.
     The new workflows are written to a sub-directory `temp` of the target directory defined in the input's `Write` node.
@@ -454,8 +462,10 @@ def split(xmlfile, groups, outdir):
         the workflow to be split
     groups: list
         a list of lists each containing IDs for individual nodes
-    outdir: str
-        the directory into which to write the XML workflows and the intermediate files created by them
+    outdir: str or None
+        the directory into which to write the XML workflows and the intermediate files created by them.
+        If None, the name will be created from the file name of the node with ID 'Write',
+        which is treated as a directory, and a subdirectory 'tmp'.
 
     Returns
     -------
@@ -468,9 +478,10 @@ def split(xmlfile, groups, outdir):
     """
     workflow = Workflow(xmlfile)
     write = workflow['Write']
-    out = write.parameters['file']
-    if not os.path.isdir(outdir):
-        os.makedirs(outdir)
+    if outdir is None:
+        out = write.parameters['file']
+        outdir = os.path.join(out, 'tmp')
+    os.makedirs(outdir, exist_ok=True)
     
     # the temporary XML files
     outlist = []
@@ -664,7 +675,7 @@ class Workflow(object):
         Parameters
         ----------
         id: str
-            the ID of  node
+            the ID of the node
         recursive: bool
             find successors recursively?
 
@@ -700,10 +711,12 @@ class Workflow(object):
 
         """
         
-        def reset(id, source):
+        def reset(id, source, excludes=None):
             if isinstance(source, list):
                 for item in source:
-                    reset(id, item)
+                    successors = self.successors(item)
+                    excludes = [x for x in successors if x in source]
+                    reset(id, item, excludes)
             else:
                 try:
                     # find the source nodes of the current node
@@ -714,6 +727,9 @@ class Workflow(object):
                     # delete the ID of the current node from the successors
                     if id in successors:
                         del successors[successors.index(id)]
+                    if excludes is not None:
+                        for item in excludes:
+                            del successors[successors.index(item)]
                     for successor in successors:
                         successor_source = self[successor].source
                         if isinstance(successor_source, list):
@@ -808,6 +824,12 @@ class Workflow(object):
         Node or None
             the new node or None, depending on arguement `void`
         """
+        ncopies = [x.operator for x in self.nodes()].count(node.operator)
+        if ncopies > 0:
+            node.id = '{0} ({1})'.format(node.operator, ncopies + 1)
+        else:
+            node.id = node.operator
+        
         if before is None and after is None and len(self) > 0:
             before = self[len(self) - 1].id
         if before and not after:
@@ -820,7 +842,6 @@ class Workflow(object):
             position = self.index(predecessor) + 1
             self.tree.insert(position, node.element)
             newnode = Node(self.tree[position])
-            self.refresh_ids()
             ####################################################
             # set the source product for the new node
             if newnode.operator != 'Read':
@@ -848,7 +869,6 @@ class Workflow(object):
         else:
             log.debug('inserting node {}'.format(node.id))
             self.tree.insert(len(self.tree) - 1, node.element)
-        self.refresh_ids()
         if not void:
             return node
     
@@ -874,6 +894,15 @@ class Workflow(object):
         return sorted(list(set([node.operator for node in self])))
     
     def refresh_ids(self):
+        """
+        Ensure unique IDs for all nodes. If two nodes with the same ID are found one is renamed to "ID (2)".
+        E.g. 2 x "Write" -> "Write", "Write (2)".
+        This method is no longer used and is just kept in case there is need for it in the future.
+        
+        Returns
+        -------
+
+        """
         counter = {}
         for node in self:
             operator = node.operator
@@ -889,7 +918,7 @@ class Workflow(object):
                 log.debug('renaming node {} to {}'.format(node.id, new))
                 node.id = new
     
-    def set_par(self, key, value):
+    def set_par(self, key, value, exceptions=None):
         """
         set a parameter for all nodes in the workflow
         
@@ -897,19 +926,29 @@ class Workflow(object):
         ----------
         key: str
             the parameter name
-        value
+        value: bool or int or float or str
+            the parameter value
+        exceptions: list
+            a list of node IDs whose parameters should not be changed
 
         Returns
         -------
 
         """
         for node in self:
+            if exceptions is not None and node.id in exceptions:
+                continue
             if key in node.parameters.keys():
                 node.parameters[key] = value2str(value)
     
-    @property
-    def suffix(self):
+    def suffix(self, stop=None):
         """
+        Get the SNAP operator suffix sequence
+        
+        Parameters
+        ----------
+        stop: str
+            the ID of the last workflow node
         
         Returns
         -------
@@ -922,6 +961,8 @@ class Workflow(object):
         for name in names:
             if name not in names_unique:
                 names_unique.append(name)
+            if name == stop:
+                break
         config = ExamineSnap()
         suffix = '_'.join(filter(None, [config.get_suffix(x) for x in names_unique]))
         return suffix
@@ -1022,7 +1063,10 @@ class Node(object):
             the processing parameters of the node
         """
         params = self.element.find('.//parameters')
-        return Par(params)
+        if self.operator == 'BandMaths':
+            return Par_BandMath(params)
+        else:
+            return Par(params)
     
     @property
     def source(self):
@@ -1148,6 +1192,21 @@ class Par(object):
             the parameter values as from :meth:`dict.values()`
         """
         return [x.text for x in self.__element.findall('./')]
+
+
+class Par_BandMath(Par):
+    def __init__(self, element):
+        self.__element = element
+        super(Par_BandMath, self).__init__(element)
+    
+    def __getitem__(self, item):
+        if item in ['variables', 'targetBands']:
+            out = []
+            for x in self.__element.findall('.//{}'.format(item[:-1])):
+                out.append(Par(x))
+            return out
+        else:
+            raise ValueError("can only get items 'variables' and 'targetBands'")
 
 
 def value2str(value):

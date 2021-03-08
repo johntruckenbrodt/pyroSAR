@@ -1,7 +1,7 @@
 ###############################################################################
 # general utilities for Sentinel-1
 
-# Copyright (c) 2016-2020, the pyroSAR Developers.
+# Copyright (c) 2016-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -83,9 +83,16 @@ class OSV(object):
     ----------
     osvdir: str
         the directory to write the orbit files to
+    timeout: int or tuple or None
+        the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
+    
+    See Also
+    --------
+    `requests timeouts <https://requests.readthedocs.io/en/master/user/advanced/#timeouts>`_
     """
     
-    def __init__(self, osvdir=None):
+    def __init__(self, osvdir=None, timeout=20):
+        self.timeout = timeout
         if osvdir is None:
             try:
                 auxdatapath = ExamineSnap().auxdatapath
@@ -289,7 +296,7 @@ class OSV(object):
                 parsed_dict = {}
             return parsed_dict
 
-        response = requests.get(target, auth=self.auth)
+        response = requests.get(target, auth=self.auth, timeout=self.timeout)
         response.raise_for_status()
         response_json = response.json()['feed']
         total_results = response_json['opensearch:totalResults']
@@ -298,7 +305,7 @@ class OSV(object):
         if int(total_results) > 10:
             subquery = subquery.replace('rows=10','rows=100')
         while subquery:
-            subquery_response = requests.get(subquery, auth=self.auth)
+            subquery_response = requests.get(subquery, auth=self.auth, timeout=self.timeout)
             subquery_response.raise_for_status()
             subquery_json = subquery_response.json()['feed']
             subquery_products = _parse_gnsssearch_response(subquery_json)
@@ -473,7 +480,7 @@ class OSV(object):
             progress = pb.ProgressBar(max_value=len(downloads))
         i = 0
         for remote, local, basename in downloads:
-            infile = requests.get(remote, auth=self.auth)
+            infile = requests.get(remote, auth=self.auth, timeout=self.timeout)
             with zf.ZipFile(file=local,
                             mode='w',
                             compression=zf.ZIP_DEFLATED) \
