@@ -1174,7 +1174,7 @@ class CEOS_PSR(ID):
 
 class EORC_PSR(ID):
     """
-    Handler class for ALOS-PALSAR data in (EORC) Path format
+    Handler class for ALOS-2/PALSAR-2 data in (EORC) Path format
     
     Sensors:
         * PALSAR-2
@@ -1182,6 +1182,7 @@ class EORC_PSR(ID):
     PALSAR-2:
         Acquisition modes:
             * FBD: Fine mode Dual polarization
+            * WBD: Scan SAR nominal [14MHz] mode Dual polarization
     """
     
     def __init__(self, scene):
