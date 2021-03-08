@@ -119,7 +119,7 @@ class ISPPar(object):
             try:
                 self.date = '{}-{:02d}-{:02d}T{:02d}:{:02d}:{:02f}'.format(*self.date)
             except:
-                # for only date available
+                # if only date available
                 self.date = '{}-{:02d}-{:02d}'.format(*self.date)
     
     def __enter__(self):
