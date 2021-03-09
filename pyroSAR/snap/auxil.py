@@ -231,6 +231,10 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
     match = re.search(pattern, err)
     
     if proc.returncode == 0:
+        pattern = r'(?P<level>WARNING: )([a-zA-Z.]*: )(?P<message>No intersection.*)'
+        match = re.search(pattern, err)
+        if match is not None:
+            raise RuntimeError(re.search(pattern, err).group('message'))
         return
     
     # delete unknown parameters and run the modified workflow
@@ -374,7 +378,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         print('converting to GTiff')
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
-        for item in finder(outname, ['*.img'], recursive=False):
+        for item in finder(tmpname, ['*.img'], recursive=False):
             if re.search('ma0_[HV]{2}', item):
                 pol = re.search('[HV]{2}', item).group()
                 name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
@@ -413,7 +417,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
             continue
     ###########################################################################
     if cleanup and os.path.exists(tmpname):
-        shutil.rmtree(outname, onerror=windows_fileprefix)
+        shutil.rmtree(tmpname, onerror=windows_fileprefix)
     print('done')
 
 
