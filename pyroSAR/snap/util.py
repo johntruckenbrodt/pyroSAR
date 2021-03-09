@@ -617,18 +617,19 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # write workflow to file and optionally execute it
     # print('- writing workflow to file')
     
-    workflow.write(outname + '_proc')
+    wf_name = outname.replace(tmpdir, outdir) + '_proc.xml'
+    workflow.write(wf_name)
     
     # execute the newly written workflow
     if not test:
         try:
-            groups = groupbyWorkers(outname + '_proc.xml', groupsize)
-            gpt(outname + '_proc.xml', groups=groups, cleanup=cleanup,
+            groups = groupbyWorkers(wf_name, groupsize)
+            gpt(wf_name, groups=groups, cleanup=cleanup,
                 gpt_exceptions=gpt_exceptions, gpt_args=gpt_args,
                 removeS1BorderNoiseMethod=removeS1BorderNoiseMethod, outdir=outdir)
         except RuntimeError as e:
             print(str(e))
-            with open(outname + '_error.log', 'w') as log:
+            with open(wf_name.replace('_proc.xml', '_error.log'), 'w') as log:
                 log.write(str(e))
     if returnWF:
-        return outname + '_proc.xml'
+        return wf_name
