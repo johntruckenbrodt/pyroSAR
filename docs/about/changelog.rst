@@ -446,3 +446,23 @@ Auxiliary Data Handling
 -----------------------
 
 - function :func:`pyroSAR.auxdata.dem_autoload`: return `None` if a VRT was defined
+
+0.12.1 / 2021-03-09
+===================
+
+SNAP API
+--------
+
+- function :func:`pyroSAR.snap.util.geocode`:
+
+  + output both sigma0 and gamma0 via argument `refarea`
+  + new `export_extra` option 'layoverShadowMask'
+
+- numerous bug fixes and API improvements
+
+Auxiliary Data Handling
+-----------------------
+
+- class :class:`pyroSAR.S1.OSV`:
+
+  + download files from https://scihub.copernicus.eu/gnss
