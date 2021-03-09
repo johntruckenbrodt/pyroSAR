@@ -18,6 +18,7 @@ import sys
 import requests
 import zipfile as zf
 from datetime import datetime
+from dateutil import parser as dateutil_parser
 import xml.etree.ElementTree as ET
 import numpy as np
 from osgeo import gdal
@@ -98,7 +99,8 @@ class OSV(object):
             except AttributeError:
                 auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
             osvdir = os.path.join(auxdatapath, 'Orbits', 'Sentinel-1')
-        self.url = 'https://qc.sentinel1.eo.esa.int/api/v1/'
+        self.url = 'https://scihub.copernicus.eu/gnss/search/'
+        self.auth = ('gnssguest', 'gnssguest')
         self.outdir_poe = os.path.join(osvdir, 'POEORB')
         self.outdir_res = os.path.join(osvdir, 'RESORB')
         self.pattern = r'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
@@ -199,22 +201,24 @@ class OSV(object):
         Returns
         -------
         list
-            the URLs of the remote OSV files
+            the product dictionary of the remote OSV files, with href
         """
         # a dictionary for storing the url arguments
         query = {}
         
         if osvtype == 'POE':
-            query['product_type'] = 'AUX_POEORB'
+            query['producttype'] = 'AUX_POEORB'
         elif osvtype == 'RES':
-            query['product_type'] = 'AUX_RESORB'
+            query['producttype'] = 'AUX_RESORB'
         else:
             raise RuntimeError("osvtype must be either 'POE' or 'RES'")
         
         if sensor in ['S1A', 'S1B']:
-            query['sentinel1__mission'] = sensor
+            query['platformname'] = 'Sentinel-1'
+            # filename starts w/ sensor
+            query['filename'] = '{}*'.format(sensor)
         elif sorted(sensor) == ['S1A', 'S1B']:
-            pass
+            query['platformname'] = 'Sentinel-1'
         else:
             raise RuntimeError('unsupported input for parameter sensor')
         
@@ -226,29 +230,93 @@ class OSV(object):
         # the start date is 2018-01-01T000000, the query would not return the corresponding
         # file, whose start date is 2017-12-31 (V20171231T225942_20180102T005942)
         if start is not None:
-            date_start = datetime.strptime(start, '%Y%m%dT%H%M%S').strftime('%Y-%m-%dT%H:%M:%S')
+            date_start = datetime.strptime(start, '%Y%m%dT%H%M%S').strftime('%Y-%m-%dT%H:%M:%SZ')
         else:
-            date_start = '2014-07-31'
+            date_start = datetime.strptime('2014-07-31', '%Y-%m-%d').strftime('%Y-%m-%dT%H:%M:%SZ')
         # set the defined date or the current date otherwise
         if stop is not None:
-            date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S').strftime('%Y-%m-%dT%H:%M:%S')
+            date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S').strftime('%Y-%m-%dT%H:%M:%SZ')
         else:
-            date_stop = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+            date_stop = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
         
         # append the time frame to the query dictionary
-        query['validity_start__gte'] = date_start
-        query['validity_stop__lte'] = date_stop
+        query['beginPosition'] = '[{} TO {}]'.format(date_start,date_stop)
+        query['endPosition'] = '[{} TO {}]'.format(date_start,date_stop)
         print('searching for new {} files'.format(osvtype))
-        target = urlQueryParser(self.url, query).replace('%3A', ':')
+        query_list = []
+        for keyword, value in query.items():
+            query_elem = '{}:{}'.format(keyword,value)
+            query_list.append(query_elem)
+        query_str = ' '.join(query_list)
+        target = '{}?q={}&format=json'.format(self.url, query_str)
         print(target)
-        while target is not None:
-            response = requests.get(target, timeout=self.timeout).json()
-            remotes = [item['remote_url'] for item in response['results']]
-            collection += remotes
-            target = response['next']
+
+        def _parse_gnsssearch_json(search_dict):
+            parsed_dict = {}
+            # Will return ['entry'] as dict if only one item
+            # If so just make a list
+            if isinstance(search_dict, dict):
+                search_dict = [search_dict]
+            for entry in search_dict:
+                id = entry['id']
+                entry_dict = {}
+
+                for key, value in entry.items():
+                    if key == 'title':
+                        entry_dict[key] = value
+                    elif key == 'id':
+                        entry_dict[key] = value
+                    elif key == 'ondemand':
+                        if value.lower() == 'true':
+                            entry_dict[key] = True
+                        else:
+                            entry_dict[key] = False
+                    elif key == 'str':
+                        for elem in value:
+                            entry_dict[elem['name']] = elem['content']
+                    elif key == 'link':
+                        for elem in value:
+                            if 'rel' in elem.keys():
+                                href_key = 'href_' + elem['rel'] 
+                                entry_dict[href_key] = elem['href']
+                            else:
+                                entry_dict['href'] = elem['href']
+                    elif key == 'date':
+                        for elem in value:
+                            entry_dict[elem['name']] = dateutil_parser.parse(elem['content'])
+                
+                parsed_dict[id] = entry_dict
+            return parsed_dict
+
+        def _parse_gnsssearch_response(response_json):
+            if 'entry' in response_json.keys():
+                search_dict = response_json['entry']
+                parsed_dict = _parse_gnsssearch_json(search_dict)
+            else:
+                parsed_dict = {}
+            return parsed_dict
+
+        response = requests.get(target, auth=self.auth, timeout=self.timeout)
+        response.raise_for_status()
+        response_json = response.json()['feed']
+        total_results = response_json['opensearch:totalResults']
+        print('found {} OSV results'.format(total_results))
+        subquery = [link['href'] for link in response_json['link'] if link['rel'] == 'self'][0]
+        if int(total_results) > 10:
+            subquery = subquery.replace('rows=10','rows=100')
+        while subquery:
+            subquery_response = requests.get(subquery, auth=self.auth, timeout=self.timeout)
+            subquery_response.raise_for_status()
+            subquery_json = subquery_response.json()['feed']
+            subquery_products = _parse_gnsssearch_response(subquery_json)
+            collection += list(subquery_products.values())
+            if 'next' in [link['rel'] for link in subquery_json['link']]:
+                subquery = [link['href'] for link in subquery_json['link'] if link['rel'] == 'next'][0]
+            else:
+                subquery = None
         if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
             collection = [x for x in collection
-                          if self.date(x, 'start') > self.maxdate('POE', 'stop')]
+                          if self.date(x['filename'], 'start') > self.maxdate('POE', 'stop')]
         return collection
     
     def date(self, file, datetype):
@@ -379,14 +447,14 @@ class OSV(object):
                 best = self.match(sensor=sensor, timestamp=timestamp, osvtype='RES')
             return best
     
-    def retrieve(self, files, pbar=False):
+    def retrieve(self, products, pbar=False):
         """
-        download a list of remote files into the respective subdirectories, i.e. POEORB or RESORB
+        download a list of product dictionaries into the respective subdirectories, i.e. POEORB or RESORB
 
         Parameters
         ----------
         files: list
-            a list of remotely existing OSV files as returned by method :meth:`catch`
+            a list of remotely existing OSV product dictionaries as returned by method :meth:`catch`
         pbar: bool
             add a progressbar?
 
@@ -394,10 +462,14 @@ class OSV(object):
         -------
         """
         downloads = []
-        for remote in files:
-            outdir = self._subdir(remote)
+        for product in products:
+            if all(key not in ['filename','href'] for key in product.keys()):
+                raise RuntimeError("product dictionaries must contain 'filename' and 'href' keys")
+            basename = product['filename']
+            remote = product['href']
+
+            outdir = self._subdir(basename)
             os.makedirs(outdir, exist_ok=True)
-            basename = os.path.basename(remote)
             local = os.path.join(outdir, basename) + '.zip'
             if not os.path.isfile(local):
                 downloads.append((remote, local, basename))
@@ -408,7 +480,7 @@ class OSV(object):
             progress = pb.ProgressBar(max_value=len(downloads))
         i = 0
         for remote, local, basename in downloads:
-            infile = requests.get(remote, timeout=self.timeout)
+            infile = requests.get(remote, auth=self.auth, timeout=self.timeout)
             with zf.ZipFile(file=local,
                             mode='w',
                             compression=zf.ZIP_DEFLATED) \
