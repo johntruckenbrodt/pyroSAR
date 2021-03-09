@@ -463,7 +463,7 @@ class OSV(object):
         """
         downloads = []
         for product in products:
-            if ['filename','href'] not in product.keys():
+            if all(key not in ['filename','href'] for key in product.keys()):
                 raise RuntimeError("product dictionaries must contain 'filename' and 'href' keys")
             basename = product['filename']
             remote = product['href']
