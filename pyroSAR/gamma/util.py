@@ -95,7 +95,7 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
                                ant_flag=0,
                                refarea_flag=1,
                                sc_dB=0,
-                               K_dB=-83.0,
+                               K_dB=id.meta['k_dB'],
                                pix_area=image + '_cal_pix_ell',
                                logpath=logpath,
                                outdir=outdir,
