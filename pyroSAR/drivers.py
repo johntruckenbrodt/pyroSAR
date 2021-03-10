@@ -1175,12 +1175,17 @@ class CEOS_PSR(ID):
 
 class EORC_PSR(ID):
     """
-    Handler class for ALOS-2/PALSAR-2 data in (EORC) Path format
+    Handler class for ALOS-2/PALSAR-2 data in EORC (Earth Observation Research Center) Path format
     
     Sensors:
         * PALSAR-2
 
     PALSAR-2:
+        Reference: 
+            ALOS-2/PALSAR-2 EORC PAth Product Format Description (First Edition, [access restricted])
+            (`JAXA 2016 <PALSAR2_25m_PATH_product_format_NDX-150019_ENG.pdf>`_).
+        Products / processing levels:
+            * 1.5
         Acquisition modes:
             * FBD: Fine mode Dual polarization
             * WBD: Scan SAR nominal [14MHz] mode Dual polarization
