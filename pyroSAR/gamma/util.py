@@ -1,7 +1,7 @@
 ###############################################################################
 # universal core routines for processing SAR images with GAMMA
 
-# Copyright (c) 2014-2020, the pyroSAR Developers.
+# Copyright (c) 2014-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -388,7 +388,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         raise NotImplementedError('conversion for class {} is not implemented yet'.format(type(id).__name__))
 
 
-def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shellscript=None):
+def correctOSV(id, osvdir=None, osvType='POE', timeout=20, logpath=None, outdir=None, shellscript=None):
     """
     correct GAMMA parameter files with orbit state vector information from dedicated OSV files;
     OSV files are downloaded automatically to either the defined `osvdir` or a sub-directory `osv` of the scene directory
@@ -401,13 +401,15 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
         the directory of OSV files; subdirectories POEORB and RESORB are created automatically
     osvType: {'POE', 'RES'}
         the OSV type to be used
+    timeout: int or tuple or None
+        the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
     logpath: str or None
         a directory to write command logfiles to
     outdir: str or None
         the directory to execute the command in
     shellscript: str or None
         a file to write the Gamma commands to in shell format
-
+    
     Returns
     -------
     
@@ -431,6 +433,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
     See Also
     --------
     :meth:`pyroSAR.drivers.SAFE.getOSV`
+    :class:`pyroSAR.S1.OSV`
     """
     
     if not isinstance(id, ID):
@@ -449,7 +452,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
             auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
         osvdir = os.path.join(auxdatapath, 'Orbits', 'Sentinel-1')
     try:
-        id.getOSV(osvdir, osvType)
+        id.getOSV(osvdir, osvType, timeout=timeout)
     except URLError:
         print('..no internet access')
     
@@ -460,7 +463,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
         timestamp = datetime.strptime(par.date, '%Y-%m-%dT%H:%M:%S.%f').strftime('%Y%m%dT%H%M%S')
     
     # find an OSV file matching the time stamp and defined OSV type(s)
-    with OSV(osvdir) as osv:
+    with OSV(osvdir, timeout=timeout) as osv:
         osvfile = osv.match(sensor=id.sensor, timestamp=timestamp, osvtype=osvType)
     if not osvfile:
         raise RuntimeError('no Orbit State Vector file found')
@@ -481,7 +484,7 @@ def correctOSV(id, osvdir=None, osvType='POE', logpath=None, outdir=None, shells
                         shellscript=shellscript)
 
 
-def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoback=1,
+def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geoback=1,
             func_interp=2, nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
             cleanup=True, normalization_method=2, export_extra=None, basename_extensions=None,
             removeS1BorderNoise=True, removeS1BorderNoiseMethod='gamma', refine_LUT=False):
@@ -494,7 +497,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
         the SAR scene to be processed
     dem: str
         the reference DEM in GAMMA format
-    tempdir: str
+    tmpdir: str
         a temporary directory for writing intermediate files
     outdir: str
         the directory for the final GeoTiff output files
@@ -646,7 +649,7 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if export_extra is not None and not isinstance(export_extra, list):
         raise TypeError("parameter 'export_extra' must either be None or a list")
     
-    for dir in [tempdir, outdir]:
+    for dir in [tmpdir, outdir]:
         if not os.path.isdir(dir):
             os.makedirs(dir)
     
@@ -662,12 +665,12 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
     if scene.compression is not None:
         print('unpacking scene..')
         try:
-            scene.unpack(tempdir)
+            scene.unpack(tmpdir)
         except RuntimeError:
             print('scene was attempted to be processed before, exiting')
             return
     else:
-        scene.scene = os.path.join(tempdir, os.path.basename(scene.file))
+        scene.scene = os.path.join(tmpdir, os.path.basename(scene.file))
         os.makedirs(scene.scene)
     
     shellscript = os.path.join(scene.scene, scene.outname_base(extensions=basename_extensions) + '_commands.sh')
@@ -972,9 +975,9 @@ def geocode(scene, dem, tempdir, outdir, targetres, scaling='linear', func_geoba
                               outdir=scene.scene,
                               shellscript=shellscript)
             par2hdr(n.dem_seg_geo + '.par', image + '_pan_geo.hdr')
-            lat.sigma2gamma(pwr1=image + '_pan_geo',
+            lat.sigma2gamma(sigma0=image + '_pan_geo',
                             inc=n.inc_geo,
-                            gamma=image + '_{}'.format(method_suffix),
+                            gamma0=image + '_{}'.format(method_suffix),
                             width=sim_width,
                             logpath=path_log,
                             outdir=scene.scene,

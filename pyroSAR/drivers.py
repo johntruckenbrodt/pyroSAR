@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2020, the pyroSAR Developers.
+# Copyright (c) 2016-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -53,11 +53,11 @@ from . import S1
 from .ERS import passdb_query
 from .xml_util import getNamespaces
 
-from spatialist import crsConvert, sqlite3, Vector, bbox, sqlite_util
+from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder
 
 # new imports for postgres
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import select, func
@@ -1506,7 +1506,7 @@ class SAFE(ID):
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False):
+    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=20):
         """
         download Orbit State Vector files for the scene
 
@@ -1515,10 +1515,15 @@ class SAFE(ID):
         osvdir: str
             the directory of OSV files; subdirectories POEORB and RESORB are created automatically;
             if no directory is defined, the standard SNAP auxdata location is used
-        osvType: {'POE', 'RES'}
-            the type of orbit file either 'POE', 'RES' or a list of both
+        osvType: str or list
+            the type of orbit file either 'POE', 'RES' or a list of both;
+            if both are selected, the best matching file will be retrieved. I.e., POE if available and RES otherwise
         returnMatch: bool
             return the best matching orbit file?
+        useLocal: bool
+            use locally existing files and do not search for files online if the right file has been found?
+        timeout: int or tuple or None
+            the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
 
         Returns
         -------
@@ -1535,20 +1540,28 @@ class SAFE(ID):
         before = (date - timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
         after = (date + timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
         
-        # download the files
+        if useLocal:
+            with S1.OSV(osvdir, timeout=timeout) as osv:
+                match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
+            if match is not None:
+                return match if returnMatch else None
+        
         if osvType in ['POE', 'RES']:
-            with S1.OSV(osvdir) as osv:
+            with S1.OSV(osvdir, timeout=timeout) as osv:
                 files = osv.catch(sensor=self.sensor, osvtype=osvType, start=before, stop=after)
-                osv.retrieve(files)
+        
         elif sorted(osvType) == ['POE', 'RES']:
-            with S1.OSV(osvdir) as osv:
+            with S1.OSV(osvdir, timeout=timeout) as osv:
                 files = osv.catch(sensor=self.sensor, osvtype='POE', start=before, stop=after)
                 if len(files) == 0:
                     files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after)
-                osv.retrieve(files)
+        else:
+            raise TypeError("osvType must either be 'POE', 'RES' or a list of both")
+        
+        osv.retrieve(files)
         
         if returnMatch:
-            with S1.OSV(osvdir) as osv:
+            with S1.OSV(osvdir, timeout=timeout) as osv:
                 match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
             return match
     
@@ -1842,6 +1855,13 @@ class Archive(object):
         if self.driver == 'sqlite':
             log.debug('loading spatialite extension')
             listen(target=self.engine, identifier='connect', fn=self.__load_spatialite)
+            # check if loading was successful
+            try:
+                conn = self.engine.connect()
+                version = conn.execute('SELECT spatialite_version();')
+                conn.close()
+            except exc.OperationalError:
+                raise RuntimeError('could not load spatialite extension')
         
         # if database is new, (create postgres-db and) enable spatial extension
         if not database_exists(self.engine.url):
@@ -1977,22 +1997,8 @@ class Archive(object):
                     dbapi_conn.load_extension(option)
                 except sqlite3.OperationalError:
                     continue
-        elif platform.system() == 'Windows':
-            sqlite_util.spatialite_setup()
-            dbapi_conn.load_extension('mod_spatialite')
         else:
             dbapi_conn.load_extension('mod_spatialite')
-        # else: # will never be reached
-        #     # or do it like this? now with .dylib (should be the right one for mac, but .so works also seemingly
-        #     for option in ['mod_spatialite', 'mod_spatialite.so', 'mod_spatialite.dll', 'mod_spatialite.dylib']:
-        #
-        #         try:
-        #
-        #             dbapi_conn.load_extension(option)
-        #
-        #         except sqlite3.OperationalError as e:
-        #
-        #             continue
     
     def __prepare_insertion(self, scene):
         """
@@ -2775,10 +2781,22 @@ def drop_archive(archive):
     See Also
     --------
     :func:`sqlalchemy_utils.functions.drop_database()`
+    
+    Examples
+    --------
+    >>> pguser = os.environ.get('PGUSER')
+    >>> pgpassword = os.environ.get('PGPASSWORD')
+    
+    >>> db = Archive('test', postgres=True, port=5432, user=pguser, password=pgpassword)
+    >>> drop_archive(db)
     """
-    url = archive.url
-    archive.close()
-    drop_database(url)
+    if archive.driver == 'postgresql':
+        url = archive.url
+        archive.close()
+        drop_database(url)
+    else:
+        raise RuntimeError('this function only works for PostgreSQL databases.'
+                           'For SQLite databases it is recommended to just delete the DB file.')
 
 
 def findfiles(scene, pattern, include_folders=False):

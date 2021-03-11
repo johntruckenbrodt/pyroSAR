@@ -1,7 +1,7 @@
 ###############################################################################
 # preparation of srtm data for use in gamma
 
-# Copyright (c) 2014-2019, the pyroSAR Developers.
+# Copyright (c) 2014-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -242,8 +242,8 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
         dem = os.path.join(tmpdir, 'dem.tif')
         
         print('collecting DEM tiles')
-        vrt = dem_autoload([geometry], demType, vrt=vrt, username=username,
-                           password=password, buffer=buffer)
+        dem_autoload([geometry], demType, vrt=vrt, username=username,
+                     password=password, buffer=buffer)
         
         # The heights of the TanDEM-X DEM products are ellipsoidal heights, all others are EGM96 Geoid heights
         # Gamma works only with Ellipsoid heights and the offset needs to be corrected

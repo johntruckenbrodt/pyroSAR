@@ -60,7 +60,8 @@ def test_dem_create(tmpdir):
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
         with pytest.raises(RuntimeError):
             files = dem_autoload([box], 'foobar')
-        vrt = dem_autoload([box], 'SRTM 3Sec', vrt='/vsimem/test.vrt')
+        vrt = '/vsimem/test.vrt'
+        dem_autoload([box], 'SRTM 3Sec', vrt=vrt)
     out = os.path.join(str(tmpdir), 'srtm.tif')
     dem_create(src=vrt, dst=out, t_srs=32632, tr=(90, 90))
     assert os.path.isfile(out)

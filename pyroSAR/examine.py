@@ -292,10 +292,9 @@ class ExamineGamma(object):
         if home_sys is not None and not os.path.isdir(home_sys):
             warnings.warn('found GAMMA_HOME environment variable, but directory does not exist')
             home_sys = None
-        if 'GAMMA' in config.sections:
-            attr = config['GAMMA']
-            for key, value in attr.items():
-                setattr(self, key, value)
+        
+        self.__read_config()
+        
         if hasattr(self, 'home'):
             if home_sys is not None and self.home != home_sys:
                 print('the value of GAMMA_HOME is different to that in the pyroSAR configuration;\n'
@@ -303,7 +302,7 @@ class ExamineGamma(object):
                       '  is : {}\n'
                       'resetting the configuration and deleting parsed modules'
                       .format(self.home, home_sys))
-                parsed = os.path.join(os.path.dirname(config.file), 'gammaparse')
+                parsed = os.path.join(os.path.dirname(self.fname), 'gammaparse')
                 shutil.rmtree(parsed)
                 self.home = home_sys
         if not hasattr(self, 'home'):
@@ -313,13 +312,27 @@ class ExamineGamma(object):
                 raise RuntimeError('could not read Gamma installation directory')
         self.version = re.search('GAMMA_SOFTWARE-(?P<version>[0-9]{8})',
                                  getattr(self, 'home')).group('version')
+        
+        if not hasattr(self, 'gdal_config'):
+            gdal_config = '/usr/bin/gdal-configue'
+            if not os.path.isfile(gdal_config):
+                warnings.warn('could not find GDAL system installation under {}\n'
+                              'please modify the pyroSAR configuration: {}'.format(gdal_config, self.fname))
+            self.gdal_config = gdal_config
         self.__update_config()
+    
+    def __read_config(self):
+        self.fname = config.file
+        if 'GAMMA' in config.sections:
+            attr = config['GAMMA']
+            for key, value in attr.items():
+                setattr(self, key, value)
     
     def __update_config(self):
         if 'GAMMA' not in config.sections:
             config.add_section('GAMMA')
         
-        for attr in ['home', 'version']:
+        for attr in ['home', 'version', 'gdal_config']:
             self.__update_config_attr(attr, getattr(self, attr), 'GAMMA')
     
     @staticmethod

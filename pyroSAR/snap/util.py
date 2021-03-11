@@ -1,7 +1,7 @@
 ###############################################################################
 # Convenience functions for SAR image batch processing with ESA SNAP
 
-# Copyright (c) 2016-2020, the pyroSAR Developers.
+# Copyright (c) 2016-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -17,13 +17,14 @@ from ..ancillary import multilook_factors
 from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, get_egm96_lookup
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
+from spatialist.ancillary import dissolve
 
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR',
             removeS1ThermalNoise=True, offset=None, allow_RES_OSV=False, demName='SRTM 1Sec HGT',
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
-            basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True,
+            basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True, tmpdir=None,
             gpt_exceptions=None, gpt_args=None, returnWF=False, nodataValueAtSea=True,
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
@@ -48,8 +49,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         The polarizations to be processed; can be a string for a single polarization, e.g. 'VV', or a list of several
         polarizations, e.g. ['VV', 'VH']. With the special value 'all' (default) all available polarizations are
         processed.
-    shapefile: str or :py:class:`~spatialist.vector.Vector`, optional
-        A vector geometry for subsetting the SAR scene to a test site. Default is None.
+    shapefile: str or :py:class:`~spatialist.vector.Vector` or dict or None
+        A vector geometry for subsetting the SAR scene to a test site.
     scaling: {'dB', 'db', 'linear'}, optional
         Should the output be in linear or decibel scaling? Default is 'dB'.
     geocoding_type: {'Range-Doppler', 'SAR simulation cross correlation'}, optional
@@ -82,7 +83,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         Apply Earth Gravitational Model to external DEM? Default is True.
     terrainFlattening: bool
         apply topographic normalization on the data?
-    basename_extensions: list of str
+    basename_extensions: list of str or None
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     test: bool, optional
         If set to True the workflow xml file is only written and not executed. Default is False.
@@ -92,11 +93,15 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - localIncidenceAngle
          - projectedLocalIncidenceAngle
          - DEM
+         - layoverShadowMask
     groupsize: int
         the number of workers executed together in one gpt call
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
-    gpt_exceptions: dict
+    tmpdir: str or None
+        path of custom temporary directory, useful to separate output folder and temp folder. If `None`, the `outdir`
+        location will be used. The created subdirectory will be deleted after processing.
+    gpt_exceptions: dict or None
         a dictionary to override the configured GPT executable for certain operators;
         each (sub-)workflow containing this operator will be executed with the define executable;
         
@@ -129,11 +134,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - 'Refined Lee'
          - 'Lee'
          - 'Lee Sigma'
-    refarea: str
-        one of the following:
-         - 'beta0'
-         - 'gamma0'
-         - 'sigma0'
+    refarea: str or list
+        'sigma0', 'gamma0' or a list of both
     alignToStandardGrid: bool
         align all processed images to a common grid?
     standardGridOriginX: int or float
@@ -206,6 +208,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         formatName = 'SENTINEL-1'
     else:
         raise RuntimeError('sensor not supported (yet)')
+    
+    # several options like resampling are modified globally for the whole workflow at the end of this function
+    # this list gathers IDs of nodes for which this should not be done because they are configured individually
+    resampling_exceptions = []
     ######################
     # print('- assessing polarization selection')
     if isinstance(polarizations, str):
@@ -220,10 +226,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         polarizations = [x for x in polarizations if x in id.polarizations]
     else:
         raise RuntimeError('polarizations must be of type str or list')
-    
-    format = 'GeoTiff-BigTIFF' if len(polarizations) == 1 and export_extra is None else 'ENVI'
-    # print(polarizations)
-    # print(format)
     
     bandnames = dict()
     bandnames['int'] = ['Intensity_' + x for x in polarizations]
@@ -277,11 +279,13 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     orbitType = orbit_lookup[formatName]
     if formatName == 'ENVISAT' and id.acquisition_mode == 'WSM':
         orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
+    
     if formatName == 'SENTINEL-1':
         match = id.getOSV(osvType='POE', returnMatch=True)
         if match is None and allow_RES_OSV:
             id.getOSV(osvType='RES')
             orbitType = 'Sentinel Restituted (Auto Download)'
+    
     orb = workflow['Apply-Orbit-File']
     orb.parameters['orbitType'] = orbitType
     orb.parameters['continueOnFail'] = False
@@ -291,16 +295,21 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     cal = workflow['Calibration']
     cal.parameters['selectedPolarisations'] = polarizations
     cal.parameters['sourceBands'] = bandnames['int']
+    if isinstance(refarea, str):
+        refarea = [refarea]
     if terrainFlattening:
-        if refarea != 'gamma0':
+        if 'gamma0' not in refarea:
             raise RuntimeError('if terrain flattening is applied refarea must be gamma0')
         cal.parameters['outputBetaBand'] = True
+        if 'sigma0' in refarea:
+            cal.parameters['outputSigmaBand'] = True
     else:
-        refarea_options = ['sigma0', 'beta0', 'gamma0']
-        if refarea not in refarea_options:
-            message = '{0} must be one of the following:\n- {1}'
-            raise ValueError(message.format('refarea', '\n- '.join(refarea_options)))
-        cal.parameters['output{}Band'.format(refarea[:-1].capitalize())] = True
+        refarea_options = ['sigma0', 'gamma0']
+        for opt in refarea:
+            if opt not in refarea_options:
+                message = '{0} must be one of the following:\n- {1}'
+                raise ValueError(message.format('refarea', '\n- '.join(refarea_options)))
+            cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
     last = cal.id
     ############################################
     # terrain flattening node configuration
@@ -334,20 +343,20 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             raise ValueError(message.format('speckleFilter', '\n- '.join(speckleFilter_options)))
         sf = parse_node('Speckle-Filter')
         workflow.insert_node(sf, before=last)
-        sf.parameters['sourceBands'] = bandnames[refarea]
+        sf.parameters['sourceBands'] = None
         sf.parameters['filter'] = speckleFilter
         last = sf.id
     ############################################
     # configuration of node sequence for specific geocoding approaches
-    
+    bands = dissolve([bandnames[opt] for opt in refarea])
     if geocoding_type == 'Range-Doppler':
         tc = parse_node('Terrain-Correction')
         workflow.insert_node(tc, before=last)
-        tc.parameters['sourceBands'] = bandnames[refarea]
+        tc.parameters['sourceBands'] = bands
     elif geocoding_type == 'SAR simulation cross correlation':
         sarsim = parse_node('SAR-Simulation')
         workflow.insert_node(sarsim, before=last)
-        sarsim.parameters['sourceBands'] = bandnames[refarea]
+        sarsim.parameters['sourceBands'] = bands
         
         workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
         
@@ -381,13 +390,29 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
         ml.parameters['sourceBands'] = None
-        # if cal.parameters['outputBetaBand']:
-        #     ml.parameters['sourceBands'] = bandnames['beta0']
-        # elif cal.parameters['outputGammaBand']:
-        #     ml.parameters['sourceBands'] = bandnames['gamma0']
-        # elif cal.parameters['outputSigmaBand']:
-        #     ml.parameters['sourceBands'] = bandnames['sigma0']
     ############################################
+    # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
+    if len(refarea) > 1 and terrainFlattening:
+        bm = parse_node('BandMerge')
+        workflow.insert_node(bm, before=[tf.source, tf.id])
+        sources = bm.source
+        gamma_index = sources.index('Terrain-Flattening')
+        sigma_index = abs(gamma_index - 1)
+        s1_id = os.path.basename(os.path.splitext(id.scene)[0])
+        bands_long = []
+        for band in bands:
+            comp = [band + '::']
+            if shapefile is not None:
+                comp.append('Subset_')
+            comp.append(s1_id)
+            if band.startswith('Gamma'):
+                comp.append('_' + workflow.suffix(stop=sources[gamma_index]))
+            else:
+                comp.append('_' + workflow.suffix(stop=sources[sigma_index]))
+            bands_long.append(''.join(comp))
+        bm.parameters['sourceBands'] = bands_long
+        bm.parameters['geographicError'] = 0.0
+        ############################################
     # specify spatial resolution and coordinate reference system of the output dataset
     # print('-- configuring CRS')
     tc.parameters['pixelSpacingInMeter'] = tr
@@ -420,19 +445,26 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if scaling in ['dB', 'db']:
         lin2db = parse_node('LinearToFromdB')
         workflow.insert_node(lin2db, before=tc.id)
-        lin2db.parameters['sourceBands'] = bandnames[refarea]
+        lin2db.parameters['sourceBands'] = bands
     
     ############################################
     # (optionally) add subset node and add bounding box coordinates of defined shapefile
     # print('-- configuring Subset Node')
     if shapefile:
         # print('--- read')
-        shp = shapefile.clone() if isinstance(shapefile, Vector) else Vector(shapefile)
-        # reproject the geometry to WGS 84 latlon
-        # print('--- reproject')
-        shp.reproject(4326)
-        ext = shp.extent
-        shp.close()
+        if isinstance(shapefile, dict):
+            ext = shapefile
+        else:
+            if isinstance(shapefile, Vector):
+                shp = shapefile.clone()
+            elif isinstance(shapefile, str):
+                shp = Vector(shapefile)
+            else:
+                raise TypeError("argument 'shapefile' must be either a dictionary, a Vector object or a string.")
+            # reproject the geometry to WGS 84 latlon
+            shp.reproject(4326)
+            ext = shp.extent
+            shp.close()
         # add an extra buffer of 0.01 degrees
         buffer = 0.01
         ext['xmin'] -= buffer
@@ -445,17 +477,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             inter = intersect(id.bbox(), bounds)
             if not inter:
                 raise RuntimeError('no bounding box intersection between shapefile and scene')
-            # print('--- close intersect')
             inter.close()
-            # print('--- get wkt')
             wkt = bounds.convert2wkt()[0]
         
-        # print('--- parse XML node')
         subset = parse_node('Subset')
-        # print('--- insert node')
         workflow.insert_node(subset, before=read.id)
         subset.parameters['region'] = [0, 0, id.samples, id.lines]
         subset.parameters['geoRegion'] = wkt
+        subset.parameters['copyMetadata'] = True
     ############################################
     # (optionally) configure subset node for pixel offsets
     if offset and not shapefile:
@@ -472,31 +501,60 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # parametrize write node
     # print('-- configuring Write Node')
     # create a suffix for the output file to identify processing steps performed in the workflow
-    suffix = workflow.suffix
-    
-    basename = os.path.join(outdir, id.outname_base(basename_extensions))
-    extension = suffix if format == 'ENVI' else polarizations[0] + '_' + suffix
-    outname = basename + '_' + extension
+    suffix = workflow.suffix()
+    if tmpdir is None:
+        tmpdir = outdir
+    basename = os.path.join(tmpdir, id.outname_base(basename_extensions))
+    outname = basename + '_' + suffix
     
     write = workflow['Write']
     write.parameters['file'] = outname
-    write.parameters['formatName'] = format
+    write.parameters['formatName'] = 'ENVI'
     ############################################
     ############################################
     if export_extra is not None:
-        options = ['incidenceAngleFromEllipsoid',
-                   'localIncidenceAngle',
-                   'projectedLocalIncidenceAngle',
-                   'DEM']
-        write = parse_node('Write')
-        workflow.insert_node(write, before=tc.id, resetSuccessorSource=False)
-        write.parameters['file'] = outname
-        write.parameters['formatName'] = format
+        tc_options = ['incidenceAngleFromEllipsoid',
+                      'localIncidenceAngle',
+                      'projectedLocalIncidenceAngle',
+                      'DEM']
+        tc_write = None
+        tc_selection = []
         for item in export_extra:
-            if item not in options:
+            if item in tc_options:
+                if tc_write is None:
+                    tc_write = parse_node('Write')
+                    workflow.insert_node(tc_write, before=tc.id, resetSuccessorSource=False)
+                    tc_write.parameters['file'] = outname
+                    tc_write.parameters['formatName'] = 'ENVI'
+                key = 'save{}{}'.format(item[0].upper(), item[1:])
+                tc.parameters[key] = True
+                tc_selection.append(item)
+            elif item == 'layoverShadowMask':
+                sarsim = parse_node('SAR-Simulation')
+                sarsim.parameters['saveLayoverShadowMask'] = True
+                workflow.insert_node(sarsim, after=tc.id, resetSuccessorSource=False)
+                sarsim_select = parse_node('BandSelect')
+                sarsim_select.parameters['sourceBands'] = 'layover_shadow_mask'
+                workflow.insert_node(sarsim_select, before=sarsim.id, resetSuccessorSource=False)
+                
+                sarsim_tc = parse_node('Terrain-Correction')
+                workflow.insert_node(sarsim_tc, before=sarsim_select.id)
+                sarsim_tc.parameters['alignToStandardGrid'] = alignToStandardGrid
+                sarsim_tc.parameters['standardGridOriginX'] = standardGridOriginX
+                sarsim_tc.parameters['standardGridOriginY'] = standardGridOriginY
+                sarsim_tc.parameters['imgResamplingMethod'] = 'NEAREST_NEIGHBOUR'
+                resampling_exceptions.append(sarsim_tc.id)
+                
+                sarsim_write = parse_node('Write')
+                sarsim_write.parameters['file'] = outname
+                sarsim_write.parameters['formatName'] = 'ENVI'
+                workflow.insert_node(sarsim_write, before=sarsim_tc.id, resetSuccessorSource=False)
+            else:
                 raise RuntimeError("ID '{}' not valid for argument 'export_extra'".format(item))
-            key = 'save{}{}'.format(item[0].upper(), item[1:])
-            tc.parameters[key] = True
+        if len(tc_selection) > 0:
+            tc_select = parse_node('BandSelect')
+            workflow.insert_node(tc_select, after=tc_write.id)
+            tc_select.parameters['sourceBands'] = tc_selection
     ############################################
     ############################################
     # select DEM type
@@ -547,7 +605,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         raise ValueError(message.format('imgResamplingMethod', '\n- '.join(options)))
     
     workflow.set_par('demResamplingMethod', demResamplingMethod)
-    workflow.set_par('imgResamplingMethod', imgResamplingMethod)
+    workflow.set_par('imgResamplingMethod', imgResamplingMethod,
+                     exceptions=resampling_exceptions)
     ############################################
     ############################################
     # additional parameter settings applied to the whole workflow
@@ -558,18 +617,19 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # write workflow to file and optionally execute it
     # print('- writing workflow to file')
     
-    workflow.write(outname + '_proc')
+    wf_name = outname.replace(tmpdir, outdir) + '_proc.xml'
+    workflow.write(wf_name)
     
     # execute the newly written workflow
     if not test:
         try:
-            groups = groupbyWorkers(outname + '_proc.xml', groupsize)
-            gpt(outname + '_proc.xml', groups=groups, cleanup=cleanup,
+            groups = groupbyWorkers(wf_name, groupsize)
+            gpt(wf_name, groups=groups, cleanup=cleanup,
                 gpt_exceptions=gpt_exceptions, gpt_args=gpt_args,
-                removeS1BorderNoiseMethod=removeS1BorderNoiseMethod)
+                removeS1BorderNoiseMethod=removeS1BorderNoiseMethod, outdir=outdir)
         except RuntimeError as e:
             print(str(e))
-            with open(outname + '_error.log', 'w') as log:
+            with open(wf_name.replace('_proc.xml', '_error.log'), 'w') as log:
                 log.write(str(e))
     if returnWF:
-        return outname + '_proc.xml'
+        return wf_name
