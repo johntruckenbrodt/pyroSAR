@@ -1182,8 +1182,7 @@ class EORC_PSR(ID):
 
     PALSAR-2:
         Reference: 
-            ALOS-2/PALSAR-2 EORC PAth Product Format Description (First Edition, [access restricted])
-            (`JAXA 2016 <PALSAR2_25m_PATH_product_format_NDX-150019_ENG.pdf>`_).
+            NDX-150019: ALOS-2/PALSAR-2 EORC Path Product Format Description (JAXA 2016)
         Products / processing levels:
             * 1.5
         Acquisition modes:
@@ -1282,25 +1281,25 @@ class EORC_PSR(ID):
         ################################################################################################################
         # read data set summary record
 
-        orbitsPerCycle = 207
+        orbitsPerCycle = int(207)
         
-        meta['orbitNumber_abs'] = header[7]
-        meta['orbitNumber_rel'] = header[7]
+        meta['orbitNumber_rel'] = int(header[7])
         meta['cycleNumber'] = header[5]
         meta['frameNumber'] = ''
+        meta['orbitNumber_abs'] = int(orbitsPerCycle * (meta['cycleNumber'] - 1) + meta['orbitNumber_rel'])
         
         meta['lines'] = int(float(facter_m[51]))
         meta['samples'] = int(float(facter_m[50]))
-        meta['incidence'] = facter_m[119]
+        meta['incidence'] = float(facter_m[119])
         meta['proc_facility'] = header[73]
 
-        meta['spacing'] = (header[51], header[52])
+        meta['spacing'] = (float(header[51]), float(header[52]))
 
         meta['orbit'] = header[9]
         ################################################################################################################
         # read radiometric data record
         
-        meta['k_dB'] = header[64]
+        meta['k_dB'] = float(header[64])
         
         return meta
 
