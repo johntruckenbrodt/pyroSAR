@@ -247,15 +247,15 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
             outname = os.path.join(directory, outname_base)
 
             isp.par_KC_PALSAR_slr(facter_m=facter_m,
-                                    CEOS_leader=led,
-                                    SLC_par=outname + '_mli.par',
-                                    pol=polarization,
-                                    pls_mode=2,
-                                    KC_data=image,
-                                    pwr=outname + '_mli',
-                                    logpath=logpath,
-                                    outdir=outdir,
-                                    shellscript=shellscript)
+                                  CEOS_leader=led,
+                                  SLC_par=outname + '_mli.par',
+                                  pol=polarization,
+                                  pls_mode=2,
+                                  KC_data=image,
+                                  pwr=outname + '_mli',
+                                  logpath=logpath,
+                                  outdir=outdir,
+                                  shellscript=shellscript)
             par2hdr(outname + '_mli.par', outname + '_mli.hdr')
     
     elif isinstance(id, ESA):
@@ -641,7 +641,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         raise RuntimeError("'scene' must be of type str or pyroSAR.ID")
     
     if scene.sensor not in ['S1A', 'S1B', 'PALSAR-2']:
-        raise IOError('this method is currently only available for Sentinel-1. Please stay tuned...')
+        raise IOError('this method is currently only available for Sentinel-1 and PALSAR-2 Path data. Please stay tuned...')
     
     if sarSimCC:
         raise IOError('geocoding with cross correlation offset refinement is still in the making. Please stay tuned...')
@@ -828,7 +828,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         # pixel area and DEM-facet pixel area directly with command pixel_area
         if hasarg(diff.pixel_area, 'sigma0_ratio'):
             if refine_LUT:
-                n.appreciate(['pix_fine'],['pix_area_sigma0'])
+                n.appreciate(['pix_fine', 'pix_area_sigma0'])
             else:
                 n.appreciate(['pix_fine'])
                 n.depreciate(['pix_area_sigma0'])
