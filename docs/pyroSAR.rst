@@ -14,6 +14,7 @@ Drivers
         ID
         CEOS_PSR
         CEOS_ERS
+        EORC_PSR
         ESA
         SAFE
         TSX
