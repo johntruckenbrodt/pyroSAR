@@ -2906,7 +2906,7 @@ def par_KC_PALSAR_slr(facter_m, CEOS_leader, SLC_par, pol, pls_mode, KC_data, pw
         a file to write the Gamma commands to in shell format
     """
     process(
-        [os.environ['ISP_HOME']+'/bin/par_KC_PALSAR_slr', facter_m, CEOS_leader, SLC_par, pol, pls_mode,
+        ['/usr/local/GAMMA_SOFTWARE-20180703/ISP/bin/par_KC_PALSAR_slr', facter_m, CEOS_leader, SLC_par, pol, pls_mode,
          KC_data, pwr, fdtab], logpath=logpath, outdir=outdir, shellscript=shellscript)
 
 
