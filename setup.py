@@ -33,7 +33,7 @@ setup(name='pyroSAR',
                         'pyyaml',
                         'requests',
                         'psycopg2',
-                        'SQLAlchemy',
+                        'SQLAlchemy<1.4.0',
                         'SQLAlchemy-Utils',
                         'GeoAlchemy2'],
       extras_require={

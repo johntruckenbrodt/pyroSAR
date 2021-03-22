@@ -314,7 +314,7 @@ class ExamineGamma(object):
                                  getattr(self, 'home')).group('version')
         
         if not hasattr(self, 'gdal_config'):
-            gdal_config = '/usr/bin/gdal-configue'
+            gdal_config = '/usr/bin/gdal-config'
             if not os.path.isfile(gdal_config):
                 warnings.warn('could not find GDAL system installation under {}\n'
                               'please modify the pyroSAR configuration: {}'.format(gdal_config, self.fname))
