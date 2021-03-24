@@ -17,7 +17,7 @@ import re
 import sys
 import requests
 import zipfile as zf
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import parser as dateutil_parser
 import xml.etree.ElementTree as ET
 import numpy as np
@@ -99,8 +99,6 @@ class OSV(object):
             except AttributeError:
                 auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
             osvdir = os.path.join(auxdatapath, 'Orbits', 'Sentinel-1')
-        self.url = 'https://scihub.copernicus.eu/gnss/search/'
-        self.auth = ('gnssguest', 'gnssguest')
         self.outdir_poe = os.path.join(osvdir, 'POEORB')
         self.outdir_res = os.path.join(osvdir, 'RESORB')
         self.pattern = r'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
@@ -180,29 +178,57 @@ class OSV(object):
         else:
             return self.outdir_res
     
-    def catch(self, sensor, osvtype='POE', start=None, stop=None):
-        """
-        check a server for files
-
-        Parameters
-        ----------
-        sensor: str or list
-            The S1 mission(s):
-             - 'S1A'
-             - 'S1B'
-             - ['S1A', 'S1B']
-        osvtype: {'POE', 'RES'}
-            the type of orbit files required
-        start: str
-            the date to start searching for files in format YYYYmmddTHHMMSS
-        stop: str
-            the date to stop searching for files in format YYYYmmddTHHMMSS
-
-        Returns
-        -------
-        list
-            the product dictionary of the remote OSV files, with href
-        """
+    def __catch_aux_sentinel(self, sensor, osvtype='POE', start=None, stop=None):
+        url = 'http://aux.sentinel1.eo.esa.int'
+        skeleton = '{url}/{osvtype}ORB/{year}/{month:02d}/{day:02d}/'
+        
+        print('searching for new {} files'.format(osvtype))
+        print(url)
+        
+        if start is not None:
+            date_start = datetime.strptime(start, '%Y%m%dT%H%M%S')
+        else:
+            date_start = datetime.strptime('2014-07-31', '%Y-%m-%d')
+        # set the defined date or the current date otherwise
+        if stop is not None:
+            date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S')
+        else:
+            date_stop = datetime.now()
+        
+        files = []
+        date_search = date_start
+        while True:
+            url_sub = skeleton.format(url=url,
+                                      osvtype=osvtype,
+                                      year=date_search.year,
+                                      month=date_search.month,
+                                      day=date_search.day)
+            result = requests.get(url_sub, timeout=self.timeout).text
+            files_sub = list(set(re.findall(self.pattern, result)))
+            if len(files_sub) == 0:
+                break
+            for file in files_sub:
+                match = re.match(self.pattern_fine, file)
+                start = datetime.strptime(match.group('start'), '%Y%m%dT%H%M%S')
+                stop = datetime.strptime(match.group('stop'), '%Y%m%dT%H%M%S')
+                if sensor == match.group('sensor'):
+                    if (date_start <= start <= date_stop) or (date_start <= stop <= date_stop):
+                        files.append({'filename': file,
+                                      'href': url_sub + '/' + file,
+                                      'auth': None})
+            date_search += timedelta(days=1)
+            if start >= date_stop:
+                break
+        
+        if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
+            files = [x for x in files
+                     if self.date(x['filename'], 'start') > self.maxdate('POE', 'stop')]
+        print('found {} results'.format(len(files)))
+        return files
+    
+    def __catch_gnss(self, sensor, osvtype='POE', start=None, stop=None):
+        url = 'https://scihub.copernicus.eu/gnss/search/'
+        auth = ('gnssguest', 'gnssguest')
         # a dictionary for storing the url arguments
         query = {}
         
@@ -240,17 +266,17 @@ class OSV(object):
             date_stop = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
         
         # append the time frame to the query dictionary
-        query['beginPosition'] = '[{} TO {}]'.format(date_start,date_stop)
-        query['endPosition'] = '[{} TO {}]'.format(date_start,date_stop)
+        query['beginPosition'] = '[{} TO {}]'.format(date_start, date_stop)
+        query['endPosition'] = '[{} TO {}]'.format(date_start, date_stop)
         print('searching for new {} files'.format(osvtype))
         query_list = []
         for keyword, value in query.items():
-            query_elem = '{}:{}'.format(keyword,value)
+            query_elem = '{}:{}'.format(keyword, value)
             query_list.append(query_elem)
         query_str = ' '.join(query_list)
-        target = '{}?q={}&format=json'.format(self.url, query_str)
+        target = '{}?q={}&format=json'.format(url, query_str)
         print(target)
-
+        
         def _parse_gnsssearch_json(search_dict):
             parsed_dict = {}
             # Will return ['entry'] as dict if only one item
@@ -260,7 +286,7 @@ class OSV(object):
             for entry in search_dict:
                 id = entry['id']
                 entry_dict = {}
-
+                
                 for key, value in entry.items():
                     if key == 'title':
                         entry_dict[key] = value
@@ -277,7 +303,7 @@ class OSV(object):
                     elif key == 'link':
                         for elem in value:
                             if 'rel' in elem.keys():
-                                href_key = 'href_' + elem['rel'] 
+                                href_key = 'href_' + elem['rel']
                                 entry_dict[href_key] = elem['href']
                             else:
                                 entry_dict['href'] = elem['href']
@@ -287,7 +313,7 @@ class OSV(object):
                 
                 parsed_dict[id] = entry_dict
             return parsed_dict
-
+        
         def _parse_gnsssearch_response(response_json):
             if 'entry' in response_json.keys():
                 search_dict = response_json['entry']
@@ -295,20 +321,23 @@ class OSV(object):
             else:
                 parsed_dict = {}
             return parsed_dict
-
-        response = requests.get(target, auth=self.auth, timeout=self.timeout)
+        
+        response = requests.get(target, auth=auth, timeout=self.timeout)
         response.raise_for_status()
         response_json = response.json()['feed']
         total_results = response_json['opensearch:totalResults']
         print('found {} OSV results'.format(total_results))
         subquery = [link['href'] for link in response_json['link'] if link['rel'] == 'self'][0]
         if int(total_results) > 10:
-            subquery = subquery.replace('rows=10','rows=100')
+            subquery = subquery.replace('rows=10', 'rows=100')
         while subquery:
-            subquery_response = requests.get(subquery, auth=self.auth, timeout=self.timeout)
+            subquery_response = requests.get(subquery, auth=auth, timeout=self.timeout)
             subquery_response.raise_for_status()
             subquery_json = subquery_response.json()['feed']
             subquery_products = _parse_gnsssearch_response(subquery_json)
+            items = list(subquery_products.values())
+            for item in items:
+                item['auth'] = auth
             collection += list(subquery_products.values())
             if 'next' in [link['rel'] for link in subquery_json['link']]:
                 subquery = [link['href'] for link in subquery_json['link'] if link['rel'] == 'next'][0]
@@ -318,6 +347,41 @@ class OSV(object):
             collection = [x for x in collection
                           if self.date(x['filename'], 'start') > self.maxdate('POE', 'stop')]
         return collection
+    
+    def catch(self, sensor, osvtype='POE', start=None, stop=None, url_option=1):
+        """
+        check a server for files
+
+        Parameters
+        ----------
+        sensor: str or list
+            The S1 mission(s):
+             - 'S1A'
+             - 'S1B'
+             - ['S1A', 'S1B']
+        osvtype: {'POE', 'RES'}
+            the type of orbit files required
+        start: str
+            the date to start searching for files in format YYYYmmddTHHMMSS
+        stop: str
+            the date to stop searching for files in format YYYYmmddTHHMMSS
+        url_option: int
+            the URL to query for scenes
+             - 1: https://scihub.copernicus.eu/gnss
+             - 2: http://aux.sentinel1.eo.esa.int
+
+        Returns
+        -------
+        list
+            the product dictionary of the remote OSV files, with href
+        """
+        if url_option == 1:
+            items = self.__catch_gnss(sensor, osvtype, start, stop)
+        elif url_option == 2:
+            items = self.__catch_aux_sentinel(sensor, osvtype, start, stop)
+        else:
+            raise ValueError("'url_option' must be either 1 or 2")
+        return items
     
     def date(self, file, datetype):
         """
@@ -463,24 +527,25 @@ class OSV(object):
         """
         downloads = []
         for product in products:
-            if all(key not in ['filename','href'] for key in product.keys()):
+            if all(key not in ['filename', 'href'] for key in product.keys()):
                 raise RuntimeError("product dictionaries must contain 'filename' and 'href' keys")
             basename = product['filename']
             remote = product['href']
-
+            auth = product['auth']
+            
             outdir = self._subdir(basename)
             os.makedirs(outdir, exist_ok=True)
             local = os.path.join(outdir, basename) + '.zip'
             if not os.path.isfile(local):
-                downloads.append((remote, local, basename))
+                downloads.append((remote, local, basename, auth))
         if len(downloads) == 0:
             return
         print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
         if pbar:
             progress = pb.ProgressBar(max_value=len(downloads))
         i = 0
-        for remote, local, basename in downloads:
-            infile = requests.get(remote, auth=self.auth, timeout=self.timeout)
+        for remote, local, basename, auth in downloads:
+            infile = requests.get(remote, auth=auth, timeout=self.timeout)
             with zf.ZipFile(file=local,
                             mode='w',
                             compression=zf.ZIP_DEFLATED) \
