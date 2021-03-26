@@ -183,7 +183,6 @@ class OSV(object):
         skeleton = '{url}/{osvtype}ORB/{year}/{month:02d}/{day:02d}/'
         
         print('searching for new {} files'.format(osvtype))
-        print(url)
         
         if start is not None:
             date_start = datetime.strptime(start, '%Y%m%dT%H%M%S')
@@ -212,7 +211,8 @@ class OSV(object):
                 start = datetime.strptime(match.group('start'), '%Y%m%dT%H%M%S')
                 stop = datetime.strptime(match.group('stop'), '%Y%m%dT%H%M%S')
                 if sensor == match.group('sensor'):
-                    if (date_start <= start <= date_stop) or (date_start <= stop <= date_stop):
+                    if start < date_stop and stop > date_start:
+                        print(url_sub)
                         files.append({'filename': file,
                                       'href': url_sub + '/' + file,
                                       'auth': None})
