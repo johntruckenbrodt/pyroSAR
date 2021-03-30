@@ -1173,6 +1173,172 @@ class CEOS_PSR(ID):
         return self.meta['corners']
 
 
+class EORC_PSR(ID):
+    """
+    Handler class for ALOS-2/PALSAR-2 data in EORC (Earth Observation Research Center) Path format
+    
+    Sensors:
+        * PALSAR-2
+
+    PALSAR-2:
+        Reference: 
+            NDX-150019: ALOS-2/PALSAR-2 EORC Path Product Format Description (JAXA 2016)
+        Products / processing levels:
+            * 1.5
+        Acquisition modes:
+            * FBD: Fine mode Dual polarization
+            * WBD: Scan SAR nominal [14MHz] mode Dual polarization
+    """
+    
+    def __init__(self, scene):
+        
+        self.scene = os.path.realpath(scene)
+
+        self.pattern = r'^PSR2-' \
+                        r'(?P<prodlevel>SLTR)_'\
+                        r'(?P<pathnr>RSP[0-9]{3})_' \
+                        r'(?P<date>[0-9]{8})'\
+                        r'(?P<mode>FBD|WBD)'\
+                        r'(?P<beam>[0-9]{2})'\
+                        r'(?P<orbit_dir>A|D)'\
+                        r'(?P<look_dir>L|R)_'\
+                        r'(?P<replay_id1>[0-9A-Z]{16})-'\
+                        r'(?P<replay_id2>[0-9A-Z]{5})_'\
+                        r'(?P<internal>[0-9]{3})_'\
+                        r'HDR$'
+        
+        self.examine()
+        
+        self.meta = self.scanMetadata()
+        
+        # register the standardized meta attributes as object attributes
+        super(EORC_PSR, self).__init__(self.meta)
+    
+    def _getHeaderfileContent(self):
+        head_obj = self.getFileObj(self.header_filename)
+        head = head_obj.read().decode('utf-8')
+        head = list(head.split('\n'))
+        head_obj.close()
+        return head
+    
+    def _parseFacter_m(self):
+        try:
+            facter_file = self.findfiles('facter_m.dat')[0]
+        except IndexError:
+            return {}
+        facter_obj = self.getFileObj(facter_file)
+        facter_m = facter_obj.read().decode('utf-8')
+        facter_m = list(facter_m.split('\n'))
+        facter_obj.close()
+        return facter_m
+    
+    @property
+    def header_filename(self):
+        return self.findfiles(self.pattern)[0]
+    
+    def scanMetadata(self):
+        ################################################################################################################
+        # read header (HDR) file
+        header = self._getHeaderfileContent()
+        header = [head.replace(" ","") for head in header]
+        
+        # read summary text file
+        facter_m = self._parseFacter_m()
+        facter_m = [fact.replace(" ","") for fact in facter_m]
+
+        meta = {}
+        
+        # read polarizations from image file names
+        meta['polarizations'] = [re.search('[HV]{2}', os.path.basename(x)).group(0) for x in self.findfiles('^sar.')]
+        meta['product'] = header[3]
+        ################################################################################################################
+        # read start and stop time --> TODO: in what format is the start and stop time?
+
+        try:
+            start_time = facter_m[168].split('.')[0].zfill(2)+facter_m[168].split('.')[1][:4]
+            stop_time = facter_m[170].split('.')[0].zfill(2)+facter_m[170].split('.')[1][:4]
+        except (AttributeError):
+            raise IndexError('start and stop time stamps cannot be extracted; see file facter_m.dat')
+
+        meta['start'] = str(header[6])#+'T'+start_time
+        meta['stop'] = str(header[6])#+'T'+stop_time
+        ################################################################################################################
+        # read file metadata
+        meta['sensor'] = header[2]
+        ################################################################################################################
+        # read leader file name information
+        meta['acquisition_mode']=header[12]
+        # ###############################################################################################################
+        # read map projection data 
+
+        lat = list(map(float, [header[33], header[35],header[37],header[39]]))
+        lon = list(map(float, [header[34], header[36],header[38],header[40]]))
+
+        meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+        # print(meta['corners'])
+        # epsg=header[]
+        meta['projection'] = crsConvert(4918, 'wkt') #EPSG: 4918: ITRF97, GRS80
+        ################################################################################################################
+        # read data set summary record
+
+        orbitsPerCycle = int(207)
+        
+        meta['orbitNumber_rel'] = int(header[7])
+        meta['cycleNumber'] = header[5]
+        meta['frameNumber'] = ''
+        meta['orbitNumber_abs'] = int(orbitsPerCycle * (meta['cycleNumber'] - 1) + meta['orbitNumber_rel'])
+        
+        meta['lines'] = int(float(facter_m[51]))
+        meta['samples'] = int(float(facter_m[50]))
+        meta['incidence'] = float(facter_m[119])
+        meta['proc_facility'] = header[73]
+
+        meta['spacing'] = (float(header[51]), float(header[52]))
+
+        meta['orbit'] = header[9]
+        ################################################################################################################
+        # read radiometric data record
+        
+        meta['k_dB'] = float(header[64])
+        
+        return meta
+
+    def unpack(self, directory, overwrite=False):
+        outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
+        self._unpack(outdir, overwrite=overwrite)
+
+    def getCorners(self):
+        if 'corners' not in self.meta.keys():
+            lat = [y for x, y in self.meta.items() if 'Latitude' in x]
+            lon = [y for x, y in self.meta.items() if 'Longitude' in x]
+            if len(lat) == 0 or len(lon) == 0:
+                img_filename = self.findfiles('IMG')[0]
+                img_obj = self.getFileObj(img_filename)
+                imageFileDescriptor = img_obj.read(720)
+                
+                lineRecordLength = int(imageFileDescriptor[186:192])  # bytes per line + 412
+                numberOfRecords = int(imageFileDescriptor[180:186])
+                
+                signalDataDescriptor1 = img_obj.read(412)
+                img_obj.seek(720 + lineRecordLength * (numberOfRecords - 1))
+                signalDataDescriptor2 = img_obj.read()
+                
+                img_obj.close()
+                
+                lat = [signalDataDescriptor1[192:196], signalDataDescriptor1[200:204],
+                       signalDataDescriptor2[192:196], signalDataDescriptor2[200:204]]
+                
+                lon = [signalDataDescriptor1[204:208], signalDataDescriptor1[212:216],
+                       signalDataDescriptor2[204:208], signalDataDescriptor2[212:216]]
+                
+                lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
+                lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
+            
+            self.meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+        
+        return self.meta['corners']
+
+
 class ESA(ID):
     """
     Handler class for SAR data in ESA format (Envisat ASAR, ERS-1/2)
@@ -1339,7 +1505,7 @@ class SAFE(ID):
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True):
+    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=20):
         """
         download Orbit State Vector files for the scene
 
@@ -1355,6 +1521,8 @@ class SAFE(ID):
             return the best matching orbit file?
         useLocal: bool
             use locally existing files and do not search for files online if the right file has been found?
+        timeout: int or tuple or None
+            the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
 
         Returns
         -------
@@ -1372,17 +1540,17 @@ class SAFE(ID):
         after = (date + timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
         
         if useLocal:
-            with S1.OSV(osvdir) as osv:
+            with S1.OSV(osvdir, timeout=timeout) as osv:
                 match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
             if match is not None:
                 return match if returnMatch else None
         
         if osvType in ['POE', 'RES']:
-            with S1.OSV(osvdir) as osv:
+            with S1.OSV(osvdir, timeout=timeout) as osv:
                 files = osv.catch(sensor=self.sensor, osvtype=osvType, start=before, stop=after)
         
         elif sorted(osvType) == ['POE', 'RES']:
-            with S1.OSV(osvdir) as osv:
+            with S1.OSV(osvdir, timeout=timeout) as osv:
                 files = osv.catch(sensor=self.sensor, osvtype='POE', start=before, stop=after)
                 if len(files) == 0:
                     files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after)
@@ -1392,7 +1560,7 @@ class SAFE(ID):
         osv.retrieve(files)
         
         if returnMatch:
-            with S1.OSV(osvdir) as osv:
+            with S1.OSV(osvdir, timeout=timeout) as osv:
                 match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
             return match
     

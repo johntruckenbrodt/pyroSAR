@@ -1,7 +1,7 @@
 ##############################################################
 # SNAP source code scan for retrieving operator suffices
 
-# Copyright (c) 2020, the pyroSAR Developers.
+# Copyright (c) 2020-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -57,7 +57,8 @@ def main():
     collect = []
     
     for op in operators:
-        with open(op) as infile:
+        print(op)
+        with open(op, encoding='utf8') as infile:
             content = infile.read()
         
         # the suffix is defined as a class attribute PRODUCT_SUFFIX
@@ -75,6 +76,9 @@ def main():
             alias = match.groups()[0]
         else:
             alias = None
+        
+        if suffix == 'Cal':
+            alias = 'Calibration'
         
         # only collect operators for which an alias exists, i.e. which are exposed in the UI,
         # and for which a suffix is defined. In the UI, all operators for which no suffix exists

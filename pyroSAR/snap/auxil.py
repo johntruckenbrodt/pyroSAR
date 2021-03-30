@@ -99,7 +99,12 @@ def parse_node(name, use_existing=True):
         out, err = run(cmd=cmd, void=False)
         
         graph = re.search('<graph id.*', out, flags=re.DOTALL).group()
+        graph = re.sub(r'>\${.*', '/>', graph)  # remove placeholder values like ${value}
+        graph = re.sub(r'<\.\.\./>.*', '', graph)  # remove <.../> placeholders
         tree = ET.fromstring(graph)
+        for elt in tree.iter():
+            if elt.text in ['string', 'double', 'integer', 'float']:
+                elt.text = None
         node = tree.find('node')
         node.attrib['id'] = operator
         # add a second source product entry for multi-source nodes
@@ -226,6 +231,10 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
     match = re.search(pattern, err)
     
     if proc.returncode == 0:
+        pattern = r'(?P<level>WARNING: )([a-zA-Z.]*: )(?P<message>No intersection.*)'
+        match = re.search(pattern, err)
+        if match is not None:
+            raise RuntimeError(re.search(pattern, err).group('message'))
         return
     
     # delete unknown parameters and run the modified workflow
@@ -251,12 +260,16 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
                 os.remove(outname + '.tif')
             elif os.path.isdir(outname):
                 shutil.rmtree(outname, onerror=windows_fileprefix)
+            elif outname.endswith('.dim'):
+                os.remove(outname)
+                shutil.rmtree(outname.replace('.dim', '.data'),
+                              onerror=windows_fileprefix)
         raise RuntimeError(submessage.format(out, err, os.path.basename(xmlfile), proc.returncode))
 
 
-def gpt(xmlfile, groups=None, cleanup=True,
+def gpt(xmlfile, outdir, groups=None, cleanup=True,
         gpt_exceptions=None, gpt_args=None,
-        removeS1BorderNoiseMethod='pyroSAR', basename_extensions=None, tmpdir=None):
+        removeS1BorderNoiseMethod='pyroSAR', basename_extensions=None):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
     Input is a readily formatted workflow XML file as
@@ -271,6 +284,8 @@ def gpt(xmlfile, groups=None, cleanup=True,
     ----------
     xmlfile: str
         the name of the workflow XML file
+    outdir: str
+        the directory into which to write the final files
     groups: list
         a list of lists each containing IDs for individual nodes
     cleanup: bool
@@ -303,8 +318,8 @@ def gpt(xmlfile, groups=None, cleanup=True,
     read = workflow['Read']
     write = workflow['Write']
     scene = identify(read.parameters['file'])
-    outname = write.parameters['file']
-    suffix = workflow.suffix
+    tmpname = write.parameters['file']
+    suffix = workflow.suffix()
     format = write.parameters['formatName']
     dem_name = workflow.tree.find('.//demName')
     if dem_name is not None:
@@ -318,9 +333,9 @@ def gpt(xmlfile, groups=None, cleanup=True,
             and scene.meta['IPF_version'] < 2.9:
         if 'SliceAssembly' in workflow.operators:
             raise RuntimeError("pyroSAR's custom border noise removal is not yet implemented for multiple scene inputs")
-        xmlfile = os.path.join(outname,
+        xmlfile = os.path.join(tmpname,
                                os.path.basename(xmlfile.replace('_bnr', '')))
-        os.makedirs(outname, exist_ok=True)
+        os.makedirs(tmpname, exist_ok=True)
         # border noise removal is done outside of SNAP and the node is thus removed from the workflow
         del workflow['Remove-GRD-Border-Noise']
         # remove the node name from the groups
@@ -335,7 +350,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
         # unpack the scene if necessary and perform the custom border noise removal
         print('unpacking scene')
         if scene.compression is not None:
-            scene.unpack(outname)
+            scene.unpack(tmpname)
         print('removing border noise..')
         scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
         # change the name of the input file to that of the unpacked archive
@@ -346,27 +361,34 @@ def gpt(xmlfile, groups=None, cleanup=True,
     print('executing node sequence{}..'.format('s' if groups is not None else ''))
     try:
         if groups is not None:
+            tmpdir = os.path.join(tmpname, 'tmp')
             subs = split(xmlfile, groups, tmpdir)
             for sub in subs:
                 execute(sub, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
         else:
             execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
     except RuntimeError as e:
-        if cleanup and os.path.exists(outname):
-            shutil.rmtree(outname, onerror=windows_fileprefix)
+        if cleanup and os.path.exists(tmpname):
+            shutil.rmtree(tmpname, onerror=windows_fileprefix)
         raise RuntimeError(str(e) + '\nfailed: {}'.format(xmlfile))
+    
+    outname = os.path.join(outdir, os.path.basename(tmpname))
     
     if format == 'ENVI':
         print('converting to GTiff')
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
-        for item in finder(outname, ['*.img'], recursive=False):
-            if re.search('[HV]{2}', item):
+        for item in finder(tmpname, ['*.img'], recursive=False):
+            if re.search('ma0_[HV]{2}', item):
                 pol = re.search('[HV]{2}', item).group()
                 name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
+                if 'Sigma0' in item:
+                    name_new = name_new.replace('TF_', '')
             else:
                 base = os.path.splitext(os.path.basename(item))[0] \
                     .replace('elevation', 'DEM')
+                if re.search('layover_shadow_mask', base):
+                    base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
                 name_new = outname.replace(suffix, '{0}.tif'.format(base))
             nodata = dem_nodata if re.search('elevation', item) else 0
             translateoptions['noData'] = nodata
@@ -387,16 +409,15 @@ def gpt(xmlfile, groups=None, cleanup=True,
             if id.sensor in ['S1A', 'S1B']:
                 manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
                 basename = id.outname_base(basename_extensions)
-                basename = '{0}_{1}_manifest.safe'.format(basename, suffix)
-                outdir = os.path.dirname(outname)
+                basename = '{0}_manifest.safe'.format(basename)
                 outname_manifest = os.path.join(outdir, basename)
                 with open(outname_manifest, 'wb') as out:
                     out.write(manifest.read())
         except RuntimeError:
             continue
     ###########################################################################
-    if cleanup and os.path.exists(outname):
-        shutil.rmtree(outname, onerror=windows_fileprefix)
+    if cleanup and os.path.exists(tmpname):
+        shutil.rmtree(tmpname, onerror=windows_fileprefix)
     print('done')
 
 
@@ -432,7 +453,7 @@ def is_consistent(workflow):
     return all(check)
 
 
-def split(xmlfile, groups, tmpdir=None):
+def split(xmlfile, groups, outdir=None):
     """
     split a workflow file into groups and write them to separate workflows including source and write target linking.
     The new workflows are written to a sub-directory `temp` of the target directory defined in the input's `Write` node.
@@ -445,6 +466,10 @@ def split(xmlfile, groups, tmpdir=None):
         the workflow to be split
     groups: list
         a list of lists each containing IDs for individual nodes
+    outdir: str or None
+        the directory into which to write the XML workflows and the intermediate files created by them.
+        If None, the name will be created from the file name of the node with ID 'Write',
+        which is treated as a directory, and a subdirectory 'tmp'.
 
     Returns
     -------
@@ -457,13 +482,10 @@ def split(xmlfile, groups, tmpdir=None):
     """
     workflow = Workflow(xmlfile)
     write = workflow['Write']
-    out = write.parameters['file']
-    if tmpdir is None:
-        tmp = os.path.join(out, 'temp')
-    else:
-        tmp = tmpdir
-    if not os.path.isdir(tmp):
-        os.makedirs(tmp)
+    if outdir is None:
+        out = write.parameters['file']
+        outdir = os.path.join(out, 'tmp')
+    os.makedirs(outdir, exist_ok=True)
     
     # the temporary XML files
     outlist = []
@@ -529,7 +551,7 @@ def split(xmlfile, groups, tmpdir=None):
                 write = parse_node('Write')
                 new.insert_node(write, before=node.id, resetSuccessorSource=False)
                 id = str(position) if counter == 0 else '{}-{}'.format(position, counter)
-                tmp_out = os.path.join(tmp, '{}_tmp{}.dim'.format(basename, id))
+                tmp_out = os.path.join(outdir, '{}_tmp{}.dim'.format(basename, id))
                 prod_tmp[node_lookup[node.id]] = tmp_out
                 prod_tmp_format[node_lookup[node.id]] = 'BEAM-DIMAP'
                 write.parameters['file'] = tmp_out
@@ -538,7 +560,7 @@ def split(xmlfile, groups, tmpdir=None):
         if not is_consistent(new):
             message = 'inconsistent group:\n {}'.format(' -> '.join(group))
             raise RuntimeError(message)
-        outname = os.path.join(tmp, '{}_tmp{}.xml'.format(basename, position))
+        outname = os.path.join(outdir, '{}_tmp{}.xml'.format(basename, position))
         new.write(outname)
         outlist.append(outname)
     return outlist
@@ -563,10 +585,16 @@ def groupbyWorkers(xmlfile, n=2):
         on the newly created groups or directly to function :func:`gpt`, which will call :func:`split` internally.
     """
     workflow = Workflow(xmlfile)
-    workers_id = [x.id for x in workflow if x.operator not in ['Read', 'Write']]
+    workers_id = [x.id for x in workflow if x.operator not in ['Read', 'Write', 'BandSelect']]
     readers_id = [x.id for x in workflow['operator=Read']]
     writers_id = [x.id for x in workflow['operator=Write']]
+    selects_id = [x.id for x in workflow['operator=BandSelect']]
     workers_groups = [workers_id[i:i + n] for i in range(0, len(workers_id), n)]
+    for item in selects_id:
+        source = workflow[item].source
+        for group in workers_groups:
+            if source in group:
+                group.insert(group.index(source) + 1, item)
     nodes_groups = []
     for group in workers_groups:
         newgroup = []
@@ -651,7 +679,7 @@ class Workflow(object):
         Parameters
         ----------
         id: str
-            the ID of  node
+            the ID of the node
         recursive: bool
             find successors recursively?
 
@@ -687,10 +715,12 @@ class Workflow(object):
 
         """
         
-        def reset(id, source):
+        def reset(id, source, excludes=None):
             if isinstance(source, list):
                 for item in source:
-                    reset(id, item)
+                    successors = self.successors(item)
+                    excludes = [x for x in successors if x in source]
+                    reset(id, item, excludes)
             else:
                 try:
                     # find the source nodes of the current node
@@ -701,6 +731,9 @@ class Workflow(object):
                     # delete the ID of the current node from the successors
                     if id in successors:
                         del successors[successors.index(id)]
+                    if excludes is not None:
+                        for item in excludes:
+                            del successors[successors.index(item)]
                     for successor in successors:
                         successor_source = self[successor].source
                         if isinstance(successor_source, list):
@@ -795,6 +828,12 @@ class Workflow(object):
         Node or None
             the new node or None, depending on arguement `void`
         """
+        ncopies = [x.operator for x in self.nodes()].count(node.operator)
+        if ncopies > 0:
+            node.id = '{0} ({1})'.format(node.operator, ncopies + 1)
+        else:
+            node.id = node.operator
+        
         if before is None and after is None and len(self) > 0:
             before = self[len(self) - 1].id
         if before and not after:
@@ -807,7 +846,6 @@ class Workflow(object):
             position = self.index(predecessor) + 1
             self.tree.insert(position, node.element)
             newnode = Node(self.tree[position])
-            self.refresh_ids()
             ####################################################
             # set the source product for the new node
             if newnode.operator != 'Read':
@@ -835,7 +873,6 @@ class Workflow(object):
         else:
             log.debug('inserting node {}'.format(node.id))
             self.tree.insert(len(self.tree) - 1, node.element)
-        self.refresh_ids()
         if not void:
             return node
     
@@ -861,6 +898,15 @@ class Workflow(object):
         return sorted(list(set([node.operator for node in self])))
     
     def refresh_ids(self):
+        """
+        Ensure unique IDs for all nodes. If two nodes with the same ID are found one is renamed to "ID (2)".
+        E.g. 2 x "Write" -> "Write", "Write (2)".
+        This method is no longer used and is just kept in case there is need for it in the future.
+        
+        Returns
+        -------
+
+        """
         counter = {}
         for node in self:
             operator = node.operator
@@ -876,7 +922,7 @@ class Workflow(object):
                 log.debug('renaming node {} to {}'.format(node.id, new))
                 node.id = new
     
-    def set_par(self, key, value):
+    def set_par(self, key, value, exceptions=None):
         """
         set a parameter for all nodes in the workflow
         
@@ -884,19 +930,29 @@ class Workflow(object):
         ----------
         key: str
             the parameter name
-        value
+        value: bool or int or float or str
+            the parameter value
+        exceptions: list
+            a list of node IDs whose parameters should not be changed
 
         Returns
         -------
 
         """
         for node in self:
+            if exceptions is not None and node.id in exceptions:
+                continue
             if key in node.parameters.keys():
                 node.parameters[key] = value2str(value)
     
-    @property
-    def suffix(self):
+    def suffix(self, stop=None):
         """
+        Get the SNAP operator suffix sequence
+        
+        Parameters
+        ----------
+        stop: str
+            the ID of the last workflow node
         
         Returns
         -------
@@ -909,6 +965,8 @@ class Workflow(object):
         for name in names:
             if name not in names_unique:
                 names_unique.append(name)
+            if name == stop:
+                break
         config = ExamineSnap()
         suffix = '_'.join(filter(None, [config.get_suffix(x) for x in names_unique]))
         return suffix
@@ -1009,7 +1067,10 @@ class Node(object):
             the processing parameters of the node
         """
         params = self.element.find('.//parameters')
-        return Par(params)
+        if self.operator == 'BandMaths':
+            return Par_BandMath(params)
+        else:
+            return Par(params)
     
     @property
     def source(self):
@@ -1023,7 +1084,8 @@ class Node(object):
         sources = []
         elements = self.element.findall('.//sources/')
         for element in elements:
-            sources.append(element.attrib['refid'])
+            if element.tag.startswith('sourceProduct'):
+                sources.append(element.attrib['refid'])
         
         if len(sources) == 0:
             return None
@@ -1134,6 +1196,21 @@ class Par(object):
             the parameter values as from :meth:`dict.values()`
         """
         return [x.text for x in self.__element.findall('./')]
+
+
+class Par_BandMath(Par):
+    def __init__(self, element):
+        self.__element = element
+        super(Par_BandMath, self).__init__(element)
+    
+    def __getitem__(self, item):
+        if item in ['variables', 'targetBands']:
+            out = []
+            for x in self.__element.findall('.//{}'.format(item[:-1])):
+                out.append(Par(x))
+            return out
+        else:
+            raise ValueError("can only get items 'variables' and 'targetBands'")
 
 
 def value2str(value):
