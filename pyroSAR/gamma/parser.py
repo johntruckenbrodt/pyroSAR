@@ -372,6 +372,18 @@ def parse_command(command, indent='    '):
     argstr_function = re.sub(r'([^\'])-([^\'])', r'\1_\2', ', '.join(arg_req + [x + "='-'" for x in arg_opt])) \
         .replace(', def=', ', drm=')
     
+    # some commands have different defaults than '-'
+    replacements_defaults = {'S1_import_SLC_from_zipfiles': {'OPOD_dir': '.'}}
+    
+    if command_base in replacements_defaults.keys():
+        for key, value in replacements_defaults[command_base].items():
+            old = "{}='-'".format(key)
+            if isinstance(value, str):
+                new = "{0}='{1}'".format(key, value)
+            else:
+                new = "{0}={1}".format(key, value)
+            argstr_function = argstr_function.replace(old, new)
+    
     # create the function definition string
     fun_def = 'def {name}({args_fun}, logpath=None, outdir=None, shellscript=None):' \
         .format(name=command_base.replace('-', '_'),
