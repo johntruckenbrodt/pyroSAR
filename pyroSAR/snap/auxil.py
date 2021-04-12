@@ -1225,6 +1225,11 @@ class Par_BandMath(Par):
             return out
         else:
             raise ValueError("can only get items 'variables' and 'targetBands'")
+    
+    def clear_variables(self):
+        var = self.__element.find('.//variables')
+        for item in var:
+            var.remove(item)
 
 
 def value2str(value):
