@@ -101,6 +101,8 @@ def parse_node(name, use_existing=True):
         graph = re.search('<graph id.*', out, flags=re.DOTALL).group()
         graph = re.sub(r'>\${.*', '/>', graph)  # remove placeholder values like ${value}
         graph = re.sub(r'<\.\.\./>.*', '', graph)  # remove <.../> placeholders
+        if operator == 'BandMaths':
+            graph = graph.replace('sourceProducts', 'sourceProduct')
         tree = ET.fromstring(graph)
         for elt in tree.iter():
             if elt.text in ['string', 'double', 'integer', 'float']:
@@ -119,6 +121,14 @@ def parse_node(name, use_existing=True):
             child.tag = 'sourceProduct'
             child.attrib['refid'] = 'Read'
             child.text = None
+        if operator == 'BandMaths':
+            tree.find('.//parameters').set('class', 'com.bc.ceres.binding.dom.XppDomElement')
+            tband = tree.find('.//targetBand')
+            for item in ['spectralWavelength', 'spectralBandwidth',
+                         'scalingOffset', 'scalingFactor',
+                         'validExpression', 'spectralBandIndex']:
+                el = tband.find('.//{}'.format(item))
+                tband.remove(el)
         
         node = Node(node)
         
@@ -137,6 +147,10 @@ def parse_node(name, use_existing=True):
                     node.parameters[parameter] = value
                     continue
             node.parameters[parameter] = None
+        
+        # fill in some additional defaults
+        if operator == 'BandMerge':
+            node.parameters['geographicError'] = '1.0E-5'
         
         with open(absname, 'w') as xml:
             xml.write(str(node))
