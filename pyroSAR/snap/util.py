@@ -562,13 +562,15 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 math.element.attrib['class'] = '"com.bc.ceres.binding.dom.XppDomElement"'
                 workflow.insert_node(math, before=area_merge1.id, resetSuccessorSource=False)
                 
-                # math = parse_node('BandMaths')
-                # workflow.insert_node(math, before=[tf.id, area_select.id], resetSuccessorSource=False)
+                pol = polarizations[0]  # the result will be the same for each polarization
+                area = 'scatteringArea_{0}'.format(pol)
+                expression = 'Beta0_{0} / Gamma0_{0}'.format(pol)
+                
                 math.parameters.clear_variables()
                 exp = math.parameters['targetBands'][0]
-                exp['name'] = 'scatteringArea_VV'
+                exp['name'] = area
                 exp['type'] = 'float32'
-                exp['expression'] = 'Beta0_VV / Gamma0_VV'
+                exp['expression'] = expression
                 exp['noDataValue'] = 0.0
                 
                 area_merge2 = parse_node('BandMerge')
@@ -576,11 +578,11 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 tc.source = area_merge2.id
                 
                 # modify Terrain-Correction source bands
-                tc_bands = tc.parameters['sourceBands'] + ',scatteringArea_VV'
+                tc_bands = tc.parameters['sourceBands'] + ',' + area
                 tc.parameters['sourceBands'] = tc_bands
                 
                 # add scattering Area to list of band directly written from Terrain-Correction
-                tc_selection.append('scatteringArea_VV')
+                tc_selection.append(area)
             else:
                 raise RuntimeError("ID '{}' not valid for argument 'export_extra'".format(item))
         if len(tc_selection) > 0:
