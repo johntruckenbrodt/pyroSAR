@@ -403,6 +403,8 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
                     .replace('elevation', 'DEM')
                 if re.search('layover_shadow_mask', base):
                     base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
+                if re.search('scatteringArea', base):
+                    base = re.sub('scatteringArea_[HV]{2}', 'scatteringArea', base)
                 name_new = outname.replace(suffix, '{0}.tif'.format(base))
             nodata = dem_nodata if re.search('elevation', item) else 0
             translateoptions['noData'] = nodata
@@ -1077,7 +1079,7 @@ class Node(object):
         
         Returns
         -------
-        Par
+        Par or Par_BandMath
             the processing parameters of the node
         """
         params = self.element.find('.//parameters')
