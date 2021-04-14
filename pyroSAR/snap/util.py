@@ -394,9 +394,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
     if len(refarea) > 1 and terrainFlattening:
-        bm = parse_node('BandMerge')
-        workflow.insert_node(bm, before=[tf.source, tf.id])
-        sources = bm.source
+        bm_tc = parse_node('BandMerge')
+        workflow.insert_node(bm_tc, before=[tf.source, tf.id])
+        sources = bm_tc.source
         gamma_index = sources.index('Terrain-Flattening')
         sigma_index = abs(gamma_index - 1)
         s1_id = os.path.basename(os.path.splitext(id.scene)[0])
@@ -411,8 +411,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             else:
                 comp.append('_' + workflow.suffix(stop=sources[sigma_index]))
             bands_long.append(''.join(comp))
-        bm.parameters['sourceBands'] = bands_long
-        bm.parameters['geographicError'] = 0.0
+        bm_tc.parameters['sourceBands'] = bands_long
+        bm_tc.parameters['geographicError'] = 0.0
         ############################################
     # specify spatial resolution and coordinate reference system of the output dataset
     # print('-- configuring CRS')
@@ -551,6 +551,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 sarsim_write.parameters['formatName'] = 'ENVI'
                 workflow.insert_node(sarsim_write, before=sarsim_tc.id, resetSuccessorSource=False)
             elif item == 'scatteringArea':
+                if not terrainFlattening:
+                    raise RuntimeError('scatteringArea can only be created if terrain flattening is performed')
                 area_select = parse_node('BandSelect')
                 workflow.insert_node(area_select, before=tf.source, resetSuccessorSource=False)
                 area_select.parameters['sourceBands'] = bandnames['beta0']
@@ -573,9 +575,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 exp['expression'] = expression
                 exp['noDataValue'] = 0.0
                 
-                area_merge2 = parse_node('BandMerge')
-                workflow.insert_node(area_merge2, before=[tf.id, math.id], resetSuccessorSource=False)
-                tc.source = area_merge2.id
+                if len(refarea) > 0:
+                    bm_tc.source = bm_tc.source + [math.id]
+                else:
+                    bm_tc = parse_node('BandMerge')
+                    workflow.insert_node(bm_tc, before=[tf.id, math.id], resetSuccessorSource=False)
+                    tc.source = bm_tc.id
                 
                 # modify Terrain-Correction source bands
                 tc_bands = tc.parameters['sourceBands'] + ',' + area
