@@ -17,6 +17,7 @@ import re
 import sys
 import requests
 import zipfile as zf
+from io import BytesIO
 from datetime import datetime, timedelta
 from dateutil import parser as dateutil_parser
 import xml.etree.ElementTree as ET
@@ -226,6 +227,62 @@ class OSV(object):
         print('found {} results'.format(len(files)))
         return files
     
+    def __catch_step_auxdata(self, sensor, osvtype='POE', start=None, stop=None):
+        url = 'http://step.esa.int/auxdata/orbits/Sentinel-1'
+        skeleton = '{url}/{osvtype}ORB/{sensor}/{year}/{month:02d}/'
+        
+        print('searching for new {} files'.format(osvtype))
+        
+        if start is not None:
+            date_start = datetime.strptime(start, '%Y%m%dT%H%M%S')
+        else:
+            date_start = datetime.strptime('2014-07-31', '%Y-%m-%d')
+        # set the defined date or the current date otherwise
+        if stop is not None:
+            date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S')
+        else:
+            date_stop = datetime.now()
+        
+        if isinstance(sensor, str):
+            sensor = [sensor]
+        
+        files = []
+        for sens in sensor:
+            date_search = datetime(year=date_start.year,
+                                   month=date_start.month,
+                                   day=1)
+            while True:
+                url_sub = skeleton.format(url=url,
+                                          osvtype=osvtype,
+                                          sensor=sens,
+                                          year=date_search.year,
+                                          month=date_search.month)
+                print(url_sub)
+                result = requests.get(url_sub, timeout=self.timeout).text
+                files_sub = list(set(re.findall(self.pattern, result)))
+                if len(files_sub) == 0:
+                    break
+                for file in files_sub:
+                    match = re.match(self.pattern_fine, file)
+                    start = datetime.strptime(match.group('start'), '%Y%m%dT%H%M%S')
+                    stop = datetime.strptime(match.group('stop'), '%Y%m%dT%H%M%S')
+                    if start < date_stop and stop > date_start:
+                        files.append({'filename': file,
+                                      'href': url_sub + '/' + file + '.zip',
+                                      'auth': None})
+                if date_search.month < 12:
+                    date_search = date_search.replace(month=date_search.month + 1)
+                else:
+                    date_search = date_search.replace(year=date_search.year + 1, month=1)
+                if start >= date_stop:
+                    break
+        
+        if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
+            files = [x for x in files
+                     if self.date(x['filename'], 'start') > self.maxdate('POE', 'stop')]
+        print('found {} results'.format(len(files)))
+        return files
+    
     def __catch_gnss(self, sensor, osvtype='POE', start=None, stop=None):
         url = 'https://scihub.copernicus.eu/gnss/search/'
         auth = ('gnssguest', 'gnssguest')
@@ -369,6 +426,7 @@ class OSV(object):
             the URL to query for scenes
              - 1: https://scihub.copernicus.eu/gnss
              - 2: http://aux.sentinel1.eo.esa.int
+             - 3: http://step.esa.int/auxdata/orbits/Sentinel-1
 
         Returns
         -------
@@ -379,8 +437,10 @@ class OSV(object):
             items = self.__catch_gnss(sensor, osvtype, start, stop)
         elif url_option == 2:
             items = self.__catch_aux_sentinel(sensor, osvtype, start, stop)
+        elif url_option == 3:
+            items = self.__catch_step_auxdata(sensor, osvtype, start, stop)
         else:
-            raise ValueError("'url_option' must be either 1 or 2")
+            raise ValueError("'url_option' must be either 1, 2 or 3")
         return items
     
     def date(self, file, datetype):
@@ -546,12 +606,20 @@ class OSV(object):
         i = 0
         for remote, local, basename, auth in downloads:
             infile = requests.get(remote, auth=auth, timeout=self.timeout)
-            with zf.ZipFile(file=local,
-                            mode='w',
-                            compression=zf.ZIP_DEFLATED) \
-                    as outfile:
-                outfile.writestr(zinfo_or_arcname=basename,
-                                 data=infile.content)
+            if remote.endswith('.zip'):
+                with zf.ZipFile(file=BytesIO(infile.content)) as tmp:
+                    members = tmp.namelist()
+                    target = [x for x in members if re.search(basename, x)][0]
+                    with zf.ZipFile(local, 'w') as outfile:
+                        outfile.write(filename=tmp.extract(target),
+                                      arcname=basename)
+            else:
+                with zf.ZipFile(file=local,
+                                mode='w',
+                                compression=zf.ZIP_DEFLATED) \
+                        as outfile:
+                    outfile.writestr(zinfo_or_arcname=basename,
+                                     data=infile.content)
             infile.close()
             if pbar:
                 i += 1
