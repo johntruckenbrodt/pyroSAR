@@ -284,7 +284,8 @@ class OSV(object):
         return files
     
     def __catch_gnss(self, sensor, osvtype='POE', start=None, stop=None):
-        url = 'https://scihub.copernicus.eu/gnss/search/'
+        url = 'https://scihub.copernicus.eu/gnss'
+        redirect = 'https://dhusfeed.dhus.onda-dias.net/gnss'
         auth = ('gnssguest', 'gnssguest')
         # a dictionary for storing the url arguments
         query = {}
@@ -331,7 +332,7 @@ class OSV(object):
             query_elem = '{}:{}'.format(keyword, value)
             query_list.append(query_elem)
         query_str = ' '.join(query_list)
-        target = '{}?q={}&format=json'.format(url, query_str)
+        target = '{}/search?q={}&format=json'.format(url, query_str)
         print(target)
         
         def _parse_gnsssearch_json(search_dict):
@@ -385,6 +386,7 @@ class OSV(object):
         total_results = response_json['opensearch:totalResults']
         print('found {} OSV results'.format(total_results))
         subquery = [link['href'] for link in response_json['link'] if link['rel'] == 'self'][0]
+        subquery = subquery.replace(redirect, url.strip())
         if int(total_results) > 10:
             subquery = subquery.replace('rows=10', 'rows=100')
         while subquery:
@@ -398,11 +400,14 @@ class OSV(object):
             collection += list(subquery_products.values())
             if 'next' in [link['rel'] for link in subquery_json['link']]:
                 subquery = [link['href'] for link in subquery_json['link'] if link['rel'] == 'next'][0]
+                subquery = subquery.replace(redirect, url.strip())
             else:
                 subquery = None
         if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
             collection = [x for x in collection
                           if self.date(x['filename'], 'start') > self.maxdate('POE', 'stop')]
+        for item in collection:
+            item['href'] = item['href'].replace(redirect, url)
         return collection
     
     def catch(self, sensor, osvtype='POE', start=None, stop=None, url_option=1):
