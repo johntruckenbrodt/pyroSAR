@@ -113,7 +113,7 @@ def parse_node(name, use_existing=True):
         # multi-source nodes are those with an entry 'sourceProducts' instead of 'sourceProduct'
         # exceptions are registered in this list:
         multisource = ['Back-Geocoding']
-        if operator != 'Read':
+        if operator != 'Read' and operator != 'ProductSet-Reader':
             source = node.find('.//sources')
             child = source[0]
             if child.tag == 'sourceProducts' or operator in multisource:
@@ -283,7 +283,8 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
 
 def gpt(xmlfile, outdir, groups=None, cleanup=True,
         gpt_exceptions=None, gpt_args=None,
-        removeS1BorderNoiseMethod='pyroSAR', basename_extensions=None):
+        removeS1BorderNoiseMethod='pyroSAR', basename_extensions=None,
+        multisource=False):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
     Input is a readily formatted workflow XML file as
@@ -329,9 +330,15 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
     """
     
     workflow = Workflow(xmlfile)
-    read = workflow['Read']
+
+    if multisource:
+        read = workflow['ProductSet-Reader']
+        # scene = identify_many(read.parameters['fileList'].split(",")) # not working
+    elif not multisource:
+        read = workflow['Read']
+        scene = identify(read.parameters['file'])
+
     write = workflow['Write']
-    scene = identify(read.parameters['file'])
     tmpname = write.parameters['file']
     suffix = workflow.suffix()
     format = write.parameters['formatName']
@@ -417,20 +424,21 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         ras = None
     ###########################################################################
     # write the Sentinel-1 manifest.safe file as addition to the actual product
-    readers = workflow['operator=Read']
-    for reader in readers:
-        infile = reader.parameters['file']
-        try:
-            id = identify(infile)
-            if id.sensor in ['S1A', 'S1B']:
-                manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
-                basename = id.outname_base(basename_extensions)
-                basename = '{0}_manifest.safe'.format(basename)
-                outname_manifest = os.path.join(outdir, basename)
-                with open(outname_manifest, 'wb') as out:
-                    out.write(manifest.read())
-        except RuntimeError:
-            continue
+    if not multisource:
+        readers = workflow['operator=Read']
+        for reader in readers:
+            infile = reader.parameters['file']
+            try:
+                id = identify(infile)
+                if id.sensor in ['S1A', 'S1B']:
+                    manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
+                    basename = id.outname_base(basename_extensions)
+                    basename = '{0}_manifest.safe'.format(basename)
+                    outname_manifest = os.path.join(outdir, basename)
+                    with open(outname_manifest, 'wb') as out:
+                        out.write(manifest.read())
+            except RuntimeError:
+                continue
     ###########################################################################
     if cleanup and os.path.exists(tmpname):
         shutil.rmtree(tmpname, onerror=windows_fileprefix)
