@@ -575,7 +575,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 exp['expression'] = expression
                 exp['noDataValue'] = 0.0
                 
-                if len(refarea) > 0:
+                if len(refarea) > 1:
                     bm_tc.source = bm_tc.source + [math.id]
                 else:
                     bm_tc = parse_node('BandMerge')
