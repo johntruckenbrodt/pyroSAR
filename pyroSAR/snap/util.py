@@ -544,6 +544,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 sarsim_tc.parameters['standardGridOriginX'] = standardGridOriginX
                 sarsim_tc.parameters['standardGridOriginY'] = standardGridOriginY
                 sarsim_tc.parameters['imgResamplingMethod'] = 'NEAREST_NEIGHBOUR'
+                sarsim_tc.parameters['pixelSpacingInMeter'] = tr
+                sarsim_tc.parameters['mapProjection'] = t_srs
+                
                 resampling_exceptions.append(sarsim_tc.id)
                 
                 sarsim_write = parse_node('Write')
