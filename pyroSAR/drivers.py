@@ -1440,8 +1440,9 @@ class SAFE(ID):
         
         self.pattern = r'^(?P<sensor>S1[AB])_' \
                        r'(?P<beam>S1|S2|S3|S4|S5|S6|IW|EW|WV|EN|N1|N2|N3|N4|N5|N6|IM)_' \
-                       r'(?P<product>SLC|GRD|OCN)(?:F|H|M|_)_' \
-                       r'(?:1|2)' \
+                       r'(?P<product>SLC|GRD|OCN)' \
+                       r'(?P<resolution>F|H|M|_)_' \
+                       r'(?P<processingLevel>1|2)' \
                        r'(?P<category>S|A)' \
                        r'(?P<pols>SH|SV|DH|DV|VV|HH|HV|VH)_' \
                        r'(?P<start>[0-9]{8}T[0-9]{6})_' \
