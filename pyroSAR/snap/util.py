@@ -419,9 +419,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     tc.parameters['pixelSpacingInMeter'] = tr
     
     try:
+        # try to convert the CRS into EPSG code (for readability in the workflow XML)
         t_srs = crsConvert(t_srs, 'epsg')
     except TypeError:
         raise RuntimeError("format of parameter 't_srs' not recognized")
+    except RuntimeError:
+        # this error can occur when the CRS does not have a corresponding EPSG code
+        # in this case the original CRS representation is written to the workflow
+        pass
     
     # the EPSG code 4326 is not supported by SNAP and thus the WKT string has to be defined;
     # in all other cases defining EPSG:{code} will do
