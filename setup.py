@@ -37,7 +37,7 @@ setup(name='pyroSAR',
                         'SQLAlchemy-Utils',
                         'GeoAlchemy2'],
       extras_require={
-          'docs': ['sphinx'],
+          'docs': ['sphinx', 'sphinxcontrib-bibtex'],
       },
       url='https://github.com/johntruckenbrodt/pyroSAR.git',
       author='John Truckenbrodt',

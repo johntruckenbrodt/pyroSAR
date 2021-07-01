@@ -54,6 +54,8 @@ extensions = [
     'sphinxcontrib.bibtex'
 ]
 
+bibtex_bibfiles = ['references.bib']
+
 # autodoc_default_flags = ['members']
 autosummary_generate = []
 

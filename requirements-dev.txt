@@ -14,4 +14,4 @@ pytest
 
 #Documentation requirements
 sphinx
-sphinxcontrib-bibtex<2.0.0 #https://github.com/executablebooks/jupyter-book/issues/1137
+sphinxcontrib-bibtex
