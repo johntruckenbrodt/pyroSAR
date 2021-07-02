@@ -2211,11 +2211,10 @@ class Archive(object):
         -------
 
         """
-        for table in ['data', 'duplicates']:
-            missing = self.__select_missing(table)
-            for scene in missing:
-                print('Removing missing scene from database table {0}: {1}'.format(table, scene))
-                self.drop_element(scene, table)
+        missing = self.__select_missing('data')
+        for scene in missing:
+            print('Removing missing scene from database tables: {}'.format(scene))
+            self.drop_element(scene, with_duplicates=True)
     
     @staticmethod
     def encode(string, encoding='utf-8'):
