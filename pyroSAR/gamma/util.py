@@ -22,15 +22,10 @@ Testing and suggestions on improvements are very welcome.
 """
 import os
 import re
-import sys
 import shutil
 import zipfile as zf
 from datetime import datetime
-
-if sys.version_info >= (3, 0):
-    from urllib.error import URLError
-else:
-    from urllib2 import URLError
+from urllib.error import URLError
 
 from spatialist import haversine
 from spatialist.ancillary import union, finder
