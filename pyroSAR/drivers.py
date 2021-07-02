@@ -123,7 +123,7 @@ def identify(scene):
     raise RuntimeError('data format not supported')
 
 
-def identify_many(scenes, verbose=True, sortkey=None):
+def identify_many(scenes, pbar=True, sortkey=None):
     """
     wrapper function for returning metadata handlers of all valid scenes in a list, similar to function
     :func:`~pyroSAR.drivers.identify`.
@@ -133,7 +133,7 @@ def identify_many(scenes, verbose=True, sortkey=None):
     ----------
     scenes: list
         the file names of the scenes to be identified
-    verbose: bool
+    pbar: bool
         adds a progressbar if True
     sortkey: str
         sort the handler object list by an attribute
@@ -146,11 +146,13 @@ def identify_many(scenes, verbose=True, sortkey=None):
     --------
     >>> from pyroSAR import identify_many
     >>> files = finder('/path', ['S1*.zip'])
-    >>> ids = identify_many(files, verbose=False, sortkey='start')
+    >>> ids = identify_many(files, pbar=False, sortkey='start')
     """
     idlist = []
-    if verbose:
-        pbar = pb.ProgressBar(max_value=len(scenes)).start()
+    if pbar:
+        progress = pb.ProgressBar(max_value=len(scenes)).start()
+    else:
+        progress = None
     for i, scene in enumerate(scenes):
         if isinstance(scene, ID):
             idlist.append(scene)
@@ -160,10 +162,10 @@ def identify_many(scenes, verbose=True, sortkey=None):
                 idlist.append(id)
             except RuntimeError:
                 continue
-        if verbose:
-            pbar.update(i + 1)
-    if verbose:
-        pbar.finish()
+        if progress is not None:
+            progress.update(i + 1)
+    if progress is not None:
+        progress.finish()
     if sortkey is not None:
         idlist.sort(key=operator.attrgetter(sortkey))
     return idlist
@@ -2346,7 +2348,7 @@ class Archive(object):
         registered = [os.path.dirname(self.encode(x[0])) for x in scenes]
         return list(set(registered))
     
-    def import_outdated(self, dbfile, verbose=False):
+    def import_outdated(self, dbfile):
         """
         import an older data base in csv format
 
@@ -2354,8 +2356,6 @@ class Archive(object):
         ----------
         dbfile: str
             the file name of the old data base
-        verbose: bool
-            should status information and a progress bar be printed into the console?
 
         Returns
         -------
@@ -2369,7 +2369,7 @@ class Archive(object):
             scenes = []
             for row in reader:
                 scenes.append(row['scene'])
-            self.insert(scenes, verbose=verbose)
+            self.insert(scenes)
     
     def move(self, scenelist, directory, pbar=False):
         """
@@ -2673,7 +2673,7 @@ class Archive(object):
         
         log.info(return_sentence + '!')
     
-    def drop_table(self, table, verbose=False):
+    def drop_table(self, table):
         """
         Drop a table from the database.
 
@@ -2681,8 +2681,6 @@ class Archive(object):
         ----------
         table: str
             tablename
-        verbose: bool
-            print additional info to console
 
         Returns
         -------
@@ -2697,8 +2695,7 @@ class Archive(object):
             else:
                 table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
                 table_info.drop(self.engine)
-            if verbose:
-                log.info('table {} dropped from database.'.format(table))
+            log.info('table {} dropped from database.'.format(table))
         else:
             raise ValueError("table {} is not registered in the database!".format(table))
         self.Base = automap_base(metadata=self.meta)
