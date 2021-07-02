@@ -387,8 +387,7 @@ class OSV(object):
         url_option: int
             the URL to query for scenes
              - 1: https://scihub.copernicus.eu/gnss
-             - 2: http://aux.sentinel1.eo.esa.int
-             - 3: http://step.esa.int/auxdata/orbits/Sentinel-1
+             - 2: http://step.esa.int/auxdata/orbits/Sentinel-1
 
         Returns
         -------
@@ -411,11 +410,9 @@ class OSV(object):
         if url_option == 1:
             items = self.__catch_gnss(sensor, start, stop, osvtype)
         elif url_option == 2:
-            items = self.__catch_aux_sentinel(sensor, start, stop, osvtype)
-        elif url_option == 3:
             items = self.__catch_step_auxdata(sensor, start, stop, osvtype)
         else:
-            raise ValueError("'url_option' must be either 1, 2 or 3")
+            raise ValueError("'url_option' must be either 1 or 2")
         
         if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
             items = [x for x in items
