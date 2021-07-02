@@ -10,7 +10,7 @@ dependencies:
   - pyyaml
   - requests
   - psycopg2
-  - sqlalchemy
+  - sqlalchemy<1.4
   - sqlalchemy-utils
   - geoalchemy2
   - coveralls

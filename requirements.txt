@@ -5,6 +5,6 @@ spatialist>=0.5
 pyyaml
 requests
 psycopg2
-SQLAlchemy
+SQLAlchemy<1.4
 SQLAlchemy-Utils
 GeoAlchemy2
