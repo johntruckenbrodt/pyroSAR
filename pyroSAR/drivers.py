@@ -1527,7 +1527,7 @@ class SAFE(ID):
         url_option: int
             the URL to query for scenes
              - 1: https://scihub.copernicus.eu/gnss
-             - 2: http://step.esa.int/auxdata/orbits/Sentinel-1
+             - 2: https://step.esa.int/auxdata/orbits/Sentinel-1
 
         Returns
         -------

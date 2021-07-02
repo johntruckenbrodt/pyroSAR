@@ -213,7 +213,7 @@ class OSV(object):
         return files
     
     def __catch_step_auxdata(self, sensor, start, stop, osvtype='POE'):
-        url = 'http://step.esa.int/auxdata/orbits/Sentinel-1'
+        url = 'https://step.esa.int/auxdata/orbits/Sentinel-1'
         skeleton = '{url}/{osvtype}ORB/{sensor}/{year}/{month:02d}/'
         
         if isinstance(sensor, str):
@@ -387,7 +387,7 @@ class OSV(object):
         url_option: int
             the URL to query for scenes
              - 1: https://scihub.copernicus.eu/gnss
-             - 2: http://step.esa.int/auxdata/orbits/Sentinel-1
+             - 2: https://step.esa.int/auxdata/orbits/Sentinel-1
 
         Returns
         -------
