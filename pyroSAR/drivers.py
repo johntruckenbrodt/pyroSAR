@@ -22,11 +22,7 @@ images from different SAR sensors.
 from __future__ import print_function
 import sys
 
-if sys.version_info >= (3, 0):
-    from builtins import str
-#     from io import BytesIO as StringIO
-# else:
-#     from StringIO import StringIO
+from builtins import str
 from io import BytesIO
 
 import abc
@@ -649,14 +645,14 @@ class ID(object):
                                 with open(outname, 'wb') as outfile:
                                     outfile.write(archive.read(item))
                             except zf.BadZipfile:
-                                print('corrupt archive, unpacking failed')
+                                log.info('corrupt archive, unpacking failed')
                                 continue
                 archive.close()
             else:
                 archive.extractall(directory)
                 archive.close()
         else:
-            print('unpacking is only supported for TAR and ZIP archives')
+            log.info('unpacking is only supported for TAR and ZIP archives')
             return
         
         self.scene = directory
@@ -1193,19 +1189,19 @@ class EORC_PSR(ID):
     def __init__(self, scene):
         
         self.scene = os.path.realpath(scene)
-
+        
         self.pattern = r'^PSR2-' \
-                        r'(?P<prodlevel>SLTR)_'\
-                        r'(?P<pathnr>RSP[0-9]{3})_' \
-                        r'(?P<date>[0-9]{8})'\
-                        r'(?P<mode>FBD|WBD)'\
-                        r'(?P<beam>[0-9]{2})'\
-                        r'(?P<orbit_dir>A|D)'\
-                        r'(?P<look_dir>L|R)_'\
-                        r'(?P<replay_id1>[0-9A-Z]{16})-'\
-                        r'(?P<replay_id2>[0-9A-Z]{5})_'\
-                        r'(?P<internal>[0-9]{3})_'\
-                        r'HDR$'
+                       r'(?P<prodlevel>SLTR)_' \
+                       r'(?P<pathnr>RSP[0-9]{3})_' \
+                       r'(?P<date>[0-9]{8})' \
+                       r'(?P<mode>FBD|WBD)' \
+                       r'(?P<beam>[0-9]{2})' \
+                       r'(?P<orbit_dir>A|D)' \
+                       r'(?P<look_dir>L|R)_' \
+                       r'(?P<replay_id1>[0-9A-Z]{16})-' \
+                       r'(?P<replay_id2>[0-9A-Z]{5})_' \
+                       r'(?P<internal>[0-9]{3})_' \
+                       r'HDR$'
         
         self.examine()
         
@@ -1240,12 +1236,12 @@ class EORC_PSR(ID):
         ################################################################################################################
         # read header (HDR) file
         header = self._getHeaderfileContent()
-        header = [head.replace(" ","") for head in header]
+        header = [head.replace(" ", "") for head in header]
         
         # read summary text file
         facter_m = self._parseFacter_m()
-        facter_m = [fact.replace(" ","") for fact in facter_m]
-
+        facter_m = [fact.replace(" ", "") for fact in facter_m]
+        
         meta = {}
         
         # read polarizations from image file names
@@ -1253,34 +1249,33 @@ class EORC_PSR(ID):
         meta['product'] = header[3]
         ################################################################################################################
         # read start and stop time --> TODO: in what format is the start and stop time?
-
+        
         try:
-            start_time = facter_m[168].split('.')[0].zfill(2)+facter_m[168].split('.')[1][:4]
-            stop_time = facter_m[170].split('.')[0].zfill(2)+facter_m[170].split('.')[1][:4]
+            start_time = facter_m[168].split('.')[0].zfill(2) + facter_m[168].split('.')[1][:4]
+            stop_time = facter_m[170].split('.')[0].zfill(2) + facter_m[170].split('.')[1][:4]
         except (AttributeError):
             raise IndexError('start and stop time stamps cannot be extracted; see file facter_m.dat')
-
-        meta['start'] = str(header[6])#+'T'+start_time
-        meta['stop'] = str(header[6])#+'T'+stop_time
+        
+        meta['start'] = str(header[6])  # +'T'+start_time
+        meta['stop'] = str(header[6])  # +'T'+stop_time
         ################################################################################################################
         # read file metadata
         meta['sensor'] = header[2]
         ################################################################################################################
         # read leader file name information
-        meta['acquisition_mode']=header[12]
+        meta['acquisition_mode'] = header[12]
         # ###############################################################################################################
         # read map projection data 
-
-        lat = list(map(float, [header[33], header[35],header[37],header[39]]))
-        lon = list(map(float, [header[34], header[36],header[38],header[40]]))
-
+        
+        lat = list(map(float, [header[33], header[35], header[37], header[39]]))
+        lon = list(map(float, [header[34], header[36], header[38], header[40]]))
+        
         meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-        # print(meta['corners'])
-        # epsg=header[]
-        meta['projection'] = crsConvert(4918, 'wkt') #EPSG: 4918: ITRF97, GRS80
+        
+        meta['projection'] = crsConvert(4918, 'wkt')  # EPSG: 4918: ITRF97, GRS80
         ################################################################################################################
         # read data set summary record
-
+        
         orbitsPerCycle = int(207)
         
         meta['orbitNumber_rel'] = int(header[7])
@@ -1292,9 +1287,9 @@ class EORC_PSR(ID):
         meta['samples'] = int(float(facter_m[50]))
         meta['incidence'] = float(facter_m[119])
         meta['proc_facility'] = header[73]
-
+        
         meta['spacing'] = (float(header[51]), float(header[52]))
-
+        
         meta['orbit'] = header[9]
         ################################################################################################################
         # read radiometric data record
@@ -1302,11 +1297,11 @@ class EORC_PSR(ID):
         meta['k_dB'] = float(header[64])
         
         return meta
-
+    
     def unpack(self, directory, overwrite=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir, overwrite=overwrite)
-
+    
     def getCorners(self):
         if 'corners' not in self.meta.keys():
             lat = [y for x, y in self.meta.items() if 'Latitude' in x]
@@ -1918,7 +1913,7 @@ class Archive(object):
                 elif val in ['String', 'string', 'str']:
                     self.data_schema.append_column(Column(key, String))
                 else:
-                    print('Value in dict custom_fields must be "integer" or "string"!')
+                    log.info('Value in dict custom_fields must be "integer" or "string"!')
         
         # schema for duplicates
         self.duplicates_schema = Table('duplicates', self.meta,
@@ -1941,12 +1936,11 @@ class Archive(object):
         self.dbfile = dbfile
         
         if cleanup:
-            sys.stdout.write('\rchecking for missing scenes..')
+            log.info('checking for missing scenes')
             self.cleanup()
-            sys.stdout.write('\rchecking for missing scenes..done\n')
             sys.stdout.flush()
     
-    def add_tables(self, tables, verbose=False):
+    def add_tables(self, tables):
         """
         Add tables to the database per :class:`sqlalchemy.schema.Table`
         Tables provided here will be added to the database. Notice that columns using Geometry must have setting
@@ -1957,8 +1951,6 @@ class Archive(object):
         tables: :class:`sqlalchemy.schema.Table` or :obj:`list` of :class:`sqlalchemy.schema.Table`
             Tables provided here will be added to the database. Notice that columns using Geometry must have setting
             management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
-        verbose: bool
-            print info
         """
         created = []
         if isinstance(tables, list):
@@ -1973,8 +1965,7 @@ class Archive(object):
             if not self.engine.dialect.has_table(self.engine, str(table)):
                 table.create(self.engine)
                 created.append(str(table))
-        if verbose:
-            print('Created table(s) {}.'.format(', '.join(created)))
+        log.info('created table(s) {}.'.format(', '.join(created)))
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
     
@@ -2065,7 +2056,7 @@ class Archive(object):
         files = [self.encode(x[0]) for x in scenes]
         return [x for x in files if not os.path.isfile(x)]
     
-    def insert(self, scene_in, verbose=False, test=False):
+    def insert(self, scene_in, pbar=False, test=False):
         """
         Insert one or many scenes into the database
 
@@ -2073,44 +2064,42 @@ class Archive(object):
         ----------
         scene_in: str or list
             a SAR scene or a list of scenes to be inserted
-        verbose: bool
-            should status information and a progress bar be printed into the console?
+        pbar: bool
+            show a progress bar?
         test: bool
             should the insertion only be tested or directly be committed to the database?
         """
-        if verbose:
-            length = len(scene_in) if isinstance(scene_in, list) else 1
-            print('...got {0} scene{1}'.format(length, 's' if length > 1 else ''))
+        length = len(scene_in) if isinstance(scene_in, list) else 1
+        
         if isinstance(scene_in, (ID, str)):
             scene_in = [scene_in]
         if not isinstance(scene_in, list):
             raise RuntimeError('scene_in must either be a string pointing to a file, a pyroSAR.ID object '
                                'or a list containing several of either')
         
-        if verbose:
-            print('filtering scenes by name...')
+        log.info('filtering scenes by name')
         scenes = self.filter_scenelist(scene_in)
         if len(scenes) == 0:
-            print('nothing to be done')
+            log.info('...nothing to be done')
             return
-        if verbose:
-            print('identifying scenes and extracting metadata...')
+        log.info('identifying scenes and extracting metadata')
         scenes = identify_many(scenes)
         
-        if len(scenes) > 0:
-            if verbose:
-                print('...{0} scene{1} remaining'.format(len(scenes), 's' if len(scenes) > 1 else ''))
-        else:
-            print('all scenes are already registered')
+        if len(scenes) == 0:
+            log.info('all scenes are already registered')
             return
         
         counter_regulars = 0
         counter_duplicates = 0
         list_duplicates = []
-        pbar = None
-        if verbose:
-            print('inserting scenes into temporary database...')
-            pbar = pb.ProgressBar(max_value=len(scenes))
+        
+        message = 'inserting {0} scene{1} into database'
+        log.info(message.format(len(scenes), '' if len(scenes) == 1 else 's'))
+        log.debug('testing changes in temporary database')
+        if pbar:
+            progress = pb.ProgressBar(max_value=len(scenes))
+        else:
+            progress = None
         basenames = []
         insertions = []
         session = self.Session()
@@ -2127,30 +2116,28 @@ class Archive(object):
             else:
                 list_duplicates.append(id.outname_base())
             
-            if pbar is not None:
-                pbar.update(i + 1)
+            if progress is not None:
+                progress.update(i + 1)
             basenames.append(basename)
         
-        if pbar is not None:
-            pbar.finish()
+        if progress is not None:
+            progress.finish()
         
         session.add_all(insertions)
         
         if not test:
-            if verbose:
-                print('committing transactions to permanent database...')
+            log.debug('committing transactions to permanent database')
             # commit changes of the session
             session.commit()
         else:
-            if verbose:
-                print('rolling back temporary database changes...')
+            log.info('rolling back temporary database changes')
             # roll back changes of the session
             session.rollback()
         
-        print('{} scenes registered regularly'.format(counter_regulars))
-        print('{} duplicates registered'.format(counter_duplicates))
-        if len(list_duplicates) != 0:
-            print('Scene(s) {} already registered as duplicate!'.format(list_duplicates))
+        message = '{0} scene{1} registered regularly'
+        log.info(message.format(counter_regulars, '' if counter_regulars == 1 else 's'))
+        message = '{0} duplicate{1} registered'
+        log.info(message.format(counter_duplicates, '' if counter_duplicates == 1 else 's'))
     
     def is_registered(self, scene):
         """
@@ -2213,7 +2200,7 @@ class Archive(object):
         """
         missing = self.__select_missing('data')
         for scene in missing:
-            print('Removing missing scene from database tables: {}'.format(scene))
+            log.info('Removing missing scene from database tables: {}'.format(scene))
             self.drop_element(scene, with_duplicates=True)
     
     @staticmethod
@@ -2241,7 +2228,7 @@ class Archive(object):
         -------
         """
         if table not in ['data', 'duplicates']:
-            print('Only data and duplicates can be exported!')
+            log.warning('Only data and duplicates can be exported!')
             return
         
         # add the .shp extension if missing
@@ -2384,7 +2371,7 @@ class Archive(object):
                 scenes.append(row['scene'])
             self.insert(scenes, verbose=verbose)
     
-    def move(self, scenelist, directory, verbose=False):
+    def move(self, scenelist, directory, pbar=False):
         """
         Move a list of files while keeping the database entries up to date.
         If a scene is registered in the database (in either the data or duplicates table),
@@ -2396,6 +2383,8 @@ class Archive(object):
             the file locations
         directory: str
             a folder to which the files are moved
+        pbar: bool
+            show a progress bar?
 
         Returns
         -------
@@ -2406,10 +2395,10 @@ class Archive(object):
             raise RuntimeError('directory cannot be written to')
         failed = []
         double = []
-        if verbose:
-            pbar = pb.ProgressBar(max_value=len(scenelist)).start()
+        if pbar:
+            progress = pb.ProgressBar(max_value=len(scenelist)).start()
         else:
-            pbar = None
+            progress = None
         
         for i, scene in enumerate(scenelist):
             new = os.path.join(directory, os.path.basename(scene))
@@ -2422,8 +2411,8 @@ class Archive(object):
                 failed.append(scene)
                 continue
             finally:
-                if pbar is not None:
-                    pbar.update(i + 1)
+                if progress is not None:
+                    progress.update(i + 1)
             if self.select(scene=scene) != 0:
                 table = 'data'
             else:
@@ -2437,16 +2426,16 @@ class Archive(object):
             if table:
                 # using core connection to execute SQL syntax (as was before)
                 self.conn.execute('''UPDATE {0} SET scene= '{1}' WHERE scene='{2}' '''.format(table, new, scene))
-        if pbar is not None:
-            pbar.finish()
-        if verbose:
-            if len(failed) > 0:
-                print('The following scenes could not be moved:\n{}'.format('\n'.join(failed)))
-            if len(double) > 0:
-                print('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
+        if progress is not None:
+            progress.finish()
+        
+        if len(failed) > 0:
+            log.info('The following scenes could not be moved:\n{}'.format('\n'.join(failed)))
+        if len(double) > 0:
+            log.info('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
     
     def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None,
-               recursive=False, polarizations=None, verbose=False, **args):
+               recursive=False, polarizations=None, **args):
         """
         select scenes from the database
 
@@ -2465,8 +2454,6 @@ class Archive(object):
             should also the subdirectories of the processdir be scanned?
         polarizations: list
             a list of polarization strings, e.g. ['HH', 'VV']
-        verbose: bool
-            print details about the selection including the SQL query?
         **args:
             any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
 
@@ -2479,7 +2466,7 @@ class Archive(object):
         arg_valid = [x for x in args.keys() if x in self.get_colnames()]
         arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
-            print('the following arguments will be ignored as they are not registered in the data base: {}'.format(
+            log.info('the following arguments will be ignored as they are not registered in the data base: {}'.format(
                 ', '.join(arg_invalid)))
         arg_format = []
         vals = []
@@ -2496,13 +2483,13 @@ class Archive(object):
                 arg_format.append('start>=?')
                 vals.append(mindate)
             else:
-                print('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
+                log.info('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
         if maxdate:
             if re.search('[0-9]{8}T[0-9]{6}', maxdate):
                 arg_format.append('stop<=?')
                 vals.append(maxdate)
             else:
-                print('WARNING: argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
+                log.info('WARNING: argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
         
         if polarizations:
             for pol in polarizations:
@@ -2522,15 +2509,14 @@ class Archive(object):
                     arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
                     vals.append(site_geom)
             else:
-                print('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
+                log.info('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
         
         query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
         # the query gets assembled stepwise here
         for val in vals:
             query = query.replace('?', ''' '{0}' ''', 1).format(val)
+        log.debug(query)
         
-        if verbose:
-            print(query)
         # core SQL execution
         query_rs = self.conn.execute(query)
         
@@ -2647,7 +2633,7 @@ class Archive(object):
         entry_data_outname_base = []
         for rowproxy in self.conn.execute(search):
             entry_data_outname_base.append((rowproxy[12]))
-        # print(entry_data_outname_base)
+        # log.info(entry_data_outname_base)
         
         # delete entry in data table
         delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
@@ -2661,7 +2647,7 @@ class Archive(object):
                 self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
             self.conn.execute(delete_statement_dup)
             
-            print(return_sentence + ' and duplicates!'.format(scene))
+            log.info(return_sentence + ' and duplicates!'.format(scene))
             return
         
         # else select scene info matching outname_base from duplicates
@@ -2681,10 +2667,11 @@ class Archive(object):
             # insert scene from duplicates into data
             self.insert(entry_duplicates_scene[0])
             
-            return_sentence += ' and entry with outname_base \n{} \nand scene \n{} \nwas moved from duplicates into data table'.format(
+            return_sentence += ' and entry with outname_base \n{} \nand scene \n{} \n' \
+                               'was moved from duplicates into data table'.format(
                 entry_data_outname_base[0], entry_duplicates_scene[0])
         
-        print(return_sentence + '!')
+        log.info(return_sentence + '!')
     
     def drop_table(self, table, verbose=False):
         """
@@ -2711,9 +2698,9 @@ class Archive(object):
                 table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
                 table_info.drop(self.engine)
             if verbose:
-                print('Table {} dropped from database.'.format(table))
+                log.info('table {} dropped from database.'.format(table))
         else:
-            raise ValueError("Table {} is not registered in the database!".format(table))
+            raise ValueError("table {} is not registered in the database!".format(table))
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
     

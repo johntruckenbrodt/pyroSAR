@@ -36,6 +36,9 @@ from spatialist import Raster
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 
+import logging
+log = logging.getLogger(__name__)
+
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
     """
@@ -216,7 +219,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
         crs = gdalwarp_args['dstSRS']
         if crs != 'EPSG:4326':
             message += ' and reprojecting to {}'.format(crs)
-        print(message)
+        log.info(message)
         gdalwarp(src, dst, gdalwarp_args)
     except RuntimeError as e:
         if os.path.isfile(dst):
@@ -314,7 +317,7 @@ class DEMHandler:
             if not os.path.isfile(outfile):
                 try:
                     input = urlopen(infile)
-                    print('{} <<-- {}'.format(outfile, infile))
+                    log.info('{} <<-- {}'.format(outfile, infile))
                 except HTTPError:
                     continue
                 with open(outfile, 'wb') as output:
@@ -352,7 +355,7 @@ class DEMHandler:
                 except ftplib.error_temp:
                     continue
                 address = '{}://{}/{}{}'.format(protocol, url, path + '/' if path != '' else '', product_remote)
-                print('{} <<-- {}'.format(product_local, address))
+                log.info('{} <<-- {}'.format(product_local, address))
                 with open(product_local, 'wb') as myfile:
                     ftp.retrbinary('RETR {}'.format(product_remote), myfile.write)
             if os.path.isfile(product_local):
@@ -577,11 +580,11 @@ def getAuxdata(datasets, scenes):
                 infile = os.path.join('https://step.esa.int/auxdata/dem/SRTMGL1', file)
                 outfile = os.path.join(auxDataPath, 'dem/SRTM 1Sec HGT', file)
                 if not os.path.isfile(outfile):
-                    print(infile)
+                    log.info(infile)
                     try:
                         input = urlopen(infile)
                     except HTTPError:
-                        print('-> not available')
+                        log.info('-> not available')
                         continue
                     with open(outfile, 'wb') as output:
                         output.write(input.read())
@@ -641,7 +644,7 @@ def getAuxdata(datasets, scenes):
                         contentVersion.close()
                     remote_contentVersion.close()
                 else:
-                    print('not implemented yet')
+                    log.info('not implemented yet')
         elif dataset == 'Delft Precise Orbits':
             path_server = 'dutlru2.lr.tudelft.nl'
             subdirs = {'ASAR:': 'ODR.ENVISAT1/eigen-cg03c', 'ERS1': 'ODR.ERS-1/dgm-e04', 'ERS2': 'ODR.ERS-2/dgm-e04'}
@@ -656,4 +659,4 @@ def getAuxdata(datasets, scenes):
                         ftp.retrbinary('RETR ' + item, open(os.path.join(path_local, item), 'wb').write)
             ftp.quit()
         else:
-            print('not implemented yet')
+            log.info('not implemented yet')

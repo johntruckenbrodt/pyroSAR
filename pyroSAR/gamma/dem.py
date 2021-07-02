@@ -31,6 +31,9 @@ from . import ISPPar, UTM, slc_corners, par2hdr
 from pyroSAR.examine import ExamineGamma
 from pyroSAR.ancillary import hasarg
 
+import logging
+log = logging.getLogger(__name__)
+
 try:
     from .api import diff, disp, isp
 except ImportError:
@@ -222,7 +225,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
             raise RuntimeError('tr needs to be defined if t_srs is not 4326')
     
     if os.path.isfile(outfile):
-        print('outfile already exists')
+        log.info('outfile already exists')
         return
     
     tmpdir = outfile + '__tmp'
@@ -235,7 +238,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
         vrt = os.path.join(tmpdir, 'dem.vrt')
         dem = os.path.join(tmpdir, 'dem.tif')
         
-        print('collecting DEM tiles')
+        log.info('collecting DEM tiles')
         dem_autoload([geometry], demType, vrt=vrt, username=username,
                      password=password, buffer=buffer)
         
@@ -259,7 +262,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
-        print(message)
+        log.info(message)
         
         if epsg == 4326:
             # old approach for backwards compatibility
@@ -581,11 +584,11 @@ def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
               os.path.isfile(os.path.join(outdir, x)) and not re.search(x, '\n'.join(targets))]
     targets.extend(extras)
     
-    print('found {} relevant SRTM tiles...'.format(len(targets)))
+    log.info('found {} relevant SRTM tiles...'.format(len(targets)))
     
     # search server for all required tiles, which were not found in the local directories
     if len(targets) < len(target_ids):
-        print('searching for additional SRTM tiles on the server...')
+        log.info('searching for additional SRTM tiles on the server...')
         onlines = []
         
         if arcsec == 1:
@@ -609,7 +612,7 @@ def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
         
         # if additional tiles have been found online, download and unzip them to the local directory
         if len(onlines) > 0:
-            print('downloading {} SRTM tiles...'.format(len(onlines)))
+            log.info('downloading {} SRTM tiles...'.format(len(onlines)))
             for candidate in onlines:
                 localname = os.path.join(outdir, re.findall(pattern, candidate)[0] + '.hgt')
                 infile = urlopen(candidate)

@@ -61,6 +61,9 @@ from spatialist.raster import Raster, Dtype
 from spatialist.ancillary import union
 from .ancillary import parse_datasetname
 
+import logging
+log = logging.getLogger(__name__)
+
 
 class Dataset(object):
     """
@@ -526,7 +529,7 @@ class Product(object):
             for measurement in self.meta['measurements']:
                 assert self.__check_dict_keys(self.__fixture_measurement, measurement.keys())
         except AssertionError as e:
-            print(e)
+            log.info(e)
             raise RuntimeError('product invalid')
     
     def add(self, dataset):
