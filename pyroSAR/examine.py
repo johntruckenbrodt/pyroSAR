@@ -25,6 +25,7 @@ from pyroSAR._dev_config import ConfigHandler
 from spatialist.ancillary import finder
 
 import logging
+
 log = logging.getLogger(__name__)
 
 config = ConfigHandler()
@@ -151,9 +152,9 @@ class ExamineSnap(object):
             self.properties = auxdata_properties
             return
         
-        warnings.warn('SNAP could not be identified. If you have installed it please add the path to the SNAP '
-                      'executables (bin subdirectory) to the PATH environment. '
-                      'E.g. in the Linux .bashrc file add the following line:\nexport PATH=$PATH:path/to/snap/bin"')
+        log.warning('SNAP could not be identified. If you have installed it please add the path to the SNAP '
+                    'executables (bin subdirectory) to the PATH environment. '
+                    'E.g. in the Linux .bashrc file add the following line:\nexport PATH=$PATH:path/to/snap/bin"')
     
     def __read_config(self):
         """
@@ -301,10 +302,10 @@ class ExamineGamma(object):
         if hasattr(self, 'home'):
             if home_sys is not None and self.home != home_sys:
                 log.info('the value of GAMMA_HOME is different to that in the pyroSAR configuration;\n'
-                      '  was: {}\n'
-                      '  is : {}\n'
-                      'resetting the configuration and deleting parsed modules'
-                      .format(self.home, home_sys))
+                         '  was: {}\n'
+                         '  is : {}\n'
+                         'resetting the configuration and deleting parsed modules'
+                         .format(self.home, home_sys))
                 parsed = os.path.join(os.path.dirname(self.fname), 'gammaparse')
                 shutil.rmtree(parsed)
                 self.home = home_sys
