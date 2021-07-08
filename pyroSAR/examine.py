@@ -55,12 +55,11 @@ class ExamineSnap(object):
         self.sections = ['SNAP', 'OUTPUT', 'SNAP_SUFFIX']
         
         # try reading all necessary attributes from the config file
-        # log.info('reading config..')
         self.__read_config()
         
         # if SNAP could not be identified from the config attributes, do a system search for it
         if not self.__is_identified():
-            # log.info('identifying SNAP..')
+            log.debug('identifying SNAP')
             self.__identify_snap()
         
         # if the auxdatapath attribute was not yet set, create a default directory
@@ -123,6 +122,7 @@ class ExamineSnap(object):
         # for each possible SNAP executable, check whether additional files and directories exist relative to it
         # to confirm whether it actually is a ESA SNAP installation or something else like e.g. the Ubuntu App Manager
         for path in executables:
+            log.debug('checking candidate {}'.format(path))
             if os.path.islink(path):
                 path = os.path.realpath(path)
             
