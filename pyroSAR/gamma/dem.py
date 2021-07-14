@@ -147,7 +147,7 @@ def transform(infile, outfile, posting=90):
     par2hdr(outfile + '.par', outfile + '.hdr')
 
 
-def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None, logpath=None,
+def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None, logpath=None,
                    username=None, password=None, geoid_mode='gamma', resampling_method='bilinear'):
     """
     | automatically create a DEM in Gamma format for a defined spatial geometry
@@ -180,7 +180,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
         the type of DEM to be used; see :func:`~pyroSAR.auxdata.dem_autoload` for options
     outfile: str
         the name of the final DEM file
-    buffer: float
+    buffer: float or None
         a buffer in degrees to create around the geometry
     t_srs: int, str or osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
