@@ -575,7 +575,6 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
       * (**v_geo**): orientation angle of n (between x and projection of n in xy plane)
       * **inc_geo**: local incidence angle (between surface normal and look vector)
       * (**psi_geo**): projection angle (between surface normal and image plane normal)
-      * **pix_geo**: pixel area normalization factor (command gc_map)
       * **ls_map_geo**: layover and shadow map (in map projection)
       * (**sim_sar_geo**): simulated SAR backscatter image
     
@@ -707,11 +706,11 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     # depreciated files will be set to '-' in the GAMMA function call and are thus not written
     n = Namespace(scene.scene, scene.outname_base(extensions=basename_extensions))
     if scene.sensor in ['S1A', 'S1B']:
-        n.appreciate(['dem_seg_geo', 'lut_init', 'pix_geo', 'inc_geo', 'ls_map_geo'])
-        n.depreciate(['sim_sar_geo', 'u_geo', 'v_geo', 'psi_geo'])
+        n.appreciate(['dem_seg_geo', 'lut_init', 'inc_geo', 'ls_map_geo'])
+        n.depreciate(['sim_sar_geo', 'u_geo', 'v_geo', 'psi_geo', 'pix_geo'])
     else:
-        n.appreciate(['dem_seg_geo', 'lut_init', 'pix_geo', 'inc_geo', 'ls_map_geo', 'sim_sar_geo'])
-        n.depreciate(['u_geo', 'v_geo', 'psi_geo'])
+        n.appreciate(['dem_seg_geo', 'lut_init', 'inc_geo', 'ls_map_geo', 'sim_sar_geo'])
+        n.depreciate(['u_geo', 'v_geo', 'psi_geo', 'pix_geo'])
     
     # if sarSimCC:
     #     n.appreciate(['ccp', 'lut_fine'])
