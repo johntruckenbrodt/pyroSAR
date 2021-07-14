@@ -175,7 +175,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
     Parameters
     ----------
     geometry: spatialist.vector.Vector
-        a vector geometry delimiting the output DEM size; CRS must be WGS84 LatLon (EPSG 4326)
+        a vector geometry delimiting the output DEM size
     demType: str
         the type of DEM to be used; see :func:`~pyroSAR.auxdata.dem_autoload` for options
     outfile: str
@@ -209,6 +209,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
     -------
 
     """
+    geometry = geometry.clone()
     
     epsg = crsConvert(t_srs, 'epsg') if t_srs != 4326 else t_srs
     
@@ -235,6 +236,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
         vrt = os.path.join(tmpdir, 'dem.vrt')
         dem = os.path.join(tmpdir, 'dem.tif')
         
+        geometry.reproject(4326)
         print('collecting DEM tiles')
         dem_autoload([geometry], demType, vrt=vrt, username=username,
                      password=password, buffer=buffer)
