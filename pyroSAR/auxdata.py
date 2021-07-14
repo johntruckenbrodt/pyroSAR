@@ -153,7 +153,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             product=product)
 
 
-def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoid_convert=False, geoid='EGM96'):
+def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoid_convert=False, geoid='EGM96', outputBounds=None):
     """
     create a new DEM GeoTiff file and optionally convert heights from geoid to ellipsoid
     
@@ -196,7 +196,11 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
-                     'resampleAlg': resampling_method}
+                     'resampleAlg': resampling_method,
+                     'targetAlignedPixels': True}
+    
+    if outputBounds is not None:
+        gdalwarp_args['outputBounds'] = outputBounds
     
     if tr is not None:
         gdalwarp_args.update({'xRes': tr[0],
