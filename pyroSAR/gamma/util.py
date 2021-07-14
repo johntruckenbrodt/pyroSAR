@@ -482,7 +482,7 @@ def correctOSV(id, osvdir=None, osvType='POE', timeout=20, logpath=None, outdir=
 def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geoback=1,
             nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
             cleanup=True, export_extra=None, basename_extensions=None,
-            removeS1BorderNoise=True, removeS1BorderNoiseMethod='gamma', refine_LUT=False):
+            removeS1BorderNoiseMethod='gamma', refine_LUT=False):
     """
     general function for radiometric terrain correction (RTC) and geocoding of SAR backscatter images with GAMMA.
     Applies the RTC method by :cite:`Small2011` to retrieve gamma nought RTC backscatter.
@@ -539,13 +539,12 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
          - see Notes for ID options
     basename_extensions: list of str or None
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
-    removeS1BorderNoise: bool
-        Enables removal of S1 GRD border noise (default).
-    removeS1BorderNoiseMethod: str
-        the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
+    removeS1BorderNoiseMethod: str or None
+        the S1 GRD border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
          - 'gamma': the GAMMA implementation of :cite:`Ali2018`
+         - None: do not remove border noise
     refine_LUT: bool
         should the LUT for geocoding be refined using pixel area normalization?
     
@@ -665,16 +664,15 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     if not os.path.isdir(path_log):
         os.makedirs(path_log)
     
-    if scene.sensor in ['S1A', 'S1B'] and removeS1BorderNoise and removeS1BorderNoiseMethod != 'gamma':
+    if scene.sensor in ['S1A', 'S1B'] and removeS1BorderNoiseMethod in ['ESA', 'pyroSAR']:
         print('removing border noise..')
         scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
     
     print('converting scene to GAMMA format..')
-    if removeS1BorderNoise and removeS1BorderNoiseMethod != 'gamma':
-        removeS1BorderNoise = False
+    gamma_bnr = True if removeS1BorderNoiseMethod == 'gamma' else False
     convert2gamma(scene, scene.scene, logpath=path_log, outdir=scene.scene,
                   basename_extensions=basename_extensions, shellscript=shellscript,
-                  S1_bnr=removeS1BorderNoise)
+                  S1_bnr=gamma_bnr)
     
     if scene.sensor in ['S1A', 'S1B']:
         print('updating orbit state vectors..')
