@@ -638,6 +638,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     if export_extra is not None and not isinstance(export_extra, list):
         raise TypeError("parameter 'export_extra' must either be None or a list")
     
+    tmpdir = os.path.join(tmpdir, scene.outname_base(extensions=basename_extensions))
+    
     for dir in [tmpdir, outdir]:
         if not os.path.isdir(dir):
             os.makedirs(dir)
@@ -662,9 +664,9 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         scene.scene = os.path.join(tmpdir, os.path.basename(scene.file))
         os.makedirs(scene.scene)
     
-    shellscript = os.path.join(scene.scene, scene.outname_base(extensions=basename_extensions) + '_commands.sh')
+    shellscript = os.path.join(tmpdir, scene.outname_base(extensions=basename_extensions) + '_commands.sh')
     
-    path_log = os.path.join(scene.scene, 'logfiles')
+    path_log = os.path.join(tmpdir, 'logfiles')
     if not os.path.isdir(path_log):
         os.makedirs(path_log)
     
@@ -674,7 +676,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     print('converting scene to GAMMA format..')
     gamma_bnr = True if removeS1BorderNoiseMethod == 'gamma' else False
-    convert2gamma(scene, scene.scene, logpath=path_log, outdir=scene.scene,
+    convert2gamma(scene, directory=tmpdir, logpath=path_log, outdir=tmpdir,
                   basename_extensions=basename_extensions, shellscript=shellscript,
                   S1_bnr=gamma_bnr)
     
@@ -685,15 +687,15 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         else:
             osvtype = 'POE'
         try:
-            correctOSV(id=scene, osvdir=osvdir, osvType=osvtype,
-                       logpath=path_log, outdir=scene.scene, shellscript=shellscript)
+            correctOSV(id=scene, directory=tmpdir, osvdir=osvdir, osvType=osvtype,
+                       logpath=path_log, outdir=tmpdir, shellscript=shellscript)
         except RuntimeError:
             print('orbit state vector correction failed for scene {}'.format(scene.scene))
             return
     
     print('calibrating...')
-    calibrate(scene, scene.scene, logpath=path_log, outdir=scene.scene, shellscript=shellscript)
-    images = [x for x in scene.getGammaImages(scene.scene) if
+    calibrate(id=scene, directory=tmpdir, logpath=path_log, outdir=tmpdir, shellscript=shellscript)
+    images = [x for x in scene.getGammaImages(tmpdir) if
               x.endswith('_grd') or x.endswith('_slc_cal') or x.endswith('_mli_cal')]
     
     products = list(images)
@@ -702,7 +704,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         print('multilooking..')
         for image in images:
             multilook(infile=image, outfile=image + '_mli', targetres=targetres,
-                      logpath=path_log, outdir=scene.scene, shellscript=shellscript)
+                      logpath=path_log, outdir=tmpdir, shellscript=shellscript)
         
         images = [x + '_mli' for x in images]
         products.extend(images)
@@ -712,7 +714,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     # create output names for files to be written
     # appreciated files will be written
     # depreciated files will be set to '-' in the GAMMA function call and are thus not written
-    n = Namespace(scene.scene, scene.outname_base(extensions=basename_extensions))
+    n = Namespace(tmpdir, scene.outname_base(extensions=basename_extensions))
     if scene.sensor in ['S1A', 'S1B']:
         n.appreciate(['dem_seg_geo', 'lut_init', 'inc_geo', 'ls_map_geo'])
         n.depreciate(['sim_sar_geo', 'u_geo', 'v_geo', 'psi_geo', 'pix_geo'])
@@ -754,7 +756,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                    'ls_mode': 2,
                    'logpath': path_log,
                    'shellscript': shellscript,
-                   'outdir': scene.scene}
+                   'outdir': tmpdir}
     
     print('creating DEM products..')
     if master_par.image_geometry == 'GROUND_RANGE':
@@ -796,7 +798,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                         pix_gamma0=n.pix_area_gamma0,
                         sig2gam_ratio=n.pix_ratio,
                         logpath=path_log,
-                        outdir=scene.scene,
+                        outdir=tmpdir,
                         shellscript=shellscript)
         par2hdr(master + '.par', n.pix_ratio + '.hdr')
         if refine_LUT:
@@ -816,7 +818,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                         pix_sigma0=n.pix_area_sigma0,
                         pix_gamma0=n.pix_area_gamma0,
                         logpath=path_log,
-                        outdir=scene.scene,
+                        outdir=tmpdir,
                         shellscript=shellscript)
         par2hdr(master + '.par', n.pix_area_gamma0 + '.hdr')
         # ellipsoid-based pixel area (ellip_pix_sigma0)
@@ -827,7 +829,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                        refarea_flag=1,  # calculate sigma0, scale area by sin(inc_ang)/sin(ref_inc_ang)
                        pix_area=n.pix_ellip_sigma0,
                        logpath=path_log,
-                       outdir=scene.scene,
+                       outdir=tmpdir,
                        shellscript=shellscript)
         par2hdr(master + '.par', n.pix_ellip_sigma0 + '.hdr')
         par2hdr(master + '.par', master + '_cal.hdr')
@@ -839,7 +841,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                   bx=1,
                   by=1,
                   logpath=path_log,
-                  outdir=scene.scene,
+                  outdir=tmpdir,
                   shellscript=shellscript)
         par2hdr(master + '.par', n.pix_ratio + '.hdr')
     
@@ -851,7 +853,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                   bx=1,
                   by=1,
                   logpath=path_log,
-                  outdir=scene.scene,
+                  outdir=tmpdir,
                   shellscript=shellscript)
         par2hdr(master + '.par', n.gs_ratio + '.hdr')
     ######################################################################
@@ -870,7 +872,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                                  PAR_type=1,
                                  iflg=0,
                                  logpath=path_log,
-                                 outdir=scene.scene,
+                                 outdir=tmpdir,
                                  shellscript=shellscript)
             # Refinement Lookuptable
             # for "shift" data offset window size enlarged twice to 512 and 256, for data without shift 256 128
@@ -887,7 +889,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                              naz=32,
                              thres=0.2,
                              logpath=path_log,
-                             outdir=scene.scene,
+                             outdir=tmpdir,
                              shellscript=shellscript)
             # par2hdr(master + '.par', master + '_offs' + '.hdr')
             diff.offset_fitm(offs=image + '_offs',
@@ -898,7 +900,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                              thres=0.2,
                              npoly=4,
                              logpath=path_log,
-                             outdir=scene.scene,
+                             outdir=tmpdir,
                              shellscript=shellscript)
             # Updating of the look-up table
             diff.gc_map_fine(gc_in=lut_final,
@@ -907,7 +909,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                              gc_out=lut_final + '.fine',
                              ref_flg=1,
                              logpath=path_log,
-                             outdir=scene.scene,
+                             outdir=tmpdir,
                              shellscript=shellscript)
             # Reproduce pixel area estimate
             diff.pixel_area(MLI_par=image + '.par',
@@ -919,7 +921,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                             pix_sigma0=n.pix_area_sigma0,
                             sigma0_ratio=n.pix_ratio,  # '-'
                             logpath=path_log,
-                            outdir=scene.scene,
+                            outdir=tmpdir,
                             shellscript=shellscript)
             par2hdr(master + '.par', image + '_pix_sigma0' + '.hdr')
             
@@ -932,7 +934,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                     bx=1,
                     by=1,
                     logpath=path_log,
-                    outdir=scene.scene,
+                    outdir=tmpdir,
                     shellscript=shellscript)
         par2hdr(master + '.par', image + '_gamma0-rtc.hdr')
         diff.geocode_back(data_in=image + '_gamma0-rtc',
@@ -942,7 +944,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                           width_out=sim_width,
                           interp_mode=func_geoback,
                           logpath=path_log,
-                          outdir=scene.scene,
+                          outdir=tmpdir,
                           shellscript=shellscript)
         par2hdr(n.dem_seg_geo + '.par', image + '_gamma0-rtc_geo.hdr')
         products.extend([image + '_gamma0-rtc', image + '_gamma0-rtc_geo'])
@@ -963,7 +965,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                              inverse_flag=0,
                              null_value=nodata,
                              logpath=path_log,
-                             outdir=scene.scene,
+                             outdir=tmpdir,
                              shellscript=shellscript)
             par2hdr(refpar, data_in + '_db.hdr')
             data_in += '_db'
@@ -975,7 +977,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                               GeoTIFF=outfile,
                               nodata=nodata,
                               logpath=path_log,
-                              outdir=scene.scene,
+                              outdir=tmpdir,
                               shellscript=shellscript)
         
         else:
@@ -1005,7 +1007,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                                   width_out=sim_width,
                                   interp_mode=func_geoback,
                                   logpath=path_log,
-                                  outdir=scene.scene,
+                                  outdir=tmpdir,
                                   shellscript=shellscript)
                 par2hdr(n.dem_seg_geo + '.par', fname + '_.hdr')
             # SAR image products
@@ -1028,7 +1030,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     if cleanup:
         print('cleaning up temporary files..')
-        shutil.rmtree(scene.scene)
+        shutil.rmtree(tmpdir)
 
 
 def ovs(parfile, targetres):
