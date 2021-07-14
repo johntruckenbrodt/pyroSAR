@@ -563,9 +563,9 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
       * **grd**: the ground range detected SAR intensity image
       * **grd_mli**: the multi-looked grd image with approached target resolution
-      * **pix_ellip_sigma0**: ellipsoid-based pixel area
+      * (**pix_ellip_sigma0**): ellipsoid-based pixel area
       * (**pix_area_sigma0**): illuminated area as obtained from integrating DEM-facets in sigma projection (command pixel_area)
-      * **pix_area_gamma0**: illuminated area as obtained from integrating DEM-facets in sigma projection (command pixel_area)
+      * (**pix_area_gamma0**): illuminated area as obtained from integrating DEM-facets in gamma projection (command pixel_area)
       * **pix_ratio**: pixel area normalization factor (pix_ellip_sigma0 / pix_area_gamma0)
       * **grd_mli_gamma0-rtc**: the terrain-corrected gamma0 backscatter (grd_mli * pix_ratio)
       * (**gs_ratio**): gamma-sigma ratio (pix_gamma0 / pix_sigma0)
@@ -579,6 +579,10 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
       * (**psi_geo**): projection angle (between surface normal and image plane normal)
       * **ls_map_geo**: layover and shadow map (in map projection)
       * (**sim_sar_geo**): simulated SAR backscatter image
+      * (**pix_area_sigma0_geo**): illuminated area as obtained from integrating DEM-facets in sigma projection (command pixel_area)
+      * (**pix_area_gamma0_geo**): illuminated area as obtained from integrating DEM-facets in gamma projection (command pixel_area)
+      * (**pix_ratio_geo**): pixel area normalization factor (pix_ellip_sigma0 / pix_area_gamma0)
+      * (**gs_ratio_geo**): gamma-sigma ratio (pix_gamma0 / pix_sigma0)
     
     - additional files
     
@@ -719,6 +723,12 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     if export_extra is not None:
         n.appreciate(export_extra)
+        pix = ['pix_area_sigma0', 'pix_area_gamma0', 'pix_ratio', 'gs_ratio']
+        pix_geo = []
+        for item in pix:
+            if item + '_geo' in export_extra:
+                pix_geo.append(item + '_geo')
+                n.appreciate([item])
     
     ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
     
@@ -984,6 +994,18 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     if export_extra is not None:
         print('exporting extra products..')
         for key in export_extra:
+            if key in pix_geo:
+                fname = n.get(key)
+                diff.geocode_back(data_in=fname.replace('_geo', ''),
+                                  width_in=master_par.range_samples,
+                                  lookup_table=lut_final,
+                                  data_out=fname,
+                                  width_out=sim_width,
+                                  interp_mode=func_geoback,
+                                  logpath=path_log,
+                                  outdir=scene.scene,
+                                  shellscript=shellscript)
+                par2hdr(n.dem_seg_geo + '.par', fname + '_.hdr')
             # SAR image products
             product_match = [x for x in products if x.endswith(key)]
             if len(product_match) > 0:
