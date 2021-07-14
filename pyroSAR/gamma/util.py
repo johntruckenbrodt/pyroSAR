@@ -484,7 +484,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             cleanup=True, export_extra=None, basename_extensions=None,
             removeS1BorderNoise=True, removeS1BorderNoiseMethod='gamma', refine_LUT=False):
     """
-    general function for geocoding SAR images with GAMMA
+    general function for radiometric terrain correction (RTC) and geocoding of SAR backscatter images with GAMMA.
+    Applies the RTC method by :cite:`Small2011` to retrieve gamma nought RTC backscatter.
     
     Parameters
     ----------
@@ -565,8 +566,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
       * **pix_ellip_sigma0**: ellipsoid-based pixel area
       * **pix_area_gamma0**: actual illuminated area as obtained from integrating DEM-facets (command pixel_area)
       * **pix_fine**: refined pixel area normalization factor (pix_ellip_sigma0 / pix_area_sigma0)
-      * **grd_mli_pan**: the pixel area normalized MLI (grd_mli * pix_fine)
-     
+      * **grd_mli_gamma0-rtc**: the terrain-corrected gamma0 backscatter (grd_mli * pix_fine)
+    
     - images in map geometry
     
       * **dem_seg_geo**: dem subsetted to the extent of the intersect between input DEM and SAR image
@@ -901,25 +902,25 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         
         lat.product(data_1=image,
                     data_2=n.pix_fine,
-                    product=image + '_pan',
+                    product=image + '_gamma0-rtc',
                     width=master_par.range_samples,
                     bx=1,
                     by=1,
                     logpath=path_log,
                     outdir=scene.scene,
                     shellscript=shellscript)
-        par2hdr(master + '.par', image + '_pan.hdr')
-        diff.geocode_back(data_in=image + '_pan',
+        par2hdr(master + '.par', image + '_gamma0-rtc.hdr')
+        diff.geocode_back(data_in=image + '_gamma0-rtc',
                           width_in=master_par.range_samples,
                           lookup_table=lut_final,
-                          data_out=image + '_pan_geo',
+                          data_out=image + '_gamma0-rtc_geo',
                           width_out=sim_width,
                           interp_mode=func_geoback,
                           logpath=path_log,
                           outdir=scene.scene,
                           shellscript=shellscript)
-        par2hdr(n.dem_seg_geo + '.par', image + '_pan_geo.hdr')
-        products.extend([image + '_pan', image + '_pan_geo'])
+        par2hdr(n.dem_seg_geo + '.par', image + '_gamma0-rtc_geo.hdr')
+        products.extend([image + '_gamma0-rtc', image + '_gamma0-rtc_geo'])
     ######################################################################
     print('conversion to (dB and) GeoTIFF..')
     
@@ -959,7 +960,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     for image in images:
         for scale in scaling:
-            exporter(data_in=image + '_{}'.format(method_suffix), scale=scale, dtype=2,
+            exporter(data_in=image + '_gamma0-rtc_geo', scale=scale, dtype=2,
                      nodata=dict(zip(('linear', 'db'), nodata))[scale], outdir=outdir)
     
     if scene.sensor in ['S1A', 'S1B']:
