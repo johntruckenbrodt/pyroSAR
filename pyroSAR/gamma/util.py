@@ -565,8 +565,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
       * **grd_mli**: the multi-looked grd image with approached target resolution
       * **pix_ellip_sigma0**: ellipsoid-based pixel area
       * **pix_area_gamma0**: actual illuminated area as obtained from integrating DEM-facets (command pixel_area)
-      * **pix_fine**: refined pixel area normalization factor (pix_ellip_sigma0 / pix_area_sigma0)
-      * **grd_mli_gamma0-rtc**: the terrain-corrected gamma0 backscatter (grd_mli * pix_fine)
+      * **pix_ratio**: pixel area normalization factor (pix_ellip_sigma0 / pix_area_gamma0)
+      * **grd_mli_gamma0-rtc**: the terrain-corrected gamma0 backscatter (grd_mli * pix_ratio)
     
     - images in map geometry
     
@@ -769,7 +769,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     # newer versions of Gamma enable creating the ratio of ellipsoid based
     # pixel area and DEM-facet pixel area directly with command pixel_area
     if hasarg(diff.pixel_area, 'sig2gam_ratio'):
-        n.appreciate(['pix_fine'])
+        n.appreciate(['pix_ratio'])
         if refine_LUT:
             n.appreciate(['pix_area_sigma0'])
         else:
@@ -781,18 +781,18 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                         ls_map=n.ls_map_geo,
                         inc_map=n.inc_geo,
                         pix_sigma0=n.pix_area_sigma0,
-                        sig2gam_ratio=n.pix_fine,
+                        sig2gam_ratio=n.pix_ratio,
                         logpath=path_log,
                         outdir=scene.scene,
                         shellscript=shellscript)
-        par2hdr(master + '.par', n.pix_fine + '.hdr')
+        par2hdr(master + '.par', n.pix_ratio + '.hdr')
         if refine_LUT:
             par2hdr(master + '.par', n.pix_area_sigma0 + '.hdr')
     
     else:
         # sigma0 = MLI * ellip_pix_sigma0 / pix_area_sigma0
         # gamma0 = MLI * ellip_pix_sigma0 / pix_area_gamma0
-        n.appreciate(['pix_area_gamma0', 'pix_ellip_sigma0', 'pix_fine'])
+        n.appreciate(['pix_area_gamma0', 'pix_ellip_sigma0', 'pix_ratio'])
         # actual illuminated area as obtained from integrating DEM-facets (pix_area_sigma0 | pix_area_gamma0)
         diff.pixel_area(MLI_par=master + '.par',
                         DEM_par=n.dem_seg_geo + '.par',
@@ -820,14 +820,14 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         # ratio of ellipsoid based pixel area and DEM-facet pixel area
         lat.ratio(d1=n.pix_ellip_sigma0,
                   d2=n.pix_area_gamma0,
-                  ratio=n.pix_fine,
+                  ratio=n.pix_ratio,
                   width=master_par.range_samples,
                   bx=1,
                   by=1,
                   logpath=path_log,
                   outdir=scene.scene,
                   shellscript=shellscript)
-        par2hdr(master + '.par', n.pix_fine + '.hdr')
+        par2hdr(master + '.par', n.pix_ratio + '.hdr')
     ######################################################################
     # radiometric terrain correction and backward geocoding ##############
     ######################################################################
@@ -891,7 +891,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                             ls_map=n.ls_map_geo,
                             inc_map=n.inc_geo,
                             pix_sigma0=n.pix_area_sigma0,
-                            sigma0_ratio=n.pix_fine,  # '-'
+                            sigma0_ratio=n.pix_ratio,  # '-'
                             logpath=path_log,
                             outdir=scene.scene,
                             shellscript=shellscript)
@@ -900,7 +900,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             lut_final = lut_final + '.fine'
         
         lat.product(data_1=image,
-                    data_2=n.pix_fine,
+                    data_2=n.pix_ratio,
                     product=image + '_gamma0-rtc',
                     width=master_par.range_samples,
                     bx=1,
