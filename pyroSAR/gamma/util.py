@@ -600,12 +600,11 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     >>> geocode(scene=filename, dem='demfile', outdir='outdir', targetres=20, scaling='db',
     >>>         export_extra=['dem_seg_geo', 'inc_geo', 'ls_map_geo'])
     
-    .. figure:: figures/gamma_geocode.png
-        :scale: 25%
+    .. figure:: figures/gamma_geocode.svg
         :align: center
         
         Workflow diagram for function geocode for processing a Sentinel-1 Ground Range
-        Detected (GRD) scene to radiometrically terrain corrected (RTC) backscatter.
+        Detected (GRD) scene to radiometrically terrain corrected (RTC) gamma nought backscatter.
     
     References
     ----------
