@@ -417,7 +417,7 @@ class ID(object):
 
         Parameters
         ----------
-        directory: str
+        directory: str or None
             the directory to be scanned; if left empty the object attribute `gammadir` is scanned
 
         Returns
