@@ -383,7 +383,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         raise NotImplementedError('conversion for class {} is not implemented yet'.format(type(id).__name__))
 
 
-def correctOSV(id, osvdir=None, osvType='POE', timeout=20, logpath=None, outdir=None, shellscript=None):
+def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpath=None, outdir=None, shellscript=None):
     """
     correct GAMMA parameter files with orbit state vector information from dedicated OSV files;
     OSV files are downloaded automatically to either the defined `osvdir` or a sub-directory `osv` of the scene directory
@@ -392,6 +392,9 @@ def correctOSV(id, osvdir=None, osvType='POE', timeout=20, logpath=None, outdir=
     ----------
     id: ~pyroSAR.drivers.ID
         the scene to be corrected
+    directory: str or None
+        a directory to be scanned for files associated with the scene.
+        If None, the scene is expected to be an unpacked directory in which the files are searched.
     osvdir: str
         the directory of OSV files; subdirectories POEORB and RESORB are created automatically
     osvType: {'POE', 'RES'}
@@ -451,7 +454,8 @@ def correctOSV(id, osvdir=None, osvType='POE', timeout=20, logpath=None, outdir=
     except URLError:
         print('..no internet access')
     
-    images = id.getGammaImages(id.scene)
+    target = directory if directory is not None else id.scene
+    images = id.getGammaImages(target)
     # read parameter file entries into object
     with ISPPar(images[0] + '.par') as par:
         # extract acquisition time stamp
