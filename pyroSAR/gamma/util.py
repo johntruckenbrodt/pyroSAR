@@ -564,9 +564,11 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
       * **grd**: the ground range detected SAR intensity image
       * **grd_mli**: the multi-looked grd image with approached target resolution
       * **pix_ellip_sigma0**: ellipsoid-based pixel area
-      * **pix_area_gamma0**: actual illuminated area as obtained from integrating DEM-facets (command pixel_area)
+      * (**pix_area_sigma0**): illuminated area as obtained from integrating DEM-facets in sigma projection (command pixel_area)
+      * **pix_area_gamma0**: illuminated area as obtained from integrating DEM-facets in sigma projection (command pixel_area)
       * **pix_ratio**: pixel area normalization factor (pix_ellip_sigma0 / pix_area_gamma0)
       * **grd_mli_gamma0-rtc**: the terrain-corrected gamma0 backscatter (grd_mli * pix_ratio)
+      * (**gs_ratio**): gamma-sigma ratio (pix_gamma0 / pix_sigma0)
     
     - images in map geometry
     
@@ -772,8 +774,6 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         n.appreciate(['pix_ratio'])
         if refine_LUT:
             n.appreciate(['pix_area_sigma0'])
-        else:
-            n.depreciate(['pix_area_sigma0'])
         diff.pixel_area(MLI_par=master + '.par',
                         DEM_par=n.dem_seg_geo + '.par',
                         DEM=n.dem_seg_geo,
@@ -781,6 +781,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                         ls_map=n.ls_map_geo,
                         inc_map=n.inc_geo,
                         pix_sigma0=n.pix_area_sigma0,
+                        pix_gamma0=n.pix_area_gamma0,
                         sig2gam_ratio=n.pix_ratio,
                         logpath=path_log,
                         outdir=scene.scene,
@@ -800,6 +801,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                         lookup_table=lut_final,
                         ls_map=n.ls_map_geo,
                         inc_map=n.inc_geo,
+                        pix_sigma0=n.pix_area_sigma0,
                         pix_gamma0=n.pix_area_gamma0,
                         logpath=path_log,
                         outdir=scene.scene,
@@ -828,6 +830,18 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                   outdir=scene.scene,
                   shellscript=shellscript)
         par2hdr(master + '.par', n.pix_ratio + '.hdr')
+    
+    if n.isappreciated('gs_ratio'):
+        lat.ratio(d1=n.pix_area_gamma0,
+                  d2=n.pix_area_sigma0,
+                  ratio=n.gs_ratio,
+                  width=master_par.range_samples,
+                  bx=1,
+                  by=1,
+                  logpath=path_log,
+                  outdir=scene.scene,
+                  shellscript=shellscript)
+        par2hdr(master + '.par', n.gs_ratio + '.hdr')
     ######################################################################
     # radiometric terrain correction and backward geocoding ##############
     ######################################################################
