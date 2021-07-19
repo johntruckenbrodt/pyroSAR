@@ -1073,7 +1073,7 @@ def ovs(parfile, targetres):
     return ovs_lat, ovs_lon
 
 
-def multilook(infile, outfile, targetres, logpath=None, outdir=None, shellscript=None):
+def multilook(infile, outfile, targetres, exist_ok=False, logpath=None, outdir=None, shellscript=None):
     """
     multilooking of SLC and MLI images
 
@@ -1093,6 +1093,8 @@ def multilook(infile, outfile, targetres, logpath=None, outdir=None, shellscript
         the name of the output GAMMA file
     targetres: int
         the target resolution in ground range
+    exist_ok: bool
+        allow existing output files and do not create new ones?
     logpath: str or None
         a directory to write command logfiles to
     outdir: str or None
@@ -1123,15 +1125,20 @@ def multilook(infile, outfile, targetres, logpath=None, outdir=None, shellscript
         pars['SLC_par'] = infile + '.par'
         pars['MLI'] = outfile
         pars['MLI_par'] = outfile + '.par'
-        isp.multi_look(**pars)
+        all_exist = all([os.path.isfile(pars[x]) for x in ['MLI', 'MLI_par']])
+        if (exist_ok and not all_exist) or not exist_ok:
+            isp.multi_look(**pars)
+            par2hdr(outfile + '.par', outfile + '.hdr')
     else:
         # multilooking for MLI images
         pars['MLI_in'] = infile
         pars['MLI_in_par'] = infile + '.par'
         pars['MLI_out'] = outfile
         pars['MLI_out_par'] = outfile + '.par'
-        isp.multi_look_MLI(**pars)
-    par2hdr(outfile + '.par', outfile + '.hdr')
+        all_exist = all([os.path.isfile(pars[x]) for x in ['MLI_out', 'MLI_out_par']])
+        if (exist_ok and not all_exist) or not exist_ok:
+            isp.multi_look_MLI(**pars)
+            par2hdr(outfile + '.par', outfile + '.hdr')
 
 
 def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
