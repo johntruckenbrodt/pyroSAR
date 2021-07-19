@@ -599,65 +599,84 @@ class ID(object):
         """
         raise NotImplementedError
     
-    def _unpack(self, directory, offset=None, overwrite=False):
+    def _unpack(self, directory, offset=None, overwrite=False, exist_ok=False):
         """
-        general function for unpacking scene archives; to be called by implementations of ID.unpack
-        :param directory: the name of the directory in which the files are written
-        :param offset: an archive directory offset; to be defined if only a subdirectory is to be unpacked (see e.g. TSX:unpack)
-        :param overwrite: should an existing directory be overwritten?
-        :return: None
+        general function for unpacking scene archives; to be called by implementations of ID.unpack.
+        Will reset object attributes `scene` and `file` to point to the locations of the unpacked scene
+        
+        Parameters
+        ----------
+        directory: str
+            the name of the directory in which the files are written
+        offset: str
+            an archive directory offset; to be defined if only a subdirectory is to be unpacked (see e.g. TSX.unpack)
+        overwrite: bool
+            should an existing directory be overwritten?
+        exist_ok: bool
+            do not attempt unpacking if the target directory already exists? Ignored if `overwrite==True`
+        
+        Returns
+        -------
+        
         """
+        do_unpack = True
         if os.path.isdir(directory):
             if overwrite:
                 shutil.rmtree(directory)
             else:
-                raise RuntimeError('target scene directory already exists: {}'.format(directory))
-        os.makedirs(directory)
+                if exist_ok:
+                    do_unpack = False
+                else:
+                    raise RuntimeError('target scene directory already exists: {}'.format(directory))
+        os.makedirs(directory, exist_ok=True)
         
-        if tf.is_tarfile(self.scene):
-            archive = tf.open(self.scene, 'r')
-            names = archive.getnames()
-            if offset is not None:
-                names = [x for x in names if x.startswith(offset)]
-            header = os.path.commonprefix(names)
+        if do_unpack:
+            if tf.is_tarfile(self.scene):
+                archive = tf.open(self.scene, 'r')
+                names = archive.getnames()
+                if offset is not None:
+                    names = [x for x in names if x.startswith(offset)]
+                header = os.path.commonprefix(names)
+                
+                if header in names:
+                    if archive.getmember(header).isdir():
+                        for item in sorted(names):
+                            if item != header:
+                                member = archive.getmember(item)
+                                if offset is not None:
+                                    member.name = member.name.replace(offset + '/', '')
+                                archive.extract(member, directory)
+                        archive.close()
+                    else:
+                        archive.extractall(directory)
+                        archive.close()
             
-            if header in names:
-                if archive.getmember(header).isdir():
+            elif zf.is_zipfile(self.scene):
+                archive = zf.ZipFile(self.scene, 'r')
+                names = archive.namelist()
+                header = os.path.commonprefix(names)
+                if header.endswith('/'):
                     for item in sorted(names):
                         if item != header:
-                            member = archive.getmember(item)
-                            if offset is not None:
-                                member.name = member.name.replace(offset + '/', '')
-                            archive.extract(member, directory)
+                            repl = item.replace(header, '', 1)
+                            outname = os.path.join(directory, repl)
+                            outname = outname.replace('/', os.path.sep)
+                            if item.endswith('/'):
+                                os.makedirs(outname)
+                            else:
+                                try:
+                                    with open(outname, 'wb') as outfile:
+                                        outfile.write(archive.read(item))
+                                except zf.BadZipfile:
+                                    print('corrupt archive, unpacking failed')
+                                    continue
                     archive.close()
                 else:
                     archive.extractall(directory)
                     archive.close()
-        
-        elif zf.is_zipfile(self.scene):
-            archive = zf.ZipFile(self.scene, 'r')
-            names = archive.namelist()
-            header = os.path.commonprefix(names)
-            if header.endswith('/'):
-                for item in sorted(names):
-                    if item != header:
-                        outname = os.path.join(directory, item.replace(header, '', 1)).replace('/', os.path.sep)
-                        if item.endswith('/'):
-                            os.makedirs(outname)
-                        else:
-                            try:
-                                with open(outname, 'wb') as outfile:
-                                    outfile.write(archive.read(item))
-                            except zf.BadZipfile:
-                                print('corrupt archive, unpacking failed')
-                                continue
-                archive.close()
             else:
-                archive.extractall(directory)
-                archive.close()
-        else:
-            print('unpacking is only supported for TAR and ZIP archives')
-            return
+                print('unpacking is only supported for TAR and ZIP archives')
+                return
         
         self.scene = directory
         main = os.path.join(self.scene, os.path.basename(self.file))
@@ -1193,19 +1212,19 @@ class EORC_PSR(ID):
     def __init__(self, scene):
         
         self.scene = os.path.realpath(scene)
-
+        
         self.pattern = r'^PSR2-' \
-                        r'(?P<prodlevel>SLTR)_'\
-                        r'(?P<pathnr>RSP[0-9]{3})_' \
-                        r'(?P<date>[0-9]{8})'\
-                        r'(?P<mode>FBD|WBD)'\
-                        r'(?P<beam>[0-9]{2})'\
-                        r'(?P<orbit_dir>A|D)'\
-                        r'(?P<look_dir>L|R)_'\
-                        r'(?P<replay_id1>[0-9A-Z]{16})-'\
-                        r'(?P<replay_id2>[0-9A-Z]{5})_'\
-                        r'(?P<internal>[0-9]{3})_'\
-                        r'HDR$'
+                       r'(?P<prodlevel>SLTR)_' \
+                       r'(?P<pathnr>RSP[0-9]{3})_' \
+                       r'(?P<date>[0-9]{8})' \
+                       r'(?P<mode>FBD|WBD)' \
+                       r'(?P<beam>[0-9]{2})' \
+                       r'(?P<orbit_dir>A|D)' \
+                       r'(?P<look_dir>L|R)_' \
+                       r'(?P<replay_id1>[0-9A-Z]{16})-' \
+                       r'(?P<replay_id2>[0-9A-Z]{5})_' \
+                       r'(?P<internal>[0-9]{3})_' \
+                       r'HDR$'
         
         self.examine()
         
@@ -1240,12 +1259,12 @@ class EORC_PSR(ID):
         ################################################################################################################
         # read header (HDR) file
         header = self._getHeaderfileContent()
-        header = [head.replace(" ","") for head in header]
+        header = [head.replace(" ", "") for head in header]
         
         # read summary text file
         facter_m = self._parseFacter_m()
-        facter_m = [fact.replace(" ","") for fact in facter_m]
-
+        facter_m = [fact.replace(" ", "") for fact in facter_m]
+        
         meta = {}
         
         # read polarizations from image file names
@@ -1253,34 +1272,34 @@ class EORC_PSR(ID):
         meta['product'] = header[3]
         ################################################################################################################
         # read start and stop time --> TODO: in what format is the start and stop time?
-
+        
         try:
-            start_time = facter_m[168].split('.')[0].zfill(2)+facter_m[168].split('.')[1][:4]
-            stop_time = facter_m[170].split('.')[0].zfill(2)+facter_m[170].split('.')[1][:4]
+            start_time = facter_m[168].split('.')[0].zfill(2) + facter_m[168].split('.')[1][:4]
+            stop_time = facter_m[170].split('.')[0].zfill(2) + facter_m[170].split('.')[1][:4]
         except (AttributeError):
             raise IndexError('start and stop time stamps cannot be extracted; see file facter_m.dat')
-
-        meta['start'] = str(header[6])#+'T'+start_time
-        meta['stop'] = str(header[6])#+'T'+stop_time
+        
+        meta['start'] = str(header[6])  # +'T'+start_time
+        meta['stop'] = str(header[6])  # +'T'+stop_time
         ################################################################################################################
         # read file metadata
         meta['sensor'] = header[2]
         ################################################################################################################
         # read leader file name information
-        meta['acquisition_mode']=header[12]
+        meta['acquisition_mode'] = header[12]
         # ###############################################################################################################
         # read map projection data 
-
-        lat = list(map(float, [header[33], header[35],header[37],header[39]]))
-        lon = list(map(float, [header[34], header[36],header[38],header[40]]))
-
+        
+        lat = list(map(float, [header[33], header[35], header[37], header[39]]))
+        lon = list(map(float, [header[34], header[36], header[38], header[40]]))
+        
         meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
         # print(meta['corners'])
         # epsg=header[]
-        meta['projection'] = crsConvert(4918, 'wkt') #EPSG: 4918: ITRF97, GRS80
+        meta['projection'] = crsConvert(4918, 'wkt')  # EPSG: 4918: ITRF97, GRS80
         ################################################################################################################
         # read data set summary record
-
+        
         orbitsPerCycle = int(207)
         
         meta['orbitNumber_rel'] = int(header[7])
@@ -1292,9 +1311,9 @@ class EORC_PSR(ID):
         meta['samples'] = int(float(facter_m[50]))
         meta['incidence'] = float(facter_m[119])
         meta['proc_facility'] = header[73]
-
+        
         meta['spacing'] = (float(header[51]), float(header[52]))
-
+        
         meta['orbit'] = header[9]
         ################################################################################################################
         # read radiometric data record
@@ -1302,11 +1321,11 @@ class EORC_PSR(ID):
         meta['k_dB'] = float(header[64])
         
         return meta
-
+    
     def unpack(self, directory, overwrite=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir, overwrite=overwrite)
-
+    
     def getCorners(self):
         if 'corners' not in self.meta.keys():
             lat = [y for x, y in self.meta.items() if 'Latitude' in x]
