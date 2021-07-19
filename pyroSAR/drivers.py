@@ -747,14 +747,14 @@ class CEOS_ERS(ID):
         lon = [x[1][0] for x in self.meta['gcps']]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         if self.sensor in ['ERS1', 'ERS2']:
             base_file = re.sub(r'\.PS$', '', os.path.basename(self.file))
             base_dir = os.path.basename(directory.strip('/'))
             
             outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
             
-            self._unpack(outdir, overwrite=overwrite)
+            self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
         else:
             raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
     
@@ -1156,9 +1156,9 @@ class CEOS_PSR(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
     
     def getCorners(self):
         if 'corners' not in self.meta.keys():
@@ -1322,9 +1322,9 @@ class EORC_PSR(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
     
     def getCorners(self):
         if 'corners' not in self.meta.keys():
@@ -1431,13 +1431,13 @@ class ESA(ID):
         meta['cycleNumber'] = meta['MPH_CYCLE']
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         base_file = os.path.basename(self.file).strip(r'\.zip|\.tar(?:\.gz|)')
         base_dir = os.path.basename(directory.strip('/'))
         
         outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
         
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
 
 
 class SAFE(ID):
@@ -1654,9 +1654,9 @@ class SAFE(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file))
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
 
 
 class TSX(ID):
@@ -1762,11 +1762,11 @@ class TSX(ID):
         meta['incidence'] = float(tree.find('.//sceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         match = self.findfiles(self.pattern, True)
         header = [x for x in match if not x.endswith('xml') and 'iif' not in x][0].replace(self.scene, '').strip('/')
         outdir = os.path.join(directory, os.path.basename(header))
-        self._unpack(outdir, offset=header, overwrite=overwrite)
+        self._unpack(outdir, offset=header, overwrite=overwrite, exist_ok=exist_ok)
 
 
 class Archive(object):
