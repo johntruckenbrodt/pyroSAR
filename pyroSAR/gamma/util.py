@@ -35,6 +35,7 @@ from ..drivers import ID, CEOS_ERS, CEOS_PSR, EORC_PSR, ESA, SAFE, TSX, identify
 from . import ISPPar, Namespace, par2hdr
 from ..ancillary import multilook_factors, hasarg
 from pyroSAR.examine import ExamineSnap
+from .auxil import do_execute
 
 try:
     from .api import diff, disp, isp, lat
@@ -129,7 +130,7 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
 
 
 def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
-                  basename_extensions=None,
+                  basename_extensions=None, exist_ok=False,
                   logpath=None, outdir=None, shellscript=None):
     """
     general function for converting SAR images to GAMMA format
@@ -182,14 +183,17 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                     dat = id.findfiles('DAT_01.001')[0]
                     title = re.sub(r'\.PS$', '', os.path.basename(id.file))
                     
-                    isp.par_ESA_ERS(CEOS_SAR_leader=lea,
-                                    SLC_par=outname + '.par',
-                                    CEOS_DAT=dat,
-                                    SLC=outname,
-                                    inlist=[title],
-                                    logpath=logpath,
-                                    outdir=outdir,
-                                    shellscript=shellscript)
+                    pars = {'CEOS_SAR_leader': lea,
+                            'SLC_par': outname + '.par',
+                            'CEOS_DAT': dat,
+                            'SLC': outname,
+                            'inlist': [title],
+                            'logpath': logpath,
+                            'outdir': outdir,
+                            'shellscript': shellscript}
+                    
+                    if do_execute(pars, ['SLC', 'SLC_par'], exist_ok):
+                        isp.par_ESA_ERS(**pars)
                 else:
                     print('scene already converted')
             else:
@@ -205,29 +209,33 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         for image in images:
             polarization = re.search('[HV]{2}', os.path.basename(image)).group(0)
             outname_base = id.outname_base(extensions=basename_extensions)
+            
+            pars = {'CEOS_leader': id.file,
+                    'CEOS_data': image,
+                    'logpath': logpath,
+                    'outdir': outdir,
+                    'shellscript': shellscript}
+            
             if id.product == '1.1':
                 outname_base = '{}_{}_slc'.format(outname_base, polarization)
                 outname = os.path.join(directory, outname_base)
                 
-                isp.par_EORC_PALSAR(CEOS_leader=id.file,
-                                    SLC_par=outname + '.par',
-                                    CEOS_data=image,
-                                    SLC=outname,
-                                    logpath=logpath,
-                                    outdir=outdir,
-                                    shellscript=shellscript)
+                pars['SLC'] = outname
+                pars['SLC_par'] = outname + '.par'
+                
+                if do_execute(pars, ['SLC', 'SLC_par'], exist_ok):
+                    isp.par_EORC_PALSAR(**pars)
             else:
                 outname_base = '{}_{}_mli_geo'.format(outname_base, polarization)
                 outname = os.path.join(directory, outname_base)
                 
-                diff.par_EORC_PALSAR_geo(CEOS_leader=id.file,
-                                         MLI_par=outname + '.par',
-                                         DEM_par=outname + '_dem.par',
-                                         CEOS_data=image,
-                                         MLI=outname,
-                                         logpath=logpath,
-                                         outdir=outdir,
-                                         shellscript=shellscript)
+                pars['MLI'] = outname
+                pars['MLI_par'] = outname + '.par'
+                pars['DEM_par'] = outname + '_dem.par'
+                
+                if do_execute(pars, ['MLI', 'MLI_par', 'DEM_par'], exist_ok):
+                    diff.par_EORC_PALSAR_geo(**pars)
+            
             par2hdr(outname + '.par', outname + '.hdr')
     
     elif isinstance(id, EORC_PSR):
@@ -241,16 +249,20 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
             outname_base = '{}_{}'.format(outname_base, polarization)
             outname = os.path.join(directory, outname_base)
             
-            isp.par_KC_PALSAR_slr(facter_m=facter_m,
-                                  CEOS_leader=led,
-                                  SLC_par=outname + '_mli.par',
-                                  pol=polarization,
-                                  pls_mode=2,
-                                  KC_data=image,
-                                  pwr=outname + '_mli',
-                                  logpath=logpath,
-                                  outdir=outdir,
-                                  shellscript=shellscript)
+            pars = {'facter_m': facter_m,
+                    'CEOS_leader': led,
+                    'SLC_par': outname + '_mli.par',
+                    'pol': polarization,
+                    'pls_mode': 2,
+                    'KC_data': image,
+                    'pwr': outname + '_mli',
+                    'logpath': logpath,
+                    'outdir': outdir,
+                    'shellscript': shellscript}
+            
+            if do_execute(pars, ['pwr', 'SLC_par'], exist_ok):
+                isp.par_KC_PALSAR_slr(**pars)
+            
             par2hdr(outname + '_mli.par', outname + '_mli.hdr')
     
     elif isinstance(id, ESA):
@@ -281,7 +293,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 if outname.endswith('.par'):
                     par2hdr(outname, outname.replace('.par', '.hdr'))
         else:
-            raise IOError('scene already processed')
+            if not exist_ok:
+                raise IOError('scene already processed')
     
     elif isinstance(id, SAFE):
         if id.product == 'OCN':
@@ -327,7 +340,9 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 pars['SLC'] = outname
                 pars['SLC_par'] = outname + '.par'
                 pars['TOPS_par'] = outname + '.tops_par'
-                isp.par_S1_SLC(**pars)
+                
+                if do_execute(pars, ['SLC', 'SLC_par', 'TOPS_par'], exist_ok):
+                    isp.par_S1_SLC(**pars)
             else:
                 if hasarg(isp.par_S1_GRD, 'edge_flag'):
                     if S1_bnr:
@@ -336,7 +351,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                         pars['edge_flag'] = 0
                 pars['MLI'] = outname
                 pars['MLI_par'] = outname + '.par'
-                isp.par_S1_GRD(**pars)
+                if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
+                    isp.par_S1_GRD(**pars)
             
             par2hdr(outname + '.par', outname + '.hdr')
     
@@ -359,14 +375,16 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 pars['COSAR'] = image
                 pars['SLC_par'] = outname + '.par'
                 pars['SLC'] = outname
-                isp.par_TX_SLC(**pars)
+                if do_execute(pars, ['SLC', 'SLC_par'], exist_ok):
+                    isp.par_TX_SLC(**pars)
             
             elif id.product == 'MGD':
                 outname += '_mli'
                 pars['GeoTIFF'] = image
                 pars['GRD_par'] = outname + '.par'
                 pars['GRD'] = outname
-                isp.par_TX_GRD(**pars)
+                if do_execute(pars, ['GRD', 'GRD_par'], exist_ok):
+                    isp.par_TX_GRD(**pars)
             
             elif id.product in ['GEC', 'EEC']:
                 outname += '_mli_geo'
@@ -374,7 +392,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 pars['MLI_par'] = outname + '.par'
                 pars['DEM_par'] = outname + '_dem.par'
                 pars['GEO'] = outname
-                diff.par_TX_geo(**pars)
+                if do_execute(pars, ['GEO', 'MLI_par', 'DEM_par'], exist_ok):
+                    diff.par_TX_geo(**pars)
             else:
                 raise RuntimeError('unknown product: {}'.format(id.product))
             
