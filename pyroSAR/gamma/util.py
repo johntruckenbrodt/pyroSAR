@@ -31,7 +31,7 @@ from spatialist import haversine
 from spatialist.ancillary import union, finder
 
 from ..S1 import OSV
-from ..drivers import ID, CEOS_ERS, CEOS_PSR, EORC_PSR, ESA, SAFE, TSX, identify
+from ..drivers import ID, CEOS_PSR, EORC_PSR, ESA, SAFE, identify
 from . import ISPPar, Namespace, par2hdr
 from ..ancillary import multilook_factors, hasarg
 from pyroSAR.examine import ExamineSnap
@@ -169,7 +169,9 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
     if not os.path.isdir(directory):
         os.makedirs(directory)
     
-    if isinstance(id, CEOS_ERS):
+    cname = type(id).__name__
+    
+    if cname == 'CEOS_ERS':
         if id.sensor in ['ERS1', 'ERS2']:
             if id.product == 'SLC' \
                     and id.meta['proc_system'] in ['PGS-ERS', 'VMP-ERS', 'SPF-ERS']:
@@ -203,7 +205,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         else:
             raise NotImplementedError('sensor {} in CEOS format not implemented yet'.format(id.sensor))
     
-    elif isinstance(id, CEOS_PSR):
+    elif cname == 'CEOS_PSR':
         images = id.findfiles('^IMG-')
         if id.product == '1.0':
             raise RuntimeError('PALSAR level 1.0 products are not supported')
@@ -239,7 +241,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                     diff.par_EORC_PALSAR_geo(**pars)
                     par2hdr(outname + '.par', outname + '.hdr')
     
-    elif isinstance(id, EORC_PSR):
+    elif cname == 'EORC_PSR':
         images = id.findfiles('^sar.')
         facter_m = id.findfiles('facter_m.dat')
         led = id.findfiles('LED-ALOS2')
@@ -265,7 +267,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 isp.par_KC_PALSAR_slr(**pars)
                 par2hdr(outname + '_mli.par', outname + '_mli.hdr')
     
-    elif isinstance(id, ESA):
+    elif cname == 'ESA':
         """
         the command par_ASAR also accepts a K_dB argument for calibration
         in which case the resulting image names will carry the suffix grd;
@@ -296,7 +298,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
             if not exist_ok:
                 raise IOError('scene already processed')
     
-    elif isinstance(id, SAFE):
+    elif cname == 'SAFE':
         if id.product == 'OCN':
             raise IOError('Sentinel-1 OCN products are not supported')
         if id.meta['category'] == 'A':
@@ -356,7 +358,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                     isp.par_S1_GRD(**pars)
                     par2hdr(outname + '.par', outname + '.hdr')
     
-    elif isinstance(id, TSX):
+    elif cname == 'TSX':
         images = id.findfiles(id.pattern_ds)
         pattern = re.compile(id.pattern_ds)
         for image in images:
@@ -399,8 +401,9 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                     par2hdr(outname + '.par', outname + '.hdr')
             else:
                 raise RuntimeError('unknown product: {}'.format(id.product))
+    
     else:
-        raise NotImplementedError('conversion for class {} is not implemented yet'.format(type(id).__name__))
+        raise NotImplementedError('conversion for class {} is not implemented yet'.format(cname))
 
 
 def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpath=None, outdir=None, shellscript=None):
