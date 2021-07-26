@@ -31,7 +31,7 @@ from spatialist import haversine
 from spatialist.ancillary import union, finder
 
 from ..S1 import OSV
-from ..drivers import ID, CEOS_PSR, EORC_PSR, ESA, SAFE, identify
+from ..drivers import ID, identify
 from . import ISPPar, Namespace, par2hdr
 from ..ancillary import multilook_factors, hasarg
 from pyroSAR.examine import ExamineSnap
@@ -65,7 +65,8 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
     -------
 
     """
-    if isinstance(id, CEOS_PSR):
+    cname = type(id).__name__
+    if cname == 'CEOS_PSR':
         for image in id.getGammaImages(directory):
             if image.endswith('_slc'):
                 isp.radcal_SLC(SLC=image,
@@ -78,7 +79,7 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
                                shellscript=shellscript)
                 par2hdr(image + '_cal.par', image + '_cal.hdr')
     
-    elif isinstance(id, EORC_PSR):
+    elif cname == 'EORC_PSR':
         for image in id.getGammaImages(directory):
             pol = re.search('[HV]{2}', os.path.basename(image)).group(0)
             if image.endswith('_mli'):
@@ -101,7 +102,7 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
                 # rename parameter file 
                 os.rename(image + '.par', image + '_cal.par')
     
-    elif isinstance(id, ESA):
+    elif cname == 'ESA':
         k_db = {'ASAR': 55., 'ERS1': 58.24, 'ERS2': 59.75}[id.sensor]
         inc_ref = 90. if id.sensor == 'ASAR' else 23.
         candidates = [x for x in id.getGammaImages(directory) if re.search('_pri$', x)]
@@ -122,11 +123,11 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
                     if os.path.isfile(item):
                         os.remove(item)
     
-    elif isinstance(id, SAFE):
+    elif cname == 'SAFE':
         print('calibration already performed during import')
     
     else:
-        raise NotImplementedError('calibration for class {} is not implemented yet'.format(type(id).__name__))
+        raise NotImplementedError('calibration for class {} is not implemented yet'.format(cname))
 
 
 def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
