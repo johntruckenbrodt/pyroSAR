@@ -1,5 +1,5 @@
 ###############################################################################
-# preparation of srtm data for use in gamma
+# preparation of DEM data for use in GAMMA
 
 # Copyright (c) 2014-2021, the pyroSAR Developers.
 
@@ -236,6 +236,11 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
         vrt = os.path.join(tmpdir, 'dem.vrt')
         dem = os.path.join(tmpdir, 'dem.tif')
         
+        if epsg == geometry.getProjection('epsg') and buffer is None:
+            ext = geometry.extent
+            bounds = [ext['xmin'], ext['ymin'], ext['xmax'], ext['ymax']]
+        else:
+            bounds = None
         geometry.reproject(4326)
         print('collecting DEM tiles')
         dem_autoload([geometry], demType, vrt=vrt, username=username,
@@ -257,7 +262,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
                 raise RuntimeError("'geoid_mode' not supported")
         
         dem_create(vrt, dem, t_srs=epsg, tr=tr, geoid_convert=gdal_geoid,
-                   resampling_method=resampling_method)
+                   resampling_method=resampling_method, outputBounds=bounds)
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
