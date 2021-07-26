@@ -1144,8 +1144,7 @@ def multilook(infile, outfile, targetres, exist_ok=False, logpath=None, outdir=N
         pars['SLC_par'] = infile + '.par'
         pars['MLI'] = outfile
         pars['MLI_par'] = outfile + '.par'
-        all_exist = all([os.path.isfile(pars[x]) for x in ['MLI', 'MLI_par']])
-        if (exist_ok and not all_exist) or not exist_ok:
+        if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
             isp.multi_look(**pars)
             par2hdr(outfile + '.par', outfile + '.hdr')
     else:
@@ -1154,8 +1153,7 @@ def multilook(infile, outfile, targetres, exist_ok=False, logpath=None, outdir=N
         pars['MLI_in_par'] = infile + '.par'
         pars['MLI_out'] = outfile
         pars['MLI_out_par'] = outfile + '.par'
-        all_exist = all([os.path.isfile(pars[x]) for x in ['MLI_out', 'MLI_out_par']])
-        if (exist_ok and not all_exist) or not exist_ok:
+        if do_execute(pars, ['MLI_out', 'MLI_out_par'], exist_ok):
             isp.multi_look_MLI(**pars)
             par2hdr(outfile + '.par', outfile + '.hdr')
 
