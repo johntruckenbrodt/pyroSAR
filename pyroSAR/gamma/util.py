@@ -31,9 +31,9 @@ from spatialist import haversine
 from spatialist.ancillary import union, finder
 
 from ..S1 import OSV
-from ..drivers import ID, identify
+from ..drivers import ID, identify, identify_many
 from . import ISPPar, Namespace, par2hdr
-from ..ancillary import multilook_factors, hasarg
+from ..ancillary import multilook_factors, hasarg, groupby
 from pyroSAR.examine import ExamineSnap
 from .auxil import do_execute
 
@@ -517,8 +517,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     Parameters
     ----------
-    scene: str or ~pyroSAR.drivers.ID
-        the SAR scene to be processed
+    scene: str or ~pyroSAR.drivers.ID or list
+        the SAR scene(s) to be processed
     dem: str
         the reference DEM in GAMMA format
     tmpdir: str
@@ -645,14 +645,13 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         :style: plain
     """
     
-    if isinstance(scene, ID):
-        scene = identify(scene.scene)
-    elif isinstance(scene, str):
-        scene = identify(scene)
-    else:
-        raise RuntimeError("'scene' must be of type str or pyroSAR.ID")
+    scenes = scene if isinstance(scene, list) else [scene]
+    if len(scenes) > 2:
+        raise RuntimeError("currently only one or two scenes can be passed via argument 'scene'")
+    scenes = identify_many(scenes, verbose=False)
+    ref = scenes[0]
     
-    if scene.sensor not in ['S1A', 'S1B', 'PALSAR-2']:
+    if ref.sensor not in ['S1A', 'S1B', 'PALSAR-2']:
         raise IOError(
             'this method is currently only available for Sentinel-1 and PALSAR-2 Path data. Please stay tuned...')
     
@@ -662,65 +661,94 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     if export_extra is not None and not isinstance(export_extra, list):
         raise TypeError("parameter 'export_extra' must either be None or a list")
     
-    tmpdir = os.path.join(tmpdir, scene.outname_base(extensions=basename_extensions))
+    tmpdir = os.path.join(tmpdir, ref.outname_base(extensions=basename_extensions))
     
     for dir in [tmpdir, outdir]:
         if not os.path.isdir(dir):
             os.makedirs(dir)
     
-    if scene.is_processed(outdir):
-        print('scene {} already processed'.format(scene.outname_base(extensions=basename_extensions)))
+    if ref.is_processed(outdir):
+        print('scene {} already processed'.format(ref.outname_base(extensions=basename_extensions)))
         return
+    
+    shellscript = os.path.join(tmpdir, ref.outname_base(extensions=basename_extensions) + '_commands.sh')
     
     scaling = [scaling] if isinstance(scaling, str) else scaling if isinstance(scaling, list) else []
     scaling = union(scaling, ['db', 'linear'])
     if len(scaling) == 0:
         raise IOError('wrong input type for parameter scaling')
     
-    if scene.compression is not None:
-        print('unpacking scene..')
-        try:
-            scene.unpack(tmpdir)
-        except RuntimeError:
-            print('scene was attempted to be processed before, exiting')
-            return
-    else:
-        scene.scene = os.path.join(tmpdir, os.path.basename(scene.file))
-        os.makedirs(scene.scene)
-    
-    shellscript = os.path.join(tmpdir, scene.outname_base(extensions=basename_extensions) + '_commands.sh')
+    for scene in scenes:
+        if scene.compression is not None:
+            print('unpacking scene..')
+            try:
+                scene.unpack(tmpdir)
+            except RuntimeError:
+                print('scene was attempted to be processed before, exiting')
+                return
+        else:
+            scene.scene = os.path.join(tmpdir, os.path.basename(scene.file))
+            os.makedirs(scene.scene)
     
     path_log = os.path.join(tmpdir, 'logfiles')
     if not os.path.isdir(path_log):
         os.makedirs(path_log)
     
-    if scene.sensor in ['S1A', 'S1B'] and removeS1BorderNoiseMethod in ['ESA', 'pyroSAR']:
-        print('removing border noise..')
-        scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
+    for scene in scenes:
+        if scene.sensor in ['S1A', 'S1B'] and removeS1BorderNoiseMethod in ['ESA', 'pyroSAR']:
+            print('removing border noise..')
+            scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
     
     print('converting scene to GAMMA format..')
     gamma_bnr = True if removeS1BorderNoiseMethod == 'gamma' else False
-    convert2gamma(scene, directory=tmpdir, logpath=path_log, outdir=tmpdir,
-                  basename_extensions=basename_extensions, shellscript=shellscript,
-                  S1_bnr=gamma_bnr)
+    for scene in scenes:
+        convert2gamma(scene, directory=tmpdir, logpath=path_log, outdir=tmpdir,
+                      basename_extensions=basename_extensions, shellscript=shellscript,
+                      S1_bnr=gamma_bnr)
     
-    if scene.sensor in ['S1A', 'S1B']:
-        print('updating orbit state vectors..')
-        if allow_RES_OSV:
-            osvtype = ['POE', 'RES']
-        else:
-            osvtype = 'POE'
-        try:
-            correctOSV(id=scene, directory=tmpdir, osvdir=osvdir, osvType=osvtype,
-                       logpath=path_log, outdir=tmpdir, shellscript=shellscript)
-        except RuntimeError:
-            print('orbit state vector correction failed for scene {}'.format(scene.scene))
-            return
+    for scene in scenes:
+        if scene.sensor in ['S1A', 'S1B']:
+            print('updating orbit state vectors..')
+            if allow_RES_OSV:
+                osvtype = ['POE', 'RES']
+            else:
+                osvtype = 'POE'
+            try:
+                correctOSV(id=scene, directory=tmpdir, osvdir=osvdir, osvType=osvtype,
+                           logpath=path_log, outdir=tmpdir, shellscript=shellscript)
+            except RuntimeError:
+                print('orbit state vector correction failed for scene {}'.format(scene.scene))
+                return
     
     print('calibrating...')
-    calibrate(id=scene, directory=tmpdir, logpath=path_log, outdir=tmpdir, shellscript=shellscript)
-    images = [x for x in scene.getGammaImages(tmpdir) if
-              x.endswith('_grd') or x.endswith('_slc_cal') or x.endswith('_mli_cal')]
+    for scene in scenes:
+        calibrate(id=scene, directory=tmpdir, logpath=path_log, outdir=tmpdir, shellscript=shellscript)
+    
+    images = []
+    for scene in scenes:
+        img = [x for x in scene.getGammaImages(tmpdir) if
+               x.endswith('_grd') or x.endswith('_slc_cal') or x.endswith('_mli_cal')]
+        images.extend(img)
+    
+    if len(scenes) > 1:
+        images_new = []
+        groups = groupby(images, 'polarization')
+        for group in groups:
+            out = group[0] + '_cat'
+            out_par = out + '.par'
+            all_exist = all([os.path.isfile(x) for x in [out, out_par]])
+            if not all_exist:
+                print('mosaicing scenes...')
+                isp.MLI_cat(MLI_1=group[0],
+                            MLI1_par=group[0] + '.par',
+                            MLI_2=group[1],
+                            MLI2_par=group[1] + '.par',
+                            MLI_3=out,
+                            MLI3_par=out_par,
+                            logpath=path_log, outdir=tmpdir, shellscript=shellscript)
+                par2hdr(out_par, out + '.hdr')
+            images_new.append(out)
+        images = images_new
     
     products = list(images)
     
