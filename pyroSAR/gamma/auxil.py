@@ -1,7 +1,7 @@
 ###############################################################################
 # general GAMMA utilities
 
-# Copyright (c) 2014-2020, Stefan Engelhardt, the pyroSAR Developers.
+# Copyright (c) 2014-2021, Stefan Engelhardt, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -445,3 +445,25 @@ def slc_corners(parfile):
             pts['xmin'], pts['xmax'] = [float(x) for x in
                                         re.findall(r'[0-9]+\.[0-9]+', line)]
     return pts
+
+
+def do_execute(par, ids, exist_ok):
+    """
+    small helper function to assess whether a GAMMA command shall be executed.
+
+    Parameters
+    ----------
+    par: dict
+        a dictionary containing all arguments for the command
+    ids: list
+        the IDs of the output files
+    exist_ok: bool
+        allow existing output files?
+
+    Returns
+    -------
+    bool
+        execute the command because (a) not all output files exist or (b) existing files are not allowed
+    """
+    all_exist = all([os.path.isfile(par[x]) for x in ids])
+    return (exist_ok and not all_exist) or not exist_ok
