@@ -10,11 +10,11 @@ dependencies:
   - pyyaml
   - requests
   - psycopg2
-  - sqlalchemy<1.4.0
+  - sqlalchemy<1.4
   - sqlalchemy-utils
   - geoalchemy2
   - coveralls
   - coverage
   - pytest
   - sphinx
-  - sphinxcontrib-bibtex<2.0.0
+  - sphinxcontrib-bibtex

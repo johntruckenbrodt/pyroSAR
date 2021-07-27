@@ -15,13 +15,7 @@
 """
 A collection of functions to handle digital elevation models in Gamma
 """
-import sys
-
-if sys.version_info >= (3, 0):
-    from urllib.request import urlopen
-else:
-    from urllib2 import urlopen
-
+from urllib.request import urlopen
 import os
 import re
 import shutil

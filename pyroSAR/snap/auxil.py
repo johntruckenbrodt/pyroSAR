@@ -1281,7 +1281,7 @@ def get_egm96_lookup():
     local = os.path.join(auxdatapath, 'dem', 'egm96', 'ww15mgh_b.zip')
     os.makedirs(os.path.dirname(local), exist_ok=True)
     if not os.path.isfile(local):
-        remote = 'http://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
+        remote = 'https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
         print('{} <<-- {}'.format(local, remote))
         r = requests.get(remote)
         with open(local, 'wb')as out:

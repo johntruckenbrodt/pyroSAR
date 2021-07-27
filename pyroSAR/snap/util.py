@@ -419,9 +419,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     tc.parameters['pixelSpacingInMeter'] = tr
     
     try:
+        # try to convert the CRS into EPSG code (for readability in the workflow XML)
         t_srs = crsConvert(t_srs, 'epsg')
     except TypeError:
         raise RuntimeError("format of parameter 't_srs' not recognized")
+    except RuntimeError:
+        # this error can occur when the CRS does not have a corresponding EPSG code
+        # in this case the original CRS representation is written to the workflow
+        pass
     
     # the EPSG code 4326 is not supported by SNAP and thus the WKT string has to be defined;
     # in all other cases defining EPSG:{code} will do
@@ -518,15 +523,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                       'localIncidenceAngle',
                       'projectedLocalIncidenceAngle',
                       'DEM']
-        tc_write = None
         tc_selection = []
         for item in export_extra:
             if item in tc_options:
-                if tc_write is None:
-                    tc_write = parse_node('Write')
-                    workflow.insert_node(tc_write, before=tc.id, resetSuccessorSource=False)
-                    tc_write.parameters['file'] = outname
-                    tc_write.parameters['formatName'] = 'ENVI'
                 key = 'save{}{}'.format(item[0].upper(), item[1:])
                 tc.parameters[key] = True
                 tc_selection.append(item)
@@ -593,7 +592,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 tc_selection.append(area)
             else:
                 raise RuntimeError("ID '{}' not valid for argument 'export_extra'".format(item))
-        if len(tc_selection) > 0:
+        # directly write export_extra layers to avoid dB scaling
+        if scaling == 'dB' and len(tc_selection) > 0:
+            tc_write = parse_node('Write')
+            workflow.insert_node(tc_write, before=tc.id, resetSuccessorSource=False)
+            tc_write.parameters['file'] = outname
+            tc_write.parameters['formatName'] = 'ENVI'
             tc_select = parse_node('BandSelect')
             workflow.insert_node(tc_select, after=tc_write.id)
             tc_select.parameters['sourceBands'] = tc_selection

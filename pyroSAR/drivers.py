@@ -1506,7 +1506,7 @@ class SAFE(ID):
         lon = [x[1] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=20):
+    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=20, url_option=1):
         """
         download Orbit State Vector files for the scene
 
@@ -1524,6 +1524,10 @@ class SAFE(ID):
             use locally existing files and do not search for files online if the right file has been found?
         timeout: int or tuple or None
             the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
+        url_option: int
+            the URL to query for scenes
+             - 1: https://scihub.copernicus.eu/gnss
+             - 2: https://step.esa.int/auxdata/orbits/Sentinel-1
 
         Returns
         -------
@@ -1548,13 +1552,16 @@ class SAFE(ID):
         
         if osvType in ['POE', 'RES']:
             with S1.OSV(osvdir, timeout=timeout) as osv:
-                files = osv.catch(sensor=self.sensor, osvtype=osvType, start=before, stop=after)
+                files = osv.catch(sensor=self.sensor, osvtype=osvType, start=before, stop=after,
+                                  url_option=url_option)
         
         elif sorted(osvType) == ['POE', 'RES']:
             with S1.OSV(osvdir, timeout=timeout) as osv:
-                files = osv.catch(sensor=self.sensor, osvtype='POE', start=before, stop=after)
+                files = osv.catch(sensor=self.sensor, osvtype='POE', start=before, stop=after,
+                                  url_option=url_option)
                 if len(files) == 0:
-                    files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after)
+                    files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after,
+                                      url_option=url_option)
         else:
             raise TypeError("osvType must either be 'POE', 'RES' or a list of both")
         
@@ -2204,11 +2211,10 @@ class Archive(object):
         -------
 
         """
-        for table in ['data', 'duplicates']:
-            missing = self.__select_missing(table)
-            for scene in missing:
-                print('Removing missing scene from database table {0}: {1}'.format(table, scene))
-                self.drop_element(scene, table)
+        missing = self.__select_missing('data')
+        for scene in missing:
+            print('Removing missing scene from database tables: {}'.format(scene))
+            self.drop_element(scene, with_duplicates=True)
     
     @staticmethod
     def encode(string, encoding='utf-8'):
