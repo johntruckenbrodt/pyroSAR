@@ -5,7 +5,7 @@ from pyroSAR.snap.auxil import parse_recipe, parse_node, gpt, execute
 import os, shutil
 import glob
 import datetime
-from IPython.core.debugger import set_trace
+
 
 #infiles: list, filepaths of SLC zip files
 #out_dir: str or None, output folder if None a default folder structure is provided: "INT/pol/"
