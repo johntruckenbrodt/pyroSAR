@@ -5,7 +5,83 @@ import os, shutil
 import glob
 import datetime
 
+"""
+function for processing H-alpha features (Alpha, Entropy, Anisotropy) from S-1 SLC files in SNAP 
 
+Parameters
+----------
+    infiles: list or str
+        filepaths of SLC zip files
+    out_dir: str or None
+        output folder if None a default folder structure is provided: "INT/pol/"
+    tmpdir: str 
+        temporary dir for intermediate processing steps, its automatically created at cwd if none is provided
+    t_res: int, float 
+        resolution in meters of final product, default is 20
+    t_crs: int
+        EPSG code of target coordinate system, default is 4326
+    out_format: str
+        format of final output, formats supported by SNAP, default is GeoTiff
+    gpt_paras: none or list 
+        a list of additional arguments to be passed to the gpt call
+    pol: str or list or "full"
+        polaristations to process, "full" processes all available polarizations, default is "full"
+    IWs: str or list 
+        selected subswath for processing, default is all 3
+    extDEM: bool
+        set to true if external DEM should be used in processing
+    ext_DEM_noDatVal: int or float
+        dependent on external DEM, default False
+    ext_DEM_file: str
+        path to file of external DEM, must be a format that SNAP can handle
+    msk_NoDatVal: bool
+        if true No data values of DEM, especially at sea, are masked out
+    ext_DEM_EGM: bool
+        apply earth gravitational model to external DEM, default true
+    imgResamp: str
+        image resampling method, must be supported by SNAP
+    demResamp: str
+        DEM resampling method, must be supported by SNAP
+    speckFilter: str
+        type of speckle filtering approach, default is Boxcar
+    filterSizeX: int
+        window size of speckle filter in x, default is 5
+    filterSizeY: int
+        window size of speckle filter in y, default is 5
+    ml_RgLook: int
+        number of looks in range, default is 4
+    ml_AzLook: int
+        number of looks in azimuth, default is 1
+    firstBurstIndex: int or None
+        index of first burst for TOPSAR-split
+    lastBurstIndex: int or None
+        index of last burst for TOPSAR-split
+    l2dB: bool
+        option for conversion from linear to dB scaling of output, default true
+    clean_tmpdir, bool
+        delete tmpdir, default true
+    osvPath: None
+        specify path to locally stored OSVs, if none default OSV path of SNAP is set
+    
+    Returns
+    -------
+    Raster files of selected output format for selected H-alpha features
+
+    Note
+    ----
+    Only set first and last burstindex if all files you are processing have the same number of bursts
+
+    Examples
+    --------
+    process backscatter intensities VV and VH for given SLC file
+
+    >>> from pyroSAR.snap import S1_INT_proc
+    >>> filename= 'S1A_IW_GRDH_1SDV_20180829T170656_20180829T170721_023464_028DE0_F7BD.zip'
+    >>> gpt_paras = ["-e", "-x", "-c","35G", "-q", "16", "-J-Xms25G", "-J-Xmx75G"]
+    >>> pol= "full"
+    >>> S1_INT_proc(infiles= filename, gtp_paras= gpt_paras, pol= "full")
+
+"""
 
 #infiles: list, filepaths of SLC zip files
 #out_dir: str or None, output folder if None a default folder structure is provided: "INT/pol/"
@@ -367,7 +443,7 @@ def S1_INT_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=32633,  ou
         #exception for SNAP errors & creating error log        
         except RuntimeError as e:
             print(str(e))
-            with open("S1_COH_proc_ERROR_"+datetime1+"_"+datetime2+".log", "w") as logf:
+            with open("S1_INT_proc_ERROR_"+date_str+".log", "w") as logf:
                 logf.write(str(e))
         ##clean tmp folder to avoid overwriting errors even if exception is valid
             files = glob.glob(tmpdir +'/*')
