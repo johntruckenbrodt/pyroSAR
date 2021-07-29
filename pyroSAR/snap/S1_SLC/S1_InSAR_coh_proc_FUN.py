@@ -6,14 +6,14 @@ import glob
 import datetime
 
 """
-function for processing H-alpha features (Alpha, Entropy, Anisotropy) from S-1 SLC files in SNAP 
+function for processing InSAR coherences from S-1 SLC files in SNAP 
 
 Parameters
 ----------
     infiles: list or str
         filepaths of SLC zip files
     out_dir: str or None
-        output folder if None a default folder structure is provided: "INT/pol/"
+        output folder if None a default folder structure is provided: "COH/pol/"
     tmpdir: str 
         temporary dir for intermediate processing steps, its automatically created at cwd if none is provided
     t_res: int, float 

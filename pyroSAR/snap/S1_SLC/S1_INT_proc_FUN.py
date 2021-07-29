@@ -1,4 +1,5 @@
 
+##necessary libraries
 import pyroSAR
 from pyroSAR.snap.auxil import parse_recipe, parse_node, gpt, execute
 import os, shutil
@@ -6,14 +7,15 @@ import glob
 import datetime
 
 """
-function for processing H-alpha features (Alpha, Entropy, Anisotropy) from S-1 SLC files in SNAP 
+
+function for processing backscatter intensities VV and VH from S-1 SLC files in SNAP 
 
 Parameters
 ----------
     infiles: list or str
         filepaths of SLC zip files
     out_dir: str or None
-        output folder if None a default folder structure is provided: "INT/pol/"
+        output folder if None a default folder structure is provided: "INT/decompFeat/"
     tmpdir: str 
         temporary dir for intermediate processing steps, its automatically created at cwd if none is provided
     t_res: int, float 
@@ -83,35 +85,10 @@ Parameters
 
 """
 
-#infiles: list, filepaths of SLC zip files
-#out_dir: str or None, output folder if None a default folder structure is provided: "INT/pol/"
-#tmpdir: str, temporary dir for intermediate processing steps, its automatically created at cwd if none is provided
-#t_res: int, float, resolution in meters of final product
-#t_crs: int, EPSG code of target coordinate system
-#out_format: str, format of final output, formats supported by SNAP
-#gpt_paras: none or list a list of additional arguments to be passed to the gpt call
-#pol: str or list or "full", polaristations to process, "full" processes all available polarizations, default is "full"
-#IWs: str or list, selectes subswath for processing, default is all 3
-#extDEM: bool, set to true if external DEM should be used in processing
-#ext_DEM_noDatVal: int or float, dependent on external DEM, default False
-#ext_DEM_file: str, path to file of external DEM
-#msk_NoDatVal: bool, if true No data values of DEM, especially at sea, are masked out
-#ext_DEM_EGM: bool, apply earth gravitational model to external DEM
-#imgResamp: str, image resampling method, must be supported by SNAP
-#demResamp: str, DEM resampling method, must be supported by SNAP
-#speckFilter: str, type of speckle filtering approach, default is Boxcar
-#filterSizeX, int, window size of speckle filter in x, default is 5
-#filterSizeY, int, window size of speckle filter in y, default is 5
-#ml_RgLook: int, nr of looks in range, default is 4
-#ml_AzLook: int, nr of looks in azimuth, default is 1
-#l2dB: bool, option for conversion from linear to dB scaling of output, default true
-#firstBurstIndex, int or None, index of first burst for TOPSAR-split
-#lastBurstIndex, int or None, index of last burst for TOPSAR-split
-#clean_tmpdir, bool, delete tmpdir, default true
-#return:
-    #images of S1 backscatter intensities, terrain flattened, speckle filtered, multi looked and terrain corrected
-def S1_INT_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=32633,  out_format= "GeoTIFF", gpt_paras= None, pol= 'full', IWs= ["IW1", "IW2", "IW3"], ext_DEM= False, ext_DEM_noDatVal= -9999, ext_Dem_file= None, msk_noDatVal= False, ext_DEM_EGM= True, imgResamp= "BICUBIC_INTERPOLATION", demResamp= "BILINEAR_INTERPOLATION", speckFilter= "Boxcar", filterSizeX= 5, filterSizeY= 5, ml_RgLook= 4, ml_AzLook= 1, l2dB_arg= True, firstBurstIndex= None, lastBurstIndex= None, osvPath= None, clean_tmpdir= True):
-    
+
+
+def S1_HA_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=4326,  out_format= "GeoTIFF", gpt_paras= None, IWs= ["IW1", "IW2", "IW3"], decompFeats= ["Alpha", "Entropy", "Anisotropy"], ext_DEM= False, ext_DEM_noDatVal= -9999, ext_Dem_file= None, msk_noDatVal= False, ext_DEM_EGM= True, imgResamp= "BICUBIC_INTERPOLATION", demResamp= "BILINEAR_INTERPOLATION",decomp_win_size= 5, speckFilter= "Box Car Filter", ml_RgLook= 4, ml_AzLook= 1, osvPath=None, firstBurstIndex= None, lastBurstIndex= None, clean_tmpdir= True):
+
     ##define formatName for reading zip-files
     formatName= "SENTINEL-1"
     ##specify tmp output format
@@ -132,7 +109,6 @@ def S1_INT_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=32633,  ou
     if isinstance(infiles, str):
         info= pyroSAR.identify(infiles)
         fps_lst=[info.scene]
-        info_ms= info
         info= [info]
     elif isinstance(infiles, list):
         info= pyroSAR.identify_many(infiles, verbose=False, sortkey='start')
@@ -141,23 +117,9 @@ def S1_INT_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=32633,  ou
         for fp in info:
             fp_str=fp.scene
             fps_lst.append(fp_str)
-        
-        info_ms= info[0]
     else:
         raise RuntimeError('Please provide str or list of filepaths') 
     ##query and handle polarisations, raise error if selected polarisations don't match (see Truckenbrodt et al.: pyroSAR: geocode)    
-    if isinstance(pol, str):
-        if pol == 'full':
-            pol = info_ms.polarizations
-        else:
-            if pol in info_ms.polarizations:
-                pol = [pol]
-            else:
-                raise RuntimeError('polarization {} does not exists in the source product'.format(pol))
-    elif isinstance(pol, list):
-        pol = [x for x in pol if x in info_ms.polarizations]
-    else:
-        raise RuntimeError('polarizations must be of type str or list')
     ##specify auto download DEM and handle external DEM file
     if ext_DEM == False:
         demName = 'SRTM 1Sec HGT'
@@ -167,10 +129,11 @@ def S1_INT_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=32633,  ou
     ##raise error if no path to external file is provided
     if ext_DEM == True and ext_DEM_file == None:
         raise RuntimeError('No DEM file provided. Specify path to DEM-file')
+    ##raise error ifwrong decomp feature
     
     ##handle SNAP problem with WGS84 (EPSG: 4326) by manually constructing crs string (see Truckenbrodt et al.: pyroSAR: geocode)
     if t_crs == 4326:
-        epsg= 'GEOGCS["WGS84(DD)",''DATUM["WGS84",''SPHEROID["WGS84", 6378137.0, 298.257223563]],''PRIMEM["Greenwich", 0.0],''UNIT["degree", 0.017453292519943295],''AXIS["Geodetic longitude", EAST],'        'AXIS["Geodetic latitude", NORTH]]'
+        epsg= 'GEOGCS["WGS84(DD)",''DATUM["WGS84",''SPHEROID["WGS84", 6378137.0, 298.257223563]],''PRIMEM["Greenwich", 0.0],''UNIT["degree", 0.017453292519943295],''AXIS["Geodetic longitude", EAST],'           'AXIS["Geodetic latitude", NORTH]]'
     else:
         epsg="EPSG:{}".format(t_crs)
     ##check if correct DEM resampling methods are supplied
@@ -188,7 +151,7 @@ def S1_INT_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=32633,  ou
     if imgResamp not in reSamp_LookUp:
         raise ValueError(message.format('imgResamplingMethod', '\n- '.join(reSamp_LookUp)))
      ##check if correct speckle filter option is supplied
-    speckleFilter_options = ['Boxcar', 'Median', 'Frost', 'Gamma Map', 'Refined Lee', 'Lee', 'Lee Sigma']
+    speckleFilter_options = ['Box Car Filter', 'IDAN Filter', 'Refined Lee Filter', 'Improved Lee Sigma Filter']
     if speckFilter not in speckleFilter_options:
             raise ValueError(message.format('speckleFilter', '\n- '.join(speckleFilter_options)))
     ##query unique dates of files: determine if sliceAssembly is required
@@ -219,6 +182,7 @@ def S1_INT_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=32633,  ou
         relOrb= info_tmp.orbitNumber_rel
         sensor= info_tmp.sensor
         orbit= info_tmp.orbit
+        pol= info_tmp.polarizations
         date_str= info_tmp.start
         
         ##check availability of orbit state vector
@@ -228,12 +192,11 @@ def S1_INT_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=32633,  ou
         if match is None:
             info_tmp.getOSV(osvType='RES', osvdir=osvPath)
             orbitType = 'Sentinel Restituted (Auto Download)'
-        
-        slcAs_name= sensor +"_relOrb_"+ str(relOrb)+"_INT_"+unique_dates_info[i]+"_slcAs"
-        slcAs_out= os.path.join(tmpdir, slcAs_name)
-        ##exception handling for SNAP errors
+        ##exception handling of SNAP errors    
         try:
-            
+        
+            slcAs_name= sensor +"_relOrb_"+ str(relOrb)+"_HA_"+unique_dates_info[i]+"_slcAs"
+            slcAs_out= os.path.join(tmpdir, slcAs_name)
             ## create workflow for sliceAssembly if more than 1 file is available per date
             if len(fps_grp) > 1:
 
@@ -265,73 +228,65 @@ def S1_INT_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=32633,  ou
 
                 workflow_slcAs.insert_node(write_slcAs, before= slcAs.id)
 
-                workflow_slcAs.write("INT_slc_prep_graph")
+                workflow_slcAs.write("HA_slc_prep_graph")
 
-                gpt('INT_slc_prep_graph.xml', gpt_args= gpt_paras, outdir= tmpdir)
+                gpt('HA_slc_prep_graph.xml', gpt_args= gpt_paras, outdir= tmpdir)
 
-                INT_proc_in= slcAs_out+".dim"
+                HA_proc_in= slcAs_out+".dim"
             ##pass file path if no sliceAssembly required
             else:
-                INT_proc_in = fps_grp[0]
+                HA_proc_in = fps_grp[0]
 
+            for iw in IWs:
+                tpm_name= sensor +"_HA_relOrb_"+ str(relOrb) + "_"+unique_dates_info[i]+ "_"+iw+"_2TPM"
+                tpm_out= os.path.join(tmpdir, tpm_name)
+                ##generate workflow for IW splits 
+                workflow= parse_recipe("blank")
 
-            for p in pol:
-                for iw in IWs:
-                    tpm_name= sensor+"_" + p +"_INT_relOrb_"+ str(relOrb) + "_"+ unique_dates_info[i]+ "_"+iw+"_2TPM"
-                    tpm_out= os.path.join(tmpdir, tpm_name)
-                    ##generate workflow for IW splits 
-                    workflow= parse_recipe("blank")
+                read= parse_node("Read")
+                read.parameters["file"]= HA_proc_in
+                if len(fps_grp) == 1:
+                    read.parameters["formatName"]= formatName
+                workflow.insert_node(read)
 
-                    read= parse_node("Read")
-                    read.parameters["file"]= INT_proc_in
-                    if len(fps_grp) == 1:
-                        read.parameters["formatName"]= formatName
-                    workflow.insert_node(read)
+                aof=parse_node("Apply-Orbit-File")
+                aof.parameters["orbitType"]= orbitType
+                aof.parameters["polyDegree"]= 3
+                aof.parameters["continueOnFail"]= False
+                workflow.insert_node(aof, before= read.id)
+                ##TOPSAR split node
+                ts=parse_node("TOPSAR-Split")
+                ts.parameters["subswath"]= iw
+                if firstBurstIndex is not None and lastBurstIndex is not None:
+                    ts.parameters["firstBurstIndex"]= firstBurstIndex
+                    ts.parameters["lastBurstIndex"]= lastBurstIndex
+                workflow.insert_node(ts, before=aof.id)
 
-                    aof=parse_node("Apply-Orbit-File")
-                    aof.parameters["orbitType"]= orbitType
-                    aof.parameters["polyDegree"]= 3
-                    aof.parameters["continueOnFail"]= False
-                    workflow.insert_node(aof, before= read.id)
-                    ##TOPSAR split node
-                    ts=parse_node("TOPSAR-Split")
-                    ts.parameters["subswath"]= iw
-                    if firstBurstIndex is not None and lastBurstIndex is not None:
-                        ts.parameters["firstBurstIndex"]= firstBurstIndex
-                        ts.parameters["lastBurstIndex"]= lastBurstIndex
-                    workflow.insert_node(ts, before=aof.id)
+                cal= parse_node("Calibration")
+                cal.parameters["selectedPolarisations"]= pol
+                cal.parameters["createBetaBand"]= False
+                cal.parameters["outputBetaBand"]= False
+                cal.parameters["outputSigmaBand"]= True
+                cal.parameters["outputImageInComplex"]=True
+                workflow.insert_node(cal, before= ts.id)
 
-                    cal= parse_node("Calibration")
-                    cal.parameters["selectedPolarisations"]= pol
-                    cal.parameters["createBetaBand"]= False
-                    cal.parameters["outputBetaBand"]= True
-                    cal.parameters["outputSigmaBand"]= False
-                    workflow.insert_node(cal, before= ts.id)
+                tpd=parse_node("TOPSAR-Deburst")
+                tpd.parameters["selectedPolarisations"]= pol
+                workflow.insert_node(tpd, before=cal.id)
 
-                    tpd=parse_node("TOPSAR-Deburst")
-                    tpd.parameters["selectedPolarisations"]= pol
-                    workflow.insert_node(tpd, before=cal.id)
+                write_tmp = parse_node("Write")
+                write_tmp.parameters["file"]= tpm_out
+                write_tmp.parameters["formatName"]= tpm_format
+                workflow.insert_node(write_tmp, before=tpd.id)
 
-                    write_tmp = parse_node("Write")
-                    write_tmp.parameters["file"]= tpm_out
-                    write_tmp.parameters["formatName"]= tpm_format
-                    workflow.insert_node(write_tmp, before=tpd.id)
+                workflow.write("HA_proc_IW_graph")
 
-                    workflow.write("Int_proc_IW_graph")
+                execute('HA_proc_IW_graph.xml', gpt_args= gpt_paras)    
 
-                    execute('Int_proc_IW_graph.xml', gpt_args= gpt_paras)    
-
+            for dc in decompFeats:          
+                dc_label= dc.upper()[0:3]
                 ##load temporary files
-                tpm_in= glob.glob(tmpdir+"/"+sensor+"_" + p +"_INT_relOrb_"+ str(relOrb) + "_"+ unique_dates_info[i]+ "*_2TPM.dim")
-                ##specify sourceBands for reference lvl beta and gamma
-                if len(IWs)== 1:
-                    ref= dict()
-                    ref["beta"]= ["Beta0_"+IWs[0]+ "_" + p]
-                    ref["gamma"]= ["Gamma0_"+IWs[0]+ "_"+ p]
-                else:
-                    ref= dict()
-                    ref["beta"]= ["Beta0_"+ p]
-                    ref["gamma"]= ["Gamma0_"+ p]
+                tpm_in= glob.glob(tmpdir+"/"+sensor+"_HA_relOrb_"+ str(relOrb) + "_"+unique_dates_info[i]+ "*_2TPM.dim")
                 ## parse_workflow of INT processing
                 workflow_tpm = parse_recipe("blank")
 
@@ -350,41 +305,42 @@ def S1_INT_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=32633,  ou
                         readers.append(readn.id)
                     ##TOPSAR merge     
                     tpm=parse_node("TOPSAR-Merge")
-                    tpm.parameters["selectedPolarisations"]=p
+                    tpm.parameters["selectedPolarisations"]=pol
                     workflow_tpm.insert_node(tpm, before=readers)
                     last_node= tpm.id
-
+                ##create C2 covariance matrix
+                polMat= parse_node("Polarimetric-Matrices")
+                polMat.parameters["matrix"]= "C2"
+                workflow_tpm.insert_node(polMat, before=last_node)
+                last_node=polMat.id
                 ##multi looking
                 ml= parse_node("Multilook")
-                ml.parameters["sourceBands"]=ref["beta"]
+                ml.parameters["sourceBands"]=["C11", "C12_real", "C12_imag", "C22"]
                 ml.parameters["nRgLooks"]= ml_RgLook
                 ml.parameters["nAzLooks"]= ml_AzLook
                 ml.parameters["grSquarePixel"]= True
                 ml.parameters["outputIntensity"]= False
-                workflow_tpm.insert_node(ml,before= last_node) 
-                ##terrain flattening
-                tf= parse_node("Terrain-Flattening")
-                tf.parameters["sourceBands"]= ref["beta"]
-                tf.parameters["demName"]= demName
-                tf.parameters["demResamplingMethod"]= demResamp
-                tf.parameters["externalDEMFile"]= ext_Dem_file
-                tf.parameters["externalDEMNoDataValue"]= ext_DEM_noDatVal
-                tf.parameters["externalDEMApplyEGM"]= True
-                tf.parameters["additionalOverlap"]= 0.1
-                tf.parameters["oversamplingMultiple"]= 1.0
+                workflow_tpm.insert_node(ml,before= last_node)
+                last_node= ml.id
 
-                workflow_tpm.insert_node(tf, before= ml.id)
-                #speckle filtering
-                sf= parse_node("Speckle-Filter")
-                sf.parameters["sourceBands"]=ref["gamma"]
-                sf.parameters["filter"]= speckFilter
-                sf.parameters["filterSizeX"]= filterSizeX
-                sf.parameters["filterSizeY"]= filterSizeY
+                ##polaricmetric speckle filtering
+                polSpec= parse_node("Polarimetric-Speckle-Filter")
+                polSpec.parameters["filter"]= speckFilter
+                workflow_tpm.insert_node(polSpec, before= last_node)
+                last_node= polSpec.id
 
-                workflow_tpm.insert_node(sf, before= tf.id)
+                ##dual-pol H/a decomposition
+                polDecp= parse_node("Polarimetric-Decomposition")
+                polDecp.parameters["decomposition"]= "H-Alpha Dual Pol Decomposition"
+                polDecp.parameters["windowSize"]= decomp_win_size
+                polDecp.parameters["outputHAAlpha"]= True
+
+                workflow_tpm.insert_node(polDecp, before= last_node)
+                last_node= polDecp.id
+
                 #terrain correction
                 tc= parse_node("Terrain-Correction")
-                tc.parameters["sourceBands"]= ref["gamma"]
+                tc.parameters["sourceBands"]= [dc]
                 tc.parameters["demName"]= demName
                 tc.parameters["externalDEMFile"]= ext_Dem_file
                 tc.parameters["externalDEMNoDataValue"]= ext_DEM_noDatVal
@@ -392,44 +348,34 @@ def S1_INT_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=32633,  ou
                 tc.parameters["imgResamplingMethod"]= imgResamp
                 tc.parameters["demResamplingMethod"]= demResamp
                 tc.parameters["pixelSpacingInMeter"]= t_res
-                tc.parameters["mapProjection"]= t_crs
+                tc.parameters["mapProjection"]= epsg
                 tc.parameters["saveSelectedSourceBand"]= True
                 tc.parameters["outputComplex"]= False
                 tc.parameters["nodataValueAtSea"]= msk_noDatVal
 
-                workflow_tpm.insert_node(tc, before= sf.id)
+                workflow_tpm.insert_node(tc, before= last_node)
                 last_node= tc.id
 
                 ## generate str for final output file based on selected IWs
                 if len(IWs) == 1:
-                    out_name= sensor+"_"+ orbit+ "_relOrb_"+ str(relOrb) + "_INT_"+ p + "_"+ IWs[0] + "_"+ date_str+"_Orb_Cal_Deb_ML_TF_Spk_TC"
+                    out_name= sensor+"_"+ orbit+ "_relOrb_"+ str(relOrb) + "_HA_"+ dc_label + "_"+ IWs[0] + "_"+date_str+"_Orb_Cal_Deb_ML_TF_Spk_TC"
                 elif len(IWs)== 2:
                     separator = "_"
                     iw_str= separator.join(IWs)
-                    out_name= sensor+"_"+ orbit+ "_relOrb_"+ str(relOrb) + "_INT_"+ p + "_"+ iw_str +"_" + date_str+"_Orb_Cal_Deb_ML_TF_Spk_TC"
+                    out_name= sensor+"_"+ orbit+ "_relOrb_"+ str(relOrb) + "_HA_"+ dc_label + "_"+iw_str +"_" + date_str+"_Orb_Cal_Deb_ML_Spk_TC"
                 else:
-                    out_name= sensor+"_"+ orbit+ "_relOrb_"+ str(relOrb) + "_INT_"+ p + "_"+ date_str+"_Orb_Cal_Deb_ML_TF_Spk_TC"
+                    out_name= sensor+"_"+ orbit+ "_relOrb_"+ str(relOrb) + "_HA_"+ dc_label + "_"+date_str+"_Orb_Cal_Deb_ML_Spk_TC"
                 ##create default output folder for each selected polarization
                 if out_dir is None:
-                    out_dir_p= "INT/"+ p
-                    if os.path.isdir(out_dir_p) == False:
-                        os.makedirs(os.path.join(os.getcwd(), out_dir_p))
+                    out_dir_fp= "INT/"+ dc_label
+                    if os.path.isdir(out_dir_fp) == False:
+                        os.makedirs(os.path.join(os.getcwd(), out_dir_fp))
                 elif os.path.isdir(out_dir):
                     out_dir_fp= out_dir
                 else:
                     raise RuntimeError("Please provide a valid filepath") 
 
-                out_path= os.path.join(out_dir_p, out_name)   
-
-
-                ##conversion from linear to dB if selected
-                if l2dB_arg == True:
-                    l2DB= parse_node("LinearToFromdB")
-                    l2DB.parameters["sourceBands"]= ref["gamma"]
-                    workflow_tpm.insert_node(l2DB, before= last_node)
-                    last_node= l2DB.id
-                    ##change output name to reflect dB conversion
-                    out_name= out_name+ "_dB"
+                out_path= os.path.join(out_dir_fp, out_name)   
 
                 write_tpm=parse_node("Write")
                 write_tpm.parameters["file"]= out_path
@@ -437,15 +383,16 @@ def S1_INT_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=32633,  ou
                 workflow_tpm.insert_node(write_tpm, before= last_node)
 
                 ##write graph and execute it
-                workflow_tpm.write("Int_TPM_continued_proc_graph")
+                workflow_tpm.write("HA_TPM_continued_proc_graph")
 
-                execute('Int_TPM_continued_proc_graph.xml', gpt_args= gpt_paras)
-        #exception for SNAP errors & creating error log        
+                execute('HA_TPM_continued_proc_graph.xml', gpt_args= gpt_paras)
+        #exception for SNAP errors & creating error log    
         except RuntimeError as e:
             print(str(e))
             with open("S1_INT_proc_ERROR_"+date_str+".log", "w") as logf:
                 logf.write(str(e))
-        ##clean tmp folder to avoid overwriting errors even if exception is valid
+            
+            ##clean tmp folder to avoid overwriting errors even if exception is valid
             files = glob.glob(tmpdir +'/*')
             for f in files:
                 if os.path.isfile(f) or os.path.islink(f):
@@ -453,7 +400,7 @@ def S1_INT_proc(infiles, out_dir= None, tmpdir= None, t_res=20, t_crs=32633,  ou
                 elif os.path.isdir(f):
                     shutil.rmtree(f)
             
-            continue
+            continue     
             
         ##clean tmp folder to avoid overwriting errors    
         files = glob.glob(tmpdir +'/*')
