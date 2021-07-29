@@ -13,20 +13,15 @@
 ###############################################################################
 import os
 import re
-import sys
 import ftplib
 import zipfile as zf
 from ftplib import FTP
 from time import strftime, gmtime
 from os.path import expanduser
 
-if sys.version_info >= (3, 0):
-    from io import StringIO
-    from urllib.request import urlopen
-    from urllib.error import HTTPError
-else:
-    from cStringIO import StringIO
-    from urllib2 import urlopen, HTTPError
+from io import StringIO
+from urllib.request import urlopen
+from urllib.error import HTTPError
 
 from osgeo import gdal
 

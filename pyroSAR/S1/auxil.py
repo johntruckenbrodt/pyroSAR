@@ -28,7 +28,7 @@ from . import linesimplify as ls
 from pyroSAR.examine import ExamineSnap
 import progressbar as pb
 
-from spatialist.ancillary import finder, urlQueryParser
+from spatialist.ancillary import finder
 
 try:
     import argparse

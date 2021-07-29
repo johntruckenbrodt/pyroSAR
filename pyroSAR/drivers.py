@@ -22,11 +22,7 @@ images from different SAR sensors.
 from __future__ import print_function
 import sys
 
-if sys.version_info >= (3, 0):
-    from builtins import str
-#     from io import BytesIO as StringIO
-# else:
-#     from StringIO import StringIO
+from builtins import str
 from io import BytesIO
 
 import abc
