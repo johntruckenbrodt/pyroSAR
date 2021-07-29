@@ -7,7 +7,7 @@ import glob
 import datetime
 
 """
-function for processing H-alpha features (Alpha, Entropy, Anisotropy) from S-1 SLC files in SNAP 
+function for processing backscatter intensities VV and VH from S-1 SLC files in SNAP 
 
 Parameters
 ----------
