@@ -4,32 +4,78 @@ from pyroSAR.snap.auxil import parse_recipe, parse_node, gpt, execute
 import os, shutil
 import glob
 import datetime
-from IPython.core.debugger import set_trace
 
+"""
+function for processing InSAR coherences from S-1 SLC files in SNAP 
 
-#infiles: list of filepaths, must contain at least 2 images from 2 different dates, must be of the same relative orbit
-#out_dir: str or None, output folder if None a default folder structure is provided: "INT/pol/"
-#tmpdir: str or none, temporary directory for intermediate processing steps, if not specified, one is created in current working directory
-#t_res: int or float, resolution of final product in meters, default is 20
-#t_crs: int, EPSG code of the chosen coordinate system
-#out_format, str, format of final output, any format SNAP supports
-#gpt_paras, none or list a list of additional arguments to be passed to the gpt call
-#pol: str or list or "full", polaristations to process, "full" processes all available polarizations, default is "full"
-#IWs: str or list, selectes subswath for processing, default is all 3
-#extDEM: bool, set to true if external DEM should be used in processing
-#ext_DEM_noDatVal: int or float, dependent on external DEM
-#ext_DEM_file: str, path to file of external DEM
-#msk_NoDatVal: bool, if true No data values of DEM, especially at sea, are masked out, default False
-#ext_DEM_EGM: bool, apply earth gravitational model to external DEM, default true
-#BCG_demResamp= str, resampling algorithm of Back Geo-Coding
-#TC_demResamp= str, resampling algorithm of terrain correction
-#cohWinRg: int, size of moving window for coherence estimation in range, default is 11
-#cohWinAz: int, size of moving window for coherence estimation in azimuth, default is 3
-#ml_RgLook: int, nr of looks in range, default is 4
-#ml_AzLook: int, nr of looks in azimuth, default is 1
-#clean_tmpdir, bool, delete tmpdir, default true
+Parameters
+----------
+    infiles: list or str
+        filepaths of SLC zip files
+    out_dir: str or None
+        output folder if None a default folder structure is provided: "INT/pol/"
+    tmpdir: str 
+        temporary dir for intermediate processing steps, its automatically created at cwd if none is provided
+    t_res: int, float 
+        resolution in meters of final product, default is 20
+    t_crs: int
+        EPSG code of target coordinate system, default is 4326
+    out_format: str
+        format of final output, formats supported by SNAP, default is GeoTiff
+    gpt_paras: none or list 
+        a list of additional arguments to be passed to the gpt call
+    pol: str or list or "full"
+        polaristations to process, "full" processes all available polarizations, default is "full"
+    IWs: str or list 
+        selected subswath for processing, default is all 3
+    extDEM: bool
+        set to true if external DEM should be used in processing
+    ext_DEM_noDatVal: int or float
+        dependent on external DEM, default False
+    ext_DEM_file: str
+        path to file of external DEM, must be a format that SNAP can handle
+    msk_NoDatVal: bool
+        if true No data values of DEM, especially at sea, are masked out
+    ext_DEM_EGM: bool
+        apply earth gravitational model to external DEM, default true
+    imgResamp: str
+        image resampling method, must be supported by SNAP
+    demResamp: str
+        DEM resampling method, must be supported by SNAP
+    BCG_demResamp= str
+        resampling algorithm of Back Geo-Coding
+    TC_demResamp= str
+        resampling algorithm of terrain correction
+    cohWinRg: int
+        size of moving window for coherence estimation in range, default is 11
+    cohWinAz: int
+        size of moving window for coherence estimation in azimuth, default is 3
+    ml_RgLook: int
+        number of looks in range, default is 4
+    ml_AzLook: int
+        number of looks in azimuth, default is 1
+    clean_tmpdir, bool
+        delete tmpdir, default true
+    osvPath: None
+        specify path to locally stored OSVs, if none default OSV path of SNAP is set
+    
+    Returns
+    -------
+    Raster files of selected output format for selected H-alpha features
 
-def S1_InSAR_coh_proc(infiles, out_dir= "default", tmpdir= None, t_res=20, t_crs=32633,  out_format= "GeoTIFF",gpt_paras= None, pol= 'full',                   IWs= ["IW1", "IW2", "IW3"], ext_DEM= False, ext_DEM_noDatVal= -9999, ext_Dem_file= None, msk_noDatVal= False,                   ext_DEM_EGM= True, BGC_demResamp= "BICUBIC_INTERPOLATION", TC_demResamp= "BILINEAR_INTERPOLATION", osvPath= None,                   cohWinRg= 11, cohWinAz= 3, ml_RgLook= 4, ml_AzLook= 1, firstBurstIndex= None, lastBurstIndex= None, clean_tmpdir= True):
+    Examples
+    --------
+    process backscatter intensities VV and VH for given SLC file
+
+    >>> from pyroSAR.snap import 1_InSAR_coh_proc
+    >>> filenames= ['S1B_IW_SLC__1SDV_20201229T170010_20201229T170037_024920_02F722_8B6C.zip.zip', 'S1B_IW_SLC__1SDV_20201217T170011_20201217T170038_024745_02F172_1D38.zip']
+    >>> gpt_paras = ["-e", "-x", "-c","35G", "-q", "16", "-J-Xms25G", "-J-Xmx75G"]
+    >>> pol= "full"
+    >>> S1_InSAR_coh_proc(infiles= filenames, gtp_paras= gpt_paras, pol= "full")
+
+"""
+
+def S1_InSAR_coh_proc(infiles, out_dir= "default", tmpdir= None, t_res=20, t_crs=32633,  out_format= "GeoTIFF",gpt_paras= None, pol= 'full', IWs= ["IW1", "IW2", "IW3"], ext_DEM= False, ext_DEM_noDatVal= -9999, ext_Dem_file= None, msk_noDatVal= False, ext_DEM_EGM= True, BGC_demResamp= "BICUBIC_INTERPOLATION", TC_demResamp= "BILINEAR_INTERPOLATION", osvPath= None, cohWinRg= 11, cohWinAz= 3, ml_RgLook= 4, ml_AzLook= 1, firstBurstIndex= None, lastBurstIndex= None, clean_tmpdir= True):
     
     ##define formatName for reading zip-files
     formatName= "SENTINEL-1"
@@ -68,7 +114,7 @@ def S1_InSAR_coh_proc(infiles, out_dir= "default", tmpdir= None, t_res=20, t_crs
     query_orb= relOrbs.count(relOrbs[0]) == len(relOrbs)
     ##raise error if different rel. orbits are detected
     if query_orb == False:
-        raise RuntimeError(message.format("Files of different relative orbits detected"))
+        raise RuntimeError("Files of different relative orbits detected")
     ##query and handle polarisations, raise error if selected polarisations don't match (see Truckenbrodt et al.: pyroSAR: geocode)    
     info_ms= info[0]
     orbit= info_ms.orbit
