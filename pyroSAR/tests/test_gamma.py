@@ -1,5 +1,6 @@
 import os
-from pyroSAR.gamma import ISPPar, par2hdr, Namespace, slc_corners
+import pytest
+from pyroSAR.gamma import ISPPar, par2hdr, Namespace, slc_corners, api
 
 
 def test_par(testdata, tmpdir):
@@ -42,6 +43,7 @@ def test_namespace():
     assert n['dem_seg'] == '-'
 
 
+@pytest.mark.skipif('isp' not in dir(api), reason='requires GAMMA installation with module ISP')
 def test_slc_corners(testdata):
     print(testdata['dempar'])
     pts = slc_corners(testdata['mlipar'])
