@@ -610,7 +610,6 @@ class DEMHandler:
             stream = csv.reader(obj, delimiter=';')
             for row in stream:
                 if row[1] + row[2] in indices:
-                    print(row)
                     ids.append(row[0])
             
             remotes = []
