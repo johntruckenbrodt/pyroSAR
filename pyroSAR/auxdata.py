@@ -13,10 +13,14 @@
 ###############################################################################
 import os
 import re
+import csv
+import ssl
 import ftplib
 
+import io
 from urllib.request import urlopen
 from urllib.error import HTTPError
+from urllib.parse import urlparse
 
 from osgeo import gdal
 
@@ -42,6 +46,11 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
           * url: ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804
 
+        - 'Copernicus 10m EEA DEM' (Copernicus 10 m DEM available over EEA-39 countries)
+
+          * registration: https://spacedata.copernicus.eu/web/cscda/data-access/registration
+          * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2020_1
+
         - 'SRTM 1Sec HGT'
 
           * url: https://step.esa.int/auxdata/dem/SRTMGL1
@@ -49,9 +58,9 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         - 'SRTM 3Sec'
 
           * url: https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF
-        
+
         - 'TDX90m'
-        
+
           * registration:  https://geoservice.dlr.de/web/dataguide/tdm90
           * url: ftpes://tandemx-90m.dlr.de
 
@@ -66,25 +75,33 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
     product: str
         the sub-product to extract from the DEM product.
         The following options are available for the respective DEM types:
-        
+
         - 'AW3D30'
-         
+
           * 'dem': the actual Digital Elevation Model
           * 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
             low correlation mask, Sea mask, Information of elevation dataset used
             for the void-filling processing)
           * 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
-          
+
+        - 'Copernicus 10m EEA DEM'
+        
+          * 'dem': the actual Digital Elevation Model
+          * 'edm': editing mask
+          * 'flm': filling mask
+          * 'hem': height error mask
+          * 'wbm': water body mask
+        
         - 'SRTM 1Sec HGT'
-         
+
           * 'dem': the actual Digital Elevation Model
-          
+
         - 'SRTM 3Sec'
-         
+
           * 'dem': the actual Digital Elevation Model
-          
+
         - 'TDX90m'
-         
+
           * 'dem': the actual Digital Elevation Model
           * 'am2': Amplitude Mosaic representing the minimum value
           * 'amp': Amplitude Mosaic representing the mean value
@@ -93,39 +110,39 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * 'hem': Height Error Map
           * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
           * 'wam': Water Indication Mask
-    
+
     Returns
     -------
     list or None
         the names of the obtained files or None if a VRT file was defined
-    
+
     Examples
     --------
     download all SRTM 1 arcsec DEMs overlapping with a Sentinel-1 scene and mosaic them to a single GeoTiff file
-    
+
     .. code-block:: python
-        
+
         from pyroSAR import identify
         from pyroSAR.auxdata import dem_autoload
         from spatialist import gdalwarp
-        
+
         # identify the SAR scene
         filename = 'S1A_IW_SLC__1SDV_20150330T170734_20150330T170801_005264_006A6C_DA69.zip'
         scene = identify(filename)
-        
+
         # extract the bounding box as spatialist.Vector object
         bbox = scene.bbox()
-        
+
         # download the tiles and virtually combine them in an in-memory
         # VRT file subsetted to the extent of the SAR scene plus a buffer of 0.01 degrees
         vrt = '/vsimem/srtm1.vrt'
         dem_autoload(geometries=[bbox], demType='SRTM 1Sec HGT',
                      vrt=vrt, buffer=0.01)
-        
+
         # write the final GeoTiff file
         outname = scene.outname_base() + 'srtm1.tif'
         gdalwarp(src=vrt, dst=outname, options={'format': 'GTiff'})
-        
+
         # alternatively use function dem_create and warp the DEM to UTM
         # including conversion from geoid to ellipsoid heights
         from pyroSAR.auxdata import dem_create
@@ -145,7 +162,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoid_convert=False, geoid='EGM96'):
     """
     create a new DEM GeoTiff file and optionally convert heights from geoid to ellipsoid
-    
+
     Parameters
     ----------
     src: str
@@ -225,7 +242,7 @@ class DEMHandler:
     """
     | An interface to obtain DEM data for selected geometries
     | The files are downloaded into the ESA SNAP auxdata directory structure
-    
+
     Parameters
     ----------
     geometries: list of spatialist.vector.Vector
@@ -313,25 +330,28 @@ class DEMHandler:
                 locals.append(outfile)
         return sorted(locals)
     
-    @staticmethod
-    def __retrieve_ftp(url, filenames, outdir, username, password):
+    def __retrieve_ftp(self, url, filenames, outdir, username, password, port=0):
         files = list(set(filenames))
-        if not os.path.isdir(outdir):
-            os.makedirs(outdir)
-        pattern = r'(ftp(?:es|))://([a-z0-9.\-]*)[/]*((?:[a-zA-Z0-9/_]*|))'
-        protocol, url, path = re.search(pattern, url).groups()
-        if protocol == 'ftpes':
-            ftp = ftplib.FTP_TLS(url)
+        os.makedirs(outdir, exist_ok=True)
+        
+        parsed = urlparse(url)
+        
+        if parsed.scheme == 'ftpes':
+            ftp = ftplib.FTP_TLS(parsed.netloc)
             try:
                 ftp.login(username, password)  # login anonymously before securing control channel
             except ftplib.error_perm as e:
                 raise RuntimeError(str(e))
             ftp.prot_p()  # switch to secure data connection.. IMPORTANT! Otherwise, only the user and password is encrypted and not all the file data.
+        elif parsed.scheme == 'ftps':
+            ftp = ImplicitFTP_TLS()
+            ftp.connect(host=parsed.netloc, port=port)
+            ftp.login(username, password)
         else:
-            ftp = ftplib.FTP(url, timeout=100)
+            ftp = ftplib.FTP(parsed.netloc, timeout=100)
             ftp.login()
-        if path != '':
-            ftp.cwd(path)
+        if parsed.path != '':
+            ftp.cwd(parsed.path)
         locals = []
         for product_remote in files:
             product_local = os.path.join(outdir, os.path.basename(product_remote))
@@ -340,7 +360,8 @@ class DEMHandler:
                     targetlist = ftp.nlst(product_remote)
                 except ftplib.error_temp:
                     continue
-                address = '{}://{}/{}{}'.format(protocol, url, path + '/' if path != '' else '', product_remote)
+                address = '{}://{}/{}{}'.format(parsed.scheme, parsed.netloc,
+                                                parsed.path + '/' if parsed.path != '' else '', product_remote)
                 print('{} <<-- {}'.format(product_local, address))
                 with open(product_local, 'wb') as myfile:
                     ftp.retrbinary('RETR {}'.format(product_remote), myfile.write)
@@ -359,6 +380,15 @@ class DEMHandler:
                                    'msk': '*MSK.tif',
                                    'stk': '*STK.tif'}
                        },
+            'Copernicus 10m EEA DEM': {'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2020_1',
+                                       'nodata': -32767.0,
+                                       'vsi': '/vsitar/',
+                                       'port': 990,
+                                       'pattern': {'dem': '*DEM.tif',
+                                                   'edm': '*EDM.tif',
+                                                   'flm': '*FLM.tif',
+                                                   'hem': '*HEM.tif',
+                                                   'wbm': '*WBM.tif'}},
             'SRTM 1Sec HGT': {'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
                               'nodata': -32768.0,
                               'vsi': '/vsizip/',
@@ -386,47 +416,55 @@ class DEMHandler:
     def load(self, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
         """
         obtain DEM tiles for the given geometries
-        
+
         Parameters
         ----------
         demType: str
             the type fo DEM to be used
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
-        buffer: int or float
+        buffer: int or float or None
             a buffer in degrees to add around the individual geometries
-        username: str
+        username: str or None
             the download account user name
-        password: str
+        password: str or None
             the download account password
         product: str
             the sub-product to extract from the DEM product
-             * 'AW3D30'
-             
-              - 'dem': the actual Digital Elevation Model
-              - 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
+             - 'AW3D30'
+
+              * 'dem': the actual Digital Elevation Model
+              * 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
                 low correlation mask, Sea mask, Information of elevation dataset used
                 for the void-filling processing)
-              - 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
-              
-             * 'SRTM 1Sec HGT'
-             
-              - 'dem': the actual Digital Elevation Model
-              
-             * 'SRTM 3Sec'
-             
-              - 'dem': the actual Digital Elevation Model
-              
-             * 'TDX90m'
-             
-              - 'dem': the actual Digital Elevation Model
-              - 'am2': Amplitude Mosaic representing the minimum value
-              - 'amp': Amplitude Mosaic representing the mean value
-              - 'com': Consistency Mask
-              - 'cov': Coverage Map
-              - 'hem': Height Error Map
-              - 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
-              - 'wam': Water Indication Mask
+              * 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
+
+             - 'Copernicus 10m EEA DEM'
+            
+              * 'dem': the actual Digital Elevation Model
+              * 'edm': Editing Mask
+              * 'flm': Filling Mask
+              * 'hem': Height Error Mask
+              * 'wbm': Water Body Mask
+          
+             - 'SRTM 1Sec HGT'
+
+              * 'dem': the actual Digital Elevation Model
+
+             - 'SRTM 3Sec'
+
+              * 'dem': the actual Digital Elevation Model
+
+             - 'TDX90m'
+
+              * 'dem': the actual Digital Elevation Model
+              * 'am2': Amplitude Mosaic representing the minimum value
+              * 'amp': Amplitude Mosaic representing the mean value
+              * 'com': Consistency Mask
+              * 'cov': Coverage Map
+              * 'hem': Height Error Map
+              * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
+              * 'wam': Water Indication Mask
 
         Returns
         -------
@@ -449,11 +487,15 @@ class DEMHandler:
         remotes = []
         for geo in self.geometries:
             corners = self.__applybuffer(geo.extent, buffer)
-            remotes.extend(self.remote_ids(corners, demType=demType))
+            remotes.extend(self.remote_ids(corners, demType=demType,
+                                           username=username, password=password))
         
-        if demType in ['AW3D30', 'TDX90m']:
+        if demType in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM']:
+            port = 0
+            if 'port' in self.config[demType].keys():
+                port = self.config[demType]['port']
             locals = self.__retrieve_ftp(self.config[demType]['url'], remotes, outdir,
-                                         username=username, password=password)
+                                         username=username, password=password, port=port)
         else:
             locals = self.__retrieve(self.config[demType]['url'], remotes, outdir)
         
@@ -471,18 +513,21 @@ class DEMHandler:
             return None
         return locals
     
-    @staticmethod
-    def remote_ids(extent, demType):
+    def remote_ids(self, extent, demType, username=None, password=None):
         """
         parse the names of the remote files overlapping with an area of interest
-        
+
         Parameters
         ----------
         extent: dict
             the extent of the area of interest with keys xmin, xmax, ymin, ymax
         demType: str
             the type fo DEM to be used
-        
+        username: str or None
+            the download account user name
+        password: str or None
+            the download account password
+
         Returns
         -------
         str
@@ -526,6 +571,7 @@ class DEMHandler:
                         yf = index(y=y, ny=2)
                         remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
                                        .format(x=xf, xr=xr, y=yf, hem=xf[0]))
+        
         elif demType == 'AW3D30':
             remotes = []
             lat, lon = intrange(extent, step=1)
@@ -542,7 +588,70 @@ class DEMHandler:
                         int((float(extent['xmax']) + 180) // 5) + 2)
             
             remotes = ['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in lon for y in lat]
+        
+        elif demType == 'Copernicus 10m EEA DEM':
+            lat, lon = intrange(extent, step=1)
+            indices = [index(x, y, nx=3, ny=2)
+                       for x in lon for y in lat]
+            
+            ftp = ImplicitFTP_TLS()
+            parsed = urlparse(self.config[demType]['url'])
+            host = parsed.netloc
+            path = parsed.path
+            ftp.connect(host=host, port=self.config[demType]['port'])
+            ftp.login(username, password)
+            ftp.cwd(path)
+            
+            obj = io.BytesIO()
+            ftp.retrbinary('RETR mapping.csv', obj.write)
+            obj = obj.getvalue().decode('utf-8').splitlines()
+            
+            ids = []
+            stream = csv.reader(obj, delimiter=';')
+            for row in stream:
+                if row[1] + row[2] in indices:
+                    print(row)
+                    ids.append(row[0])
+            
+            remotes = []
+            
+            def ftp_search(target, files):
+                pattern = '|'.join(files)
+                if target.endswith('/'):
+                    content = ftp.nlst(target)
+                    for item in content:
+                        ftp_search(target + '/' + item, files)
+                else:
+                    if target.endswith('.tar') and re.search(pattern, target):
+                        remotes.append(target)
+            
+            ftp_search(path + '/', ids)
+            ftp.quit()
+        
         else:
             raise ValueError('unknown demType: {}'.format(demType))
         
         return sorted(remotes)
+
+
+class ImplicitFTP_TLS(ftplib.FTP_TLS):
+    """
+    FTP_TLS subclass that automatically wraps sockets in SSL to support implicit FTPS.
+    taken from https://stackoverflow.com/a/36049814
+    """
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._sock = None
+    
+    @property
+    def sock(self):
+        """Return the socket."""
+        return self._sock
+    
+    @sock.setter
+    def sock(self, value):
+        """When modifying the socket, ensure that it is ssl wrapped."""
+        if value is not None and not isinstance(value, ssl.SSLSocket):
+            value = self.context.wrap_socket(value)
+        self._sock = value
