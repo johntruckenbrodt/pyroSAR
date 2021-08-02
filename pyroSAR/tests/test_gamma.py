@@ -1,5 +1,5 @@
 import os
-from pyroSAR.gamma import ISPPar, par2hdr, Namespace
+from pyroSAR.gamma import ISPPar, par2hdr, Namespace, slc_corners
 
 
 def test_par(testdata, tmpdir):
@@ -40,3 +40,12 @@ def test_namespace():
     assert n.select(['inc_geo', 'ls_map']) == ['-', exp2]
     n.depreciate(['dem_seg'])
     assert n['dem_seg'] == '-'
+
+
+def test_slc_corners(testdata):
+    print(testdata['dempar'])
+    pts = slc_corners(testdata['mlipar'])
+    assert pts == {'ymin': 36.20859758,
+                   'ymax': 38.11058293,
+                   'xmin': -6.59346425,
+                   'xmax': -3.42811204}
