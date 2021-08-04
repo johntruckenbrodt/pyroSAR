@@ -16,12 +16,7 @@ import os
 import sys
 import json
 
-# Python 3 comparability
-
-if sys.version_info >= (3, 0):
-    import configparser as ConfigParser
-else:
-    import ConfigParser
+import configparser as ConfigParser
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode',
              'start', 'stop', 'product', 'spacing', 'samples', 'lines']
@@ -382,9 +377,5 @@ class ConfigHandler(metaclass=Singleton):
         self.write()
     
     def write(self):
-        if sys.version_info >= (3, 0):
-            with open(self.__GLOBAL['config'], 'w', encoding='utf8') as out:
-                self.parser.write(out)
-        else:
-            with open(self.__GLOBAL['config'], 'w') as out:
-                self.parser.write(out)
+        with open(self.__GLOBAL['config'], 'w', encoding='utf8') as out:
+            self.parser.write(out)
