@@ -83,7 +83,7 @@ The parameter `allow_RES_OSV` can be used to allow processing with `RES` files i
     scene = 'S1A_IW_GRDH_1SDV_20180101T170648_20180101T170713_019964_021FFD_DA78.zip'
     geocode(scene=scene,
             dem='/path/to/demfile',
-            tempdir='tmpdir',
+            tmpdir='tmpdir',
             outdir='outdir',
             targetres=20,
             osvdir='/path/to/osvdir',
