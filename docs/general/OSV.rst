@@ -96,7 +96,7 @@ matching OSV type for processing.
 
     from pyroSAR.snap import geocode
     scene = 'S1A_IW_GRDH_1SDV_20180101T170648_20180101T170713_019964_021FFD_DA78.zip'
-    geocode(scene=scene,
+    geocode(infile=scene,
             outdir='outdir',
             allow_RES_OSV=True)
 
