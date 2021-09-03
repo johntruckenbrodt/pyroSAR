@@ -2097,7 +2097,7 @@ class Archive(object):
             if verbose:
                 print('...{0} scene{1} remaining'.format(len(scenes), 's' if len(scenes) > 1 else ''))
         else:
-            print('all scenes are already registered')
+            print('no scenes could be identifyed!')
             return
         
         counter_regulars = 0
