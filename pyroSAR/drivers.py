@@ -1494,8 +1494,8 @@ class SAFE(ID):
     
     def getCorners(self):
         coordinates = self.meta['coordinates']
-        lat = [x[0] for x in coordinates]
-        lon = [x[1] for x in coordinates]
+        lat = [x[1] for x in coordinates]
+        lon = [x[0] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=20, url_option=1):
@@ -1588,7 +1588,7 @@ class SAFE(ID):
         meta['acquisition_time'] = dict(
             [(x, tree.find('.//safe:{}Time'.format(x), namespaces).text) for x in ['start', 'stop']])
         meta['start'], meta['stop'] = (self.parse_date(meta['acquisition_time'][x]) for x in ['start', 'stop'])
-        meta['coordinates'] = [tuple([float(y) for y in x.split(',')]) for x in
+        meta['coordinates'] = [tuple([float(y) for y in x.split(',')][::-1]) for x in
                                tree.find('.//gml:coordinates', namespaces).text.split()]
         meta['orbit'] = tree.find('.//s1:pass', namespaces).text[0]
         
