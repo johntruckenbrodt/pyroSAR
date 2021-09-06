@@ -1465,11 +1465,7 @@ class SAFE(ID):
         
         # scan the metadata XML files file and add selected attributes to a meta dictionary
         self.meta = self.scanMetadata()
-        self.meta['projection'] = 'GEOGCS["WGS 84",' \
-                                  'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
-                                  'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
-                                  'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
-                                  'AUTHORITY["EPSG","4326"]]'
+        self.meta['projection'] = crsConvert(4326, 'wkt')
         
         # register the standardized meta attributes as object attributes
         super(SAFE, self).__init__(self.meta)
@@ -1691,13 +1687,7 @@ class TSX(ID):
             raise IOError('folder does not match TSX scene naming convention')
         
         self.meta = self.scanMetadata()
-        self.meta['projection'] = 'GEOGCS["WGS 84",' \
-                                  'DATUM["WGS_1984",' \
-                                  'SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],' \
-                                  'AUTHORITY["EPSG","6326"]],' \
-                                  'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
-                                  'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
-                                  'AUTHORITY["EPSG","4326"]]'
+        self.meta['projection'] = crsConvert(4326, 'wkt')
         
         super(TSX, self).__init__(self.meta)
     
