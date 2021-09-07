@@ -268,9 +268,11 @@ class DEMHandler:
         if nodata is None:
             with Raster(locals[0]) as ras:
                 nodata = ras.nodata
+                xres, yres = ras.res
         opts = {'outputBounds': (extent['xmin'], extent['ymin'],
                                  extent['xmax'], extent['ymax']),
-                'srcNodata': nodata}
+                'srcNodata': nodata, 'targetAlignedPixels': True,
+                'xRes': xres, 'yRes': yres}
         if srs is not None:
             opts['outputSRS'] = crsConvert(srs, 'wkt')
         gdalbuildvrt(src=locals, dst=vrtfile,
