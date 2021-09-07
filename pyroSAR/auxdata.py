@@ -275,10 +275,10 @@ class DEMHandler:
     @staticmethod
     def __buildvrt(archives, vrtfile, pattern, vsi, extent, nodata=None, srs=None):
         locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in archives])]
-        if nodata is None:
-            with Raster(locals[0]) as ras:
+        with Raster(locals[0]) as ras:
+            if nodata is None:
                 nodata = ras.nodata
-                xres, yres = ras.res
+            xres, yres = ras.res
         opts = {'outputBounds': (extent['xmin'], extent['ymin'],
                                  extent['xmax'], extent['ymax']),
                 'srcNodata': nodata, 'targetAlignedPixels': True,
