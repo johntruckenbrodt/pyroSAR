@@ -149,6 +149,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         This is available since version 20191203, for older versions this argument is ignored.
     basename_extensions: list of str
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
+    exist_ok: bool
+        allow existing output files and do not create new ones?
     logpath: str or None
         a directory to write command logfiles to
     outdir: str or None
@@ -510,7 +512,7 @@ def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpa
 def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geoback=1,
             nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
             cleanup=True, export_extra=None, basename_extensions=None,
-            removeS1BorderNoiseMethod='gamma', refine_LUT=False):
+            removeS1BorderNoiseMethod='gamma', refine_LUT=False, exist_ok=False):
     """
     general function for radiometric terrain correction (RTC) and geocoding of SAR backscatter images with GAMMA.
     Applies the RTC method by :cite:`Small2011` to retrieve gamma nought RTC backscatter.
@@ -575,6 +577,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
          - None: do not remove border noise
     refine_LUT: bool
         should the LUT for geocoding be refined using pixel area normalization?
+    exist_ok: bool
+        allow existing output files and do not create new ones?
     
     Returns
     -------
@@ -682,7 +686,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         if scene.compression is not None:
             print('unpacking scene..')
             try:
-                scene.unpack(tmpdir)
+                scene.unpack(tmpdir, exist_ok=exist_ok)
             except RuntimeError:
                 print('scene was attempted to be processed before, exiting')
                 return
@@ -704,7 +708,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     for scene in scenes:
         convert2gamma(scene, directory=tmpdir, logpath=path_log, outdir=tmpdir,
                       basename_extensions=basename_extensions, shellscript=shellscript,
-                      S1_bnr=gamma_bnr)
+                      S1_bnr=gamma_bnr, exist_ok=exist_ok)
     
     for scene in scenes:
         if scene.sensor in ['S1A', 'S1B']:
@@ -716,9 +720,12 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             try:
                 correctOSV(id=scene, directory=tmpdir, osvdir=osvdir, osvType=osvtype,
                            logpath=path_log, outdir=tmpdir, shellscript=shellscript)
-            except RuntimeError:
-                print('orbit state vector correction failed for scene {}'.format(scene.scene))
-                return
+            except RuntimeError as e:
+                if str(e) == 'in subroutine julday: there is no year zero!':
+                    pass
+                else:
+                    print('orbit state vector correction failed for scene {}'.format(scene.scene))
+                    return
     
     print('calibrating...')
     for scene in scenes:
@@ -756,7 +763,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         print('multilooking..')
         for image in images:
             multilook(infile=image, outfile=image + '_mli', targetres=targetres,
-                      logpath=path_log, outdir=tmpdir, shellscript=shellscript)
+                      logpath=path_log, outdir=tmpdir, shellscript=shellscript, exist_ok=exist_ok)
         
         images = [x + '_mli' for x in images]
         products.extend(images)
@@ -785,6 +792,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             if item + '_geo' in export_extra:
                 pix_geo.append(item + '_geo')
                 n.appreciate([item])
+            else:
+                n.depreciate([item])
     
     ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
     
