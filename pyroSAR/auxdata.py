@@ -273,7 +273,7 @@ class DEMHandler:
         return ext
     
     @staticmethod
-    def __buildvrt(archives, vrtfile, pattern, vsi, extent, nodata=None, srs=None):
+    def __buildvrt(archives, vrtfile, pattern, vsi, extent, nodata=None):
         locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in archives])]
         with Raster(locals[0]) as ras:
             if nodata is None:
@@ -283,8 +283,6 @@ class DEMHandler:
                                  extent['xmax'], extent['ymax']),
                 'srcNodata': nodata, 'targetAlignedPixels': True,
                 'xRes': xres, 'yRes': yres}
-        if srs is not None:
-            opts['outputSRS'] = crsConvert(srs, 'wkt')
         gdalbuildvrt(src=locals, dst=vrtfile,
                      options=opts)
     
