@@ -14,7 +14,7 @@
 import os
 import re
 import ftplib
-
+import zipfile as zf
 from urllib.request import urlopen
 from urllib.error import HTTPError
 
@@ -24,6 +24,7 @@ from pyroSAR.examine import ExamineSnap
 from spatialist import Raster
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
+from spatialist.envi import HDRobject
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
@@ -41,6 +42,11 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         - 'AW3D30' (ALOS Global Digital Surface Model "ALOS World 3D - 30m")
 
           * url: ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804
+        
+        - 'GETASSE30'
+        
+          * info: https://seadas.gsfc.nasa.gov/help-8.1.0/desktop/GETASSE30ElevationModel.html
+          * url: https://step.esa.int/auxdata/dem/GETASSE30
 
         - 'SRTM 1Sec HGT'
 
@@ -74,7 +80,11 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
             low correlation mask, Sea mask, Information of elevation dataset used
             for the void-filling processing)
           * 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
-          
+        
+        - 'GETASSE30'
+        
+          * 'dem': the actual Digital Elevation Model
+        
         - 'SRTM 1Sec HGT'
          
           * 'dem': the actual Digital Elevation Model
@@ -361,6 +371,11 @@ class DEMHandler:
                                    'msk': '*MSK.tif',
                                    'stk': '*STK.tif'}
                        },
+            'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
+                          'nodata': None,
+                          'vsi': '/vsizip/',
+                          'pattern': {'dem': '*.GETASSE30'}
+                          },
             'SRTM 1Sec HGT': {'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
                               'nodata': -32768.0,
                               'vsi': '/vsizip/',
@@ -459,6 +474,10 @@ class DEMHandler:
         else:
             locals = self.__retrieve(self.config[demType]['url'], remotes, outdir)
         
+        if demType == 'GETASSE30':
+            for item in locals:
+                getasse30_hdr(item)
+        
         if product == 'dem':
             nodata = self.config[demType]['nodata']
         else:
@@ -501,25 +520,34 @@ class DEMHandler:
                         step)
             return lat, lon
         
-        def index(x=None, y=None, nx=3, ny=3):
+        def index(x=None, y=None, nx=3, ny=3, reverse=False):
+            if reverse:
+                pattern = '{c:0{n}d}{id}'
+            else:
+                pattern = '{id}{c:0{n}d}'
             if x is not None:
-                xf = '{ew}{x:0{nx}d}'.format(ew='W' if x < 0 else 'E', x=abs(x), nx=nx)
+                xf = pattern.format(id='W' if x < 0 else 'E', c=abs(x), n=nx)
             else:
                 xf = ''
             if y is not None:
-                yf = '{ns}{y:0{ny}d}'.format(ns='S' if y < 0 else 'N', y=abs(y), ny=ny)
+                yf = pattern.format(id='S' if y < 0 else 'N', c=abs(y), n=ny)
             else:
                 yf = ''
             out = yf + xf
             return out
         
-        if demType in ['SRTM 1Sec HGT', 'TDX90m']:
-            lat, lon = intrange(extent, step=1)
+        if demType in ['SRTM 1Sec HGT', 'GETASSE30', 'TDX90m']:
             
             if demType == 'SRTM 1Sec HGT':
+                lat, lon = intrange(extent, step=1)
                 remotes = ['{}.SRTMGL1.hgt.zip'.format(index(x, y, nx=3, ny=2))
                            for x in lon for y in lat]
+            elif demType == 'GETASSE30':
+                lat, lon = intrange(extent, step=15)
+                remotes = ['{}.zip'.format(index(x, y, nx=3, ny=2, reverse=True))
+                           for x in lon for y in lat]
             else:
+                lat, lon = intrange(extent, step=1)
                 remotes = []
                 for x in lon:
                     xr = abs(x) // 10 * 10
@@ -548,3 +576,53 @@ class DEMHandler:
             raise ValueError('unknown demType: {}'.format(demType))
         
         return sorted(remotes)
+
+
+def getasse30_hdr(fname):
+    """
+    create an ENVI HDR file for zipped GETASSE30 DEM tiles
+    
+    Parameters
+    ----------
+    fname: str
+        the name of the zipped tile
+
+    Returns
+    -------
+
+    """
+    basename = os.path.basename(fname)
+    pattern = r'(?P<lat>[0-9]{2})' \
+              '(?P<ns>[A-Z])' \
+              '(?P<lon>[0-9]{3})' \
+              '(?P<ew>[A-Z]).zip'
+    match = re.search(pattern, basename).groupdict()
+    
+    lon = float(match['lon'])
+    if match['ew'] == 'W':
+        lon *= -1
+    lat = float(match['lat'])
+    if match['ns'] == 'S':
+        lat *= -1
+    posting = 30 / 3600  # 30 arc seconds
+    pixels = 1800
+    
+    map_info = ['Geographic Lat/Lon', '1.0000', '1.0000',
+                str(lon),
+                str(lat + pixels * posting),
+                str(posting),
+                str(posting),
+                'WGS-84', 'units=Degrees']
+    
+    with zf.ZipFile(fname, 'a') as zip:
+        files = zip.namelist()
+        hdr = basename.replace('.zip', '.hdr')
+        if hdr not in files:
+            with HDRobject() as obj:
+                obj.samples = pixels
+                obj.lines = pixels
+                obj.byte_order = 1
+                obj.data_type = 2
+                obj.map_info = '{{{}}}'.format(','.join(map_info))
+                obj.coordinate_system_string = crsConvert(4326, 'wkt')
+                zip.writestr(hdr, str(obj))
