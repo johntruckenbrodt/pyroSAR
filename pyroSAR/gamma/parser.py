@@ -86,6 +86,7 @@ def parse_command(command, indent='    '):
                                            ('east/lon', 'east_lon'),
                                            ('SLC_par', '<SLC_MLI_par>'),
                                            ('SLC/MLI_par', 'SLC_MLI_par')],
+                       'data2geotiff': [('nodata', 'no_data')],
                        'dis2hgt': [('m/cycle', 'm_cycle')],
                        'discc': [('min_corr', 'cmin'),
                                  ('max_corr', 'cmax')],

@@ -26,7 +26,7 @@ def test_args_diff():
 @pytest.mark.skipif('disp' not in dir(api), reason='requires GAMMA installation with module DISP')
 def test_args_disp():
     from pyroSAR.gamma.api import disp
-    assert getargs(disp.data2geotiff) == ['DEM_par', 'GeoTIFF', 'data', 'logpath', 'nodata', 'outdir', 'shellscript',
+    assert getargs(disp.data2geotiff) == ['DEM_par', 'GeoTIFF', 'data', 'logpath', 'no_data', 'outdir', 'shellscript',
                                           'type']
 
 
