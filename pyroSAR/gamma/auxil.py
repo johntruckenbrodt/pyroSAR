@@ -1,7 +1,7 @@
 ###############################################################################
 # general GAMMA utilities
 
-# Copyright (c) 2014-2021, Stefan Engelhardt, the pyroSAR Developers.
+# Copyright (c) 2014-2021, the pyroSAR Developers, Stefan Engelhardt.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -127,6 +127,10 @@ class ISPPar(object):
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         return
+    
+    def __getattr__(self, item):
+        # will only be run if object has no attribute item
+        raise AttributeError("parameter file has no attribute '{}'".format(item))
     
     def __str__(self):
         maxlen = len(max(self.keys, key=len)) + 1
