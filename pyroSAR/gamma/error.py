@@ -54,7 +54,8 @@ def gammaErrorHandler(out, err):
                    'OPOD state vector data ends before start of the state vector time window': RuntimeError,
                    'non-zero exit status': RuntimeError,
                    'unsupported DEM projection': RuntimeError,
-                   'tiffWriteProc:No space left on device': RuntimeError}
+                   'tiffWriteProc:No space left on device': RuntimeError,
+                   'in subroutine julday: there is no year zero!': RuntimeError}
     
     # check if the error message is known and throw the mapped error from knownErrors accordingly.
     # Otherwise throw an GammaUnknownError.
