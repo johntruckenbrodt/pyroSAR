@@ -136,7 +136,7 @@ class ISPPar(object):
     
     def envidict(self, nodata=None):
         """
-        export relevant metadata to a ENVI HDR file compliant format
+        export relevant metadata to an ENVI HDR file compliant format
         
         Parameters
         ----------

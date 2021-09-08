@@ -66,13 +66,14 @@ GAMMA Processing
 ================
 
 .. automodule:: pyroSAR.gamma
-    :members: geocode, convert2gamma, ISPPar, process, ovs, S1_deburst, correctOSV, multilook, par2hdr, UTM
+    :members: geocode, convert2gamma, ISPPar, process, ovs, S1_deburst, correctOSV, multilook, par2hdr, UTM, calibrate
     :undoc-members:
     :show-inheritance:
 
     .. autosummary::
         :nosignatures:
 
+        calibrate
         convert2gamma
         correctOSV
         geocode

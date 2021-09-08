@@ -48,6 +48,7 @@ except ImportError:
 
 def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscript=None):
     """
+    radiometric calibration of SAR scenes
     
     Parameters
     ----------
