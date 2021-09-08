@@ -37,6 +37,9 @@ from ..ancillary import multilook_factors, hasarg, groupby
 from pyroSAR.examine import ExamineSnap
 from .auxil import do_execute
 
+import logging
+log = logging.getLogger(__name__)
+
 try:
     from .api import diff, disp, isp, lat
 except ImportError:
@@ -124,7 +127,7 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
                         os.remove(item)
     
     elif cname == 'SAFE':
-        print('calibration already performed during import')
+        log.info('calibration already performed during import')
     
     else:
         raise NotImplementedError('calibration for class {} is not implemented yet'.format(cname))
@@ -201,7 +204,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                         isp.par_ESA_ERS(**pars)
                         par2hdr(outname + '.par', outname + '.hdr')
                 else:
-                    print('scene already converted')
+                    log.info('scene already converted')
             else:
                 raise NotImplementedError('ERS {} product of {} processor in CEOS format not implemented yet'
                                           .format(id.product, id.meta['proc_system']))
@@ -478,7 +481,7 @@ def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpa
     try:
         id.getOSV(osvdir, osvType, timeout=timeout)
     except URLError:
-        print('..no internet access')
+        log.warning('..no internet access')
     
     target = directory if directory is not None else id.scene
     images = id.getGammaImages(target)
@@ -500,7 +503,7 @@ def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpa
         osvfile = os.path.join(osvdir, os.path.basename(osvfile).replace('.zip', ''))
     
     # update the GAMMA parameter file with the selected orbit state vectors
-    print('correcting state vectors with file {}'.format(osvfile))
+    log.info('correcting state vectors with file {}'.format(osvfile))
     for image in images:
         isp.S1_OPOD_vec(SLC_par=image + '.par',
                         OPOD=osvfile,
@@ -652,7 +655,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     scenes = scene if isinstance(scene, list) else [scene]
     if len(scenes) > 2:
         raise RuntimeError("currently only one or two scenes can be passed via argument 'scene'")
-    scenes = identify_many(scenes, verbose=False)
+    scenes = identify_many(scenes)
     ref = scenes[0]
     
     if ref.sensor not in ['S1A', 'S1B', 'PALSAR-2']:
@@ -672,7 +675,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             os.makedirs(dir)
     
     if ref.is_processed(outdir):
-        print('scene {} already processed'.format(ref.outname_base(extensions=basename_extensions)))
+        log.info('scene {} already processed'.format(ref.outname_base(extensions=basename_extensions)))
         return
     
     shellscript = os.path.join(tmpdir, ref.outname_base(extensions=basename_extensions) + '_commands.sh')
@@ -684,11 +687,11 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     for scene in scenes:
         if scene.compression is not None:
-            print('unpacking scene..')
+            log.info('unpacking scene..')
             try:
                 scene.unpack(tmpdir, exist_ok=exist_ok)
             except RuntimeError:
-                print('scene was attempted to be processed before, exiting')
+                log.info('scene was attempted to be processed before, exiting')
                 return
         else:
             scene.scene = os.path.join(tmpdir, os.path.basename(scene.file))
@@ -700,10 +703,10 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     for scene in scenes:
         if scene.sensor in ['S1A', 'S1B'] and removeS1BorderNoiseMethod in ['ESA', 'pyroSAR']:
-            print('removing border noise..')
+            log.info('removing border noise..')
             scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
     
-    print('converting scene to GAMMA format..')
+    log.info('converting scene to GAMMA format..')
     gamma_bnr = True if removeS1BorderNoiseMethod == 'gamma' else False
     for scene in scenes:
         convert2gamma(scene, directory=tmpdir, logpath=path_log, outdir=tmpdir,
@@ -712,7 +715,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     for scene in scenes:
         if scene.sensor in ['S1A', 'S1B']:
-            print('updating orbit state vectors..')
+            log.info('updating orbit state vectors..')
             if allow_RES_OSV:
                 osvtype = ['POE', 'RES']
             else:
@@ -724,10 +727,10 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                 if str(e) == 'in subroutine julday: there is no year zero!':
                     pass
                 else:
-                    print('orbit state vector correction failed for scene {}'.format(scene.scene))
+                    log.warning('orbit state vector correction failed for scene {}'.format(scene.scene))
                     return
     
-    print('calibrating...')
+    log.info('calibrating...')
     for scene in scenes:
         calibrate(id=scene, directory=tmpdir, logpath=path_log, outdir=tmpdir, shellscript=shellscript)
     
@@ -745,7 +748,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             out_par = out + '.par'
             all_exist = all([os.path.isfile(x) for x in [out, out_par]])
             if not all_exist:
-                print('mosaicing scenes...')
+                log.info('mosaicing scenes...')
                 isp.MLI_cat(MLI_1=group[0],
                             MLI1_par=group[0] + '.par',
                             MLI_2=group[1],
@@ -760,7 +763,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     products = list(images)
     
     if scene.sensor in ['S1A', 'S1B']:
-        print('multilooking..')
+        log.info('multilooking..')
         for image in images:
             multilook(infile=image, outfile=image + '_mli', targetres=targetres,
                       logpath=path_log, outdir=tmpdir, shellscript=shellscript, exist_ok=exist_ok)
@@ -819,7 +822,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                    'shellscript': shellscript,
                    'outdir': tmpdir}
     
-    print('creating DEM products..')
+    log.info('creating DEM products..')
     if master_par.image_geometry == 'GROUND_RANGE':
         gc_map_args.update({'GRD_par': master + '.par'})
         diff.gc_map_grd(**gc_map_args)
@@ -1010,7 +1013,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         par2hdr(n.dem_seg_geo + '.par', image + '_gamma0-rtc_geo.hdr')
         products.extend([image + '_gamma0-rtc', image + '_gamma0-rtc_geo'])
     ######################################################################
-    print('conversion to (dB and) GeoTIFF..')
+    log.info('conversion to (dB and) GeoTIFF..')
     
     def exporter(data_in, outdir, nodata, scale='linear', dtype=2):
         if scale == 'db':
@@ -1057,7 +1060,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                         os.path.join(outdir, outname_base + '_manifest.safe'))
     
     if export_extra is not None:
-        print('exporting extra products..')
+        log.info('exporting extra products..')
         for key in export_extra:
             if key in pix_geo:
                 fname = n.get(key)
@@ -1085,12 +1088,12 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                 nodata = 0
                 exporter(filename, outdir, dtype=dtype, nodata=nodata)
             else:
-                print('cannot not export file {}'.format(key))
+                log.warning('cannot export file {}'.format(key))
     
     shutil.copyfile(shellscript, os.path.join(outdir, os.path.basename(shellscript)))
     
     if cleanup:
-        print('cleaning up temporary files..')
+        log.info('cleaning up temporary files..')
         shutil.rmtree(tmpdir)
 
 

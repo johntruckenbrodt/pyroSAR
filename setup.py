@@ -1,22 +1,19 @@
 from setuptools import setup, find_packages
 import os
-import sys
 
 # Create .pyrosar in HOME - Directory
 directory = os.path.join(os.path.expanduser('~'), '.pyrosar')
 os.makedirs(directory, exist_ok=True)
 
 directory = os.path.abspath(os.path.dirname(__file__))
-if sys.version_info >= (3, 0):
-    with open(os.path.join(directory, 'README.md'), encoding='utf-8') as f:
-        long_description = f.read()
-else:
-    with open(os.path.join(directory, 'README.md')) as f:
-        long_description = f.read()
+
+with open(os.path.join(directory, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
 
 setup(name='pyroSAR',
       packages=find_packages(),
       include_package_data=True,
+      python_requires='>=3',
       setup_requires=['setuptools_scm'],
       use_scm_version=True,
       description='a framework for large-scale SAR satellite data processing',
@@ -24,12 +21,12 @@ setup(name='pyroSAR',
           'License :: OSI Approved :: MIT License',
           'Operating System :: Microsoft :: Windows',
           'Operating System :: POSIX :: Linux',
-          'Programming Language :: Python',
+          'Programming Language :: Python :: 3'
       ],
       install_requires=['progressbar2',
                         'pathos>=0.2',
                         'numpy',
-                        'spatialist>=0.5',
+                        'spatialist>=0.8',
                         'pyyaml',
                         'requests',
                         'psycopg2',
