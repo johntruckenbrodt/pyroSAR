@@ -19,7 +19,6 @@ The :class:`ID` class and its subclasses allow easy and standardized access to t
 images from different SAR sensors.
 """
 
-from __future__ import print_function
 import sys
 
 from builtins import str
@@ -127,7 +126,6 @@ def identify_many(scenes, pbar=True, sortkey=None):
     """
     wrapper function for returning metadata handlers of all valid scenes in a list, similar to function
     :func:`~pyroSAR.drivers.identify`.
-    Prints a progressbar.
 
     Parameters
     ----------
