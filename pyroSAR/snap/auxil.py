@@ -270,10 +270,12 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None):
                 os.remove(outname + '.tif')
             elif os.path.isdir(outname):
                 shutil.rmtree(outname, onerror=windows_fileprefix)
-            elif outname.endswith('.dim'):
+            elif outname.endswith('.dim') and os.path.isfile(outname):
                 os.remove(outname)
-                shutil.rmtree(outname.replace('.dim', '.data'),
-                              onerror=windows_fileprefix)
+                datadir = outname.replace('.dim', '.data')
+                if os.path.isdir(datadir):
+                    shutil.rmtree(datadir,
+                                  onerror=windows_fileprefix)
         raise RuntimeError(submessage.format(out, err, os.path.basename(xmlfile), proc.returncode))
 
 

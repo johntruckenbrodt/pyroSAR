@@ -6,7 +6,7 @@ dependencies:
   - progressbar2
   - pathos>=0.2
   - numpy
-  - spatialist>=0.5
+  - spatialist>=0.8
   - pyyaml
   - requests
   - psycopg2

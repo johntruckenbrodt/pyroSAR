@@ -13,28 +13,18 @@
 ###############################################################################
 import os
 import re
-import sys
 import ftplib
 import zipfile as zf
-from ftplib import FTP
-from time import strftime, gmtime
-from os.path import expanduser
-
-if sys.version_info >= (3, 0):
-    from io import StringIO
-    from urllib.request import urlopen
-    from urllib.error import HTTPError
-else:
-    from cStringIO import StringIO
-    from urllib2 import urlopen, HTTPError
+from urllib.request import urlopen
+from urllib.error import HTTPError
 
 from osgeo import gdal
 
-from pyroSAR import identify
 from pyroSAR.examine import ExamineSnap
 from spatialist import Raster
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
+from spatialist.envi import HDRobject
 
 import logging
 log = logging.getLogger(__name__)
@@ -55,6 +45,11 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         - 'AW3D30' (ALOS Global Digital Surface Model "ALOS World 3D - 30m")
 
           * url: ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804
+        
+        - 'GETASSE30'
+        
+          * info: https://seadas.gsfc.nasa.gov/help-8.1.0/desktop/GETASSE30ElevationModel.html
+          * url: https://step.esa.int/auxdata/dem/GETASSE30
 
         - 'SRTM 1Sec HGT'
 
@@ -88,7 +83,11 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
             low correlation mask, Sea mask, Information of elevation dataset used
             for the void-filling processing)
           * 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
-          
+        
+        - 'GETASSE30'
+        
+          * 'dem': the actual Digital Elevation Model
+        
         - 'SRTM 1Sec HGT'
          
           * 'dem': the actual Digital Elevation Model
@@ -277,16 +276,16 @@ class DEMHandler:
         return ext
     
     @staticmethod
-    def __buildvrt(archives, vrtfile, pattern, vsi, extent, nodata=None, srs=None):
+    def __buildvrt(archives, vrtfile, pattern, vsi, extent, nodata=None):
         locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in archives])]
-        if nodata is None:
-            with Raster(locals[0]) as ras:
+        with Raster(locals[0]) as ras:
+            if nodata is None:
                 nodata = ras.nodata
+            xres, yres = ras.res
         opts = {'outputBounds': (extent['xmin'], extent['ymin'],
                                  extent['xmax'], extent['ymax']),
-                'srcNodata': nodata}
-        if srs is not None:
-            opts['outputSRS'] = crsConvert(srs, 'wkt')
+                'srcNodata': nodata, 'targetAlignedPixels': True,
+                'xRes': xres, 'yRes': yres}
         gdalbuildvrt(src=locals, dst=vrtfile,
                      options=opts)
     
@@ -373,6 +372,11 @@ class DEMHandler:
                                    'msk': '*MSK.tif',
                                    'stk': '*STK.tif'}
                        },
+            'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
+                          'nodata': None,
+                          'vsi': '/vsizip/',
+                          'pattern': {'dem': '*.GETASSE30'}
+                          },
             'SRTM 1Sec HGT': {'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
                               'nodata': -32768.0,
                               'vsi': '/vsizip/',
@@ -471,6 +475,10 @@ class DEMHandler:
         else:
             locals = self.__retrieve(self.config[demType]['url'], remotes, outdir)
         
+        if demType == 'GETASSE30':
+            for item in locals:
+                getasse30_hdr(item)
+        
         if product == 'dem':
             nodata = self.config[demType]['nodata']
         else:
@@ -513,25 +521,34 @@ class DEMHandler:
                         step)
             return lat, lon
         
-        def index(x=None, y=None, nx=3, ny=3):
+        def index(x=None, y=None, nx=3, ny=3, reverse=False):
+            if reverse:
+                pattern = '{c:0{n}d}{id}'
+            else:
+                pattern = '{id}{c:0{n}d}'
             if x is not None:
-                xf = '{ew}{x:0{nx}d}'.format(ew='W' if x < 0 else 'E', x=abs(x), nx=nx)
+                xf = pattern.format(id='W' if x < 0 else 'E', c=abs(x), n=nx)
             else:
                 xf = ''
             if y is not None:
-                yf = '{ns}{y:0{ny}d}'.format(ns='S' if y < 0 else 'N', y=abs(y), ny=ny)
+                yf = pattern.format(id='S' if y < 0 else 'N', c=abs(y), n=ny)
             else:
                 yf = ''
             out = yf + xf
             return out
         
-        if demType in ['SRTM 1Sec HGT', 'TDX90m']:
-            lat, lon = intrange(extent, step=1)
+        if demType in ['SRTM 1Sec HGT', 'GETASSE30', 'TDX90m']:
             
             if demType == 'SRTM 1Sec HGT':
+                lat, lon = intrange(extent, step=1)
                 remotes = ['{}.SRTMGL1.hgt.zip'.format(index(x, y, nx=3, ny=2))
                            for x in lon for y in lat]
+            elif demType == 'GETASSE30':
+                lat, lon = intrange(extent, step=15)
+                remotes = ['{}.zip'.format(index(x, y, nx=3, ny=2, reverse=True))
+                           for x in lon for y in lat]
             else:
+                lat, lon = intrange(extent, step=1)
                 remotes = []
                 for x in lon:
                     xr = abs(x) // 10 * 10
@@ -562,101 +579,51 @@ class DEMHandler:
         return sorted(remotes)
 
 
-def getAuxdata(datasets, scenes):
-    def getOrbitContentVersions(contentVersion):
-        content = contentVersion.read().split('\n')
-        items = [re.split(r'\s*=\s*', x.strip('\r')) for x in content if re.search('^[0-9]{4}', x)]
-        return dict(items)
+def getasse30_hdr(fname):
+    """
+    create an ENVI HDR file for zipped GETASSE30 DEM tiles
     
-    auxDataPath = os.path.join(expanduser("~"), '.snap/auxdata')
+    Parameters
+    ----------
+    fname: str
+        the name of the zipped tile
+
+    Returns
+    -------
+
+    """
+    basename = os.path.basename(fname)
+    pattern = r'(?P<lat>[0-9]{2})' \
+              '(?P<ns>[A-Z])' \
+              '(?P<lon>[0-9]{3})' \
+              '(?P<ew>[A-Z]).zip'
+    match = re.search(pattern, basename).groupdict()
     
-    scenes = [identify(scene) if isinstance(scene, str) else scene for scene in scenes]
-    sensors = list(set([scene.sensor for scene in scenes]))
-    for dataset in datasets:
-        if dataset == 'SRTM 1Sec HGT':
-            files = [x.replace('hgt', 'SRTMGL1.hgt.zip') for x in
-                     list(set(dissolve([scene.getHGT() for scene in scenes])))]
-            for file in files:
-                infile = os.path.join('https://step.esa.int/auxdata/dem/SRTMGL1', file)
-                outfile = os.path.join(auxDataPath, 'dem/SRTM 1Sec HGT', file)
-                if not os.path.isfile(outfile):
-                    log.info(infile)
-                    try:
-                        input = urlopen(infile)
-                    except HTTPError:
-                        log.info('-> not available')
-                        continue
-                    with open(outfile, 'wb') as output:
-                        output.write(input.read())
-                    input.close()
-        elif dataset == 'POEORB':
-            for sensor in sensors:
-                if re.search('S1[AB]', sensor):
-                    
-                    dates = [(scene.start[:4], scene.start[4:6]) for scene in scenes]
-                    years = list(set([x[0] for x in dates]))
-                    
-                    remote_contentVersion = urlopen(
-                        'https://step.esa.int/auxdata/orbits/Sentinel-1/POEORB/remote_contentVersion.txt')
-                    versions_remote = getOrbitContentVersions(remote_contentVersion)
-                    
-                    for year in years:
-                        dir_orb = os.path.join(auxDataPath, 'Orbits/Sentinel-1/POEORB', year)
-                        
-                        if not os.path.isdir(dir_orb):
-                            os.makedirs(dir_orb)
-                        contentVersionFile = os.path.join(dir_orb, 'contentVersion.txt')
-                        
-                        if os.path.isfile(contentVersionFile):
-                            contentVersion = open(contentVersionFile, 'r+')
-                            versions_local = getOrbitContentVersions(contentVersion)
-                        else:
-                            contentVersion = open(contentVersionFile, 'w')
-                            versions_local = {}
-                        
-                        combine = dict(set(versions_local.items()) & set(versions_remote.items()))
-                        
-                        dates_select = [x for x in dates if x[0] == year]
-                        months = list(set([x[1] for x in dates_select]))
-                        
-                        orb_ids = sorted(
-                            [x for x in ['{}-{}.zip'.format(year, month) for month in months] if not x in combine])
-                        
-                        if len(orb_ids) > 0:
-                            contentVersion.write('#\n#{}\n'.format(strftime('%a %b %d %H:%M:%S %Z %Y', gmtime())))
-                            
-                            for orb_id in orb_ids:
-                                orb_remote = urlopen(
-                                    'https://step.esa.int/auxdata/orbits/Sentinel-1/POEORB/{}'.format(orb_id))
-                                orb_remote_stream = zf.ZipFile(StringIO(orb_remote.read()), 'r')
-                                orb_remote.close()
-                                
-                                targets = [x for x in orb_remote_stream.namelist() if
-                                           not os.path.isfile(os.path.join(dir_orb, x))]
-                                orb_remote_stream.extractall(dir_orb, targets)
-                                orb_remote_stream.close()
-                                
-                                versions_local[orb_id] = versions_remote[orb_id]
-                                
-                                for key, val in versions_local.iteritems():
-                                    contentVersion.write('{}={}\n'.format(key, val))
-                        
-                        contentVersion.close()
-                    remote_contentVersion.close()
-                else:
-                    log.info('not implemented yet')
-        elif dataset == 'Delft Precise Orbits':
-            path_server = 'dutlru2.lr.tudelft.nl'
-            subdirs = {'ASAR:': 'ODR.ENVISAT1/eigen-cg03c', 'ERS1': 'ODR.ERS-1/dgm-e04', 'ERS2': 'ODR.ERS-2/dgm-e04'}
-            ftp = FTP(path_server)
-            ftp.login()
-            for sensor in sensors:
-                if sensor in subdirs.keys():
-                    path_target = os.path.join('pub/orbits', subdirs[sensor])
-                    path_local = os.path.join(auxDataPath, 'Orbits/Delft Precise Orbits', subdirs[sensor])
-                    ftp.cwd(path_target)
-                    for item in ftp.nlst():
-                        ftp.retrbinary('RETR ' + item, open(os.path.join(path_local, item), 'wb').write)
-            ftp.quit()
-        else:
-            log.info('not implemented yet')
+    lon = float(match['lon'])
+    if match['ew'] == 'W':
+        lon *= -1
+    lat = float(match['lat'])
+    if match['ns'] == 'S':
+        lat *= -1
+    posting = 30 / 3600  # 30 arc seconds
+    pixels = 1800
+    
+    map_info = ['Geographic Lat/Lon', '1.0000', '1.0000',
+                str(lon),
+                str(lat + pixels * posting),
+                str(posting),
+                str(posting),
+                'WGS-84', 'units=Degrees']
+    
+    with zf.ZipFile(fname, 'a') as zip:
+        files = zip.namelist()
+        hdr = basename.replace('.zip', '.hdr')
+        if hdr not in files:
+            with HDRobject() as obj:
+                obj.samples = pixels
+                obj.lines = pixels
+                obj.byte_order = 1
+                obj.data_type = 2
+                obj.map_info = '{{{}}}'.format(','.join(map_info))
+                obj.coordinate_system_string = crsConvert(4326, 'wkt')
+                zip.writestr(hdr, str(obj))
