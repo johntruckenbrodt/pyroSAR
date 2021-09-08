@@ -31,7 +31,6 @@ from spatialist.auxil import gdal_translate
 from spatialist.ancillary import finder, run
 
 import logging
-
 log = logging.getLogger(__name__)
 
 
@@ -163,7 +162,7 @@ def parse_node(name, use_existing=True):
         return Node(element)
 
 
-def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=True):
+def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None):
     """
     execute SNAP workflows via the Graph Processing Tool gpt.
     This function merely calls gpt with some additional command
@@ -186,8 +185,6 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
         a list of additional arguments to be passed to the gpt call
         
         - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
-    verbose: bool
-        print out status messages?
     
     Returns
     -------
@@ -209,8 +206,7 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
                 gpt_exec = exec
                 message += ' (using {})'.format(exec)
                 break
-    if verbose:
-        print(message)
+    log.info(message)
     # try to find the GPT executable
     if gpt_exec is None:
         try:
@@ -255,12 +251,12 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
     elif proc.returncode == 1 and match is not None:
         replace = match.groupdict()
         with Workflow(xmlfile) as flow:
-            print('  removing parameter {id}:{par} and executing modified workflow'.format(**replace))
+            log.info('  removing parameter {id}:{par} and executing modified workflow'.format(**replace))
             node = flow[replace['id']]
             del node.parameters[replace['par']]
             flow.write(xmlfile)
         execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions,
-                gpt_args=gpt_args, verbose=verbose)
+                gpt_args=gpt_args)
     
     # append additional information to the error message and raise an error
     else:
@@ -371,17 +367,17 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
             else:
                 i += 1
         # unpack the scene if necessary and perform the custom border noise removal
-        print('unpacking scene')
+        log.info('unpacking scene')
         if scene.compression is not None:
             scene.unpack(tmpname)
-        print('removing border noise..')
+        log.info('removing border noise..')
         scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
         # change the name of the input file to that of the unpacked archive
         read.parameters['file'] = scene.scene
         # write a new workflow file
         workflow.write(xmlfile)
     
-    print('executing node sequence{}..'.format('s' if groups is not None else ''))
+    log.info('executing node sequence{}..'.format('s' if groups is not None else ''))
     try:
         if groups is not None:
             tmpdir = os.path.join(tmpname, 'tmp')
@@ -398,7 +394,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
     outname = os.path.join(outdir, os.path.basename(tmpname))
     
     if format == 'ENVI':
-        print('converting to GTiff')
+        log.info('converting to GTiff')
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
         for item in finder(tmpname, ['*.img'], recursive=False):
@@ -444,7 +440,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
     ###########################################################################
     if cleanup and os.path.exists(tmpname):
         shutil.rmtree(tmpname, onerror=windows_fileprefix)
-    print('done')
+    log.info('done')
 
 
 def is_consistent(workflow):
@@ -1284,7 +1280,7 @@ def get_egm96_lookup():
     os.makedirs(os.path.dirname(local), exist_ok=True)
     if not os.path.isfile(local):
         remote = 'https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
-        print('{} <<-- {}'.format(local, remote))
+        log.info('{} <<-- {}'.format(local, remote))
         r = requests.get(remote)
         with open(local, 'wb')as out:
             out.write(r.content)

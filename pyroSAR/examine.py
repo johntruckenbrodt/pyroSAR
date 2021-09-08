@@ -24,6 +24,10 @@ import pkg_resources
 from pyroSAR._dev_config import ConfigHandler
 from spatialist.ancillary import finder
 
+import logging
+
+log = logging.getLogger(__name__)
+
 config = ConfigHandler()
 
 
@@ -51,12 +55,11 @@ class ExamineSnap(object):
         self.sections = ['SNAP', 'OUTPUT', 'SNAP_SUFFIX']
         
         # try reading all necessary attributes from the config file
-        # print('reading config..')
         self.__read_config()
         
         # if SNAP could not be identified from the config attributes, do a system search for it
         if not self.__is_identified():
-            # print('identifying SNAP..')
+            log.debug('identifying SNAP')
             self.__identify_snap()
         
         # if the auxdatapath attribute was not yet set, create a default directory
@@ -67,7 +70,7 @@ class ExamineSnap(object):
         # if the SNAP auxdata properties attribute was not yet identified,
         # point it to the default file delivered with pyroSAR
         if not hasattr(self, 'properties'):
-            # print('using default properties file..')
+            # log.info('using default properties file..')
             template = os.path.join('snap', 'data', 'snap.auxdata.properties')
             self.properties = pkg_resources.resource_filename(__name__, template)
         
@@ -119,6 +122,7 @@ class ExamineSnap(object):
         # for each possible SNAP executable, check whether additional files and directories exist relative to it
         # to confirm whether it actually is a ESA SNAP installation or something else like e.g. the Ubuntu App Manager
         for path in executables:
+            log.debug('checking candidate {}'.format(path))
             if os.path.islink(path):
                 path = os.path.realpath(path)
             
@@ -148,9 +152,9 @@ class ExamineSnap(object):
             self.properties = auxdata_properties
             return
         
-        warnings.warn('SNAP could not be identified. If you have installed it please add the path to the SNAP '
-                      'executables (bin subdirectory) to the PATH environment. '
-                      'E.g. in the Linux .bashrc file add the following line:\nexport PATH=$PATH:path/to/snap/bin"')
+        log.warning('SNAP could not be identified. If you have installed it please add the path to the SNAP '
+                    'executables (bin subdirectory) to the PATH environment. '
+                    'E.g. in the Linux .bashrc file add the following line:\nexport PATH=$PATH:path/to/snap/bin"')
     
     def __read_config(self):
         """
@@ -202,13 +206,13 @@ class ExamineSnap(object):
                 else:
                     exist = os.path.isdir(val)
                 if exist:
-                    # print('setting attribute {}'.format(attr))
+                    # log.info('setting attribute {}'.format(attr))
                     setattr(self, attr, val)
     
     def __update_config(self):
         for section in self.sections:
             if section not in config.sections:
-                # print('creating section {}..'.format(section))
+                # log.info('creating section {}..'.format(section))
                 config.add_section(section)
         
         for key in self.identifiers + ['auxdatapath', 'properties']:
@@ -227,8 +231,8 @@ class ExamineSnap(object):
             value = json.dumps(value)
         
         if attr not in config[section].keys() or config[section][attr] != value:
-            # print('updating attribute {0}:{1}..'.format(section, attr))
-            # print('  {0} -> {1}'.format(repr(config[section][attr]), repr(value)))
+            # log.info('updating attribute {0}:{1}..'.format(section, attr))
+            # log.info('  {0} -> {1}'.format(repr(config[section][attr]), repr(value)))
             config.set(section, key=attr, value=value, overwrite=True)
     
     def __update_snap_properties(self):
@@ -297,11 +301,11 @@ class ExamineGamma(object):
         
         if hasattr(self, 'home'):
             if home_sys is not None and self.home != home_sys:
-                print('the value of GAMMA_HOME is different to that in the pyroSAR configuration;\n'
-                      '  was: {}\n'
-                      '  is : {}\n'
-                      'resetting the configuration and deleting parsed modules'
-                      .format(self.home, home_sys))
+                log.info('the value of GAMMA_HOME is different to that in the pyroSAR configuration;\n'
+                         '  was: {}\n'
+                         '  is : {}\n'
+                         'resetting the configuration and deleting parsed modules'
+                         .format(self.home, home_sys))
                 parsed = os.path.join(os.path.dirname(self.fname), 'gammaparse')
                 shutil.rmtree(parsed)
                 self.home = home_sys

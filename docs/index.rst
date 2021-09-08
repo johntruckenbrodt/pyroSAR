@@ -19,6 +19,7 @@ General Topics
    general/DEM
    general/snap
    general/processing
+   general/logging
 
 API Documentation
 =================
