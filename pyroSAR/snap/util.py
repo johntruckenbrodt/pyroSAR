@@ -190,7 +190,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     elif isinstance(infile, str):
         id = pyroSAR.identify(infile)
     elif isinstance(infile, list):
-        ids = pyroSAR.identify_many(infile, verbose=False, sortkey='start')
+        ids = pyroSAR.identify_many(infile, sortkey='start')
         id = ids[0]
     else:
         raise TypeError("'infile' must be of type str, list or pyroSAR.ID")
