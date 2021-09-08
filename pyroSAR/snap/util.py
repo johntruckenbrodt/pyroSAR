@@ -19,6 +19,9 @@ from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, get_egm96_look
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 from spatialist.ancillary import dissolve
 
+import logging
+log = logging.getLogger(__name__)
+
 
 def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR',
@@ -187,15 +190,15 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     elif isinstance(infile, str):
         id = pyroSAR.identify(infile)
     elif isinstance(infile, list):
-        ids = pyroSAR.identify_many(infile, verbose=False, sortkey='start')
+        ids = pyroSAR.identify_many(infile, sortkey='start')
         id = ids[0]
     else:
         raise TypeError("'infile' must be of type str, list or pyroSAR.ID")
     
     if id.is_processed(outdir):
-        print('scene {} already processed'.format(id.outname_base()))
+        log.info('scene {} already processed'.format(id.outname_base()))
         return
-    # print(os.path.basename(id.scene))
+    
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
     ############################################
@@ -214,7 +217,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # this list gathers IDs of nodes for which this should not be done because they are configured individually
     resampling_exceptions = []
     ######################
-    # print('- assessing polarization selection')
     if isinstance(polarizations, str):
         if polarizations == 'all':
             polarizations = id.polarizations
@@ -236,11 +238,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     ############################################
     # parse base workflow
-    # print('- parsing base workflow')
     workflow = parse_recipe('base')
     ############################################
     # Read node configuration
-    # print('-- configuring Read Node')
     read = workflow['Read']
     read.parameters['file'] = id.scene
     read.parameters['formatName'] = formatName
@@ -259,14 +259,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         read = sliceAssembly
     ############################################
     # Remove-GRD-Border-Noise node configuration
-    # print('-- configuring Remove-GRD-Border-Noise Node')
     if id.sensor in ['S1A', 'S1B'] and removeS1BorderNoise:
         bn = parse_node('Remove-GRD-Border-Noise')
         workflow.insert_node(bn, before=read.id)
         bn.parameters['selectedPolarisations'] = polarizations
     ############################################
     # ThermalNoiseRemoval node configuration
-    # print('-- configuring ThermalNoiseRemoval Node')
     if id.sensor in ['S1A', 'S1B'] and removeS1ThermalNoise:
         for reader in readers:
             tn = parse_node('ThermalNoiseRemoval')
@@ -274,7 +272,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             tn.parameters['selectedPolarisations'] = polarizations
     ############################################
     # orbit file application node configuration
-    # print('-- configuring Apply-Orbit-File Node')
     orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
                     'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
     orbitType = orbit_lookup[formatName]
@@ -292,7 +289,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     orb.parameters['continueOnFail'] = False
     ############################################
     # calibration node configuration
-    # print('-- configuring Calibration Node')
     cal = workflow['Calibration']
     cal.parameters['selectedPolarisations'] = polarizations
     cal.parameters['sourceBands'] = bandnames['int']
@@ -314,7 +310,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     last = cal.id
     ############################################
     # terrain flattening node configuration
-    # print('-- configuring Terrain-Flattening Node')
     if terrainFlattening:
         tf = parse_node('Terrain-Flattening')
         workflow.insert_node(tf, before=last)
@@ -415,7 +410,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         bm_tc.parameters['geographicError'] = 0.0
         ############################################
     # specify spatial resolution and coordinate reference system of the output dataset
-    # print('-- configuring CRS')
     tc.parameters['pixelSpacingInMeter'] = tr
     
     try:
@@ -444,7 +438,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     tc.parameters['mapProjection'] = t_srs
     ############################################
     # (optionally) add node for conversion from linear to db scaling
-    # print('-- configuring LinearToFromdB Node')
     if scaling not in ['dB', 'db', 'linear']:
         raise RuntimeError('scaling must be  a string of either "dB", "db" or "linear"')
     
@@ -455,9 +448,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     ############################################
     # (optionally) add subset node and add bounding box coordinates of defined shapefile
-    # print('-- configuring Subset Node')
     if shapefile:
-        # print('--- read')
         if isinstance(shapefile, dict):
             ext = shapefile
         else:
@@ -477,9 +468,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ext['ymin'] -= buffer
         ext['xmax'] += buffer
         ext['ymax'] += buffer
-        # print('--- create bbox')
         with bbox(ext, 4326) as bounds:
-            # print('--- intersect')
             inter = intersect(id.bbox(), bounds)
             if not inter:
                 raise RuntimeError('no bounding box intersection between shapefile and scene')
@@ -505,7 +494,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         subset.parameters['geoRegion'] = ''
     ############################################
     # parametrize write node
-    # print('-- configuring Write Node')
     # create a suffix for the output file to identify processing steps performed in the workflow
     suffix = workflow.suffix()
     if tmpdir is None:
@@ -604,7 +592,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     ############################################
     # select DEM type
-    # print('-- configuring DEM')
     dempar = {'externalDEMFile': externalDEMFile,
               'externalDEMApplyEGM': externalDEMApplyEGM}
     if externalDEMFile is not None:
@@ -661,7 +648,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     ############################################
     # write workflow to file and optionally execute it
-    # print('- writing workflow to file')
+    log.debug('writing workflow to file')
     
     wf_name = outname.replace(tmpdir, outdir) + '_proc.xml'
     workflow.write(wf_name)
@@ -674,8 +661,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 gpt_exceptions=gpt_exceptions, gpt_args=gpt_args,
                 removeS1BorderNoiseMethod=removeS1BorderNoiseMethod, outdir=outdir)
         except RuntimeError as e:
-            print(str(e))
-            with open(wf_name.replace('_proc.xml', '_error.log'), 'w') as log:
-                log.write(str(e))
+            log.info(str(e))
+            with open(wf_name.replace('_proc.xml', '_error.log'), 'w') as logfile:
+                logfile.write(str(e))
     if returnWF:
         return wf_name

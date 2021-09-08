@@ -26,6 +26,9 @@ from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
 
+import logging
+log = logging.getLogger(__name__)
+
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
     """
@@ -215,7 +218,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
         crs = gdalwarp_args['dstSRS']
         if crs != 'EPSG:4326':
             message += ' and reprojecting to {}'.format(crs)
-        print(message)
+        log.info(message)
         gdalwarp(src, dst, gdalwarp_args)
     except RuntimeError as e:
         if os.path.isfile(dst):
@@ -313,7 +316,7 @@ class DEMHandler:
             if not os.path.isfile(outfile):
                 try:
                     input = urlopen(infile)
-                    print('{} <<-- {}'.format(outfile, infile))
+                    log.info('{} <<-- {}'.format(outfile, infile))
                 except HTTPError:
                     continue
                 with open(outfile, 'wb') as output:
@@ -351,7 +354,7 @@ class DEMHandler:
                 except ftplib.error_temp:
                     continue
                 address = '{}://{}/{}{}'.format(protocol, url, path + '/' if path != '' else '', product_remote)
-                print('{} <<-- {}'.format(product_local, address))
+                log.info('{} <<-- {}'.format(product_local, address))
                 with open(product_local, 'wb') as myfile:
                     ftp.retrbinary('RETR {}'.format(product_remote), myfile.write)
             if os.path.isfile(product_local):

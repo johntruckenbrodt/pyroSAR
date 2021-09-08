@@ -19,6 +19,9 @@ from spatialist.ancillary import finder, which, dissolve
 
 from pyroSAR.examine import ExamineGamma
 
+import logging
+log = logging.getLogger(__name__)
+
 
 def parse_command(command, indent='    '):
     """
@@ -646,7 +649,6 @@ def parse_module(bindir, outfile):
     for cmd in sorted(finder(bindir, [r'^\w+$'], regex=True), key=lambda s: s.lower()):
         basename = os.path.basename(cmd)
         if basename not in excludes:
-            # print(basename)
             try:
                 fun = parse_command(cmd)
             except RuntimeError as e:
@@ -665,7 +667,7 @@ def parse_module(bindir, outfile):
         with open(outfile, 'a') as out:
             out.write(outstring)
     if len(failed) > 0:
-        print('the following functions could not be parsed:\n{0}\n({1} total)'.format('\n'.join(failed), len(failed)))
+        log.info('the following functions could not be parsed:\n{0}\n({1} total)'.format('\n'.join(failed), len(failed)))
 
 
 def autoparse():
@@ -693,14 +695,14 @@ def autoparse():
     for module in finder(home, ['[A-Z]*'], foldermode=2):
         outfile = os.path.join(target, os.path.basename(module).lower() + '.py')
         if not os.path.isfile(outfile):
-            print('parsing module {} to {}'.format(os.path.basename(module), outfile))
+            log.info('parsing module {} to {}'.format(os.path.basename(module), outfile))
             for submodule in ['bin', 'scripts']:
-                print('-' * 10 + '\n{}'.format(submodule))
+                log.info('-' * 10 + '\n{}'.format(submodule))
                 try:
                     parse_module(os.path.join(module, submodule), outfile)
                 except OSError:
-                    print('..does not exist')
-            print('=' * 20)
+                    log.info('..does not exist')
+            log.info('=' * 20)
     modules = [re.sub(r'\.py', '', os.path.basename(x)) for x in finder(target, [r'[a-z]+\.py$'], regex=True)]
     if len(modules) > 0:
         with open(os.path.join(target, '__init__.py'), 'w') as init:

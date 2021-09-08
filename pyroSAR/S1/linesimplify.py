@@ -177,7 +177,7 @@ def reduce(seq, maxpoints=20, straighten=False, plot=False):
     # further straighten the line segments
     # def straight(xn, yn, VWpts):
     #     indices = [i for i in range(0, len(xn)) if (xn[i], yn[i]) in VWpts]
-    #     print(indices)
+    #     log.info(indices)
     #     for i, j in enumerate(indices):
     #         if i < (len(indices) - 1):
     #             if indices[i + 1] > j + 1:

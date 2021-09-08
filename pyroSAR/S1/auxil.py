@@ -30,6 +30,9 @@ import progressbar as pb
 
 from spatialist.ancillary import finder
 
+import logging
+log = logging.getLogger(__name__)
+
 try:
     import argparse
 except ImportError:
@@ -149,7 +152,7 @@ class OSV(object):
                 os.makedirs(os.path.dirname(target), exist_ok=True)
                 if not os.path.isfile(target):
                     if message:
-                        print('compressing and reorganizing EOF files')
+                        log.info('compressing and reorganizing EOF files')
                         message = False
                     with zf.ZipFile(file=target,
                                     mode='w',
@@ -202,7 +205,7 @@ class OSV(object):
                 stop2 = datetime.strptime(match.group('stop'), '%Y%m%dT%H%M%S')
                 if sensor == match.group('sensor'):
                     if start2 < stop and stop2 > start:
-                        print(url_sub)
+                        log.info(url_sub)
                         files.append({'filename': file,
                                       'href': url_sub + '/' + file,
                                       'auth': None})
@@ -231,7 +234,7 @@ class OSV(object):
                                           sensor=sens,
                                           year=date_search.year,
                                           month=date_search.month)
-                print(url_sub)
+                log.info(url_sub)
                 result = requests.get(url_sub, timeout=self.timeout).text
                 files_sub = list(set(re.findall(self.pattern, result)))
                 if len(files_sub) == 0:
@@ -291,7 +294,7 @@ class OSV(object):
             query_list.append(query_elem)
         query_str = ' '.join(query_list)
         target = '{}/search?q={}&format=json'.format(url, query_str)
-        print(target)
+        log.info(target)
         
         def _parse_gnsssearch_json(search_dict):
             parsed_dict = {}
@@ -395,7 +398,7 @@ class OSV(object):
             the product dictionary of the remote OSV files, with href
         """
         
-        print('searching for new {} files'.format(osvtype))
+        log.info('searching for new {} files'.format(osvtype))
         
         if start is not None:
             start = datetime.strptime(start, '%Y%m%dT%H%M%S')
@@ -417,7 +420,7 @@ class OSV(object):
         if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
             items = [x for x in items
                      if self.date(x['filename'], 'start') > self.maxdate('POE', 'stop')]
-        print('found {} results'.format(len(items)))
+        log.info('found {} results'.format(len(items)))
         
         return items
     
@@ -446,7 +449,7 @@ class OSV(object):
         maxdate_poe = self.maxdate('POE', 'stop')
         if maxdate_poe is not None:
             deprecated = [x for x in self.getLocals('RES') if self.date(x, 'stop') < maxdate_poe]
-            print('deleting {} RES file{}'.format(len(deprecated), '' if len(deprecated) == 1 else 's'))
+            log.info('deleting {} RES file{}'.format(len(deprecated), '' if len(deprecated) == 1 else 's'))
             for item in deprecated:
                 os.remove(item)
     
@@ -578,7 +581,7 @@ class OSV(object):
                 downloads.append((remote, local, basename, auth))
         if len(downloads) == 0:
             return
-        print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
+        log.info('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
         if pbar:
             progress = pb.ProgressBar(max_value=len(downloads))
         i = 0
@@ -697,7 +700,7 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
     
     # compute noise scaling factor
     if scene.meta['IPF_version'] >= 2.9:
-        print('border noise removal not necessary for IPF version {}'.format(scene.meta['IPF_version']))
+        log.info('border noise removal not necessary for IPF version {}'.format(scene.meta['IPF_version']))
         return
     elif scene.meta['IPF_version'] <= 2.5:
         knoise = {'IW': 75088.7, 'EW': 56065.87}[scene.acquisition_mode]
@@ -737,7 +740,7 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
     
     # iterate over the four image subsets
     for subset in subsets:
-        print(subset)
+        log.info(subset)
         xmin, ymin, xmax, ymax = subset
         xdiff = xmax - xmin
         ydiff = ymax - ymin
