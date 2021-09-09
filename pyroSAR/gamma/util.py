@@ -38,6 +38,7 @@ from pyroSAR.examine import ExamineSnap
 from .auxil import do_execute
 
 import logging
+
 log = logging.getLogger(__name__)
 
 try:
@@ -516,7 +517,7 @@ def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpa
 def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geoback=1,
             nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
             cleanup=True, export_extra=None, basename_extensions=None,
-            removeS1BorderNoiseMethod='gamma', refine_LUT=False, exist_ok=False):
+            removeS1BorderNoiseMethod='gamma', refine_LUT=False):
     """
     general function for radiometric terrain correction (RTC) and geocoding of SAR backscatter images with GAMMA.
     Applies the RTC method by :cite:`Small2011` to retrieve gamma nought RTC backscatter.
@@ -581,8 +582,6 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
          - None: do not remove border noise
     refine_LUT: bool
         should the LUT for geocoding be refined using pixel area normalization?
-    exist_ok: bool
-        allow existing output files and do not create new ones?
     
     Returns
     -------
@@ -672,8 +671,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     tmpdir = os.path.join(tmpdir, ref.outname_base(extensions=basename_extensions))
     
     for dir in [tmpdir, outdir]:
-        if not os.path.isdir(dir):
-            os.makedirs(dir)
+        os.makedirs(dir, exist_ok=True)
     
     if ref.is_processed(outdir):
         log.info('scene {} already processed'.format(ref.outname_base(extensions=basename_extensions)))
@@ -690,7 +688,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         if scene.compression is not None:
             log.info('unpacking scene..')
             try:
-                scene.unpack(tmpdir, exist_ok=exist_ok)
+                scene.unpack(tmpdir)
             except RuntimeError:
                 log.info('scene was attempted to be processed before, exiting')
                 return
@@ -712,7 +710,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     for scene in scenes:
         convert2gamma(scene, directory=tmpdir, logpath=path_log, outdir=tmpdir,
                       basename_extensions=basename_extensions, shellscript=shellscript,
-                      S1_bnr=gamma_bnr, exist_ok=exist_ok)
+                      S1_bnr=gamma_bnr)
     
     for scene in scenes:
         if scene.sensor in ['S1A', 'S1B']:
@@ -724,12 +722,9 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             try:
                 correctOSV(id=scene, directory=tmpdir, osvdir=osvdir, osvType=osvtype,
                            logpath=path_log, outdir=tmpdir, shellscript=shellscript)
-            except RuntimeError as e:
-                if str(e) == 'in subroutine julday: there is no year zero!':
-                    pass
-                else:
-                    log.warning('orbit state vector correction failed for scene {}'.format(scene.scene))
-                    return
+            except RuntimeError:
+                log.warning('orbit state vector correction failed for scene {}'.format(scene.scene))
+                return
     
     log.info('calibrating...')
     for scene in scenes:
@@ -767,7 +762,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         log.info('multilooking..')
         for image in images:
             multilook(infile=image, outfile=image + '_mli', targetres=targetres,
-                      logpath=path_log, outdir=tmpdir, shellscript=shellscript, exist_ok=exist_ok)
+                      logpath=path_log, outdir=tmpdir, shellscript=shellscript)
         
         images = [x + '_mli' for x in images]
         products.extend(images)
