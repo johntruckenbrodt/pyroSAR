@@ -1188,7 +1188,7 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
 
 def pixel_area_wrap(master, namespace, lut, path_log, outdir, shellscript):
     """
-    helper function for computing pixel_area files
+    helper function for computing pixel_area files in function geocode.
     
     Parameters
     ----------
@@ -1210,40 +1210,30 @@ def pixel_area_wrap(master, namespace, lut, path_log, outdir, shellscript):
 
     """
     master_par = ISPPar(master + '.par')
+
+    pixel_area_args = {'MLI_par': master + '.par',
+                       'DEM_par': namespace.dem_seg_geo + '.par',
+                       'DEM': namespace.dem_seg_geo,
+                       'lookup_table': lut,
+                       'ls_map': namespace.ls_map_geo,
+                       'inc_map': namespace.inc_geo,
+                       'pix_sigma0': namespace.pix_area_sigma0,
+                       'pix_gamma0': namespace.pix_area_gamma0,
+                       'logpath': path_log,
+                       'outdir': outdir,
+                       'shellscript': shellscript}
     
     # newer versions of GAMMA enable creating the ratio of ellipsoid based
     # pixel area and DEM-facet pixel area directly with command pixel_area
     if hasarg(diff.pixel_area, 'sig2gam_ratio'):
         namespace.appreciate(['pix_ratio'])
-        
-        diff.pixel_area(MLI_par=master + '.par',
-                        DEM_par=namespace.dem_seg_geo + '.par',
-                        DEM=namespace.dem_seg_geo,
-                        lookup_table=lut,
-                        ls_map=namespace.ls_map_geo,
-                        inc_map=namespace.inc_geo,
-                        pix_sigma0=namespace.pix_area_sigma0,
-                        pix_gamma0=namespace.pix_area_gamma0,
-                        sig2gam_ratio=namespace.pix_ratio,
-                        logpath=path_log,
-                        outdir=outdir,
-                        shellscript=shellscript)
+        pixel_area_args['sig2gam_ratio'] = namespace.pix_ratio
+        diff.pixel_area(**pixel_area_args)
     else:
         # sigma0 = MLI * ellip_pix_sigma0 / pix_area_sigma0
         # gamma0 = MLI * ellip_pix_sigma0 / pix_area_gamma0
         namespace.appreciate(['pix_area_gamma0', 'pix_ellip_sigma0', 'pix_ratio'])
         # actual illuminated area as obtained from integrating DEM-facets (pix_area_sigma0 | pix_area_gamma0)
-        pixel_area_args = {'MLI_par': master + '.par',
-                           'DEM_par': namespace.dem_seg_geo + '.par',
-                           'DEM': namespace.dem_seg_geo,
-                           'lookup_table': lut,
-                           'ls_map': namespace.ls_map_geo,
-                           'inc_map': namespace.inc_geo,
-                           'pix_sigma0': namespace.pix_area_sigma0,
-                           'pix_gamma0': namespace.pix_area_gamma0,
-                           'logpath': path_log,
-                           'outdir': outdir,
-                           'shellscript': shellscript}
         diff.pixel_area(**pixel_area_args)
         
         # ellipsoid-based pixel area (ellip_pix_sigma0)
