@@ -15,7 +15,7 @@ env:
     - PGPASSWORD=
 
 addons:
-  postgresql: 9.6
+  postgresql: '9.6'
   apt:
     sources:
       - sourceline: 'ppa:ubuntugis/ppa'

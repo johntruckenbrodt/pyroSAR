@@ -31,6 +31,9 @@ minor edits for Python3 compatibility by John Truckenbrodt 2019
 from numpy import array, argmin
 import numpy as np
 
+import logging
+log = logging.getLogger(__name__)
+
 
 def triangle_area(p1, p2, p3):
     """
@@ -258,7 +261,7 @@ except ImportError:
         """
 
         def __init__(*args, **kwargs):
-            print("""
+            log.info("""
                   django.contrib.gis.gdal not found.
                   GDALSimplifier not available.
                   """)
@@ -399,7 +402,7 @@ else:
             return ret_func(result)
 
         def notimplemented(self, n):
-            print('This function is not yet implemented')
+            log.info('This function is not yet implemented')
 
         def from_threshold(self, threshold):
             precision = self.precision
@@ -448,7 +451,7 @@ if __name__ == "__main__":
     simplifier = VWSimplifier(pts)
     pts = simplifier.from_number(1000)
     end = time()
-    print("%s vertices removed in %02f seconds" % (n - len(pts), end - start))
+    log.info("%s vertices removed in %02f seconds" % (n - len(pts), end - start))
 
     import matplotlib
 
@@ -457,5 +460,5 @@ if __name__ == "__main__":
 
     plot.plot(pts[:, 0], pts[:, 1], color='r')
     plot.savefig('visvalingam.png')
-    print("saved visvalingam.png")
+    log.info("saved visvalingam.png")
     # plot.show()
