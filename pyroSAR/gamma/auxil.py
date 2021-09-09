@@ -382,7 +382,12 @@ class Namespace(object):
         self.__reg = []
     
     def __getitem__(self, item):
-        return getattr(self, item.replace('.', '_'))
+        item = str(item).replace('.', '_')
+        return self.get(item)
+    
+    def __getattr__(self, item):
+        # will only be run if object has no attribute item
+        return '-'
     
     def appreciate(self, keys):
         for key in keys:

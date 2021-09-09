@@ -928,7 +928,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             '''
             LUT refinement procedure for PALSAR-2 Path data
             '''
-            print('refining LUT of {}...'.format(image))
+            log.info('refining LUT of {}...'.format(image))
             # Refinement of geocoding lookup table
             diff.create_diff_par(PAR_1=image + '.par',
                                  PAR_2='-',
