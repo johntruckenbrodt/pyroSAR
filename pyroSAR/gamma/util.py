@@ -842,80 +842,10 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     ######################################################################
     # RTC reference area computation #####################################
     ######################################################################
-    # newer versions of Gamma enable creating the ratio of ellipsoid based
-    # pixel area and DEM-facet pixel area directly with command pixel_area
-    if hasarg(diff.pixel_area, 'sig2gam_ratio'):
-        n.appreciate(['pix_ratio'])
-        if refine_LUT:
-            n.appreciate(['pix_area_sigma0'])
-        diff.pixel_area(MLI_par=master + '.par',
-                        DEM_par=n.dem_seg_geo + '.par',
-                        DEM=n.dem_seg_geo,
-                        lookup_table=lut_final,
-                        ls_map=n.ls_map_geo,
-                        inc_map=n.inc_geo,
-                        pix_sigma0=n.pix_area_sigma0,
-                        pix_gamma0=n.pix_area_gamma0,
-                        sig2gam_ratio=n.pix_ratio,
-                        logpath=path_log,
-                        outdir=tmpdir,
-                        shellscript=shellscript)
-        par2hdr(master + '.par', n.pix_ratio + '.hdr')
-        if refine_LUT:
-            par2hdr(master + '.par', n.pix_area_sigma0 + '.hdr')
     
-    else:
-        # sigma0 = MLI * ellip_pix_sigma0 / pix_area_sigma0
-        # gamma0 = MLI * ellip_pix_sigma0 / pix_area_gamma0
-        n.appreciate(['pix_area_gamma0', 'pix_ellip_sigma0', 'pix_ratio'])
-        # actual illuminated area as obtained from integrating DEM-facets (pix_area_sigma0 | pix_area_gamma0)
-        diff.pixel_area(MLI_par=master + '.par',
-                        DEM_par=n.dem_seg_geo + '.par',
-                        DEM=n.dem_seg_geo,
-                        lookup_table=lut_final,
-                        ls_map=n.ls_map_geo,
-                        inc_map=n.inc_geo,
-                        pix_sigma0=n.pix_area_sigma0,
-                        pix_gamma0=n.pix_area_gamma0,
-                        logpath=path_log,
-                        outdir=tmpdir,
-                        shellscript=shellscript)
-        par2hdr(master + '.par', n.pix_area_gamma0 + '.hdr')
-        # ellipsoid-based pixel area (ellip_pix_sigma0)
-        isp.radcal_MLI(MLI=master,
-                       MLI_par=master + '.par',
-                       OFF_par='-',
-                       CMLI=master + '_cal',
-                       refarea_flag=1,  # calculate sigma0, scale area by sin(inc_ang)/sin(ref_inc_ang)
-                       pix_area=n.pix_ellip_sigma0,
-                       logpath=path_log,
-                       outdir=tmpdir,
-                       shellscript=shellscript)
-        par2hdr(master + '.par', n.pix_ellip_sigma0 + '.hdr')
-        par2hdr(master + '.par', master + '_cal.hdr')
-        # ratio of ellipsoid based pixel area and DEM-facet pixel area
-        lat.ratio(d1=n.pix_ellip_sigma0,
-                  d2=n.pix_area_gamma0,
-                  ratio=n.pix_ratio,
-                  width=master_par.range_samples,
-                  bx=1,
-                  by=1,
-                  logpath=path_log,
-                  outdir=tmpdir,
-                  shellscript=shellscript)
-        par2hdr(master + '.par', n.pix_ratio + '.hdr')
+    pixel_area_wrap(master=master, namespace=n, lut=lut_final,
+                       path_log=path_log, outdir=tmpdir, shellscript=shellscript)
     
-    if n.isappreciated('gs_ratio'):
-        lat.ratio(d1=n.pix_area_gamma0,
-                  d2=n.pix_area_sigma0,
-                  ratio=n.gs_ratio,
-                  width=master_par.range_samples,
-                  bx=1,
-                  by=1,
-                  logpath=path_log,
-                  outdir=tmpdir,
-                  shellscript=shellscript)
-        par2hdr(master + '.par', n.gs_ratio + '.hdr')
     ######################################################################
     # radiometric terrain correction and backward geocoding ##############
     ######################################################################
@@ -972,18 +902,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                              outdir=tmpdir,
                              shellscript=shellscript)
             # Reproduce pixel area estimate
-            diff.pixel_area(MLI_par=image + '.par',
-                            DEM_par=n.dem_seg_geo + '.par',
-                            DEM=n.dem_seg_geo,
-                            lookup_table=lut_final + '.fine',  # lut_final
-                            ls_map=n.ls_map_geo,
-                            inc_map=n.inc_geo,
-                            pix_sigma0=n.pix_area_sigma0,
-                            sigma0_ratio=n.pix_ratio,  # '-'
-                            logpath=path_log,
-                            outdir=tmpdir,
-                            shellscript=shellscript)
-            par2hdr(master + '.par', image + '_pix_sigma0' + '.hdr')
+            pixel_area_wrap(master=image, namespace=n, lut=lut_final + '.fine',
+                               path_log=path_log, outdir=tmpdir, shellscript=shellscript)
             
             lut_final = lut_final + '.fine'
         
@@ -1276,3 +1196,103 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
             os.remove(subitem)
     os.remove(tab_in)
     os.remove(tab_out)
+
+
+def pixel_area_wrap(master, namespace, lut, path_log, outdir, shellscript):
+    """
+    helper function for computing pixel_area files
+    
+    Parameters
+    ----------
+    master: str
+        the master SAR scene
+    namespace: pyroSAR.gamma.auxil.Namespace
+        an object collecting all output file names
+    lut: str
+        the name of the lookpu table
+    path_log: str
+        a directory to write command logfiles to
+    outdir: str
+        the directory to execute the command in
+    shellscript: str
+        a file to write the Gamma commands to in shell format
+
+    Returns
+    -------
+
+    """
+    master_par = ISPPar(master + '.par')
+    
+    # newer versions of GAMMA enable creating the ratio of ellipsoid based
+    # pixel area and DEM-facet pixel area directly with command pixel_area
+    if hasarg(diff.pixel_area, 'sig2gam_ratio'):
+        namespace.appreciate(['pix_ratio'])
+        
+        diff.pixel_area(MLI_par=master + '.par',
+                        DEM_par=namespace.dem_seg_geo + '.par',
+                        DEM=namespace.dem_seg_geo,
+                        lookup_table=lut,
+                        ls_map=namespace.ls_map_geo,
+                        inc_map=namespace.inc_geo,
+                        pix_sigma0=namespace.pix_area_sigma0,
+                        pix_gamma0=namespace.pix_area_gamma0,
+                        sig2gam_ratio=namespace.pix_ratio,
+                        logpath=path_log,
+                        outdir=outdir,
+                        shellscript=shellscript)
+    else:
+        # sigma0 = MLI * ellip_pix_sigma0 / pix_area_sigma0
+        # gamma0 = MLI * ellip_pix_sigma0 / pix_area_gamma0
+        namespace.appreciate(['pix_area_gamma0', 'pix_ellip_sigma0', 'pix_ratio'])
+        # actual illuminated area as obtained from integrating DEM-facets (pix_area_sigma0 | pix_area_gamma0)
+        pixel_area_args = {'MLI_par': master + '.par',
+                           'DEM_par': namespace.dem_seg_geo + '.par',
+                           'DEM': namespace.dem_seg_geo,
+                           'lookup_table': lut,
+                           'ls_map': namespace.ls_map_geo,
+                           'inc_map': namespace.inc_geo,
+                           'pix_sigma0': namespace.pix_area_sigma0,
+                           'pix_gamma0': namespace.pix_area_gamma0,
+                           'logpath': path_log,
+                           'outdir': outdir,
+                           'shellscript': shellscript}
+        diff.pixel_area(**pixel_area_args)
+        
+        # ellipsoid-based pixel area (ellip_pix_sigma0)
+        isp.radcal_MLI(MLI=master,
+                       MLI_par=master + '.par',
+                       OFF_par='-',
+                       CMLI=master + '_cal',
+                       refarea_flag=1,  # calculate sigma0, scale area by sin(inc_ang)/sin(ref_inc_ang)
+                       pix_area=namespace.pix_ellip_sigma0,
+                       logpath=path_log,
+                       outdir=outdir,
+                       shellscript=shellscript)
+        par2hdr(master + '.par', master + '_cal.hdr')
+        
+        # ratio of ellipsoid based pixel area and DEM-facet pixel area
+        lat.ratio(d1=namespace.pix_ellip_sigma0,
+                  d2=namespace.pix_area_gamma0,
+                  ratio=namespace.pix_ratio,
+                  width=master_par.range_samples,
+                  bx=1,
+                  by=1,
+                  logpath=path_log,
+                  outdir=outdir,
+                  shellscript=shellscript)
+    
+    if namespace.isappreciated('gs_ratio'):
+        lat.ratio(d1=namespace.pix_area_gamma0,
+                  d2=namespace.pix_area_sigma0,
+                  ratio=namespace.gs_ratio,
+                  width=master_par.range_samples,
+                  bx=1,
+                  by=1,
+                  logpath=path_log,
+                  outdir=outdir,
+                  shellscript=shellscript)
+
+    for item in ['pix_area_sigma0', 'pix_area_gamma0',
+                 'pix_ratio', 'pix_ellip_sigma0', 'gs_ratio']:
+        if namespace.isappreciated(item):
+            par2hdr(master + '.par', namespace[item] + '.hdr')
