@@ -783,6 +783,9 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             else:
                 n.depreciate([item])
     
+    if refine_lut:
+        n.appreciate(['pix_area_sigma0'])
+    
     ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
     
     master_par = ISPPar(master + '.par')
