@@ -531,7 +531,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     tmpdir: str
         a temporary directory for writing intermediate files
     outdir: str
-        the directory for the final GeoTiff output files
+        the directory for the final GeoTIFF output files
     targetres: int
         the target resolution in meters
     scaling: {'linear', 'db'} or list
@@ -560,12 +560,12 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         if set to None, a subdirectory OSV is created in the directory of the unpacked scene.
     allow_RES_OSV: bool
         also allow the less accurate RES orbit files to be used?
-        Otherwise the function will raise an error if no POE file exists
+        Otherwise the function will raise an error if no POE file exists.
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
     export_extra: list of str or None
         a list of image file IDs to be exported to outdir
-         - format is GeoTiff if the file is geocoded and ENVI otherwise. Non-geocoded images can be converted via Gamma
+         - format is GeoTIFF if the file is geocoded and ENVI otherwise. Non-geocoded images can be converted via GAMMA
            command data2tiff yet the output was found impossible to read with GIS software
          - scaling of SAR image products is applied as defined by parameter `scaling`
          - see Notes for ID options
@@ -680,7 +680,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     for scene in scenes:
         if scene.compression is not None:
-            log.info('unpacking scene..')
+            log.info('unpacking scene')
             try:
                 scene.unpack(tmpdir)
             except RuntimeError:
@@ -699,7 +699,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             log.info('removing border noise..')
             scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
     
-    log.info('converting scene to GAMMA format..')
+    log.info('converting scene to GAMMA format')
     gamma_bnr = True if removeS1BorderNoiseMethod == 'gamma' else False
     for scene in scenes:
         convert2gamma(scene, directory=tmpdir, logpath=path_log, outdir=tmpdir,
@@ -708,7 +708,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     for scene in scenes:
         if scene.sensor in ['S1A', 'S1B']:
-            log.info('updating orbit state vectors..')
+            log.info('updating orbit state vectors')
             if allow_RES_OSV:
                 osvtype = ['POE', 'RES']
             else:
@@ -720,7 +720,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                 log.warning('orbit state vector correction failed for scene {}'.format(scene.scene))
                 return
     
-    log.info('calibrating...')
+    log.info('calibrating')
     for scene in scenes:
         calibrate(id=scene, directory=tmpdir, logpath=path_log, outdir=tmpdir, shellscript=shellscript)
     
@@ -738,7 +738,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             out_par = out + '.par'
             all_exist = all([os.path.isfile(x) for x in [out, out_par]])
             if not all_exist:
-                log.info('mosaicing scenes...')
+                log.info('mosaicing scenes')
                 isp.MLI_cat(MLI_1=group[0],
                             MLI1_par=group[0] + '.par',
                             MLI_2=group[1],
@@ -753,7 +753,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     products = list(images)
     
     if scene.sensor in ['S1A', 'S1B']:
-        log.info('multilooking..')
+        log.info('multilooking')
         for image in images:
             multilook(infile=image, outfile=image + '_mli', targetres=targetres,
                       logpath=path_log, outdir=tmpdir, shellscript=shellscript)
@@ -807,7 +807,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                    'shellscript': shellscript,
                    'outdir': tmpdir}
     
-    log.info('creating DEM products..')
+    log.info('creating DEM products')
     if master_par.image_geometry == 'GROUND_RANGE':
         gc_map_args.update({'GRD_par': master + '.par'})
         diff.gc_map_grd(**gc_map_args)
@@ -828,18 +828,15 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     ######################################################################
     
     pixel_area_wrap(master=master, namespace=n, lut=n.lut_init,
-                       path_log=path_log, outdir=tmpdir, shellscript=shellscript)
+                    path_log=path_log, outdir=tmpdir, shellscript=shellscript)
     
     ######################################################################
-    # radiometric terrain correction and backward geocoding ##############
+    # lookup table Refinement ############################################
     ######################################################################
     lut_final = n.lut_init
     for image in images:
         if refine_lut:
-            '''
-            LUT refinement procedure for PALSAR-2 Path data
-            '''
-            log.info('refining LUT of {}...'.format(image))
+            log.info('refining LUT of {}'.format(image))
             # Refinement of geocoding lookup table
             diff.create_diff_par(PAR_1=image + '.par',
                                  PAR_2='-',
@@ -890,7 +887,9 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             pixel_area_wrap(master=image, namespace=n, lut=lut_final + '.fine',
                                path_log=path_log, outdir=tmpdir, shellscript=shellscript)
             lut_final = lut_final + '.fine'
-        
+    ######################################################################
+    # radiometric terrain correction and backward geocoding ##############
+    ######################################################################
         lat.product(data_1=image,
                     data_2=n.pix_ratio,
                     product=image + '_gamma0-rtc',
@@ -912,6 +911,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                           shellscript=shellscript)
         par2hdr(n.dem_seg_geo + '.par', image + '_gamma0-rtc_geo.hdr')
         products.extend([image + '_gamma0-rtc', image + '_gamma0-rtc_geo'])
+    ######################################################################
+    # log scaling and image export #######################################
     ######################################################################
     log.info('conversion to (dB and) GeoTIFF..')
     
