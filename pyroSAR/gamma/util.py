@@ -515,9 +515,9 @@ def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpa
 
 
 def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geoback=1,
-            nodata=(0, -99), sarSimCC=False, osvdir=None, allow_RES_OSV=False,
+            nodata=(0, -99), osvdir=None, allow_RES_OSV=False,
             cleanup=True, export_extra=None, basename_extensions=None,
-            removeS1BorderNoiseMethod='gamma', refine_LUT=False):
+            removeS1BorderNoiseMethod='gamma', refine_lut=False):
     """
     general function for radiometric terrain correction (RTC) and geocoding of SAR backscatter images with GAMMA.
     Applies the RTC method by :cite:`Small2011` to retrieve gamma nought RTC backscatter.
@@ -554,9 +554,6 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     nodata: tuple
         the nodata values for the output files; defined as a tuple with two values, the first for linear,
         the second for logarithmic scaling
-    sarSimCC: bool
-        perform geocoding with SAR simulation cross correlation?
-        If False, geocoding is performed with the Range-Doppler approach using orbit state vectors
     osvdir: str
         a directory for Orbit State Vector files;
         this is currently only used by for Sentinel-1 where two subdirectories POEORB and RESORB are created;
@@ -580,7 +577,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
          - 'gamma': the GAMMA implementation of :cite:`Ali2018`
          - None: do not remove border noise
-    refine_LUT: bool
+    refine_lut: bool
         should the LUT for geocoding be refined using pixel area normalization?
     
     Returns
@@ -661,9 +658,6 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     if ref.sensor not in ['S1A', 'S1B', 'PALSAR-2']:
         raise IOError(
             'this method is currently only available for Sentinel-1 and PALSAR-2 Path data. Please stay tuned...')
-    
-    if sarSimCC:
-        raise IOError('geocoding with cross correlation offset refinement is still in the making. Please stay tuned...')
     
     if export_extra is not None and not isinstance(export_extra, list):
         raise TypeError("parameter 'export_extra' must either be None or a list")
@@ -775,13 +769,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     n = Namespace(tmpdir, scene.outname_base(extensions=basename_extensions))
     if scene.sensor in ['S1A', 'S1B']:
         n.appreciate(['dem_seg_geo', 'lut_init', 'inc_geo', 'ls_map_geo'])
-        n.depreciate(['sim_sar_geo', 'u_geo', 'v_geo', 'psi_geo', 'pix_geo'])
     else:
         n.appreciate(['dem_seg_geo', 'lut_init', 'inc_geo', 'ls_map_geo', 'sim_sar_geo'])
-        n.depreciate(['u_geo', 'v_geo', 'psi_geo', 'pix_geo'])
-    
-    # if sarSimCC:
-    #     n.appreciate(['ccp', 'lut_fine'])
     
     if export_extra is not None:
         n.appreciate(export_extra)
@@ -834,23 +823,19 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     sim_width = ISPPar(n.dem_seg_geo + '.par').width
     
-    if sarSimCC:
-        raise IOError('geocoding with cross correlation offset refinement is still in the making. Please stay tuned...')
-    else:
-        lut_final = n.lut_init
-    
     ######################################################################
     # RTC reference area computation #####################################
     ######################################################################
     
-    pixel_area_wrap(master=master, namespace=n, lut=lut_final,
+    pixel_area_wrap(master=master, namespace=n, lut=n.lut_init,
                        path_log=path_log, outdir=tmpdir, shellscript=shellscript)
     
     ######################################################################
     # radiometric terrain correction and backward geocoding ##############
     ######################################################################
+    lut_final = n.lut_init
     for image in images:
-        if refine_LUT:
+        if refine_lut:
             '''
             LUT refinement procedure for PALSAR-2 Path data
             '''
@@ -904,7 +889,6 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             # Reproduce pixel area estimate
             pixel_area_wrap(master=image, namespace=n, lut=lut_final + '.fine',
                                path_log=path_log, outdir=tmpdir, shellscript=shellscript)
-            
             lut_final = lut_final + '.fine'
         
         lat.product(data_1=image,
