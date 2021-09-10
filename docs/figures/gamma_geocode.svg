@@ -209,9 +209,9 @@
       <path d="M443 425.9852 L448 413.9852 L443 416.9852 L438 413.9852 Z" clip-path="url(#clipPath2)" stroke="none"/>
       <path fill="none" d="M455.9476 446.7093 L600.663 510.5222" clip-path="url(#clipPath2)"/>
       <path d="M607.9829 513.75 L599.0203 504.3334 L599.748 510.1188 L594.9857 513.4833 Z" clip-path="url(#clipPath2)" stroke="none"/>
-      <path fill="none" d="M443 456.0095 L443 661.75 L589 661.75" clip-path="url(#clipPath2)"/>
+      <path fill="none" d="M443 456.0095 L443 523.75 M443 533.75 L443 661.75 L589 661.75" clip-path="url(#clipPath2)"/>
       <path d="M597 661.75 L585 656.75 L588 661.75 L585 666.75 Z" clip-path="url(#clipPath2)" stroke="none"/>
-      <path fill="none" d="M443 456.016 L443 758.75" clip-path="url(#clipPath2)"/>
+      <path fill="none" d="M443 456.016 L443 523.75 M443 533.75 L443 758.75" clip-path="url(#clipPath2)"/>
       <path d="M443 766.75 L448 754.75 L443 757.75 L438 754.75 Z" clip-path="url(#clipPath2)" stroke="none"/>
       <path fill="none" d="M443 396 L443 410.4331 L544.5 410.4331 L544.5 417.9852" clip-path="url(#clipPath2)"/>
       <path d="M544.5 425.9852 L549.5 413.9852 L544.5 416.9852 L539.5 413.9852 Z" clip-path="url(#clipPath2)" stroke="none"/>
