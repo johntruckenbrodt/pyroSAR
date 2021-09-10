@@ -122,7 +122,7 @@ def identify(scene):
     raise RuntimeError('data format not supported')
 
 
-def identify_many(scenes, pbar=True, sortkey=None):
+def identify_many(scenes, pbar=False, sortkey=None):
     """
     wrapper function for returning metadata handlers of all valid scenes in a list, similar to function
     :func:`~pyroSAR.drivers.identify`.
@@ -413,7 +413,7 @@ class ID(object):
 
         Parameters
         ----------
-        directory: str
+        directory: str or None
             the directory to be scanned; if left empty the object attribute `gammadir` is scanned
 
         Returns
@@ -595,65 +595,84 @@ class ID(object):
         """
         raise NotImplementedError
     
-    def _unpack(self, directory, offset=None, overwrite=False):
+    def _unpack(self, directory, offset=None, overwrite=False, exist_ok=False):
         """
-        general function for unpacking scene archives; to be called by implementations of ID.unpack
-        :param directory: the name of the directory in which the files are written
-        :param offset: an archive directory offset; to be defined if only a subdirectory is to be unpacked (see e.g. TSX:unpack)
-        :param overwrite: should an existing directory be overwritten?
-        :return: None
+        general function for unpacking scene archives; to be called by implementations of ID.unpack.
+        Will reset object attributes `scene` and `file` to point to the locations of the unpacked scene
+        
+        Parameters
+        ----------
+        directory: str
+            the name of the directory in which the files are written
+        offset: str
+            an archive directory offset; to be defined if only a subdirectory is to be unpacked (see e.g. TSX.unpack)
+        overwrite: bool
+            should an existing directory be overwritten?
+        exist_ok: bool
+            do not attempt unpacking if the target directory already exists? Ignored if `overwrite==True`
+        
+        Returns
+        -------
+        
         """
+        do_unpack = True
         if os.path.isdir(directory):
             if overwrite:
                 shutil.rmtree(directory)
             else:
-                raise RuntimeError('target scene directory already exists: {}'.format(directory))
-        os.makedirs(directory)
+                if exist_ok:
+                    do_unpack = False
+                else:
+                    raise RuntimeError('target scene directory already exists: {}'.format(directory))
+        os.makedirs(directory, exist_ok=True)
         
-        if tf.is_tarfile(self.scene):
-            archive = tf.open(self.scene, 'r')
-            names = archive.getnames()
-            if offset is not None:
-                names = [x for x in names if x.startswith(offset)]
-            header = os.path.commonprefix(names)
+        if do_unpack:
+            if tf.is_tarfile(self.scene):
+                archive = tf.open(self.scene, 'r')
+                names = archive.getnames()
+                if offset is not None:
+                    names = [x for x in names if x.startswith(offset)]
+                header = os.path.commonprefix(names)
+                
+                if header in names:
+                    if archive.getmember(header).isdir():
+                        for item in sorted(names):
+                            if item != header:
+                                member = archive.getmember(item)
+                                if offset is not None:
+                                    member.name = member.name.replace(offset + '/', '')
+                                archive.extract(member, directory)
+                        archive.close()
+                    else:
+                        archive.extractall(directory)
+                        archive.close()
             
-            if header in names:
-                if archive.getmember(header).isdir():
+            elif zf.is_zipfile(self.scene):
+                archive = zf.ZipFile(self.scene, 'r')
+                names = archive.namelist()
+                header = os.path.commonprefix(names)
+                if header.endswith('/'):
                     for item in sorted(names):
                         if item != header:
-                            member = archive.getmember(item)
-                            if offset is not None:
-                                member.name = member.name.replace(offset + '/', '')
-                            archive.extract(member, directory)
+                            repl = item.replace(header, '', 1)
+                            outname = os.path.join(directory, repl)
+                            outname = outname.replace('/', os.path.sep)
+                            if item.endswith('/'):
+                                os.makedirs(outname)
+                            else:
+                                try:
+                                    with open(outname, 'wb') as outfile:
+                                        outfile.write(archive.read(item))
+                                except zf.BadZipfile:
+                                    log.info('corrupt archive, unpacking failed')
+                                    continue
                     archive.close()
                 else:
                     archive.extractall(directory)
                     archive.close()
-        
-        elif zf.is_zipfile(self.scene):
-            archive = zf.ZipFile(self.scene, 'r')
-            names = archive.namelist()
-            header = os.path.commonprefix(names)
-            if header.endswith('/'):
-                for item in sorted(names):
-                    if item != header:
-                        outname = os.path.join(directory, item.replace(header, '', 1)).replace('/', os.path.sep)
-                        if item.endswith('/'):
-                            os.makedirs(outname)
-                        else:
-                            try:
-                                with open(outname, 'wb') as outfile:
-                                    outfile.write(archive.read(item))
-                            except zf.BadZipfile:
-                                log.info('corrupt archive, unpacking failed')
-                                continue
-                archive.close()
             else:
-                archive.extractall(directory)
-                archive.close()
-        else:
-            log.info('unpacking is only supported for TAR and ZIP archives')
-            return
+                log.info('unpacking is only supported for TAR and ZIP archives')
+                return
         
         self.scene = directory
         main = os.path.join(self.scene, os.path.basename(self.file))
@@ -724,14 +743,14 @@ class CEOS_ERS(ID):
         lon = [x[1][0] for x in self.meta['gcps']]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         if self.sensor in ['ERS1', 'ERS2']:
             base_file = re.sub(r'\.PS$', '', os.path.basename(self.file))
             base_dir = os.path.basename(directory.strip('/'))
             
             outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
             
-            self._unpack(outdir, overwrite=overwrite)
+            self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
         else:
             raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
     
@@ -1133,9 +1152,9 @@ class CEOS_PSR(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
     
     def getCorners(self):
         if 'corners' not in self.meta.keys():
@@ -1298,9 +1317,9 @@ class EORC_PSR(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
     
     def getCorners(self):
         if 'corners' not in self.meta.keys():
@@ -1407,13 +1426,13 @@ class ESA(ID):
         meta['cycleNumber'] = meta['MPH_CYCLE']
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         base_file = os.path.basename(self.file).strip(r'\.zip|\.tar(?:\.gz|)')
         base_dir = os.path.basename(directory.strip('/'))
         
         outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
         
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
 
 
 class SAFE(ID):
@@ -1626,9 +1645,9 @@ class SAFE(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file))
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
 
 
 class TSX(ID):
@@ -1728,11 +1747,11 @@ class TSX(ID):
         meta['incidence'] = float(tree.find('.//sceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         match = self.findfiles(self.pattern, True)
         header = [x for x in match if not x.endswith('xml') and 'iif' not in x][0].replace(self.scene, '').strip('/')
         outdir = os.path.join(directory, os.path.basename(header))
-        self._unpack(outdir, offset=header, overwrite=overwrite)
+        self._unpack(outdir, offset=header, overwrite=overwrite, exist_ok=exist_ok)
 
 
 class Archive(object):

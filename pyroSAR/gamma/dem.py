@@ -1,5 +1,5 @@
 ###############################################################################
-# preparation of srtm data for use in gamma
+# preparation of DEM data for use in GAMMA
 
 # Copyright (c) 2014-2021, the pyroSAR Developers.
 
@@ -150,7 +150,7 @@ def transform(infile, outfile, posting=90):
     par2hdr(outfile + '.par', outfile + '.hdr')
 
 
-def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None, logpath=None,
+def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None, logpath=None,
                    username=None, password=None, geoid_mode='gamma', resampling_method='bilinear'):
     """
     | automatically create a DEM in Gamma format for a defined spatial geometry
@@ -178,12 +178,12 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
     Parameters
     ----------
     geometry: spatialist.vector.Vector
-        a vector geometry delimiting the output DEM size; CRS must be WGS84 LatLon (EPSG 4326)
+        a vector geometry delimiting the output DEM size
     demType: str
         the type of DEM to be used; see :func:`~pyroSAR.auxdata.dem_autoload` for options
     outfile: str
         the name of the final DEM file
-    buffer: float
+    buffer: float or None
         a buffer in degrees to create around the geometry
     t_srs: int, str or osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
@@ -212,6 +212,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
     -------
 
     """
+    geometry = geometry.clone()
     
     epsg = crsConvert(t_srs, 'epsg') if t_srs != 4326 else t_srs
     
@@ -238,6 +239,12 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
         vrt = os.path.join(tmpdir, 'dem.vrt')
         dem = os.path.join(tmpdir, 'dem.tif')
         
+        if epsg == geometry.getProjection('epsg') and buffer is None:
+            ext = geometry.extent
+            bounds = [ext['xmin'], ext['ymin'], ext['xmax'], ext['ymax']]
+        else:
+            bounds = None
+        geometry.reproject(4326)
         log.info('collecting DEM tiles')
         dem_autoload([geometry], demType, vrt=vrt, username=username,
                      password=password, buffer=buffer)
@@ -258,7 +265,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
                 raise RuntimeError("'geoid_mode' not supported")
         
         dem_create(vrt, dem, t_srs=epsg, tr=tr, geoid_convert=gdal_geoid,
-                   resampling_method=resampling_method)
+                   resampling_method=resampling_method, outputBounds=bounds)
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
