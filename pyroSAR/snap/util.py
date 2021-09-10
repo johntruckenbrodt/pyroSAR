@@ -154,15 +154,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
 
     Note
     ----
-    If only one polarization is selected and not extra products are defined the results are directly written to GeoTiff.
-    Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTiff files
+    If only one polarization is selected and not extra products are defined the results are directly written to GeoTIFF.
+    Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTIFF files
     (one for each polarization/extra product).
-    If GeoTiff would directly be selected as output format for multiple polarizations then a multilayer GeoTiff
+    If GeoTIFF would directly be selected as output format for multiple polarizations then a multilayer GeoTIFF
     is written by SNAP which is considered an unfavorable format
     
     
-    .. figure:: figures/snap_geocode.png
-        :scale: 25%
+    .. figure:: figures/snap_geocode.svg
         :align: center
         
         Workflow diagram for function geocode for processing a Sentinel-1 Ground Range
