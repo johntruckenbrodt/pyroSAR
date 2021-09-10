@@ -122,7 +122,7 @@ def identify(scene):
     raise RuntimeError('data format not supported')
 
 
-def identify_many(scenes, pbar=True, sortkey=None):
+def identify_many(scenes, pbar=False, sortkey=None):
     """
     wrapper function for returning metadata handlers of all valid scenes in a list, similar to function
     :func:`~pyroSAR.drivers.identify`.
