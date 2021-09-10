@@ -235,6 +235,7 @@ def parse_command(command, indent='    '):
                                     ('SLC2Rs_par', 'SLC-2Rs_par')],
                        'SLC_intf_geo2': [('cc        (', 'CC        (')],
                        'SLC_interp_map': [('coffs2_sm', 'coffs_sm')],
+                       'SLC_mosaic_S1_TOPS': [('wflg', 'bflg')],
                        'srtm_mosaic': [('<lon>', '<lon2>')],
                        'SSI_INT_S1': [('<SLC2> <par2>', '<SLC_tab2>')],
                        'texture': [('weights_flag', 'wgt_flag')],
