@@ -593,7 +593,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     - images in range-Doppler geometry
     
       * **grd**: the ground range detected SAR intensity image
-      * **grd_mli**: the multi-looked grd image with approached target resolution
+      * **grd_mli**: the multi-looked grd image with approximated target resolution
       * (**pix_ellip_sigma0**): ellipsoid-based pixel area
       * (**pix_area_sigma0**): illuminated area as obtained from integrating DEM-facets in sigma projection (command pixel_area)
       * (**pix_area_gamma0**): illuminated area as obtained from integrating DEM-facets in gamma projection (command pixel_area)
@@ -610,6 +610,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
       * (**psi_geo**): projection angle (between surface normal and image plane normal)
       * **ls_map_geo**: layover and shadow map (in map projection)
       * (**sim_sar_geo**): simulated SAR backscatter image
+      * (**pix_ellip_sigma0_geo**): ellipsoid-based pixel area
       * (**pix_area_sigma0_geo**): illuminated area as obtained from integrating DEM-facets in sigma projection (command pixel_area)
       * (**pix_area_gamma0_geo**): illuminated area as obtained from integrating DEM-facets in gamma projection (command pixel_area)
       * (**pix_ratio_geo**): pixel area normalization factor (pix_ellip_sigma0 / pix_area_gamma0)
@@ -619,7 +620,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
       * **lut_init**: initial geocoding lookup table
     
-    - files specific to SAR simulation cross-correlation geocoding
+    - files specific to lookup table refinement
     
       * **lut_fine**: refined geocoding lookup table
       * **diffpar**: ISP offset/interferogram parameter file
@@ -656,8 +657,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     ref = scenes[0]
     
     if ref.sensor not in ['S1A', 'S1B', 'PALSAR-2']:
-        raise IOError(
-            'this method is currently only available for Sentinel-1 and PALSAR-2 Path data. Please stay tuned...')
+        raise RuntimeError(
+            'this function currently only supports Sentinel-1 and PALSAR-2 Path data. Please stay tuned...')
     
     if export_extra is not None and not isinstance(export_extra, list):
         raise TypeError("parameter 'export_extra' must either be None or a list")
@@ -696,7 +697,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     for scene in scenes:
         if scene.sensor in ['S1A', 'S1B'] and removeS1BorderNoiseMethod in ['ESA', 'pyroSAR']:
-            log.info('removing border noise..')
+            log.info('removing border noise')
             scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
     
     log.info('converting scene to GAMMA format')
@@ -765,23 +766,17 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     # create output names for files to be written
     # appreciated files will be written
-    # depreciated files will be set to '-' in the GAMMA function call and are thus not written
     n = Namespace(tmpdir, scene.outname_base(extensions=basename_extensions))
-    if scene.sensor in ['S1A', 'S1B']:
-        n.appreciate(['dem_seg_geo', 'lut_init', 'inc_geo', 'ls_map_geo'])
-    else:
-        n.appreciate(['dem_seg_geo', 'lut_init', 'inc_geo', 'ls_map_geo', 'sim_sar_geo'])
+    n.appreciate(['dem_seg_geo', 'lut_init', 'inc_geo', 'ls_map_geo'])
     
     if export_extra is not None:
         n.appreciate(export_extra)
-        pix = ['pix_area_sigma0', 'pix_area_gamma0', 'pix_ratio', 'gs_ratio']
+        pix = ['pix_area_sigma0', 'pix_area_gamma0', 'pix_ratio', 'gs_ratio', 'pix_ellip_sigma0']
         pix_geo = []
         for item in pix:
             if item + '_geo' in export_extra:
                 pix_geo.append(item + '_geo')
                 n.appreciate([item])
-            else:
-                n.depreciate([item])
     
     if refine_lut:
         n.appreciate(['pix_area_sigma0'])
@@ -819,7 +814,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                             'OFF_par': '-'})
         diff.gc_map(**gc_map_args)
     
-    for item in ['dem_seg_geo', 'sim_sar_geo', 'u_geo', 'v_geo', 'psi_geo', 'pix_geo', 'inc_geo', 'ls_map_geo']:
+    for item in ['dem_seg_geo', 'sim_sar_geo', 'u_geo', 'v_geo',
+                 'psi_geo', 'pix_geo', 'inc_geo', 'ls_map_geo']:
         if n.isappreciated(item):
             mods = {'data_type': 1} if item == 'ls_map_geo' else None
             par2hdr(n.dem_seg_geo + '.par', n.get(item) + '.hdr', mods)
@@ -888,11 +884,11 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                              shellscript=shellscript)
             # Reproduce pixel area estimate
             pixel_area_wrap(master=image, namespace=n, lut=lut_final + '.fine',
-                               path_log=path_log, outdir=tmpdir, shellscript=shellscript)
+                            path_log=path_log, outdir=tmpdir, shellscript=shellscript)
             lut_final = lut_final + '.fine'
-    ######################################################################
-    # radiometric terrain correction and backward geocoding ##############
-    ######################################################################
+        ######################################################################
+        # radiometric terrain correction and backward geocoding ##############
+        ######################################################################
         lat.product(data_1=image,
                     data_2=n.pix_ratio,
                     product=image + '_gamma0-rtc',
@@ -917,7 +913,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     ######################################################################
     # log scaling and image export #######################################
     ######################################################################
-    log.info('conversion to (dB and) GeoTIFF..')
+    log.info('conversion to (dB and) GeoTIFF')
     
     def exporter(data_in, outdir, nodata, scale='linear', dtype=2):
         if scale == 'db':
@@ -964,7 +960,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                         os.path.join(outdir, outname_base + '_manifest.safe'))
     
     if export_extra is not None:
-        log.info('exporting extra products..')
+        log.info('exporting extra products')
         for key in export_extra:
             if key in pix_geo:
                 fname = n.get(key)
@@ -997,7 +993,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     shutil.copyfile(shellscript, os.path.join(outdir, os.path.basename(shellscript)))
     
     if cleanup:
-        log.info('cleaning up temporary files..')
+        log.info('cleaning up temporary files')
         shutil.rmtree(tmpdir)
 
 
@@ -1210,7 +1206,7 @@ def pixel_area_wrap(master, namespace, lut, path_log, outdir, shellscript):
 
     """
     master_par = ISPPar(master + '.par')
-
+    
     pixel_area_args = {'MLI_par': master + '.par',
                        'DEM_par': namespace.dem_seg_geo + '.par',
                        'DEM': namespace.dem_seg_geo,
@@ -1223,12 +1219,26 @@ def pixel_area_wrap(master, namespace, lut, path_log, outdir, shellscript):
                        'outdir': outdir,
                        'shellscript': shellscript}
     
+    radcal_mli_args = {'MLI': master,
+                       'MLI_par': master + '.par',
+                       'OFF_par': '-',
+                       'CMLI': master + '_cal',
+                       'refarea_flag': 1,  # calculate sigma0, scale area by sin(inc_ang)/sin(ref_inc_ang)
+                       'pix_area': namespace.pix_ellip_sigma0,
+                       'logpath': path_log,
+                       'outdir': outdir,
+                       'shellscript': shellscript}
+    
     # newer versions of GAMMA enable creating the ratio of ellipsoid based
     # pixel area and DEM-facet pixel area directly with command pixel_area
     if hasarg(diff.pixel_area, 'sig2gam_ratio'):
         namespace.appreciate(['pix_ratio'])
         pixel_area_args['sig2gam_ratio'] = namespace.pix_ratio
         diff.pixel_area(**pixel_area_args)
+        
+        if namespace.isappreciated('pix_ellip_sigma0'):
+            isp.radcal_MLI(**radcal_mli_args)
+            par2hdr(master + '.par', master + '_cal.hdr')
     else:
         # sigma0 = MLI * ellip_pix_sigma0 / pix_area_sigma0
         # gamma0 = MLI * ellip_pix_sigma0 / pix_area_gamma0
@@ -1237,15 +1247,7 @@ def pixel_area_wrap(master, namespace, lut, path_log, outdir, shellscript):
         diff.pixel_area(**pixel_area_args)
         
         # ellipsoid-based pixel area (ellip_pix_sigma0)
-        isp.radcal_MLI(MLI=master,
-                       MLI_par=master + '.par',
-                       OFF_par='-',
-                       CMLI=master + '_cal',
-                       refarea_flag=1,  # calculate sigma0, scale area by sin(inc_ang)/sin(ref_inc_ang)
-                       pix_area=namespace.pix_ellip_sigma0,
-                       logpath=path_log,
-                       outdir=outdir,
-                       shellscript=shellscript)
+        isp.radcal_MLI(**radcal_mli_args)
         par2hdr(master + '.par', master + '_cal.hdr')
         
         # ratio of ellipsoid based pixel area and DEM-facet pixel area
@@ -1269,7 +1271,7 @@ def pixel_area_wrap(master, namespace, lut, path_log, outdir, shellscript):
                   logpath=path_log,
                   outdir=outdir,
                   shellscript=shellscript)
-
+    
     for item in ['pix_area_sigma0', 'pix_area_gamma0',
                  'pix_ratio', 'pix_ellip_sigma0', 'gs_ratio']:
         if namespace.isappreciated(item):
