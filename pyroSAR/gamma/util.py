@@ -1155,7 +1155,7 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
                 out1.write(item + '\t' + item + '.par\t' + item + '.tops_par\n')
                 out2.write(item + '_drp\t' + item + '_drp.par\t' + item + '_drp.tops_par\n')
     
-    isp.SLC_deramp_S1_TOPS(SLC1_tab=tab_in,
+    isp.SLC_deramp_ScanSAR(SLC1_tab=tab_in,
                            SLC2_tab=tab_out,
                            mode=0,
                            phflg=0,
