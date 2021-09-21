@@ -2505,7 +2505,7 @@ class Archive(object):
         
         if vectorobject:
             if isinstance(vectorobject, Vector):
-                vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
+                vectorobject.reproject(4326)
                 site_geom = vectorobject.convert2wkt(set3D=False)[0]
                 # postgres has a different way to store geometries
                 if self.driver == 'postgresql':
