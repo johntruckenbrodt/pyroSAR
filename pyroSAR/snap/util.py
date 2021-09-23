@@ -63,6 +63,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     removeS1BorderNoiseMethod: str, optional
         The border noise removal method to be applied if `removeS1BorderNoise` is True.
         See :func:`pyroSAR.S1.removeGRDBorderNoise` for details. One of the following:
+        
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement (default)
     removeS1ThermalNoise: bool, optional
@@ -93,6 +94,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         If set to True the workflow xml file is only written and not executed. Default is False.
     export_extra: list or None
         A list of image file IDs to be exported to outdir. The following IDs are currently supported:
+        
          - incidenceAngleFromEllipsoid
          - localIncidenceAngle
          - projectedLocalIncidenceAngle
