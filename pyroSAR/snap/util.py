@@ -202,12 +202,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         os.makedirs(outdir)
     ############################################
     # general setup
+    processSLC = False
     
     if id.sensor in ['ASAR', 'ERS1', 'ERS2']:
         formatName = 'ENVISAT'
     elif id.sensor in ['S1A', 'S1B']:
         if id.product == 'SLC':
-            raise RuntimeError('Sentinel-1 SLC data is not supported yet')
+            removeS1BorderNoise = False
+            processSLC = True
         formatName = 'SENTINEL-1'
     else:
         raise RuntimeError('sensor not supported (yet)')
@@ -228,12 +230,25 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         polarizations = [x for x in polarizations if x in id.polarizations]
     else:
         raise RuntimeError('polarizations must be of type str or list')
+     
+    if processSLC:
+        if id.acquisition_mode == 'IW':
+            swaths = ['IW1', 'IW2', 'IW3']
+        elif id.acquisition_mode == 'EW':
+            swaths = ['EW1', 'EW2', 'EW3', 'EW4', 'EW5']
+        elif id.acquisition_mode == 'SM':
+            swaths = None
+        else:
+            raise RuntimeError('acquisition mode {} not supported'.format(id.acquisition_mode))
     
     bandnames = dict()
-    bandnames['int'] = ['Intensity_' + x for x in polarizations]
     bandnames['beta0'] = ['Beta0_' + x for x in polarizations]
     bandnames['gamma0'] = ['Gamma0_' + x for x in polarizations]
     bandnames['sigma0'] = ['Sigma0_' + x for x in polarizations]
+    bandnames['int'] = ['Intensity_' + x for x in polarizations]
+    if processSLC and swaths is not None:
+        swaths_pols = ['_'.join((s, p)) for s in swaths for p in polarizations]
+        bandnames['int'] = ['Intensity_' + x for x in swaths_pols]
     ############################################
     ############################################
     # parse base workflow
@@ -308,6 +323,13 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
     last = cal.id
     ############################################
+    # TOPSAR-Deburst node configuration
+    if processSLC:
+        deb = parse_node('TOPSAR-Deburst')
+        workflow.insert_node(deb, before=last)
+        deb.parameters['selectedPolarisations'] = polarizations
+        last = deb.id
+    ############################################
     # terrain flattening node configuration
     if terrainFlattening:
         tf = parse_node('Terrain-Flattening')
@@ -379,12 +401,24 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                                     geometry=image_geometry,
                                     incidence=incidence)
     
-    if azlks > 1 or rlks > 1:
-        workflow.insert_node(parse_node('Multilook'), before='Calibration')
+    if processSLC:
+        workflow.insert_node(parse_node('Multilook'), before=deb.id)
         ml = workflow['Multilook']
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
         ml.parameters['sourceBands'] = None
+        
+        workflow.insert_node(parse_node('SRGR'), before=ml.id)
+        srgr = workflow['SRGR']
+        srgr.parameters['warpPolynomialOrder'] = 4
+        srgr.parameters['interpolationMethod'] = 'Nearest-neighbor interpolation'
+    else:
+        if azlks > 1 or rlks > 1:
+            workflow.insert_node(parse_node('Multilook'), before='Calibration')
+            ml = workflow['Multilook']
+            ml.parameters['nAzLooks'] = azlks
+            ml.parameters['nRgLooks'] = rlks
+            ml.parameters['sourceBands'] = None
     ############################################
     # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
     if len(refarea) > 1 and terrainFlattening:
@@ -475,7 +509,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             wkt = bounds.convert2wkt()[0]
         
         subset = parse_node('Subset')
-        workflow.insert_node(subset, before=read.id)
+        if processSLC:
+            workflow.insert_node(subset, before=srgr.id)
+        else:
+            workflow.insert_node(subset, before=read.id)
         subset.parameters['region'] = [0, 0, id.samples, id.lines]
         subset.parameters['geoRegion'] = wkt
         subset.parameters['copyMetadata'] = True
@@ -483,7 +520,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # (optionally) configure subset node for pixel offsets
     if offset and not shapefile:
         subset = parse_node('Subset')
-        workflow.insert_node(subset, before=read.id)
+        if processSLC:
+            workflow.insert_node(subset, before=srgr.id)
+        else:
+            workflow.insert_node(subset, before=read.id)
         
         # left, right, top and bottom offset in pixels
         l, r, t, b = offset
