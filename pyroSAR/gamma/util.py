@@ -538,6 +538,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         the value scaling of the backscatter values; either 'linear', 'db' or a list of both, i.e. ['linear', 'db']
     func_geoback: {0, 1, 2, 3, 4, 5, 6, 7}
         backward geocoding interpolation mode (see GAMMA command geocode_back)
+        
          - 0: nearest-neighbor
          - 1: bicubic spline (default)
          - 2: bicubic-spline, interpolate log(data)
@@ -565,6 +566,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         should all files written to the temporary directory during function execution be deleted after processing?
     export_extra: list of str or None
         a list of image file IDs to be exported to outdir
+        
          - format is GeoTIFF if the file is geocoded and ENVI otherwise. Non-geocoded images can be converted via GAMMA
            command data2tiff yet the output was found impossible to read with GIS software
          - scaling of SAR image products is applied as defined by parameter `scaling`
@@ -573,6 +575,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     removeS1BorderNoiseMethod: str or None
         the S1 GRD border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
+        
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
          - 'gamma': the GAMMA implementation of :cite:`Ali2018`

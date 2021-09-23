@@ -228,7 +228,7 @@ class ID(object):
         outname: str
             the name of the shapefile to be written
         driver: str
-        the output file format; needs to be defined if the format cannot
+            the output file format; needs to be defined if the format cannot
             be auto-detected from the filename extension
         overwrite: bool
             overwrite an existing shapefile?
@@ -331,11 +331,6 @@ class ID(object):
     def gdalinfo(self):
         """
         read metadata directly from the GDAL SAR image drivers
-
-        Parameters
-        ----------
-        scene: str
-            an archive containing a SAR scene
 
         Returns
         -------
@@ -1498,6 +1493,7 @@ class SAFE(ID):
         ----------
         method: str
             the border noise removal method to be applied; one of the following:
+            
              - 'ESA': the pure implementation as described by ESA
              - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
 
@@ -1536,6 +1532,7 @@ class SAFE(ID):
             the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
         url_option: int
             the URL to query for scenes
+            
              - 1: https://scihub.copernicus.eu/gnss
              - 2: https://step.esa.int/auxdata/orbits/Sentinel-1
 

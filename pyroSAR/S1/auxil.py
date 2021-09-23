@@ -378,6 +378,7 @@ class OSV(object):
         ----------
         sensor: str or list
             The S1 mission(s):
+            
              - 'S1A'
              - 'S1B'
              - ['S1A', 'S1B']
@@ -389,6 +390,7 @@ class OSV(object):
             the date to stop searching for files in format YYYYmmddTHHMMSS
         url_option: int
             the URL to query for scenes
+            
              - 1: https://scihub.copernicus.eu/gnss
              - 2: https://step.esa.int/auxdata/orbits/Sentinel-1
 
@@ -521,6 +523,7 @@ class OSV(object):
         ----------
         sensor: str
             The S1 mission:
+            
              - 'S1A'
              - 'S1B'
         timestamp: str
@@ -676,6 +679,7 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
         the Sentinel-1 scene object
     method: str
         the border noise removal method to be applied; one of the following:
+        
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
 

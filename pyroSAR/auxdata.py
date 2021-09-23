@@ -178,7 +178,8 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
         convert geoid heights?
     geoid: str
         the geoid model to be corrected, only used if ``geoid_convert == True``; current options:
-         * 'EGM96'
+        
+         - 'EGM96'
 
     Returns
     -------
