@@ -202,6 +202,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
         (optional) the password for the registration account
     geoid_mode: str
         the software to be used for converting geoid to ellipsoid heights; does not apply to demType TDX90m; options:
+        
          - 'gamma'
          - 'gdal'
     resampling_method: str

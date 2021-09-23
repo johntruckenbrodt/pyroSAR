@@ -314,6 +314,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
     removeS1BorderNoiseMethod: str
         the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
+        
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
     basename_extensions: list of str

@@ -19,3 +19,6 @@ dependencies:
   - sphinx
   - sphinxcontrib-bibtex
   - pip
+  - cairosvg
+  - pip:
+      - sphinxcontrib-svg2pdfconverter
