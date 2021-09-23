@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import requests
+import tempfile
 import zipfile as zf
 from io import BytesIO
 from datetime import datetime, timedelta
@@ -590,20 +591,31 @@ class OSV(object):
         i = 0
         for remote, local, basename, auth in downloads:
             infile = requests.get(remote, auth=auth, timeout=self.timeout)
-            if remote.endswith('.zip'):
-                with zf.ZipFile(file=BytesIO(infile.content)) as tmp:
-                    members = tmp.namelist()
-                    target = [x for x in members if re.search(basename, x)][0]
-                    with zf.ZipFile(local, 'w') as outfile:
-                        outfile.write(filename=tmp.extract(target),
-                                      arcname=basename)
-            else:
-                with zf.ZipFile(file=local,
-                                mode='w',
-                                compression=zf.ZIP_DEFLATED) \
-                        as outfile:
-                    outfile.writestr(zinfo_or_arcname=basename,
-                                     data=infile.content)
+
+            # use a tempfile to allow atomic writes in the case of
+            # parallel executions dependent on the same orbit files
+            fd, tmp_path = tempfile.mkstemp(prefix=os.path.basename(local), dir=os.path.dirname(local))
+            os.close(fd)
+            try:
+                if remote.endswith('.zip'):
+                    with zf.ZipFile(file=BytesIO(infile.content)) as tmp:
+                        members = tmp.namelist()
+                        target = [x for x in members if re.search(basename, x)][0]
+                        with zf.ZipFile(tmp_path, 'w') as outfile:
+                            outfile.write(filename=tmp.extract(target),
+                                          arcname=basename)
+                else:
+                    with zf.ZipFile(file=tmp_path,
+                                    mode='w',
+                                    compression=zf.ZIP_DEFLATED) \
+                            as outfile:
+                        outfile.writestr(zinfo_or_arcname=basename,
+                                         data=infile.content)
+                os.rename(tmp_path, local)
+            except Exception as e:
+                os.unlink(tmp_path)
+                raise
+
             infile.close()
             if pbar:
                 i += 1
