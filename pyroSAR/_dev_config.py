@@ -117,7 +117,7 @@ LOOKUP = Storage(attributes={'sensor': 'TEXT',
 dem = Storage(ace2='https://step.esa.int/auxdata/dem/ACE2/5M/',
               ace='https://step.esa.int/auxdata/dem/ACE30/',
               srtm3_FTP='xftp.jrc.it',
-              srtm3='http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/SRTM_Data_GeoTiff/',
+              srtm3='https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF',
               srtm1Hgt='https://step.esa.int/auxdata/dem/SRTMGL1/', )
 
 orbit = Storage(doris='https://step.esa.int/auxdata/orbits/Doris/vor',

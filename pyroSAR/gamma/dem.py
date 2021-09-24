@@ -188,7 +188,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
     t_srs: int, str or osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
-        Default: `4326 <http://spatialreference.org/ref/epsg/4326/>`_.
+        Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
     tr: tuple or None
         the target resolution as (xres, yres) in units of ``t_srs``; if ``t_srs`` is kept at its default value of 4326,
         ``tr`` does not need to be defined and the original resolution is preserved;
@@ -504,7 +504,7 @@ def makeSRTM(scenes, srtmdir, outname):
     intended for SRTM products downloaded from:
 
     - USGS: https://gdex.cr.usgs.gov/gdex/
-    - CGIAR: http://srtm.csi.cgiar.org
+    - CGIAR: https://srtm.csi.cgiar.org
 
     Parameters
     ----------

@@ -45,7 +45,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     t_srs: int, str or osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
-        Default: `4326 <http://spatialreference.org/ref/epsg/4326/>`_.
+        Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
     tr: int or float, optional
         The target resolution in meters. Default is 20
     polarizations: list or str
