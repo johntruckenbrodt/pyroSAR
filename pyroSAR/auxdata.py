@@ -114,7 +114,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
     
     Examples
     --------
-    download all SRTM 1 arcsec DEMs overlapping with a Sentinel-1 scene and mosaic them to a single GeoTiff file
+    download all SRTM 1 arcsec DEMs overlapping with a Sentinel-1 scene and mosaic them to a single GeoTIFF file
     
     .. code-block:: python
         
@@ -135,7 +135,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         dem_autoload(geometries=[bbox], demType='SRTM 1Sec HGT',
                      vrt=vrt, buffer=0.01)
         
-        # write the final GeoTiff file
+        # write the final GeoTIFF file
         outname = scene.outname_base() + 'srtm1.tif'
         gdalwarp(src=vrt, dst=outname, options={'format': 'GTiff'})
         
@@ -157,7 +157,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
 def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoid_convert=False, geoid='EGM96', outputBounds=None):
     """
-    create a new DEM GeoTiff file and optionally convert heights from geoid to ellipsoid
+    create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
     
     Parameters
     ----------

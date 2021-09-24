@@ -5,11 +5,12 @@ Installation
 conda
 =====
 
-Starting with version 0.11, pyroSAR is also distributed via conda-forge and can easily be installed with
+Starting with version 0.11, pyroSAR is also distributed via `conda-forge <https://anaconda.org/conda-forge/pyrosar>`_
+and can easily be installed with
 
 ::
 
-    conda install --channel conda-forge pyroSAR
+    conda install --channel conda-forge pyrosar
 
 This is by far the easiest way to work with pyroSAR on any operating system.
 

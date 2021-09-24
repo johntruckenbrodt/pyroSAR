@@ -291,7 +291,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
     
      * execute the workflow in groups as defined by `groups`
      * encode a nodata value into the output file if the format is GeoTiff-BigTIFF
-     * convert output files to GeoTiff if the output format is ENVI
+     * convert output files to GeoTIFF if the output format defined in `Write` nodes of the workflow is ENVI
     
     Parameters
     ----------
@@ -313,12 +313,13 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         
         - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
     removeS1BorderNoiseMethod: str
-        the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
+        the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details;
+        one of the following:
         
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
     basename_extensions: list of str
-        names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
+        names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
     
     Returns
     -------
@@ -1267,7 +1268,8 @@ def value2str(value):
 
 def get_egm96_lookup():
     """
-    If not found, download SNAP's lookup table for converting EGM96 geoid heights to WGS84 ellipsoid heights
+    If not found, download SNAP's lookup table for converting EGM96 geoid heights to WGS84 ellipsoid heights.
+    Default directory: `$HOME/.snap/auxdata/dem/egm96`.
     
     Returns
     -------

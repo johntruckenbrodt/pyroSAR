@@ -168,7 +168,7 @@ class Dataset(object):
     def __add__(self, dataset):
         """
         override the + operator. This is intended to easily combine two Dataset objects, which were
-        created from different files belonging to the same measurement, e.g. two GeoTiffs with one polarization
+        created from different files belonging to the same measurement, e.g. two GeoTIFFs with one polarization
         each.
         
         Parameters

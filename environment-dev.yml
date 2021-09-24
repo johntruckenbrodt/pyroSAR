@@ -17,7 +17,7 @@ dependencies:
   - coverage
   - pytest
   - sphinx
-  - sphinxcontrib-bibtex
+  - sphinxcontrib-bibtex>=2.2
   - pip
   - cairosvg
   - pip:

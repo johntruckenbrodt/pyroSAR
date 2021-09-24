@@ -56,7 +56,7 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
     id: ~pyroSAR.drivers.ID
         an SAR scene object of type pyroSAR.ID or any subclass
     directory: str
-        the directory to search for Gamma calibration candidates
+        the directory to search for GAMMA calibration candidates
     replace: bool
         replace the input images by the new files? If True, the input images will be deleted.
     logpath: str or None
@@ -64,7 +64,7 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
     outdir: str or None
         the directory to execute the command in
     shellscript: str or None
-        a file to write the Gamma commands to in shell format
+        a file to write the GAMMA commands to in shell format
 
     Returns
     -------
@@ -161,7 +161,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
     outdir: str or None
         the directory to execute the command in
     shellscript: str or None
-        a file to write the Gamma commands to in shell format
+        a file to write the GAMMA commands to in shell format
 
     Returns
     -------
@@ -437,7 +437,7 @@ def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpa
     outdir: str or None
         the directory to execute the command in
     shellscript: str or None
-        a file to write the Gamma commands to in shell format
+        a file to write the GAMMA commands to in shell format
     
     Returns
     -------
@@ -520,7 +520,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             removeS1BorderNoiseMethod='gamma', refine_lut=False):
     """
     general function for radiometric terrain correction (RTC) and geocoding of SAR backscatter images with GAMMA.
-    Applies the RTC method by :cite:`Small2011` to retrieve gamma nought RTC backscatter.
+    Applies the RTC method by :cite:t:`Small2011` to retrieve gamma nought RTC backscatter.
     
     Parameters
     ----------
@@ -550,7 +550,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
 
         NOTE: log and sqrt interpolation modes should only be used with non-negative data!
         
-        NOTE: Gamma reccomendation for MLI data: "The interpolation should be performed on
+        NOTE: GAMMA recommendation for MLI data: "The interpolation should be performed on
         the square root of the data. A mid-order (3 to 5) B-spline interpolation is recommended."
     nodata: tuple
         the nodata values for the output files; defined as a tuple with two values, the first for linear,
@@ -647,10 +647,6 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         Workflow diagram for function geocode for processing a Sentinel-1 Ground Range
         Detected (GRD) scene to radiometrically terrain corrected (RTC) gamma nought backscatter.
     
-    References
-    ----------
-    .. bibliography:: references.bib
-        :style: plain
     """
     
     scenes = scene if isinstance(scene, list) else [scene]

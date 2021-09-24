@@ -40,7 +40,7 @@ class ISPPar(object):
     Parameters
     ----------
     filename: str
-        the Gamma parameter file
+        the GAMMA parameter file
     
     Examples
     --------
@@ -205,12 +205,12 @@ class ISPPar(object):
 
 def par2hdr(parfile, hdrfile, modifications=None, nodata=None):
     """
-    Create an ENVI HDR file from a Gamma PAR file
+    Create an ENVI HDR file from a GAMMA PAR file
     
     Parameters
     ----------
     parfile: str
-        the Gamma parfile
+        the GAMMA parfile
     hdrfile: str
         the ENVI HDR file
     modifications: dict or None
@@ -248,7 +248,7 @@ class UTM(object):
     Parameters
     ----------
     parfile: str
-        the Gamma parameter file to read the coordinate from
+        the GAMMA parameter file to read the coordinate from
     
     Example
     -------
@@ -300,7 +300,7 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
     void: bool
         return the stdout and stderr messages?
     shellscript: str
-        a file to write the Gamma commands to in shell format
+        a file to write the GAMMA commands to in shell format
     
     Returns
     -------

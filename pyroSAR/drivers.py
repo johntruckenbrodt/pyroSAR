@@ -1643,6 +1643,22 @@ class SAFE(ID):
         return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
+        """
+        Unpack the SAR scene into a defined directory.
+
+        Parameters
+        ----------
+        directory: str
+            the base directory into which the scene is unpacked
+        overwrite: bool
+            overwrite an existing unpacked scene?
+        exist_ok: bool
+            allow existing output files and do not create new ones?
+
+        Returns
+        -------
+
+        """
         outdir = os.path.join(directory, os.path.basename(self.file))
         self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
 

@@ -110,7 +110,7 @@ DEM tools
 GAMMA Command API
 -----------------
 
-This is an attempt to make it easier to execute Gamma commands by offering automatically parsed Python functions.
+This is an attempt to make it easier to execute GAMMA commands by offering automatically parsed Python functions.
 Thus, instead of executing the command via shell:
 
 .. code-block:: shell
