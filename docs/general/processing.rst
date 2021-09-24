@@ -16,7 +16,7 @@ At first we load the scene into pyroSAR for analysis of the metadata:
     print(scene)
 
 This will automatically identify the scene, scan it for metadata and print a summary of selected metadata entries.
-The names of the attributes (e.g. `sensor` and `acquisition_mode`) are standardized for all SAR scenes.
+Several attribute names (e.g. `sensor` and `acquisition_mode`) are standardized for all SAR scenes.
 Further entries, whose names are not standardized, can be found in a dictionary `scene.meta`.
 The function :func:`~pyroSAR.drivers.identify` will loop through all SAR images classes (:mod:`pyroSAR.drivers`) and return an
 object of the class that was successful in identifying the scene (:class:`~pyroSAR.drivers.SAFE` in this case).
@@ -24,7 +24,7 @@ object of the class that was successful in identifying the scene (:class:`~pyroS
 Database Handling
 =================
 
-Now that we have made ourselves familiar with the scene, we can import its metadata into a SQLite database using class
+Now that we have made ourselves familiar with the scene, we can import its metadata into an SQLite database using class
 :class:`~pyroSAR.drivers.Archive`:
 
 .. code-block:: python
@@ -87,5 +87,6 @@ It will perform all necessary steps to subset, resample, topographically normali
 image and write GeoTIFF files to the selected output directory.
 All necessary files like orbit state vectors and SRTM DEM tiles are downloaded automatically in the background by SNAP.
 SNAP is most conveniently used with workflow XMLs. The function geocode parses a workflow for the particular scene,
-parametrizes it depending on the scene type and selected processing parameters and writes it to the output directory.
+parametrizes it (depending on the scene type and selected processing parameters) and writes it to the output directory.
 It then calls the command `gpt`, which is SNAP's command line interface, on the workflow to execute the processing steps.
+

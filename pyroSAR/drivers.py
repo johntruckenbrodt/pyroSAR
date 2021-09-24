@@ -485,7 +485,7 @@ class ID(object):
         Parameters
         ----------
         extensions: list of str
-            the names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
+            the names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
         Returns
         -------
         str
@@ -573,7 +573,7 @@ class ID(object):
         raise NotImplementedError
     
     @abc.abstractmethod
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         """
         Unpack the SAR scene into a defined directory.
 
@@ -583,6 +583,8 @@ class ID(object):
             the base directory into which the scene is unpacked
         overwrite: bool
             overwrite an existing unpacked scene?
+        exist_ok: bool
+            allow existing output files and do not create new ones?
 
         Returns
         -------
@@ -604,7 +606,7 @@ class ID(object):
         overwrite: bool
             should an existing directory be overwritten?
         exist_ok: bool
-            do not attempt unpacking if the target directory already exists? Ignored if `overwrite==True`
+            do not attempt unpacking if the target directory already exists? Ignored if ``overwrite==True``
         
         Returns
         -------
@@ -1643,22 +1645,6 @@ class SAFE(ID):
         return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
-        """
-        Unpack the SAR scene into a defined directory.
-
-        Parameters
-        ----------
-        directory: str
-            the base directory into which the scene is unpacked
-        overwrite: bool
-            overwrite an existing unpacked scene?
-        exist_ok: bool
-            allow existing output files and do not create new ones?
-
-        Returns
-        -------
-
-        """
         outdir = os.path.join(directory, os.path.basename(self.file))
         self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
 
@@ -1807,6 +1793,7 @@ class Archive(object):
     >>>     archive.insert(scenes_s1)
 
     select all Sentinel-1 A/B scenes stored in the database, which
+    
      * overlap with a test site
      * were acquired in Ground-Range-Detected (GRD) Interferometric Wide Swath (IW) mode before 2018
      * contain a VV polarization image

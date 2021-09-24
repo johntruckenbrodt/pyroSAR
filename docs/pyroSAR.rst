@@ -45,7 +45,7 @@ Workflow Parsing
 ----------------
 
 .. automodule:: pyroSAR.snap.auxil
-    :members: gpt, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par, get_egm96_lookup
+    :members: gpt, execute, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par, get_egm96_lookup
     :undoc-members:
     :show-inheritance:
 
@@ -53,6 +53,7 @@ Workflow Parsing
         :nosignatures:
 
         gpt
+        execute
         parse_node
         parse_recipe
         split
@@ -159,7 +160,7 @@ API Demo
 ********
 
 This is a demonstration of an output script as generated automatically by function
-:func:`~pyroSAR.gamma.parser.parse_module` for the Gamma module `ISP`.
+:func:`~pyroSAR.gamma.parser.parse_module` for the GAMMA module `ISP`.
 Within each function, the command name and all parameters are passed to function
 :func:`~pyroSAR.gamma.process`, which converts all input to :py:obj:`str` and then calls the command via the
 :mod:`subprocess` module.

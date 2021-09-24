@@ -55,7 +55,7 @@ The spatial reference system, WGS84 UTM 32N in this case, is defined by its EPSG
 are available. Since for SAR processing we are interested in ellipsoid heights, we call the function with the according
 parameter `geoid_convert` set to `True`.
 This function makes use of :func:`spatialist.auxil.gdalwarp`.
-Conversion of vertical reference systems, e.g. from geoid to ellipsoid, require GDAL version >=2.2.
+Conversion of vertical reference systems, e.g. from geoid to ellipsoid, requires GDAL version >=2.2.
 
 .. code-block:: python
 

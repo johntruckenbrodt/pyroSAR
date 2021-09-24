@@ -33,8 +33,27 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
             speckleFilter=False, refarea='gamma0'):
     """
-    wrapper function for geocoding SAR images using ESA SNAP
+    general function for geocoding of SAR backscatter images with SNAP.
+    
+    This function performs the following steps:
+    
+    - (if necessary) identify the SAR scene(s) passed via argument `infile` (:func:`pyroSAR.drivers.identify`)
+    - (if necessary) create the directories defined via `outdir` and `tmpdir`
+    - (if necessary) download Sentinel-1 OSV files
+    - parse a SNAP workflow (:class:`pyroSAR.snap.auxil.Workflow`)
+    - write the workflow to an XML file in `outdir`
+    - execute the workflow (:func:`pyroSAR.snap.auxil.gpt`)
 
+    Note
+    ----
+    The function may create workflows with multiple `Write` nodes. All nodes are parametrized to write data in ENVI format,
+    in which case the node parameter `file` is going to be a directory. All nodes will use the same temporary directory,
+    which will be created in `tmpdir`.
+    Its name is created from the basename of the `infile` (:meth:`pyroSAR.drivers.ID.outname_base`)
+    and a suffix identifying each processing node of the workflow (:meth:`pyroSAR.snap.auxil.Workflow.suffix`).
+    
+    For example: `S1A__IW___A_20180101T170648_NR_Orb_Cal_ML_TF_TC`.
+    
     Parameters
     ----------
     infile: str or ~pyroSAR.drivers.ID or list
@@ -47,7 +66,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
     tr: int or float, optional
-        The target resolution in meters. Default is 20
+        The target pixel spacing in meters. Default is 20
     polarizations: list or str
         The polarizations to be processed; can be a string for a single polarization, e.g. 'VV', or a list of several
         polarizations, e.g. ['VV', 'VH']. With the special value 'all' (default) all available polarizations are
@@ -152,15 +171,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     Returns
     -------
     str or None
-        either the name of the workflow file if `returnWF == True` or None otherwise
-
-    Note
-    ----
-    If only one polarization is selected and not extra products are defined the results are directly written to GeoTIFF.
-    Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTIFF files
-    (one for each polarization/extra product).
-    If GeoTIFF would directly be selected as output format for multiple polarizations then a multilayer GeoTIFF
-    is written by SNAP which is considered an unfavorable format
+        either the name of the workflow file if ``returnWF == True`` or None otherwise
     
     
     .. figure:: figures/snap_geocode.svg
