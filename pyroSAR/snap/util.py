@@ -14,7 +14,8 @@
 import os
 import pyroSAR
 from ..ancillary import multilook_factors
-from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, get_egm96_lookup
+from ..auxdata import get_egm96_lookup
+from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 from spatialist.ancillary import dissolve

@@ -45,7 +45,7 @@ Workflow Parsing
 ----------------
 
 .. automodule:: pyroSAR.snap.auxil
-    :members: gpt, execute, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par, get_egm96_lookup
+    :members: gpt, execute, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par
     :undoc-members:
     :show-inheritance:
 
@@ -61,7 +61,6 @@ Workflow Parsing
         Workflow
         Node
         Par
-        get_egm96_lookup
 
 GAMMA Processing
 ================
@@ -188,7 +187,7 @@ Auxiliary Data Tools
 ====================
 
 .. automodule:: pyroSAR.auxdata
-    :members: dem_autoload, dem_create
+    :members: dem_autoload, dem_create, get_egm96_lookup
     :undoc-members:
     :show-inheritance:
 
@@ -197,6 +196,7 @@ Auxiliary Data Tools
 
         dem_autoload
         dem_create
+        get_egm96_lookup
 
 Datacube Tools
 ==============

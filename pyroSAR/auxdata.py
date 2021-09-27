@@ -14,6 +14,7 @@
 import os
 import re
 import ftplib
+import requests
 import zipfile as zf
 from urllib.request import urlopen
 from urllib.error import HTTPError
@@ -632,3 +633,26 @@ def getasse30_hdr(fname):
                 obj.map_info = '{{{}}}'.format(','.join(map_info))
                 obj.coordinate_system_string = crsConvert(4326, 'wkt')
                 zip.writestr(hdr, str(obj))
+
+
+def get_egm96_lookup():
+    """
+    If not found, download SNAP's lookup table for converting EGM96 geoid heights to WGS84 ellipsoid heights.
+    Default directory: `$HOME/.snap/auxdata/dem/egm96`.
+
+    Returns
+    -------
+
+    """
+    try:
+        auxdatapath = ExamineSnap().auxdatapath
+    except AttributeError:
+        auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
+    local = os.path.join(auxdatapath, 'dem', 'egm96', 'ww15mgh_b.zip')
+    os.makedirs(os.path.dirname(local), exist_ok=True)
+    if not os.path.isfile(local):
+        remote = 'https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
+        log.info('{} <<-- {}'.format(local, remote))
+        r = requests.get(remote)
+        with open(local, 'wb') as out:
+            out.write(r.content)
