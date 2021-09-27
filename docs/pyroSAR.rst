@@ -41,8 +41,8 @@ SNAP Processing
     :undoc-members:
     :show-inheritance:
 
-Workflow Parsing
-----------------
+Workflow Parsing and Execution
+------------------------------
 
 .. automodule:: pyroSAR.snap.auxil
     :members: gpt, execute, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par
