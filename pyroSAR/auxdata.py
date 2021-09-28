@@ -597,26 +597,27 @@ class DEMHandler:
             out = yf + xf
             return out
         
-        if demType in ['SRTM 1Sec HGT', 'GETASSE30', 'TDX90m']:
-            
-            if demType == 'SRTM 1Sec HGT':
-                lat, lon = intrange(extent, step=1)
-                remotes = ['{}.SRTMGL1.hgt.zip'.format(index(x, y, nx=3, ny=2))
-                           for x in lon for y in lat]
-            elif demType == 'GETASSE30':
-                lat, lon = intrange(extent, step=15)
-                remotes = ['{}.zip'.format(index(x, y, nx=3, ny=2, reverse=True))
-                           for x in lon for y in lat]
-            else:
-                lat, lon = intrange(extent, step=1)
-                remotes = []
-                for x in lon:
-                    xr = abs(x) // 10 * 10
-                    for y in lat:
-                        xf = index(x=x, nx=3)
-                        yf = index(y=y, ny=2)
-                        remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
-                                       .format(x=xf, xr=xr, y=yf, hem=xf[0]))
+        if demType == 'SRTM 1Sec HGT':
+            lat, lon = intrange(extent, step=1)
+            remotes = ['{}.SRTMGL1.hgt.zip'.format(index(x, y, nx=3, ny=2))
+                       for x in lon for y in lat]
+        
+        elif demType == 'GETASSE30':
+            lat, lon = intrange(extent, step=15)
+            remotes = ['{}.zip'.format(index(x, y, nx=3, ny=2, reverse=True))
+                       for x in lon for y in lat]
+        
+        elif demType == 'TDX90m':
+            lat, lon = intrange(extent, step=1)
+            remotes = []
+            for x in lon:
+                xr = abs(x) // 10 * 10
+                for y in lat:
+                    xf = index(x=x, nx=3)
+                    yf = index(y=y, ny=2)
+                    remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
+                                   .format(x=xf, xr=xr, y=yf, hem=xf[0]))
+        
         elif demType == 'AW3D30':
             remotes = []
             lat, lon = intrange(extent, step=1)
@@ -631,7 +632,6 @@ class DEMHandler:
                         int((60 - float(extent['ymax'])) // 5) + 2)
             lon = range(int((float(extent['xmin']) + 180) // 5) + 1,
                         int((float(extent['xmax']) + 180) // 5) + 2)
-            
             remotes = ['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in lon for y in lat]
         
         elif demType == 'Copernicus 10m EEA DEM':
@@ -671,7 +671,6 @@ class DEMHandler:
             
             ftp_search(path + '/', ids)
             ftp.quit()
-        
         else:
             raise ValueError('unknown demType: {}'.format(demType))
         
