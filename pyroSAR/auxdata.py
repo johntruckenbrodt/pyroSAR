@@ -52,29 +52,35 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
           * info: https://www.eorc.jaxa.jp/ALOS/en/aw3d30/index.htm
           * url: ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804
+          * height reference: EGM96
 
         - 'Copernicus 10m EEA DEM' (Copernicus 10 m DEM available over EEA-39 countries)
 
           * registration: https://spacedata.copernicus.eu/web/cscda/data-access/registration
           * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2020_1
+          * height reference: EGM2008
 
         - 'GETASSE30'
         
           * info: https://seadas.gsfc.nasa.gov/help-8.1.0/desktop/GETASSE30ElevationModel.html
           * url: https://step.esa.int/auxdata/dem/GETASSE30
+          * height reference: WGS84
         
         - 'SRTM 1Sec HGT'
 
           * url: https://step.esa.int/auxdata/dem/SRTMGL1
+          * height reference: EGM96
 
         - 'SRTM 3Sec'
 
           * url: https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF
+          * height reference: EGM96
         
         - 'TDX90m'
         
           * registration:  https://geoservice.dlr.de/web/dataguide/tdm90
           * url: ftpes://tandemx-90m.dlr.de
+          * height reference: WGS84
 
     vrt: str or None
         an optional GDAL VRT file created from the obtained DEM tiles
