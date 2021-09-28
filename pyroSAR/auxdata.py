@@ -32,6 +32,7 @@ from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
 
 import logging
+
 log = logging.getLogger(__name__)
 
 
@@ -49,18 +50,19 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
         - 'AW3D30' (ALOS Global Digital Surface Model "ALOS World 3D - 30m")
 
+          * info: https://www.eorc.jaxa.jp/ALOS/en/aw3d30/index.htm
           * url: ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804
-        
-        - 'GETASSE30'
-        
-          * info: https://seadas.gsfc.nasa.gov/help-8.1.0/desktop/GETASSE30ElevationModel.html
-          * url: https://step.esa.int/auxdata/dem/GETASSE30
 
         - 'Copernicus 10m EEA DEM' (Copernicus 10 m DEM available over EEA-39 countries)
 
           * registration: https://spacedata.copernicus.eu/web/cscda/data-access/registration
           * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2020_1
 
+        - 'GETASSE30'
+        
+          * info: https://seadas.gsfc.nasa.gov/help-8.1.0/desktop/GETASSE30ElevationModel.html
+          * url: https://step.esa.int/auxdata/dem/GETASSE30
+        
         - 'SRTM 1Sec HGT'
 
           * url: https://step.esa.int/auxdata/dem/SRTMGL1
@@ -93,10 +95,6 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
             low correlation mask, Sea mask, Information of elevation dataset used
             for the void-filling processing)
           * 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
-          
-        - 'GETASSE30'
-        
-          * 'dem': the actual Digital Elevation Model
 
         - 'Copernicus 10m EEA DEM'
         
@@ -105,6 +103,10 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * 'flm': filling mask
           * 'hem': height error mask
           * 'wbm': water body mask
+         
+        - 'GETASSE30'
+        
+          * 'dem': the actual Digital Elevation Model
         
         - 'SRTM 1Sec HGT'
          
@@ -173,7 +175,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             product=product)
 
 
-def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoid_convert=False, geoid='EGM96', outputBounds=None):
+def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoid_convert=False, geoid='EGM96',
+               outputBounds=None):
     """
     create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
     
@@ -198,7 +201,9 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
         the geoid model to be corrected, only used if ``geoid_convert == True``; current options:
         
          - 'EGM96'
-
+    outputBounds: list or None
+        output bounds as [xmin, ymin, xmax, ymax] in target SRS
+    
     Returns
     -------
 
@@ -470,6 +475,10 @@ class DEMHandler:
               * 'flm': Filling Mask
               * 'hem': Height Error Mask
               * 'wbm': Water Body Mask
+    
+             - 'GETASSE30'
+            
+              * 'dem': the actual Digital Elevation Model
           
              - 'SRTM 1Sec HGT'
 
