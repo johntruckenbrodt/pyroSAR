@@ -200,7 +200,9 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
     geoid: str
         the geoid model to be corrected, only used if ``geoid_convert == True``; current options:
         
+         - 'EGM84'
          - 'EGM96'
+         - 'EGM2008'
     outputBounds: list or None
         output bounds as [xmin, ymin, xmax, ymax] in target SRS
     
@@ -236,8 +238,14 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
         if gdal.__version__ < '2.2':
             raise RuntimeError('geoid conversion requires GDAL >= 2.2;'
                                'see documentation of gdalwarp')
-        if geoid == 'EGM96':
-            gdalwarp_args['srcSRS'] += '+5773'
+        
+        geoid_epsg = {'EGM84': 5798,
+                      'EGM96': 5773,
+                      'EGM2008': 3855}
+        
+        if geoid in geoid_epsg.keys():
+            epsg = geoid_epsg[geoid]
+            gdalwarp_args['srcSRS'] += '+{}'.format(epsg)
         else:
             raise RuntimeError('geoid model not yet supported')
     
@@ -412,7 +420,8 @@ class DEMHandler:
                                                    'edm': '*EDM.tif',
                                                    'flm': '*FLM.tif',
                                                    'hem': '*HEM.tif',
-                                                   'wbm': '*WBM.tif'}},
+                                                   'wbm': '*WBM.tif'}
+                                       },
             'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
                           'nodata': None,
                           'vsi': '/vsizip/',
