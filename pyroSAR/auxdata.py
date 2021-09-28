@@ -60,6 +60,16 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2020_1
           * height reference: EGM2008
 
+        - 'Copernicus 30m Global DEM'
+     
+          * info: https://copernicus-dem-30m.s3.amazonaws.com/readme.html
+          * url: https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/
+
+        - 'Copernicus 90m Global DEM'
+     
+          * info: https://copernicus-dem-90m.s3.amazonaws.com/readme.html
+          * url: https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com/
+          
         - 'GETASSE30'
         
           * info: https://seadas.gsfc.nasa.gov/help-8.1.0/desktop/GETASSE30ElevationModel.html
@@ -318,8 +328,11 @@ class DEMHandler:
         return ext
     
     @staticmethod
-    def __buildvrt(archives, vrtfile, pattern, vsi, extent, nodata=None):
-        locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in archives])]
+    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None):
+        if vsi is not None:
+            locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in tiles])]
+        else:
+            locals = tiles
         with Raster(locals[0]) as ras:
             if nodata is None:
                 nodata = ras.nodata
@@ -349,8 +362,7 @@ class DEMHandler:
     @staticmethod
     def __retrieve(url, filenames, outdir):
         files = list(set(filenames))
-        if not os.path.isdir(outdir):
-            os.makedirs(outdir)
+        os.makedirs(outdir, exist_ok=True)
         locals = []
         for file in files:
             infile = '{}/{}'.format(url, file)
@@ -428,6 +440,16 @@ class DEMHandler:
                                                    'hem': '*HEM.tif',
                                                    'wbm': '*WBM.tif'}
                                        },
+            'Copernicus 30m Global DEM': {'url': 'https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com',
+                                          'nodata': None,
+                                          'vsi': None,
+                                          'pattern': {'dem': '*DSM*'}
+                                          },
+            'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com',
+                                          'nodata': None,
+                                          'vsi': None,
+                                          'pattern': {'dem': '*DSM*'}
+                                          },
             'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
                           'nodata': None,
                           'vsi': '/vsizip/',
@@ -490,7 +512,15 @@ class DEMHandler:
               * 'flm': Filling Mask
               * 'hem': Height Error Mask
               * 'wbm': Water Body Mask
-    
+              
+             - 'Copernicus 30m Global DEM'
+             
+              * 'dem': the actual Digital Elevation Model
+
+             - 'Copernicus 90m Global DEM'
+             
+              * 'dem': the actual Digital Elevation Model
+              
              - 'GETASSE30'
             
               * 'dem': the actual Digital Elevation Model
@@ -557,7 +587,7 @@ class DEMHandler:
             nodata = 0
         
         if vrt is not None:
-            self.__buildvrt(archives=locals, vrtfile=vrt,
+            self.__buildvrt(tiles=locals, vrtfile=vrt,
                             pattern=self.config[demType]['pattern'][product],
                             vsi=self.config[demType]['vsi'],
                             extent=self.__commonextent(buffer),
@@ -609,17 +639,25 @@ class DEMHandler:
                 yf = pattern.format(id='S' if y < 0 else 'N', c=abs(y), n=ny)
             else:
                 yf = ''
-            out = yf + xf
-            return out
+            return yf, xf
+        
+        def cop_dem_remotes(extent, arcsecs):
+            lat, lon = intrange(extent, step=1)
+            indices = [index(x, y, nx=3, ny=2)
+                       for x in lon for y in lat]
+            base = 'Copernicus_DSM_COG_{res}_{0}_00_{1}_00_DEM'
+            skeleton = '{base}/{base}.tif'.format(base=base)
+            remotes = [skeleton.format(res=arcsecs, *item) for item in indices]
+            return remotes
         
         if demType == 'SRTM 1Sec HGT':
             lat, lon = intrange(extent, step=1)
-            remotes = ['{}.SRTMGL1.hgt.zip'.format(index(x, y, nx=3, ny=2))
+            remotes = ['{0}{1}.SRTMGL1.hgt.zip'.format(*index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
         
         elif demType == 'GETASSE30':
             lat, lon = intrange(extent, step=15)
-            remotes = ['{}.zip'.format(index(x, y, nx=3, ny=2, reverse=True))
+            remotes = ['{0}{1}.zip'.format(*index(x, y, nx=3, ny=2, reverse=True))
                        for x in lon for y in lat]
         
         elif demType == 'TDX90m':
@@ -628,8 +666,7 @@ class DEMHandler:
             for x in lon:
                 xr = abs(x) // 10 * 10
                 for y in lat:
-                    xf = index(x=x, nx=3)
-                    yf = index(y=y, ny=2)
+                    yf, xf = index(x=x, y=y, nx=3, ny=2)
                     remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
                                    .format(x=xf, xr=xr, y=yf, hem=xf[0]))
         
@@ -639,8 +676,8 @@ class DEMHandler:
             for x in lon:
                 for y in lat:
                     remotes.append(
-                        '{}/{}.tar.gz'.format(index(x // 5 * 5, y // 5 * 5),
-                                              index(x, y)))
+                        '{0}{1}/{2}{3}.tar.gz'.format(*index(x // 5 * 5, y // 5 * 5),
+                                                      *index(x, y)))
         
         elif demType == 'SRTM 3Sec':
             lat = range(int((60 - float(extent['ymin'])) // 5) + 1,
@@ -651,7 +688,7 @@ class DEMHandler:
         
         elif demType == 'Copernicus 10m EEA DEM':
             lat, lon = intrange(extent, step=1)
-            indices = [index(x, y, nx=3, ny=2)
+            indices = [''.join(index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
             
             ftp = ImplicitFTP_TLS()
@@ -686,6 +723,13 @@ class DEMHandler:
             
             ftp_search(path + '/', ids)
             ftp.quit()
+        
+        elif demType == 'Copernicus 30m Global DEM':
+            remotes = cop_dem_remotes(extent, arcsecs=10)
+        
+        elif demType == 'Copernicus 90m Global DEM':
+            remotes = cop_dem_remotes(extent, arcsecs=30)
+        
         else:
             raise ValueError('unknown demType: {}'.format(demType))
         
