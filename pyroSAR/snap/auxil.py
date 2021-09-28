@@ -31,7 +31,6 @@ from spatialist.auxil import gdal_translate
 from spatialist.ancillary import finder, run
 
 import logging
-
 log = logging.getLogger(__name__)
 
 
@@ -44,7 +43,8 @@ def parse_recipe(name):
     name: str
         the name of the recipe; current options:
          * `blank`: a workflow without any nodes
-         * `geocode`: a basic workflow containing Read, Apply-Orbit-File, Calibration, Terrain-Flattening and Write nodes
+         * `geocode`: a basic workflow containing `Read`, `Apply-Orbit-File`,
+           `Calibration`, `Terrain-Flattening` and `Write` nodes
 
     Returns
     -------
@@ -163,13 +163,12 @@ def parse_node(name, use_existing=True):
         return Node(element)
 
 
-def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=True):
+def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None):
     """
-    execute SNAP workflows via the Graph Processing Tool gpt.
+    execute SNAP workflows via the Graph Processing Tool GPT.
     This function merely calls gpt with some additional command
     line arguments and raises a RuntimeError on fail. This
-    function is used internally by function :func:`gpt`, which
-    should be used instead.
+    function is used internally by function :func:`gpt`.
     
     Parameters
     ----------
@@ -183,11 +182,9 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
         
          - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
     gpt_args: list or None
-        a list of additional arguments to be passed to the gpt call
+        a list of additional arguments to be passed to the GPT call
         
         - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
-    verbose: bool
-        print out status messages?
     
     Returns
     -------
@@ -209,8 +206,7 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
                 gpt_exec = exec
                 message += ' (using {})'.format(exec)
                 break
-    if verbose:
-        print(message)
+    log.info(message)
     # try to find the GPT executable
     if gpt_exec is None:
         try:
@@ -255,12 +251,12 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
     elif proc.returncode == 1 and match is not None:
         replace = match.groupdict()
         with Workflow(xmlfile) as flow:
-            print('  removing parameter {id}:{par} and executing modified workflow'.format(**replace))
+            log.info('  removing parameter {id}:{par} and executing modified workflow'.format(**replace))
             node = flow[replace['id']]
             del node.parameters[replace['par']]
             flow.write(xmlfile)
         execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions,
-                gpt_args=gpt_args, verbose=verbose)
+                gpt_args=gpt_args)
     
     # append additional information to the error message and raise an error
     else:
@@ -274,10 +270,12 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
                 os.remove(outname + '.tif')
             elif os.path.isdir(outname):
                 shutil.rmtree(outname, onerror=windows_fileprefix)
-            elif outname.endswith('.dim'):
+            elif outname.endswith('.dim') and os.path.isfile(outname):
                 os.remove(outname)
-                shutil.rmtree(outname.replace('.dim', '.data'),
-                              onerror=windows_fileprefix)
+                datadir = outname.replace('.dim', '.data')
+                if os.path.isdir(datadir):
+                    shutil.rmtree(datadir,
+                                  onerror=windows_fileprefix)
         raise RuntimeError(submessage.format(out, err, os.path.basename(xmlfile), proc.returncode))
 
 
@@ -291,9 +289,21 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
     created by function :func:`~pyroSAR.snap.util.geocode`.
     Additional to calling GPT, this function will
     
-     * execute the workflow in groups as defined by `groups`
-     * encode a nodata value into the output file if the format is GeoTiff-BigTIFF
-     * convert output files to GeoTiff if the output format is ENVI
+    - (if processing Sentinel-1 GRD data with IPF version <2.9 and ``removeS1BorderNoiseMethod='pyroSAR'``)
+      unpack the scene and perform the custom removal (:func:`pyroSAR.S1.removeGRDBorderNoise`)
+    - split the workflow into sub-workflows as defined by `groups` (:func:`pyroSAR.snap.auxil.split`)
+    - execute the sub-workflows (:func:`pyroSAR.snap.auxil.execute`)
+    - write the final products to `outdir`
+    
+      * encode a nodata value into the output file if the format is `GeoTiff-BigTIFF`
+      * convert output files to GeoTIFF if the output format defined in `Write` nodes of the workflow is ENVI
+    - (if processing Sentinel-1) copy the `manifest.safe` metadata file to `outdir`
+    
+    .. warning::
+    
+        this function is intended to eventually be a universal tool for executing SNAP workflows. However, in its current state
+        it is very much customized to the workflows generated by function :func:`~pyroSAR.snap.util.geocode`.
+        Alternatively the function :func:`pyroSAR.snap.auxil.execute` can be used.
     
     Parameters
     ----------
@@ -315,11 +325,13 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         
         - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
     removeS1BorderNoiseMethod: str
-        the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
+        the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details;
+        one of the following:
+        
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
     basename_extensions: list of str
-        names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
+        names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
     
     Returns
     -------
@@ -369,17 +381,17 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
             else:
                 i += 1
         # unpack the scene if necessary and perform the custom border noise removal
-        print('unpacking scene')
+        log.info('unpacking scene')
         if scene.compression is not None:
             scene.unpack(tmpname)
-        print('removing border noise..')
+        log.info('removing border noise..')
         scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
         # change the name of the input file to that of the unpacked archive
         read.parameters['file'] = scene.scene
         # write a new workflow file
         workflow.write(xmlfile)
     
-    print('executing node sequence{}..'.format('s' if groups is not None else ''))
+    log.info('executing node sequence{}..'.format('s' if groups is not None else ''))
     try:
         if groups is not None:
             tmpdir = os.path.join(tmpname, 'tmp')
@@ -396,7 +408,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
     outname = os.path.join(outdir, os.path.basename(tmpname))
     
     if format == 'ENVI':
-        print('converting to GTiff')
+        log.info('converting to GTiff')
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
         for item in finder(tmpname, ['*.img'], recursive=False):
@@ -442,7 +454,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
     ###########################################################################
     if cleanup and os.path.exists(tmpname):
         shutil.rmtree(tmpname, onerror=windows_fileprefix)
-    print('done')
+    log.info('done')
 
 
 def is_consistent(workflow):
@@ -1264,25 +1276,3 @@ def value2str(value):
     else:
         strval = str(value)
     return strval
-
-
-def get_egm96_lookup():
-    """
-    If not found, download SNAP's lookup table for converting EGM96 geoid heights to WGS84 ellipsoid heights
-    
-    Returns
-    -------
-
-    """
-    try:
-        auxdatapath = ExamineSnap().auxdatapath
-    except AttributeError:
-        auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
-    local = os.path.join(auxdatapath, 'dem', 'egm96', 'ww15mgh_b.zip')
-    os.makedirs(os.path.dirname(local), exist_ok=True)
-    if not os.path.isfile(local):
-        remote = 'https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
-        print('{} <<-- {}'.format(local, remote))
-        r = requests.get(remote)
-        with open(local, 'wb')as out:
-            out.write(r.content)

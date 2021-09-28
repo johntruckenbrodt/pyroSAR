@@ -59,7 +59,7 @@ install:
   - python setup.py install
 
 # Skip .NET project specific build phase.
-build: off
+build: false
 
 test_script:
   - coverage run --source pyroSAR/ -m pytest

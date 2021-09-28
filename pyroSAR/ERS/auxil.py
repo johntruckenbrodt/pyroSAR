@@ -17,6 +17,9 @@ from spatialist import sqlite_setup
 from spatialist.ancillary import HiddenPrints
 from datetime import datetime, timedelta
 
+import logging
+log = logging.getLogger(__name__)
+
 
 def passdb_create(ers1passes, ers2passes, dbname):
     """
@@ -71,7 +74,7 @@ def passdb_create(ers1passes, ers2passes, dbname):
                              int(cycle), int(passNumber),
                              time_convert(starttime), time_convert(endtime)]
                 if satellite == 'ERS1':
-                    print(tuple(insertion))
+                    log.info(tuple(insertion))
                 cursor.execute(insert_string, tuple(insertion))
     con.commit()
     con.close()

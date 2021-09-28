@@ -55,7 +55,8 @@ calling the GPT command line tool:
 
     gpt('outname_proc.xml')
 
-**workflow splitting**
+workflow splitting
+==================
 
 Simple workflows like the one shown above take only a few seconds to process, but the more processing nodes are added,
 the more time it obviously takes to execute them. However, it was observed that executing long workflows takes longer
@@ -87,7 +88,8 @@ These new files are then executed in sequence with intermediate `BEAM-DIMAP`
 files written in the same directory as the sub-workflow XML files. After processing this directory is deleted unless
 parameter ``cleanup`` of function :func:`~pyroSAR.snap.auxil.gpt` is set to ``False``.
 
-**backwards compatibility**
+backwards compatibility
+=======================
 
 With new versions of SNAP, new parameters are introduced and others removed. If a new parameter is not listed in the
 node's XML description its default is used by SNAP during processing. If, however, a parameter is contained in the
@@ -95,7 +97,8 @@ workflow that is no longer supported by SNAP, the processing will be terminated.
 was created by an older version of SNAP. pyroSAR reads the error messages and, if an unknown parameter is mentioned,
 deletes this parameter from the workflow, saves it to a new file and executes it instead.
 
-**troubleshooting**
+troubleshooting
+===============
 
 SNAP as well as pyroSAR's SNAP API are constantly being developed and bugs are unfortunately inevitable.
 This section is intended to guide users to better interpret errors and unexpected behaviour.

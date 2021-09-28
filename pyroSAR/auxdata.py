@@ -11,13 +11,14 @@
 # copied, modified, propagated, or distributed except according
 # to the terms contained in the LICENSE.txt file.
 ###############################################################################
+import io
 import os
 import re
 import csv
 import ssl
 import ftplib
-
-import io
+import requests
+import zipfile as zf
 from urllib.request import urlopen
 from urllib.error import HTTPError
 from urllib.parse import urlparse
@@ -28,6 +29,10 @@ from pyroSAR.examine import ExamineSnap
 from spatialist import Raster
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
+from spatialist.envi import HDRobject
+
+import logging
+log = logging.getLogger(__name__)
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
@@ -45,6 +50,11 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         - 'AW3D30' (ALOS Global Digital Surface Model "ALOS World 3D - 30m")
 
           * url: ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804
+        
+        - 'GETASSE30'
+        
+          * info: https://seadas.gsfc.nasa.gov/help-8.1.0/desktop/GETASSE30ElevationModel.html
+          * url: https://step.esa.int/auxdata/dem/GETASSE30
 
         - 'Copernicus 10m EEA DEM' (Copernicus 10 m DEM available over EEA-39 countries)
 
@@ -58,9 +68,9 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         - 'SRTM 3Sec'
 
           * url: https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF
-
+        
         - 'TDX90m'
-
+        
           * registration:  https://geoservice.dlr.de/web/dataguide/tdm90
           * url: ftpes://tandemx-90m.dlr.de
 
@@ -75,14 +85,18 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
     product: str
         the sub-product to extract from the DEM product.
         The following options are available for the respective DEM types:
-
+        
         - 'AW3D30'
-
+         
           * 'dem': the actual Digital Elevation Model
           * 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
             low correlation mask, Sea mask, Information of elevation dataset used
             for the void-filling processing)
           * 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
+          
+        - 'GETASSE30'
+        
+          * 'dem': the actual Digital Elevation Model
 
         - 'Copernicus 10m EEA DEM'
         
@@ -93,15 +107,15 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * 'wbm': water body mask
         
         - 'SRTM 1Sec HGT'
-
+         
           * 'dem': the actual Digital Elevation Model
-
+          
         - 'SRTM 3Sec'
-
+         
           * 'dem': the actual Digital Elevation Model
-
+          
         - 'TDX90m'
-
+         
           * 'dem': the actual Digital Elevation Model
           * 'am2': Amplitude Mosaic representing the minimum value
           * 'amp': Amplitude Mosaic representing the mean value
@@ -110,39 +124,39 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * 'hem': Height Error Map
           * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
           * 'wam': Water Indication Mask
-
+    
     Returns
     -------
     list or None
         the names of the obtained files or None if a VRT file was defined
-
+    
     Examples
     --------
-    download all SRTM 1 arcsec DEMs overlapping with a Sentinel-1 scene and mosaic them to a single GeoTiff file
-
+    download all SRTM 1 arcsec DEMs overlapping with a Sentinel-1 scene and mosaic them to a single GeoTIFF file
+    
     .. code-block:: python
-
+        
         from pyroSAR import identify
         from pyroSAR.auxdata import dem_autoload
         from spatialist import gdalwarp
-
+        
         # identify the SAR scene
         filename = 'S1A_IW_SLC__1SDV_20150330T170734_20150330T170801_005264_006A6C_DA69.zip'
         scene = identify(filename)
-
+        
         # extract the bounding box as spatialist.Vector object
         bbox = scene.bbox()
-
+        
         # download the tiles and virtually combine them in an in-memory
         # VRT file subsetted to the extent of the SAR scene plus a buffer of 0.01 degrees
         vrt = '/vsimem/srtm1.vrt'
         dem_autoload(geometries=[bbox], demType='SRTM 1Sec HGT',
                      vrt=vrt, buffer=0.01)
-
-        # write the final GeoTiff file
+        
+        # write the final GeoTIFF file
         outname = scene.outname_base() + 'srtm1.tif'
         gdalwarp(src=vrt, dst=outname, options={'format': 'GTiff'})
-
+        
         # alternatively use function dem_create and warp the DEM to UTM
         # including conversion from geoid to ellipsoid heights
         from pyroSAR.auxdata import dem_create
@@ -159,10 +173,10 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             product=product)
 
 
-def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoid_convert=False, geoid='EGM96'):
+def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoid_convert=False, geoid='EGM96', outputBounds=None):
     """
-    create a new DEM GeoTiff file and optionally convert heights from geoid to ellipsoid
-
+    create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
+    
     Parameters
     ----------
     src: str
@@ -182,7 +196,8 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
         convert geoid heights?
     geoid: str
         the geoid model to be corrected, only used if ``geoid_convert == True``; current options:
-         * 'EGM96'
+        
+         - 'EGM96'
 
     Returns
     -------
@@ -202,7 +217,11 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
-                     'resampleAlg': resampling_method}
+                     'resampleAlg': resampling_method,
+                     'targetAlignedPixels': True}
+    
+    if outputBounds is not None:
+        gdalwarp_args['outputBounds'] = outputBounds
     
     if tr is not None:
         gdalwarp_args.update({'xRes': tr[0],
@@ -222,7 +241,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
         crs = gdalwarp_args['dstSRS']
         if crs != 'EPSG:4326':
             message += ' and reprojecting to {}'.format(crs)
-        print(message)
+        log.info(message)
         gdalwarp(src, dst, gdalwarp_args)
     except RuntimeError as e:
         if os.path.isfile(dst):
@@ -242,7 +261,7 @@ class DEMHandler:
     """
     | An interface to obtain DEM data for selected geometries
     | The files are downloaded into the ESA SNAP auxdata directory structure
-
+    
     Parameters
     ----------
     geometries: list of spatialist.vector.Vector
@@ -280,16 +299,16 @@ class DEMHandler:
         return ext
     
     @staticmethod
-    def __buildvrt(archives, vrtfile, pattern, vsi, extent, nodata=None, srs=None):
+    def __buildvrt(archives, vrtfile, pattern, vsi, extent, nodata=None):
         locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in archives])]
-        if nodata is None:
-            with Raster(locals[0]) as ras:
+        with Raster(locals[0]) as ras:
+            if nodata is None:
                 nodata = ras.nodata
+            xres, yres = ras.res
         opts = {'outputBounds': (extent['xmin'], extent['ymin'],
                                  extent['xmax'], extent['ymax']),
-                'srcNodata': nodata}
-        if srs is not None:
-            opts['outputSRS'] = crsConvert(srs, 'wkt')
+                'srcNodata': nodata, 'targetAlignedPixels': True,
+                'xRes': xres, 'yRes': yres}
         gdalbuildvrt(src=locals, dst=vrtfile,
                      options=opts)
     
@@ -320,7 +339,7 @@ class DEMHandler:
             if not os.path.isfile(outfile):
                 try:
                     input = urlopen(infile)
-                    print('{} <<-- {}'.format(outfile, infile))
+                    log.info('{} <<-- {}'.format(outfile, infile))
                 except HTTPError:
                     continue
                 with open(outfile, 'wb') as output:
@@ -362,7 +381,7 @@ class DEMHandler:
                     continue
                 address = '{}://{}/{}{}'.format(parsed.scheme, parsed.netloc,
                                                 parsed.path + '/' if parsed.path != '' else '', product_remote)
-                print('{} <<-- {}'.format(product_local, address))
+                log.info('{} <<-- {}'.format(product_local, address))
                 with open(product_local, 'wb') as myfile:
                     ftp.retrbinary('RETR {}'.format(product_remote), myfile.write)
             if os.path.isfile(product_local):
@@ -389,6 +408,11 @@ class DEMHandler:
                                                    'flm': '*FLM.tif',
                                                    'hem': '*HEM.tif',
                                                    'wbm': '*WBM.tif'}},
+            'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
+                          'nodata': None,
+                          'vsi': '/vsizip/',
+                          'pattern': {'dem': '*.GETASSE30'}
+                          },
             'SRTM 1Sec HGT': {'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
                               'nodata': -32768.0,
                               'vsi': '/vsizip/',
@@ -416,7 +440,7 @@ class DEMHandler:
     def load(self, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
         """
         obtain DEM tiles for the given geometries
-
+        
         Parameters
         ----------
         demType: str
@@ -499,6 +523,10 @@ class DEMHandler:
         else:
             locals = self.__retrieve(self.config[demType]['url'], remotes, outdir)
         
+        if demType == 'GETASSE30':
+            for item in locals:
+                getasse30_hdr(item)
+        
         if product == 'dem':
             nodata = self.config[demType]['nodata']
         else:
@@ -544,25 +572,34 @@ class DEMHandler:
                         step)
             return lat, lon
         
-        def index(x=None, y=None, nx=3, ny=3):
+        def index(x=None, y=None, nx=3, ny=3, reverse=False):
+            if reverse:
+                pattern = '{c:0{n}d}{id}'
+            else:
+                pattern = '{id}{c:0{n}d}'
             if x is not None:
-                xf = '{ew}{x:0{nx}d}'.format(ew='W' if x < 0 else 'E', x=abs(x), nx=nx)
+                xf = pattern.format(id='W' if x < 0 else 'E', c=abs(x), n=nx)
             else:
                 xf = ''
             if y is not None:
-                yf = '{ns}{y:0{ny}d}'.format(ns='S' if y < 0 else 'N', y=abs(y), ny=ny)
+                yf = pattern.format(id='S' if y < 0 else 'N', c=abs(y), n=ny)
             else:
                 yf = ''
             out = yf + xf
             return out
         
-        if demType in ['SRTM 1Sec HGT', 'TDX90m']:
-            lat, lon = intrange(extent, step=1)
+        if demType in ['SRTM 1Sec HGT', 'GETASSE30', 'TDX90m']:
             
             if demType == 'SRTM 1Sec HGT':
+                lat, lon = intrange(extent, step=1)
                 remotes = ['{}.SRTMGL1.hgt.zip'.format(index(x, y, nx=3, ny=2))
                            for x in lon for y in lat]
+            elif demType == 'GETASSE30':
+                lat, lon = intrange(extent, step=15)
+                remotes = ['{}.zip'.format(index(x, y, nx=3, ny=2, reverse=True))
+                           for x in lon for y in lat]
             else:
+                lat, lon = intrange(extent, step=1)
                 remotes = []
                 for x in lon:
                     xr = abs(x) // 10 * 10
@@ -571,7 +608,6 @@ class DEMHandler:
                         yf = index(y=y, ny=2)
                         remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
                                        .format(x=xf, xr=xr, y=yf, hem=xf[0]))
-        
         elif demType == 'AW3D30':
             remotes = []
             lat, lon = intrange(extent, step=1)
@@ -631,6 +667,79 @@ class DEMHandler:
             raise ValueError('unknown demType: {}'.format(demType))
         
         return sorted(remotes)
+
+
+def getasse30_hdr(fname):
+    """
+    create an ENVI HDR file for zipped GETASSE30 DEM tiles
+    
+    Parameters
+    ----------
+    fname: str
+        the name of the zipped tile
+
+    Returns
+    -------
+
+    """
+    basename = os.path.basename(fname)
+    pattern = r'(?P<lat>[0-9]{2})' \
+              '(?P<ns>[A-Z])' \
+              '(?P<lon>[0-9]{3})' \
+              '(?P<ew>[A-Z]).zip'
+    match = re.search(pattern, basename).groupdict()
+    
+    lon = float(match['lon'])
+    if match['ew'] == 'W':
+        lon *= -1
+    lat = float(match['lat'])
+    if match['ns'] == 'S':
+        lat *= -1
+    posting = 30 / 3600  # 30 arc seconds
+    pixels = 1800
+    
+    map_info = ['Geographic Lat/Lon', '1.0000', '1.0000',
+                str(lon),
+                str(lat + pixels * posting),
+                str(posting),
+                str(posting),
+                'WGS-84', 'units=Degrees']
+    
+    with zf.ZipFile(fname, 'a') as zip:
+        files = zip.namelist()
+        hdr = basename.replace('.zip', '.hdr')
+        if hdr not in files:
+            with HDRobject() as obj:
+                obj.samples = pixels
+                obj.lines = pixels
+                obj.byte_order = 1
+                obj.data_type = 2
+                obj.map_info = '{{{}}}'.format(','.join(map_info))
+                obj.coordinate_system_string = crsConvert(4326, 'wkt')
+                zip.writestr(hdr, str(obj))
+
+
+def get_egm96_lookup():
+    """
+    If not found, download SNAP's lookup table for converting EGM96 geoid heights to WGS84 ellipsoid heights.
+    Default directory: `$HOME/.snap/auxdata/dem/egm96`.
+
+    Returns
+    -------
+
+    """
+    try:
+        auxdatapath = ExamineSnap().auxdatapath
+    except AttributeError:
+        auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
+    local = os.path.join(auxdatapath, 'dem', 'egm96', 'ww15mgh_b.zip')
+    os.makedirs(os.path.dirname(local), exist_ok=True)
+    if not os.path.isfile(local):
+        remote = 'https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
+        log.info('{} <<-- {}'.format(local, remote))
+        r = requests.get(remote)
+        with open(local, 'wb') as out:
+            out.write(r.content)
 
 
 class ImplicitFTP_TLS(ftplib.FTP_TLS):
