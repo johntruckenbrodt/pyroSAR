@@ -389,7 +389,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     tc.parameters['alignToStandardGrid'] = alignToStandardGrid
     tc.parameters['standardGridOriginX'] = standardGridOriginX
     tc.parameters['standardGridOriginY'] = standardGridOriginY
-    tc.parameters['imgResamplingMethod'] = 'NEAREST_NEIGHBOUR'
     ############################################
     # Multilook node configuration
     
