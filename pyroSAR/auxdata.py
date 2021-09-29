@@ -242,15 +242,15 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
-                     'resampleAlg': resampling_method,
-                     'targetAlignedPixels': True}
+                     'resampleAlg': resampling_method}
     
     if outputBounds is not None:
         gdalwarp_args['outputBounds'] = outputBounds
     
     if tr is not None:
         gdalwarp_args.update({'xRes': tr[0],
-                              'yRes': tr[1]})
+                              'yRes': tr[1],
+                              'targetAlignedPixels': True})
     
     if geoid_convert:
         if gdal.__version__ < '2.2':
@@ -280,7 +280,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
         errstr = str(e)
         if 'Cannot open egm96_15.gtx' in errstr:
             addition = '\nplease refer to the following site for instructions ' \
-                       'on how to use the file egm96_15.gtx (requires proj.4 >= 5.0.0):\n' \
+                       'on how to use the file egm96_15.gtx (requires PROJ >= 5.0.0):\n' \
                        'https://gis.stackexchange.com/questions/258532/' \
                        'noaa-vdatum-gdal-variable-paths-for-linux-ubuntu'
             raise RuntimeError(errstr + addition)
