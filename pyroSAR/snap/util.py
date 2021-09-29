@@ -406,14 +406,18 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                                     incidence=incidence)
     
     if processSLC:
-        workflow.insert_node(parse_node('Multilook'), before=deb.id)
-        ml = workflow['Multilook']
-        ml.parameters['nAzLooks'] = azlks
-        ml.parameters['nRgLooks'] = rlks
-        ml.parameters['sourceBands'] = None
-        
-        workflow.insert_node(parse_node('SRGR'), before=ml.id)
-        srgr = workflow['SRGR']
+        if azlks > 1 or rlks > 1:
+            workflow.insert_node(parse_node('Multilook'), before=deb.id)
+            ml = workflow['Multilook']
+            ml.parameters['nAzLooks'] = azlks
+            ml.parameters['nRgLooks'] = rlks
+            ml.parameters['sourceBands'] = None
+            
+            workflow.insert_node(parse_node('SRGR'), before=ml.id)
+            srgr = workflow['SRGR']
+        else:
+            workflow.insert_node(parse_node('SRGR'), before=deb.id)
+            srgr = workflow['SRGR']
         srgr.parameters['warpPolynomialOrder'] = 4
         srgr.parameters['interpolationMethod'] = 'Nearest-neighbor interpolation'
     else:
