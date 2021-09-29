@@ -64,11 +64,13 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
      
           * info: https://copernicus-dem-30m.s3.amazonaws.com/readme.html
           * url: https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/
+          * height reference: EGM2008
 
         - 'Copernicus 90m Global DEM'
      
           * info: https://copernicus-dem-90m.s3.amazonaws.com/readme.html
           * url: https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com/
+          * height reference: EGM2008
           
         - 'GETASSE30'
         
