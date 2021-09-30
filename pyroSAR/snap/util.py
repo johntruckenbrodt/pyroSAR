@@ -29,7 +29,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
             basename_extensions=None, test=False, export_extra=None, groupsize=1, cleanup=True, tmpdir=None,
             gpt_exceptions=None, gpt_args=None, returnWF=False, nodataValueAtSea=True,
-            demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='NEAREST_NEIGHBOUR',
+            demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
             speckleFilter=False, refarea='gamma0'):
     """
@@ -133,7 +133,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - 'BICUBIC_INTERPOLATION'
     imgResamplingMethod: str
         The resampling method for geocoding the SAR image; the options are identical to demResamplingMethod.
-        Defaults to 'NEAREST_NEIGHBOUR'.
     speckleFilter: str
         One of the following:
          - 'Boxcar'
