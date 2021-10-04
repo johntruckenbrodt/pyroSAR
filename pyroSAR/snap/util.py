@@ -328,7 +328,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     last = cal.id
     ############################################
     # TOPSAR-Deburst node configuration
-    if processSLC:
+    if processSLC and swaths is not None:
         deb = parse_node('TOPSAR-Deburst')
         workflow.insert_node(deb, before=last)
         deb.parameters['selectedPolarisations'] = polarizations
@@ -406,8 +406,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                                     incidence=incidence)
     
     if processSLC:
+        id_before = deb.id if swaths is not None else cal.id
         if azlks > 1 or rlks > 1:
-            workflow.insert_node(parse_node('Multilook'), before=deb.id)
+            workflow.insert_node(parse_node('Multilook'), before=id_before)
             ml = workflow['Multilook']
             ml.parameters['nAzLooks'] = azlks
             ml.parameters['nRgLooks'] = rlks
@@ -416,7 +417,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             workflow.insert_node(parse_node('SRGR'), before=ml.id)
             srgr = workflow['SRGR']
         else:
-            workflow.insert_node(parse_node('SRGR'), before=deb.id)
+            workflow.insert_node(parse_node('SRGR'), before=id_before)
             srgr = workflow['SRGR']
         srgr.parameters['warpPolynomialOrder'] = 4
         srgr.parameters['interpolationMethod'] = 'Nearest-neighbor interpolation'
