@@ -28,7 +28,6 @@ Drivers
         identify
         identify_many
         filter_processed
-        findfiles
         getFileObj
         parse_date
         drop_archive

@@ -51,7 +51,6 @@ from .xml_util import getNamespaces
 from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder
 
-# new imports for postgres
 from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
@@ -313,7 +312,7 @@ class ID(object):
     
     def findfiles(self, pattern, include_folders=False):
         """
-        find files in the scene archive, which match a pattern; see :func:`~findfiles`
+        find files in the scene archive, which match a pattern.
 
         Parameters
         ----------
@@ -325,8 +324,22 @@ class ID(object):
         -------
         list
             the matched file names
+        
+        See Also
+        --------
+        :func:`spatialist.ancillary.finder`
         """
-        return findfiles(self.scene, pattern, include_folders)
+        foldermode = 1 if include_folders else 0
+        
+        files = finder(target=self.scene, matchlist=[pattern],
+                       foldermode=foldermode, regex=True)
+        
+        if os.path.isdir(self.scene) \
+                and re.search(pattern, os.path.basename(self.scene)) \
+                and include_folders:
+            files.append(self.scene)
+        
+        return files
     
     def gdalinfo(self):
         """
@@ -2794,36 +2807,6 @@ def drop_archive(archive):
     else:
         raise RuntimeError('this function only works for PostgreSQL databases.'
                            'For SQLite databases it is recommended to just delete the DB file.')
-
-
-def findfiles(scene, pattern, include_folders=False):
-    """
-    find files in a scene archive, which match a pattern
-
-    Parameters
-    ----------
-    scene: str
-        the SAR scene to be scanned, can be a directory, a zip or tar.gz archive
-    pattern: str
-        the regular expression to match
-    include_folders: bool
-         also match folders (or just files)?
-    Returns
-    -------
-    list
-        the matched file names
-    """
-    foldermode = 1 if include_folders else 0
-    
-    files = finder(target=scene, matchlist=[pattern],
-                   foldermode=foldermode, regex=True)
-    
-    if os.path.isdir(scene) \
-            and re.search(pattern, os.path.basename(scene)) \
-            and include_folders:
-        files.append(scene)
-    
-    return files
 
 
 def getFileObj(scene, filename):
