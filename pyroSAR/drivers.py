@@ -2133,10 +2133,12 @@ class Archive(object):
                 insertion = self.__prepare_insertion(id)
                 insertions.append(insertion)
                 counter_regulars += 1
+                log.debug('regular:   {}'.format(id.scene))
             elif not self.__is_registered_in_duplicates(id):
                 insertion = self.Duplicates(outname_base=basename, scene=id.scene)
                 insertions.append(insertion)
                 counter_duplicates += 1
+                log.debug('duplicate: {}'.format(id.scene))
             else:
                 list_duplicates.append(id.outname_base())
             
