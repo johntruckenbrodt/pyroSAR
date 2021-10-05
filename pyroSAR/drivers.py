@@ -2813,28 +2813,16 @@ def findfiles(scene, pattern, include_folders=False):
     list
         the matched file names
     """
-    if os.path.isdir(scene):
-        files = finder(scene, [pattern], regex=True, foldermode=1 if include_folders else 0)
-        if re.search(pattern, os.path.basename(scene)) and include_folders:
-            files.append(scene)
-    elif zf.is_zipfile(scene):
-        with zf.ZipFile(scene, 'r') as zip:
-            files = [os.path.join(scene, x) for x in zip.namelist() if
-                     re.search(pattern, os.path.basename(x.strip('/')))]
-            if include_folders:
-                files = [x.strip('/') for x in files]
-            else:
-                files = [x for x in files if not x.endswith('/')]
-    elif tf.is_tarfile(scene):
-        tar = tf.open(scene)
-        files = [x for x in tar.getnames() if re.search(pattern, os.path.basename(x.strip('/')))]
-        if not include_folders:
-            files = [x for x in files if not tar.getmember(x).isdir()]
-        tar.close()
-        files = [os.path.join(scene, x) for x in files]
-    else:
-        files = [scene] if re.search(pattern, scene) else []
-    files = [str(x) for x in files]
+    foldermode = 1 if include_folders else 0
+    
+    files = finder(target=scene, matchlist=[pattern],
+                   foldermode=foldermode, regex=True)
+    
+    if os.path.isdir(scene) \
+            and re.search(pattern, os.path.basename(scene)) \
+            and include_folders:
+        files.append(scene)
+    
     return files
 
 
