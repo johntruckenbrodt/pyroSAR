@@ -159,6 +159,8 @@ def identify_many(scenes, pbar=False, sortkey=None):
                 idlist.append(id)
             except RuntimeError:
                 continue
+            except PermissionError:
+                log.warning("Permission denied: '{}'".format(scene))
         if progress is not None:
             progress.update(i + 1)
     if progress is not None:
