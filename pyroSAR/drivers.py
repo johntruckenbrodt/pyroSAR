@@ -2105,7 +2105,7 @@ class Archive(object):
             log.info('...nothing to be done')
             return
         log.info('identifying scenes and extracting metadata')
-        scenes = identify_many(scenes)
+        scenes = identify_many(scenes, pbar=pbar)
         
         if len(scenes) == 0:
             log.info('all scenes are already registered')
