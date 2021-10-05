@@ -116,7 +116,7 @@ def identify(scene):
     for handler in ID.__subclasses__():
         try:
             return handler(scene)
-        except (IOError, KeyError):
+        except (RuntimeError, KeyError):
             pass
     raise RuntimeError('data format not supported')
 
@@ -300,15 +300,15 @@ class ID(object):
 
         Raises
         -------
-        IOError
+        RuntimeError
         """
         files = self.findfiles(self.pattern, include_folders=include_folders)
         if len(files) == 1:
             self.file = files[0]
         elif len(files) == 0:
-            raise IOError('scene does not match {} naming convention'.format(type(self).__name__))
+            raise RuntimeError('scene does not match {} naming convention'.format(type(self).__name__))
         else:
-            raise IOError('file ambiguity detected:\n{}'.format('\n'.join(files)))
+            raise RuntimeError('file ambiguity detected:\n{}'.format('\n'.join(files)))
     
     def findfiles(self, pattern, include_folders=False):
         """
@@ -356,9 +356,9 @@ class ID(object):
             prefix = {'zip': '/vsizip/', 'tar': '/vsitar/', None: ''}[self.compression]
             header = files[0]
         elif len(files) > 1:
-            raise IOError('file ambiguity detected')
+            raise RuntimeError('file ambiguity detected')
         else:
-            raise IOError('file type not supported')
+            raise RuntimeError('file type not supported')
         
         meta = {}
         
@@ -431,13 +431,13 @@ class ID(object):
 
         Raises
         -------
-        IOError
+        RuntimeError
         """
         if directory is None:
             if hasattr(self, 'gammadir'):
                 directory = self.gammadir
             else:
-                raise IOError(
+                raise RuntimeError(
                     'directory missing; please provide directory to function or define object attribute "gammadir"')
         return [x for x in finder(directory, [self.outname_base()], regex=True) if
                 not re.search(r'\.(?:par|hdr|aux\.xml|swp|sh)$', x)]
@@ -729,7 +729,7 @@ class CEOS_ERS(ID):
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
         
         if re.search('IM__0', match.group('product_id')):
-            raise IOError('product level 0 not supported (yet)')
+            raise RuntimeError('product level 0 not supported (yet)')
         
         self.meta = self.gdalinfo()
         
@@ -907,7 +907,7 @@ class CEOS_PSR(ID):
             try:
                 self.examine()
                 break
-            except IOError as e:
+            except RuntimeError as e:
                 if i + 1 == len(patterns):
                     raise e
         
@@ -1401,7 +1401,7 @@ class ESA(ID):
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
         
         if re.search('IM__0', match.group('product_id')):
-            raise IOError('product level 0 not supported (yet)')
+            raise RuntimeError('product level 0 not supported (yet)')
         
         self.meta = self.scanMetadata()
         self.meta['acquisition_mode'] = match2.group('image_mode')
@@ -1489,7 +1489,7 @@ class SAFE(ID):
         self.examine(include_folders=True)
         
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
-            raise IOError('folder does not match S1 scene naming convention')
+            raise RuntimeError('folder does not match S1 scene naming convention')
         
         # scan the metadata XML files file and add selected attributes to a meta dictionary
         self.meta = self.scanMetadata()
@@ -1714,7 +1714,7 @@ class TSX(ID):
         self.examine(include_folders=False)
         
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
-            raise IOError('folder does not match TSX scene naming convention')
+            raise RuntimeError('folder does not match TSX scene naming convention')
         
         self.meta = self.scanMetadata()
         self.meta['projection'] = crsConvert(4326, 'wkt')
@@ -2295,7 +2295,7 @@ class Archive(object):
         """
         for item in scenelist:
             if not isinstance(item, (ID, str)):
-                raise IOError('items in scenelist must be of type "str" or pyroSAR.ID')
+                raise TypeError("items in scenelist must be of type 'str' or 'pyroSAR.ID'")
         
         # ORM query, get all scenes locations
         scenes_data = self.Session().query(self.Data.scene)

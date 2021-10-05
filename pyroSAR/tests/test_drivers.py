@@ -10,7 +10,7 @@ from geoalchemy2 import Geometry
 
 metadata = MetaData()
 
-mytable = Table("mytable", metadata,
+mytable = Table('mytable', metadata,
                 Column('mytable_id', Integer, primary_key=True),
                 Column('value', String(50)),
                 Column('shape', Geometry('POLYGON', management=True, srid=4326)))
@@ -148,7 +148,7 @@ def test_scene(tmpdir, testdata):
     id.unpack(str(tmpdir), overwrite=True)
     assert id.compression is None
     id.export2sqlite(dbfile)
-    with pytest.raises(IOError):
+    with pytest.raises(RuntimeError):
         id.getGammaImages()
     assert id.getGammaImages(id.scene) == []
 
@@ -181,7 +181,7 @@ def test_archive(tmpdir, testdata):
     
     db.add_tables(mytable)
     assert 'mytable' in db.get_tablenames()
-    with pytest.raises(IOError):
+    with pytest.raises(TypeError):
         db.filter_scenelist([1])
     db.close()
 
@@ -225,7 +225,7 @@ def test_archive_postgres(tmpdir, testdata):
     assert isinstance(out[0], str)
     db.add_tables(mytable)
     assert 'mytable' in db.get_tablenames()
-    with pytest.raises(IOError):
+    with pytest.raises(TypeError):
         db.filter_scenelist([1])
     db.close()
     with pyroSAR.Archive('test', postgres=True, port=5432, user=pguser, password=pgpassword) as db:
