@@ -1970,14 +1970,17 @@ class Archive(object):
     def add_tables(self, tables):
         """
         Add tables to the database per :class:`sqlalchemy.schema.Table`
-        Tables provided here will be added to the database. Notice that columns using Geometry must have setting
-        management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
+        Tables provided here will be added to the database.
+        
+        .. note::
+        
+            Columns using Geometry must have setting management=True for SQLite,
+            for example: ``bbox = Column(Geometry('POLYGON', management=True, srid=4326))``
         
         Parameters
         ----------
         tables: :class:`sqlalchemy.schema.Table` or :obj:`list` of :class:`sqlalchemy.schema.Table`
-            Tables provided here will be added to the database. Notice that columns using Geometry must have setting
-            management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
+            The table(s) to be added to the database.
         """
         created = []
         if isinstance(tables, list):
@@ -2470,15 +2473,15 @@ class Archive(object):
         ----------
         vectorobject: :class:`~spatialist.vector.Vector`
             a geometry with which the scenes need to overlap
-        mindate: str
-            the minimum acquisition date in format YYYYmmddTHHMMSS
-        maxdate: str
-            the maximum acquisition date in format YYYYmmddTHHMMSS
-        processdir: str
-            a directory to be scanned for already processed scenes;
-            the selected scenes will be filtered to those that have not yet been processed
+        mindate: str or datetime.datetime, optional
+            the minimum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
+        maxdate: str or datetime.datetime, optional
+            the maximum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
+        processdir: str, optional
+            A directory to be scanned for already processed scenes;
+            the selected scenes will be filtered to those that have not yet been processed. Default: None
         recursive: bool
-            should also the subdirectories of the processdir be scanned?
+            (only if `processdir` is not None) should also the subdirectories of the `processdir` be scanned?
         polarizations: list
             a list of polarization strings, e.g. ['HH', 'VV']
         **args:
@@ -2506,12 +2509,16 @@ class Archive(object):
                 elif isinstance(args[key], (tuple, list)):
                     arg_format.append('''{0} IN ('{1}')'''.format(key, "', '".join(map(str, args[key]))))
         if mindate:
+            if isinstance(mindate, datetime):
+                mindate = mindate.strftime('%Y%m%dT%H%M%S')
             if re.search('[0-9]{8}T[0-9]{6}', mindate):
                 arg_format.append('start>=?')
                 vals.append(mindate)
             else:
                 log.info('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
         if maxdate:
+            if isinstance(maxdate, datetime):
+                maxdate = maxdate.strftime('%Y%m%dT%H%M%S')
             if re.search('[0-9]{8}T[0-9]{6}', maxdate):
                 arg_format.append('stop<=?')
                 vals.append(maxdate)
