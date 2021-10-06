@@ -249,10 +249,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     bandnames['beta0'] = ['Beta0_' + x for x in polarizations]
     bandnames['gamma0'] = ['Gamma0_' + x for x in polarizations]
     bandnames['sigma0'] = ['Sigma0_' + x for x in polarizations]
-    bandnames['int'] = ['Intensity_' + x for x in polarizations]
+    
     if processSLC and swaths is not None:
         swaths_pols = ['_'.join((s, p)) for s in swaths for p in polarizations]
         bandnames['int'] = ['Intensity_' + x for x in swaths_pols]
+    else:
+        bandnames['int'] = ['Intensity_' + x for x in polarizations]
     ############################################
     ############################################
     # parse base workflow
@@ -407,27 +409,22 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     if processSLC:
         id_before = deb.id if swaths is not None else cal.id
-        if azlks > 1 or rlks > 1:
-            workflow.insert_node(parse_node('Multilook'), before=id_before)
-            ml = workflow['Multilook']
-            ml.parameters['nAzLooks'] = azlks
-            ml.parameters['nRgLooks'] = rlks
-            ml.parameters['sourceBands'] = None
-            
-            workflow.insert_node(parse_node('SRGR'), before=ml.id)
-            srgr = workflow['SRGR']
-        else:
-            workflow.insert_node(parse_node('SRGR'), before=id_before)
-            srgr = workflow['SRGR']
+    else:
+        id_before = 'Calibration'
+    
+    if azlks > 1 or rlks > 1:
+        workflow.insert_node(parse_node('Multilook'), before=id_before)
+        ml = workflow['Multilook']
+        ml.parameters['nAzLooks'] = azlks
+        ml.parameters['nRgLooks'] = rlks
+        ml.parameters['sourceBands'] = None
+        id_before = ml.id
+    
+    if processSLC:
+        workflow.insert_node(parse_node('SRGR'), before=id_before)
+        srgr = workflow['SRGR']
         srgr.parameters['warpPolynomialOrder'] = 4
         srgr.parameters['interpolationMethod'] = 'Nearest-neighbor interpolation'
-    else:
-        if azlks > 1 or rlks > 1:
-            workflow.insert_node(parse_node('Multilook'), before='Calibration')
-            ml = workflow['Multilook']
-            ml.parameters['nAzLooks'] = azlks
-            ml.parameters['nRgLooks'] = rlks
-            ml.parameters['sourceBands'] = None
     ############################################
     # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
     if len(refarea) > 1 and terrainFlattening:
