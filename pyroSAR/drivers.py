@@ -210,6 +210,9 @@ class ID(object):
         for item in self.locals:
             setattr(self, item, metadict[item])
     
+    def __getattr__(self, item):
+        raise AttributeError("object has no attribute '{}'".format(item))
+    
     def __str__(self):
         lines = ['pyroSAR ID object of type {}'.format(self.__class__.__name__)]
         for item in sorted(self.locals):
@@ -276,7 +279,7 @@ class ID(object):
     
     def export2sqlite(self, dbfile):
         """
-        Export relevant metadata to a sqlite database
+        Export relevant metadata to an SQLite database
 
         Parameters
         ----------
@@ -2086,7 +2089,7 @@ class Archive(object):
 
         Parameters
         ----------
-        scene_in: str or list
+        scene_in: str or ID or list
             a SAR scene or a list of scenes to be inserted
         pbar: bool
             show a progress bar?
