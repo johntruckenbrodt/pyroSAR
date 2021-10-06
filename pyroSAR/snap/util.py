@@ -218,14 +218,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         os.makedirs(outdir)
     ############################################
     # general setup
-    processSLC = False
+    process_S1_SLC = False
     
     if id.sensor in ['ASAR', 'ERS1', 'ERS2']:
         formatName = 'ENVISAT'
     elif id.sensor in ['S1A', 'S1B']:
         if id.product == 'SLC':
             removeS1BorderNoise = False
-            processSLC = True
+            process_S1_SLC = True
         formatName = 'SENTINEL-1'
     else:
         raise RuntimeError('sensor not supported (yet)')
@@ -246,8 +246,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         polarizations = [x for x in polarizations if x in id.polarizations]
     else:
         raise RuntimeError('polarizations must be of type str or list')
-     
-    if processSLC:
+    
+    if process_S1_SLC:
         if id.acquisition_mode == 'IW':
             swaths = ['IW1', 'IW2', 'IW3']
         elif id.acquisition_mode == 'EW':
@@ -262,7 +262,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     bandnames['gamma0'] = ['Gamma0_' + x for x in polarizations]
     bandnames['sigma0'] = ['Sigma0_' + x for x in polarizations]
     
-    if processSLC and swaths is not None:
+    if process_S1_SLC and swaths is not None:
         swaths_pols = ['_'.join((s, p)) for s in swaths for p in polarizations]
         bandnames['int'] = ['Intensity_' + x for x in swaths_pols]
     else:
@@ -342,7 +342,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     last = cal.id
     ############################################
     # TOPSAR-Deburst node configuration
-    if processSLC and swaths is not None:
+    if process_S1_SLC and swaths is not None:
         deb = parse_node('TOPSAR-Deburst')
         workflow.insert_node(deb, before=last)
         deb.parameters['selectedPolarisations'] = polarizations
@@ -419,7 +419,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                                     geometry=image_geometry,
                                     incidence=incidence)
     
-    if processSLC:
+    if process_S1_SLC:
         id_before = deb.id if swaths is not None else cal.id
     else:
         id_before = 'Calibration'
@@ -432,7 +432,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ml.parameters['sourceBands'] = None
         id_before = ml.id
     
-    if processSLC:
+    if process_S1_SLC:
         workflow.insert_node(parse_node('SRGR'), before=id_before)
         srgr = workflow['SRGR']
         srgr.parameters['warpPolynomialOrder'] = 4
@@ -527,7 +527,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             wkt = bounds.convert2wkt()[0]
         
         subset = parse_node('Subset')
-        if processSLC:
+        if process_S1_SLC:
             workflow.insert_node(subset, before=srgr.id)
         else:
             workflow.insert_node(subset, before=read.id)
@@ -538,7 +538,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # (optionally) configure subset node for pixel offsets
     if offset and not shapefile:
         subset = parse_node('Subset')
-        if processSLC:
+        if process_S1_SLC:
             workflow.insert_node(subset, before=srgr.id)
         else:
             workflow.insert_node(subset, before=read.id)
