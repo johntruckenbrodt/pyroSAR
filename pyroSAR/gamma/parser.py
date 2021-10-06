@@ -1,5 +1,5 @@
 ###############################################################################
-# parse Gamma command docstrings to Python functions
+# parse GAMMA command docstrings to Python functions
 
 # Copyright (c) 2015-2021, the pyroSAR Developers.
 
@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 def parse_command(command, indent='    '):
     """
-    Parse the help text of a Gamma command to a Python function including a docstring.
+    Parse the help text of a GAMMA command to a Python function including a docstring.
     The docstring is in rst format and can thu be parsed by e.g. sphinx.
     This function is not intended to be used by itself, but rather within function :func:`parse_module`.
 
