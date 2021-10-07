@@ -490,7 +490,7 @@ class ID(object):
         """
         if os.path.isdir(outdir):
             # '{}.*tif$'.format(self.outname_base())
-            return len(finder(outdir, [self.outname_base()], regex=True, recursive=recursive)) != 0
+            return len(finder(outdir, [self.outname_base()], regex=True, recursive=recursive)) > 2
         else:
             return False
     
