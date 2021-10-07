@@ -211,9 +211,9 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
                               'yRes': tr[1]})
     
     if geoid_convert:
-        if gdal.__version__ < '2.2':
-            raise RuntimeError('geoid conversion requires GDAL >= 2.2;'
-                               'see documentation of gdalwarp')
+        if not gdal.__version__.startswith('2'):
+            raise RuntimeError('geoid conversion temporarily requires GDAL version 2.x; '
+                               'see https://github.com/OSGeo/gdal/issues/4566')
         if geoid == 'EGM96':
             gdalwarp_args['srcSRS'] += '+5773'
         else:
@@ -232,7 +232,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
         errstr = str(e)
         if 'Cannot open egm96_15.gtx' in errstr:
             addition = '\nplease refer to the following site for instructions ' \
-                       'on how to use the file egm96_15.gtx (requires proj.4 >= 5.0.0):\n' \
+                       'on how to use the file egm96_15.gtx (requires PROJ >= 5.0.0):\n' \
                        'https://gis.stackexchange.com/questions/258532/' \
                        'noaa-vdatum-gdal-variable-paths-for-linux-ubuntu'
             raise RuntimeError(errstr + addition)
