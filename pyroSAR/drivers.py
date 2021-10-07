@@ -2556,7 +2556,7 @@ class Archive(object):
         
         if processdir and os.path.isdir(processdir):
             scenes = [x for x in query_rs
-                      if len(finder(processdir, [x[1]], regex=True, recursive=recursive)) == 0]
+                      if len(finder(processdir, [x[1]], regex=True, recursive=recursive)) < 3]
         else:
             scenes = query_rs
         ret = []
