@@ -333,7 +333,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
             fields = (id.outname_base(extensions=basename_extensions),
                       match.group('pol').upper(),
                       product)
-            outname = os.path.join(directory, '_'.join(fields))
+            basename = '_'.join(fields)
+            outname = os.path.join(directory, basename)
             
             pars = {'GeoTIFF': tiff,
                     'annotation_XML': xml_ann,
@@ -346,7 +347,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
             if product == 'slc':
                 swath = match.group('swath').upper()
                 old = '{:_<{length}}'.format(id.acquisition_mode, length=len(swath))
-                outname = outname.replace(old, swath)
+                base_new = basename.replace(old, swath)
+                outname = os.path.join(os.path.dirname(outname), base_new)
                 pars['SLC'] = outname
                 pars['SLC_par'] = outname + '.par'
                 pars['TOPS_par'] = outname + '.tops_par'
