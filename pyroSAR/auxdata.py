@@ -211,9 +211,6 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
                               'yRes': tr[1]})
     
     if geoid_convert:
-        if not gdal.__version__.startswith('2'):
-            raise RuntimeError('geoid conversion temporarily requires GDAL version 2.x; '
-                               'see https://github.com/OSGeo/gdal/issues/4566')
         if geoid == 'EGM96':
             gdalwarp_args['srcSRS'] += '+5773'
         else:
