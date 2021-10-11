@@ -712,6 +712,7 @@ class DEMHandler:
                     ids.append(row[0])
             
             remotes = []
+            remotes_base = []
             
             def ftp_search(target, files):
                 pattern = '|'.join(files)
@@ -721,7 +722,10 @@ class DEMHandler:
                         ftp_search(target + '/' + item, files)
                 else:
                     if target.endswith('.tar') and re.search(pattern, target):
-                        remotes.append(target)
+                        base = os.path.basename(target)
+                        if base not in remotes_base:
+                            remotes.append(target)
+                            remotes_base.append(base)
             
             ftp_search(path + '/', ids)
             ftp.quit()
