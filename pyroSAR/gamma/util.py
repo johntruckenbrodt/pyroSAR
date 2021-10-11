@@ -1044,22 +1044,26 @@ def ovs(parfile, targetres):
 
 def multilook(infile, outfile, targetres, exist_ok=False, logpath=None, outdir=None, shellscript=None):
     """
-    multilooking of SLC and MLI images
+    Multilooking of SLC and MLI images.
 
-    if the image is in slant range the ground range resolution is computed by dividing the range pixel spacing by
-    the sine of the incidence angle
+    If the image is in slant range the ground range resolution is computed by dividing the range pixel spacing by
+    the sine of the incidence angle.
 
-    the looks in range and azimuth are chosen to approximate the target resolution by rounding the ratio between
-    target resolution and ground range/azimuth pixel spacing to the nearest integer
+    The looks in range and azimuth are chosen to approximate the target resolution by rounding the ratio between
+    target resolution and ground range/azimuth pixel spacing to the nearest integer.
 
-    an ENVI HDR parameter file is automatically written for better handling in other software
+    An ENVI HDR parameter file is automatically written for better handling in other software.
 
     Parameters
     ----------
-    infile: str
-        a SAR image in GAMMA format with a parameter file of name <infile>.par
+    infile: str or list
+        one of the following:
+        
+        - a SAR image in GAMMA format with a parameter file <infile>.par
+        - a list of ScanSAR SLC swaths with parameter files <slc>.par and <slc>.tops_par; in this case a text file
+          <outfile>_slc-tab.txt will be created, which is passed to the GAMMA command ``multi_look_ScanSAR``
     outfile: str
-        the name of the output GAMMA file
+        the name of the output GAMMA MLI file
     targetres: int
         the target resolution in ground range
     exist_ok: bool
@@ -1069,18 +1073,39 @@ def multilook(infile, outfile, targetres, exist_ok=False, logpath=None, outdir=N
     outdir: str or None
         the directory to execute the command in
     shellscript: str or None
-        a file to write the Gamma commands to in shell format
+        a file to write the GAMMA commands to in shell format
 
+    See Also
+    --------
+    pyroSAR.ancillary.multilook_factors
     """
     # read the input parameter file
-    par = ISPPar(infile + '.par')
+    if isinstance(infile, str):
+        par = ISPPar(infile + '.par')
+        range_pixel_spacing = par.range_pixel_spacing
+        azimuth_pixel_spacing = par.azimuth_pixel_spacing
+        incidence_angle = par.incidence_angle
+        image_geometry = par.image_geometry
+        image_format = par.image_format
+    elif isinstance(infile, list):
+        par = [ISPPar(x + '.par') for x in infile]
+        range_pixel_spacings = [getattr(x, 'range_pixel_spacing') for x in par]
+        range_pixel_spacing = sum(range_pixel_spacings) / len(par)
+        azimuth_pixel_spacings = [getattr(x, 'azimuth_pixel_spacing') for x in par]
+        azimuth_pixel_spacing = sum(azimuth_pixel_spacings) / len(par)
+        incidence_angles = [getattr(x, 'azimuth_pixel_spacing') for x in par]
+        incidence_angle = sum(incidence_angles) / len(par)
+        image_geometry = par[0].image_geometry
+        image_format = par[0].image_format
+    else:
+        raise TypeError("'infile' must be str or list")
     
-    rlks, azlks = multilook_factors(sp_rg=par.range_pixel_spacing,
-                                    sp_az=par.azimuth_pixel_spacing,
+    rlks, azlks = multilook_factors(sp_rg=range_pixel_spacing,
+                                    sp_az=azimuth_pixel_spacing,
                                     tr_rg=targetres,
                                     tr_az=targetres,
-                                    geometry=par.image_geometry,
-                                    incidence=par.incidence_angle)
+                                    geometry=image_geometry,
+                                    incidence=incidence_angle)
     
     pars = {'rlks': rlks,
             'azlks': azlks,
@@ -1088,17 +1113,30 @@ def multilook(infile, outfile, targetres, exist_ok=False, logpath=None, outdir=N
             'shellscript': shellscript,
             'outdir': outdir}
     
-    if par.image_format in ['SCOMPLEX', 'FCOMPLEX']:
-        # multilooking for SLC images
-        pars['SLC'] = infile
-        pars['SLC_par'] = infile + '.par'
+    if image_format in ['SCOMPLEX', 'FCOMPLEX']:
+        # multilooking of SLC images
         pars['MLI'] = outfile
         pars['MLI_par'] = outfile + '.par'
-        if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
-            isp.multi_look(**pars)
-            par2hdr(outfile + '.par', outfile + '.hdr')
+        if isinstance(infile, str):
+            pars['SLC'] = infile
+            pars['SLC_par'] = infile + '.par'
+            if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
+                isp.multi_look(**pars)
+                par2hdr(outfile + '.par', outfile + '.hdr')
+        else:
+            slcpar = [x + '.par' for x in infile]
+            topspar = [x + '.tops_par' for x in infile]
+            slc_tab = outfile + '_slc-tab.txt'
+            if not os.path.isfile(slc_tab) or not exist_ok:
+                with open(slc_tab, 'w') as tab:
+                    for item in zip(infile, slcpar, topspar):
+                        tab.write(' '.join(item) + '\n')
+            pars['SLC_tab'] = slc_tab
+            if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
+                isp.multi_look_ScanSAR(**pars)
+                par2hdr(outfile + '.par', outfile + '.hdr')
     else:
-        # multilooking for MLI images
+        # multilooking of MLI images
         pars['MLI_in'] = infile
         pars['MLI_in_par'] = infile + '.par'
         pars['MLI_out'] = outfile
