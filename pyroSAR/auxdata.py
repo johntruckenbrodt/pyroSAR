@@ -200,15 +200,15 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
-                     'resampleAlg': resampling_method,
-                     'targetAlignedPixels': True}
+                     'resampleAlg': resampling_method}
     
     if outputBounds is not None:
         gdalwarp_args['outputBounds'] = outputBounds
     
     if tr is not None:
         gdalwarp_args.update({'xRes': tr[0],
-                              'yRes': tr[1]})
+                              'yRes': tr[1],
+                              'targetAlignedPixels': True})
     
     if geoid_convert:
         if geoid == 'EGM96':
