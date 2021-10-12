@@ -632,7 +632,7 @@ def getasse30_hdr(fname):
                 zip.writestr(hdr, str(obj))
 
 
-def get_egm96_lookup():
+def get_egm_lookup():
     """
     If not found, download SNAP's lookup table for converting EGM96 geoid heights to WGS84 ellipsoid heights.
     Default directory: `$HOME/.snap/auxdata/dem/egm96`.
