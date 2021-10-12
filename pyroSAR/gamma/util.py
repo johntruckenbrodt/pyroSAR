@@ -137,6 +137,7 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
 
 def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                   basename_extensions=None, exist_ok=False,
+                  return_fnames=False,
                   logpath=None, outdir=None, shellscript=None):
     """
     general function for converting SAR images to GAMMA format
@@ -156,6 +157,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     exist_ok: bool
         allow existing output files and do not create new ones?
+    return_fnames: bool
+        return the names of the output image files? Default: False.
     logpath: str or None
         a directory to write command logfiles to
     outdir: str or None
@@ -165,7 +168,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
 
     Returns
     -------
-
+    list or None
+        the sorted image file names if ``return_fnames=True`` and None otherwise
     """
     
     if not isinstance(id, ID):
@@ -174,8 +178,9 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
     if id.compression is not None:
         raise RuntimeError('scene is not yet unpacked')
     
-    if not os.path.isdir(directory):
-        os.makedirs(directory)
+    os.makedirs(directory, exist_ok=True)
+    
+    fnames = []
     
     cname = type(id).__name__
     
@@ -205,6 +210,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                     if do_execute(pars, ['SLC', 'SLC_par'], exist_ok):
                         isp.par_ESA_ERS(**pars)
                         par2hdr(outname + '.par', outname + '.hdr')
+                    fnames.append(outname)
                 else:
                     log.info('scene already converted')
             else:
@@ -248,6 +254,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 if do_execute(pars, ['MLI', 'MLI_par', 'DEM_par'], exist_ok):
                     diff.par_EORC_PALSAR_geo(**pars)
                     par2hdr(outname + '.par', outname + '.hdr')
+            fnames.append(outname)
     
     elif cname == 'EORC_PSR':
         images = id.findfiles('^sar.')
@@ -258,22 +265,23 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
             polarization = re.search('[HV]{2}', os.path.basename(image)).group(0)
             outname_base = id.outname_base(extensions=basename_extensions)
             outname_base = '{}_{}'.format(outname_base, polarization)
-            outname = os.path.join(directory, outname_base)
+            outname = os.path.join(directory, outname_base) + '_mli'
+            fnames.append(outname)
             
             pars = {'facter_m': facter_m,
                     'CEOS_leader': led,
-                    'SLC_par': outname + '_mli.par',
+                    'SLC_par': outname + '.par',
                     'pol': polarization,
                     'pls_mode': 2,
                     'KC_data': image,
-                    'pwr': outname + '_mli',
+                    'pwr': outname,
                     'logpath': logpath,
                     'outdir': outdir,
                     'shellscript': shellscript}
             
             if do_execute(pars, ['pwr', 'SLC_par'], exist_ok):
                 isp.par_KC_PALSAR_slr(**pars)
-                par2hdr(outname + '_mli.par', outname + '_mli.hdr')
+                par2hdr(outname + '.par', outname + '.hdr')
     
     elif cname == 'ESA':
         """
@@ -300,6 +308,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                     .replace('SLC', 'slc')
                 outname = os.path.join(directory, outname_base + ext)
                 os.rename(item, outname)
+                fnames.append(outname)
                 if outname.endswith('.par'):
                     par2hdr(outname, outname.replace('.par', '.hdr'))
         else:
@@ -352,7 +361,6 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 pars['SLC'] = outname
                 pars['SLC_par'] = outname + '.par'
                 pars['TOPS_par'] = outname + '.tops_par'
-                
                 if do_execute(pars, ['SLC', 'SLC_par', 'TOPS_par'], exist_ok):
                     isp.par_S1_SLC(**pars)
                     par2hdr(outname + '.par', outname + '.hdr')
@@ -367,6 +375,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
                     isp.par_S1_GRD(**pars)
                     par2hdr(outname + '.par', outname + '.hdr')
+            fnames.append(outname)
     
     elif cname == 'TSX':
         images = id.findfiles(id.pattern_ds)
@@ -411,9 +420,13 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                     par2hdr(outname + '.par', outname + '.hdr')
             else:
                 raise RuntimeError('unknown product: {}'.format(id.product))
+            fnames.append(outname)
     
     else:
         raise NotImplementedError('conversion for class {} is not implemented yet'.format(cname))
+    
+    if return_fnames:
+        return sorted(fnames)
 
 
 def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpath=None, outdir=None, shellscript=None):
