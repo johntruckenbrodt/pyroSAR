@@ -23,8 +23,6 @@ from urllib.request import urlopen
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 
-from osgeo import gdal
-
 from pyroSAR.examine import ExamineSnap
 from spatialist import Raster
 from spatialist.ancillary import dissolve, finder
@@ -96,7 +94,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
     vrt: str or None
         an optional GDAL VRT file created from the obtained DEM tiles
-    buffer: int or float
+    buffer: int, float, None
         a buffer in degrees to add around the individual geometries
     username: str or None
         (optional) the user name for services requiring registration
@@ -193,8 +191,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             product=product)
 
 
-def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoid_convert=False, geoid='EGM96',
-               outputBounds=None):
+def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
+               geoid_convert=False, geoid='EGM96', outputBounds=None):
     """
     create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
     
@@ -253,19 +251,29 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
                               'targetAlignedPixels': True})
     
     if geoid_convert:
-        if gdal.__version__ < '2.2':
-            raise RuntimeError('geoid conversion requires GDAL >= 2.2;'
-                               'see documentation of gdalwarp')
-        
         geoid_epsg = {'EGM84': 5798,
                       'EGM96': 5773,
                       'EGM2008': 3855}
-        
         if geoid in geoid_epsg.keys():
             epsg = geoid_epsg[geoid]
             gdalwarp_args['srcSRS'] += '+{}'.format(epsg)
+            # the following line is a temporary workaround until compound EPSG codes can
+            # directly be used for vertical CRS transformations
+            # see https://github.com/OSGeo/gdal/pull/4639
+            gdalwarp_args['srcSRS'] = crsConvert(gdalwarp_args['srcSRS'], 'proj4') \
+                .replace('us_nga_egm96_15.tif', 'egm96_15.gtx') \
+                .replace('us_nga_egm08_25.tif', 'egm08_25.gtx')
         else:
             raise RuntimeError('geoid model not yet supported')
+        try:
+            get_egm_lookup(geoid=geoid, software='PROJ')
+        except OSError as e:
+            errstr = str(e)
+            addition = '\nplease refer to the following site for instructions ' \
+                       'on how to use EGM GTX files (requires PROJ >= 5.0.0):\n' \
+                       'https://gis.stackexchange.com/questions/258532/' \
+                       'noaa-vdatum-gdal-variable-paths-for-linux-ubuntu'
+            raise RuntimeError(errstr + addition)
     
     try:
         message = 'creating mosaic'
@@ -274,18 +282,10 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
             message += ' and reprojecting to {}'.format(crs)
         log.info(message)
         gdalwarp(src, dst, gdalwarp_args)
-    except RuntimeError as e:
+    except Exception:
         if os.path.isfile(dst):
             os.remove(dst)
-        errstr = str(e)
-        if 'Cannot open egm96_15.gtx' in errstr:
-            addition = '\nplease refer to the following site for instructions ' \
-                       'on how to use the file egm96_15.gtx (requires PROJ >= 5.0.0):\n' \
-                       'https://gis.stackexchange.com/questions/258532/' \
-                       'noaa-vdatum-gdal-variable-paths-for-linux-ubuntu'
-            raise RuntimeError(errstr + addition)
-        else:
-            raise e
+        raise
 
 
 class DEMHandler:
@@ -491,7 +491,7 @@ class DEMHandler:
             the type fo DEM to be used
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
-        buffer: int or float or None
+        buffer: int, float, None
             a buffer in degrees to add around the individual geometries
         username: str or None
             the download account user name
@@ -792,27 +792,66 @@ def getasse30_hdr(fname):
                 zip.writestr(hdr, str(obj))
 
 
-def get_egm96_lookup():
+def get_egm_lookup(geoid, software):
     """
-    If not found, download SNAP's lookup table for converting EGM96 geoid heights to WGS84 ellipsoid heights.
-    Default directory: `$HOME/.snap/auxdata/dem/egm96`.
+    Download lookup tables for converting EGM geoid heights to WGS84 ellipsoid heights.
+    
+    Parameters
+    ----------
+    geoid: str
+        the geoid model; current options:
+        
+        - SNAP: 'EGM96'
+        - PROJ: 'EGM96', 'EGM2008'
+    software: str
+        the software for which to download the EGM lookup
+        
+        - SNAP: default directory: ``~/.snap/auxdata/dem/egm96``; URL:
+        
+          * https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip
+        - PROJ: requires ``PROJ_LIB`` environment variable to be set as download directory; URLs:
+        
+          * https://download.osgeo.org/proj/vdatum/egm96_15/egm96_15.gtx
+          * https://download.osgeo.org/proj/vdatum/egm08_25/egm08_25.gtx
 
     Returns
     -------
 
     """
-    try:
-        auxdatapath = ExamineSnap().auxdatapath
-    except AttributeError:
-        auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
-    local = os.path.join(auxdatapath, 'dem', 'egm96', 'ww15mgh_b.zip')
-    os.makedirs(os.path.dirname(local), exist_ok=True)
-    if not os.path.isfile(local):
-        remote = 'https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
-        log.info('{} <<-- {}'.format(local, remote))
-        r = requests.get(remote)
-        with open(local, 'wb') as out:
-            out.write(r.content)
+    if software == 'SNAP':
+        try:
+            auxdatapath = ExamineSnap().auxdatapath
+        except AttributeError:
+            auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
+        local = os.path.join(auxdatapath, 'dem', 'egm96', 'ww15mgh_b.zip')
+        os.makedirs(os.path.dirname(local), exist_ok=True)
+        if not os.path.isfile(local):
+            remote = 'https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
+            log.info('{} <<-- {}'.format(local, remote))
+            r = requests.get(remote)
+            with open(local, 'wb') as out:
+                out.write(r.content)
+    
+    elif software == 'PROJ':
+        gtx_lookup = {'EGM96': 'egm96_15/egm96_15.gtx',
+                      'EGM2008': 'egm08_25/egm08_25.gtx'}
+        gtx_remote = 'https://download.osgeo.org/proj/vdatum/' + gtx_lookup[geoid]
+        
+        proj_lib = os.environ.get('PROJ_LIB')
+        if proj_lib is not None:
+            if not os.access(proj_lib, os.W_OK):
+                raise OSError("cannot write to 'PROJ_LIB' path: {}".format(proj_lib))
+            
+            gtx_local = os.path.join(proj_lib, os.path.basename(gtx_remote))
+            if not os.path.isfile(gtx_local):
+                log.info('{} <<-- {}'.format(gtx_local, gtx_remote))
+                r = requests.get(gtx_remote)
+                with open(gtx_local, 'wb') as out:
+                    out.write(r.content)
+        else:
+            raise RuntimeError("environment variable 'PROJ_LIB' not set")
+    else:
+        raise TypeError("software must be either 'SNAP' or 'PROJ'")
 
 
 class ImplicitFTP_TLS(ftplib.FTP_TLS):
