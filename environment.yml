@@ -13,4 +13,4 @@ dependencies:
   - sqlalchemy<1.4
   - sqlalchemy-utils
   - geoalchemy2
-  - gdal=2.4.*
+  - gdal>=2.4
