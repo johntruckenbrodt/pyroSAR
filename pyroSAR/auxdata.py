@@ -216,7 +216,6 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
     geoid: str
         the geoid model to be corrected, only used if ``geoid_convert == True``; current options:
         
-         - 'EGM84'
          - 'EGM96'
          - 'EGM2008'
     outputBounds: list or None
@@ -251,8 +250,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
                               'targetAlignedPixels': True})
     
     if geoid_convert:
-        geoid_epsg = {'EGM84': 5798,
-                      'EGM96': 5773,
+        geoid_epsg = {'EGM96': 5773,
                       'EGM2008': 3855}
         if geoid in geoid_epsg.keys():
             epsg = geoid_epsg[geoid]
