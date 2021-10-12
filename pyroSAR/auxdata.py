@@ -641,7 +641,7 @@ def getasse30_hdr(fname):
 
 def get_egm_lookup(geoid, software):
     """
-    If not found, lookup tables for converting EGM geoid heights to WGS84 ellipsoid heights.
+    Download lookup tables for converting EGM geoid heights to WGS84 ellipsoid heights.
     
     Parameters
     ----------
