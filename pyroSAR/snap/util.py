@@ -631,7 +631,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     # download the EGM lookup table if necessary
     if dempar['externalDEMApplyEGM']:
-        get_egm_lookup()
+        get_egm_lookup(geoid='EGM96', software='SNAP')
     ############################################
     ############################################
     # configure the resampling methods

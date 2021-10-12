@@ -632,24 +632,63 @@ def getasse30_hdr(fname):
                 zip.writestr(hdr, str(obj))
 
 
-def get_egm_lookup():
+def get_egm_lookup(geoid, software):
     """
-    If not found, download SNAP's lookup table for converting EGM96 geoid heights to WGS84 ellipsoid heights.
-    Default directory: `$HOME/.snap/auxdata/dem/egm96`.
+    If not found, lookup tables for converting EGM geoid heights to WGS84 ellipsoid heights.
+    
+    Parameters
+    ----------
+    geoid: str
+        the geoid model; current options:
+        
+        - SNAP: 'EGM96'
+        - PROJ: 'EGM96', 'EGM2008'
+    software: str
+        the software for which to download the EGM lookup
+        
+        - SNAP: default directory: ``~/.snap/auxdata/dem/egm96``; URL:
+        
+          * https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip
+        - PROJ: requires ``PROJ_LIB`` environment variable to be set as download directory; URLs:
+        
+          * https://download.osgeo.org/proj/vdatum/egm96_15/egm96_15.gtx
+          * https://download.osgeo.org/proj/vdatum/egm08_25/egm08_25.gtx
 
     Returns
     -------
 
     """
-    try:
-        auxdatapath = ExamineSnap().auxdatapath
-    except AttributeError:
-        auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
-    local = os.path.join(auxdatapath, 'dem', 'egm96', 'ww15mgh_b.zip')
-    os.makedirs(os.path.dirname(local), exist_ok=True)
-    if not os.path.isfile(local):
-        remote = 'https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
-        log.info('{} <<-- {}'.format(local, remote))
-        r = requests.get(remote)
-        with open(local, 'wb') as out:
-            out.write(r.content)
+    if software == 'SNAP':
+        try:
+            auxdatapath = ExamineSnap().auxdatapath
+        except AttributeError:
+            auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
+        local = os.path.join(auxdatapath, 'dem', 'egm96', 'ww15mgh_b.zip')
+        os.makedirs(os.path.dirname(local), exist_ok=True)
+        if not os.path.isfile(local):
+            remote = 'https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
+            log.info('{} <<-- {}'.format(local, remote))
+            r = requests.get(remote)
+            with open(local, 'wb') as out:
+                out.write(r.content)
+    
+    elif software == 'PROJ':
+        gtx_lookup = {'EGM96': 'egm96_15/egm96_15.gtx',
+                      'EGM2008': 'egm08_25/egm08_25.gtx'}
+        gtx_remote = 'https://download.osgeo.org/proj/vdatum/' + gtx_lookup[geoid]
+        
+        proj_lib = os.environ.get('PROJ_LIB')
+        if proj_lib is not None:
+            if not os.access(proj_lib, os.W_OK):
+                raise OSError("cannot write to 'PROJ_LIB' path: {}".format(proj_lib))
+            
+            gtx_local = os.path.join(proj_lib, os.path.basename(gtx_remote))
+            if not os.path.isfile(gtx_local):
+                log.info('{} <<-- {}'.format(gtx_local, gtx_remote))
+                r = requests.get(gtx_remote)
+                with open(gtx_local, 'wb') as out:
+                    out.write(r.content)
+        else:
+            raise RuntimeError("environment variable 'PROJ_LIB' not set")
+    else:
+        raise TypeError("software must be either 'SNAP' or 'PROJ'")
