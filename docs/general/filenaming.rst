@@ -3,7 +3,7 @@ File Naming
 ###########
 
 pyroSAR internally uses a fixed naming scheme to keep track of processed results. For each scene an identifier is created,
-which contains the sensor, acquisition mode, orbit (ascending or dsescending) and the time stamp of the acquisition start.
+which contains the sensor, acquisition mode, orbit (ascending or descending) and the time stamp of the acquisition start.
 For example `S1A__IW___A_20150222T170750`, which is created by calling method :meth:`~pyroSAR.drivers.ID.outname_base`:
 
 .. code-block:: python

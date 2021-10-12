@@ -1,7 +1,7 @@
 ###############################################################################
 # general GAMMA utilities
 
-# Copyright (c) 2014-2020, Stefan Engelhardt, the pyroSAR Developers.
+# Copyright (c) 2014-2021, the pyroSAR Developers, Stefan Engelhardt.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -40,7 +40,7 @@ class ISPPar(object):
     Parameters
     ----------
     filename: str
-        the Gamma parameter file
+        the GAMMA parameter file
     
     Examples
     --------
@@ -128,6 +128,10 @@ class ISPPar(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         return
     
+    def __getattr__(self, item):
+        # will only be run if object has no attribute item
+        raise AttributeError("parameter file has no attribute '{}'".format(item))
+    
     def __str__(self):
         maxlen = len(max(self.keys, key=len)) + 1
         return '\n'.join(['{key}:{sep}{value}'.format(key=key,
@@ -136,7 +140,7 @@ class ISPPar(object):
     
     def envidict(self, nodata=None):
         """
-        export relevant metadata to a ENVI HDR file compliant format
+        export relevant metadata to an ENVI HDR file compliant format
         
         Parameters
         ----------
@@ -201,12 +205,12 @@ class ISPPar(object):
 
 def par2hdr(parfile, hdrfile, modifications=None, nodata=None):
     """
-    Create an ENVI HDR file from a Gamma PAR file
+    Create an ENVI HDR file from a GAMMA PAR file
     
     Parameters
     ----------
     parfile: str
-        the Gamma parfile
+        the GAMMA parfile
     hdrfile: str
         the ENVI HDR file
     modifications: dict or None
@@ -244,7 +248,7 @@ class UTM(object):
     Parameters
     ----------
     parfile: str
-        the Gamma parameter file to read the coordinate from
+        the GAMMA parameter file to read the coordinate from
     
     Example
     -------
@@ -296,7 +300,7 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
     void: bool
         return the stdout and stderr messages?
     shellscript: str
-        a file to write the Gamma commands to in shell format
+        a file to write the GAMMA commands to in shell format
     
     Returns
     -------
@@ -382,7 +386,12 @@ class Namespace(object):
         self.__reg = []
     
     def __getitem__(self, item):
-        return getattr(self, item.replace('.', '_'))
+        item = str(item).replace('.', '_')
+        return self.get(item)
+    
+    def __getattr__(self, item):
+        # will only be run if object has no attribute item
+        return '-'
     
     def appreciate(self, keys):
         for key in keys:
@@ -446,3 +455,25 @@ def slc_corners(parfile):
             pts['xmin'], pts['xmax'] = [float(x) for x in
                                         re.findall(pattern, line)]
     return pts
+
+
+def do_execute(par, ids, exist_ok):
+    """
+    small helper function to assess whether a GAMMA command shall be executed.
+
+    Parameters
+    ----------
+    par: dict
+        a dictionary containing all arguments for the command
+    ids: list
+        the IDs of the output files
+    exist_ok: bool
+        allow existing output files?
+
+    Returns
+    -------
+    bool
+        execute the command because (a) not all output files exist or (b) existing files are not allowed
+    """
+    all_exist = all([os.path.isfile(par[x]) for x in ids])
+    return (exist_ok and not all_exist) or not exist_ok

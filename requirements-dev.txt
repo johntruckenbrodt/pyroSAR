@@ -15,3 +15,5 @@ pytest
 #Documentation requirements
 sphinx
 sphinxcontrib-bibtex
+sphinxcontrib-svg2pdfconverter
+cairosvg

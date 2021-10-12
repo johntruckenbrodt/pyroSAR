@@ -14,7 +14,8 @@
 import os
 import pyroSAR
 from ..ancillary import multilook_factors
-from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, get_egm96_lookup
+from ..auxdata import get_egm96_lookup
+from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 from spatialist.ancillary import dissolve
@@ -33,8 +34,27 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
             speckleFilter=False, refarea='gamma0'):
     """
-    wrapper function for geocoding SAR images using ESA SNAP
+    general function for geocoding of SAR backscatter images with SNAP.
+    
+    This function performs the following steps:
+    
+    - (if necessary) identify the SAR scene(s) passed via argument `infile` (:func:`pyroSAR.drivers.identify`)
+    - (if necessary) create the directories defined via `outdir` and `tmpdir`
+    - (if necessary) download Sentinel-1 OSV files
+    - parse a SNAP workflow (:class:`pyroSAR.snap.auxil.Workflow`)
+    - write the workflow to an XML file in `outdir`
+    - execute the workflow (:func:`pyroSAR.snap.auxil.gpt`)
 
+    Note
+    ----
+    The function may create workflows with multiple `Write` nodes. All nodes are parametrized to write data in ENVI format,
+    in which case the node parameter `file` is going to be a directory. All nodes will use the same temporary directory,
+    which will be created in `tmpdir`.
+    Its name is created from the basename of the `infile` (:meth:`pyroSAR.drivers.ID.outname_base`)
+    and a suffix identifying each processing node of the workflow (:meth:`pyroSAR.snap.auxil.Workflow.suffix`).
+    
+    For example: `S1A__IW___A_20180101T170648_NR_Orb_Cal_ML_TF_TC`.
+    
     Parameters
     ----------
     infile: str or ~pyroSAR.drivers.ID or list
@@ -45,9 +65,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     t_srs: int, str or osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
-        Default: `4326 <http://spatialreference.org/ref/epsg/4326/>`_.
+        Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
     tr: int or float, optional
-        The target resolution in meters. Default is 20
+        The target pixel spacing in meters. Default is 20
     polarizations: list or str
         The polarizations to be processed; can be a string for a single polarization, e.g. 'VV', or a list of several
         polarizations, e.g. ['VV', 'VH']. With the special value 'all' (default) all available polarizations are
@@ -62,6 +82,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         Enables removal of S1 GRD border noise (default).
     removeS1BorderNoiseMethod: str
         the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
+        
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
     removeS1ThermalNoise: bool, optional
@@ -92,6 +113,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         If set to True the workflow xml file is only written and not executed. Default is False.
     export_extra: list or None
         a list of image file IDs to be exported to outdir. The following IDs are currently supported:
+        
          - incidenceAngleFromEllipsoid
          - localIncidenceAngle
          - projectedLocalIncidenceAngle
@@ -150,24 +172,15 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     Returns
     -------
     str or None
-        either the name of the workflow file if `returnWF == True` or None otherwise
-
-    Note
-    ----
-    If only one polarization is selected and not extra products are defined the results are directly written to GeoTiff.
-    Otherwise the results are first written to a folder containing ENVI files and then transformed to GeoTiff files
-    (one for each polarization/extra product).
-    If GeoTiff would directly be selected as output format for multiple polarizations then a multilayer GeoTiff
-    is written by SNAP which is considered an unfavorable format
+        either the name of the workflow file if ``returnWF == True`` or None otherwise
     
     
-    .. figure:: figures/snap_geocode.png
-        :scale: 25%
+    .. figure:: figures/snap_geocode.svg
         :align: center
         
         Workflow diagram for function geocode for processing a Sentinel-1 Ground Range
         Detected (GRD) scene to radiometrically terrain corrected (RTC) backscatter.
-        An additional Subset node might be inserted in case a vector geometry is provided.
+        An additional `Subset` node might be inserted in case a vector geometry is provided.
 
     Examples
     --------

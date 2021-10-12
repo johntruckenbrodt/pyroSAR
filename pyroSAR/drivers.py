@@ -51,7 +51,6 @@ from .xml_util import getNamespaces
 from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder
 
-# new imports for postgres
 from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
@@ -117,12 +116,12 @@ def identify(scene):
     for handler in ID.__subclasses__():
         try:
             return handler(scene)
-        except (IOError, KeyError):
+        except (RuntimeError, KeyError):
             pass
     raise RuntimeError('data format not supported')
 
 
-def identify_many(scenes, pbar=True, sortkey=None):
+def identify_many(scenes, pbar=False, sortkey=None):
     """
     wrapper function for returning metadata handlers of all valid scenes in a list, similar to function
     :func:`~pyroSAR.drivers.identify`.
@@ -160,6 +159,8 @@ def identify_many(scenes, pbar=True, sortkey=None):
                 idlist.append(id)
             except RuntimeError:
                 continue
+            except PermissionError:
+                log.warning("Permission denied: '{}'".format(scene))
         if progress is not None:
             progress.update(i + 1)
     if progress is not None:
@@ -209,6 +210,9 @@ class ID(object):
         for item in self.locals:
             setattr(self, item, metadict[item])
     
+    def __getattr__(self, item):
+        raise AttributeError("object has no attribute '{}'".format(item))
+    
     def __str__(self):
         lines = ['pyroSAR ID object of type {}'.format(self.__class__.__name__)]
         for item in sorted(self.locals):
@@ -228,7 +232,7 @@ class ID(object):
         outname: str
             the name of the shapefile to be written
         driver: str
-        the output file format; needs to be defined if the format cannot
+            the output file format; needs to be defined if the format cannot
             be auto-detected from the filename extension
         overwrite: bool
             overwrite an existing shapefile?
@@ -275,7 +279,7 @@ class ID(object):
     
     def export2sqlite(self, dbfile):
         """
-        Export relevant metadata to a sqlite database
+        Export relevant metadata to an SQLite database
 
         Parameters
         ----------
@@ -301,19 +305,19 @@ class ID(object):
 
         Raises
         -------
-        IOError
+        RuntimeError
         """
         files = self.findfiles(self.pattern, include_folders=include_folders)
         if len(files) == 1:
             self.file = files[0]
         elif len(files) == 0:
-            raise IOError('scene does not match {} naming convention'.format(type(self).__name__))
+            raise RuntimeError('scene does not match {} naming convention'.format(type(self).__name__))
         else:
-            raise IOError('file ambiguity detected:\n{}'.format('\n'.join(files)))
+            raise RuntimeError('file ambiguity detected:\n{}'.format('\n'.join(files)))
     
     def findfiles(self, pattern, include_folders=False):
         """
-        find files in the scene archive, which match a pattern; see :func:`~findfiles`
+        find files in the scene archive, which match a pattern.
 
         Parameters
         ----------
@@ -325,17 +329,26 @@ class ID(object):
         -------
         list
             the matched file names
+        
+        See Also
+        --------
+        :func:`spatialist.ancillary.finder`
         """
-        return findfiles(self.scene, pattern, include_folders)
+        foldermode = 1 if include_folders else 0
+        
+        files = finder(target=self.scene, matchlist=[pattern],
+                       foldermode=foldermode, regex=True)
+        
+        if os.path.isdir(self.scene) \
+                and re.search(pattern, os.path.basename(self.scene)) \
+                and include_folders:
+            files.append(self.scene)
+        
+        return files
     
     def gdalinfo(self):
         """
         read metadata directly from the GDAL SAR image drivers
-
-        Parameters
-        ----------
-        scene: str
-            an archive containing a SAR scene
 
         Returns
         -------
@@ -348,9 +361,9 @@ class ID(object):
             prefix = {'zip': '/vsizip/', 'tar': '/vsitar/', None: ''}[self.compression]
             header = files[0]
         elif len(files) > 1:
-            raise IOError('file ambiguity detected')
+            raise RuntimeError('file ambiguity detected')
         else:
-            raise IOError('file type not supported')
+            raise RuntimeError('file type not supported')
         
         meta = {}
         
@@ -413,7 +426,7 @@ class ID(object):
 
         Parameters
         ----------
-        directory: str
+        directory: str or None
             the directory to be scanned; if left empty the object attribute `gammadir` is scanned
 
         Returns
@@ -423,13 +436,13 @@ class ID(object):
 
         Raises
         -------
-        IOError
+        RuntimeError
         """
         if directory is None:
             if hasattr(self, 'gammadir'):
                 directory = self.gammadir
             else:
-                raise IOError(
+                raise RuntimeError(
                     'directory missing; please provide directory to function or define object attribute "gammadir"')
         return [x for x in finder(directory, [self.outname_base()], regex=True) if
                 not re.search(r'\.(?:par|hdr|aux\.xml|swp|sh)$', x)]
@@ -490,7 +503,7 @@ class ID(object):
         Parameters
         ----------
         extensions: list of str
-            the names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
+            the names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
         Returns
         -------
         str
@@ -578,7 +591,7 @@ class ID(object):
         raise NotImplementedError
     
     @abc.abstractmethod
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         """
         Unpack the SAR scene into a defined directory.
 
@@ -588,6 +601,8 @@ class ID(object):
             the base directory into which the scene is unpacked
         overwrite: bool
             overwrite an existing unpacked scene?
+        exist_ok: bool
+            allow existing output files and do not create new ones?
 
         Returns
         -------
@@ -595,65 +610,84 @@ class ID(object):
         """
         raise NotImplementedError
     
-    def _unpack(self, directory, offset=None, overwrite=False):
+    def _unpack(self, directory, offset=None, overwrite=False, exist_ok=False):
         """
-        general function for unpacking scene archives; to be called by implementations of ID.unpack
-        :param directory: the name of the directory in which the files are written
-        :param offset: an archive directory offset; to be defined if only a subdirectory is to be unpacked (see e.g. TSX:unpack)
-        :param overwrite: should an existing directory be overwritten?
-        :return: None
+        general function for unpacking scene archives; to be called by implementations of ID.unpack.
+        Will reset object attributes `scene` and `file` to point to the locations of the unpacked scene
+        
+        Parameters
+        ----------
+        directory: str
+            the name of the directory in which the files are written
+        offset: str
+            an archive directory offset; to be defined if only a subdirectory is to be unpacked (see e.g. TSX.unpack)
+        overwrite: bool
+            should an existing directory be overwritten?
+        exist_ok: bool
+            do not attempt unpacking if the target directory already exists? Ignored if ``overwrite==True``
+        
+        Returns
+        -------
+        
         """
+        do_unpack = True
         if os.path.isdir(directory):
             if overwrite:
                 shutil.rmtree(directory)
             else:
-                raise RuntimeError('target scene directory already exists: {}'.format(directory))
-        os.makedirs(directory)
+                if exist_ok:
+                    do_unpack = False
+                else:
+                    raise RuntimeError('target scene directory already exists: {}'.format(directory))
+        os.makedirs(directory, exist_ok=True)
         
-        if tf.is_tarfile(self.scene):
-            archive = tf.open(self.scene, 'r')
-            names = archive.getnames()
-            if offset is not None:
-                names = [x for x in names if x.startswith(offset)]
-            header = os.path.commonprefix(names)
+        if do_unpack:
+            if tf.is_tarfile(self.scene):
+                archive = tf.open(self.scene, 'r')
+                names = archive.getnames()
+                if offset is not None:
+                    names = [x for x in names if x.startswith(offset)]
+                header = os.path.commonprefix(names)
+                
+                if header in names:
+                    if archive.getmember(header).isdir():
+                        for item in sorted(names):
+                            if item != header:
+                                member = archive.getmember(item)
+                                if offset is not None:
+                                    member.name = member.name.replace(offset + '/', '')
+                                archive.extract(member, directory)
+                        archive.close()
+                    else:
+                        archive.extractall(directory)
+                        archive.close()
             
-            if header in names:
-                if archive.getmember(header).isdir():
+            elif zf.is_zipfile(self.scene):
+                archive = zf.ZipFile(self.scene, 'r')
+                names = archive.namelist()
+                header = os.path.commonprefix(names)
+                if header.endswith('/'):
                     for item in sorted(names):
                         if item != header:
-                            member = archive.getmember(item)
-                            if offset is not None:
-                                member.name = member.name.replace(offset + '/', '')
-                            archive.extract(member, directory)
+                            repl = item.replace(header, '', 1)
+                            outname = os.path.join(directory, repl)
+                            outname = outname.replace('/', os.path.sep)
+                            if item.endswith('/'):
+                                os.makedirs(outname)
+                            else:
+                                try:
+                                    with open(outname, 'wb') as outfile:
+                                        outfile.write(archive.read(item))
+                                except zf.BadZipfile:
+                                    log.info('corrupt archive, unpacking failed')
+                                    continue
                     archive.close()
                 else:
                     archive.extractall(directory)
                     archive.close()
-        
-        elif zf.is_zipfile(self.scene):
-            archive = zf.ZipFile(self.scene, 'r')
-            names = archive.namelist()
-            header = os.path.commonprefix(names)
-            if header.endswith('/'):
-                for item in sorted(names):
-                    if item != header:
-                        outname = os.path.join(directory, item.replace(header, '', 1)).replace('/', os.path.sep)
-                        if item.endswith('/'):
-                            os.makedirs(outname)
-                        else:
-                            try:
-                                with open(outname, 'wb') as outfile:
-                                    outfile.write(archive.read(item))
-                            except zf.BadZipfile:
-                                log.info('corrupt archive, unpacking failed')
-                                continue
-                archive.close()
             else:
-                archive.extractall(directory)
-                archive.close()
-        else:
-            log.info('unpacking is only supported for TAR and ZIP archives')
-            return
+                log.info('unpacking is only supported for TAR and ZIP archives')
+                return
         
         self.scene = directory
         main = os.path.join(self.scene, os.path.basename(self.file))
@@ -700,7 +734,7 @@ class CEOS_ERS(ID):
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
         
         if re.search('IM__0', match.group('product_id')):
-            raise IOError('product level 0 not supported (yet)')
+            raise RuntimeError('product level 0 not supported (yet)')
         
         self.meta = self.gdalinfo()
         
@@ -724,14 +758,14 @@ class CEOS_ERS(ID):
         lon = [x[1][0] for x in self.meta['gcps']]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         if self.sensor in ['ERS1', 'ERS2']:
             base_file = re.sub(r'\.PS$', '', os.path.basename(self.file))
             base_dir = os.path.basename(directory.strip('/'))
             
             outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
             
-            self._unpack(outdir, overwrite=overwrite)
+            self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
         else:
             raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
     
@@ -878,7 +912,7 @@ class CEOS_PSR(ID):
             try:
                 self.examine()
                 break
-            except IOError as e:
+            except RuntimeError as e:
                 if i + 1 == len(patterns):
                     raise e
         
@@ -1133,9 +1167,9 @@ class CEOS_PSR(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
     
     def getCorners(self):
         if 'corners' not in self.meta.keys():
@@ -1298,9 +1332,9 @@ class EORC_PSR(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
     
     def getCorners(self):
         if 'corners' not in self.meta.keys():
@@ -1372,7 +1406,7 @@ class ESA(ID):
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
         
         if re.search('IM__0', match.group('product_id')):
-            raise IOError('product level 0 not supported (yet)')
+            raise RuntimeError('product level 0 not supported (yet)')
         
         self.meta = self.scanMetadata()
         self.meta['acquisition_mode'] = match2.group('image_mode')
@@ -1407,13 +1441,13 @@ class ESA(ID):
         meta['cycleNumber'] = meta['MPH_CYCLE']
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         base_file = os.path.basename(self.file).strip(r'\.zip|\.tar(?:\.gz|)')
         base_dir = os.path.basename(directory.strip('/'))
         
         outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
         
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
 
 
 class SAFE(ID):
@@ -1460,7 +1494,7 @@ class SAFE(ID):
         self.examine(include_folders=True)
         
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
-            raise IOError('folder does not match S1 scene naming convention')
+            raise RuntimeError('folder does not match S1 scene naming convention')
         
         # scan the metadata XML files file and add selected attributes to a meta dictionary
         self.meta = self.scanMetadata()
@@ -1479,6 +1513,7 @@ class SAFE(ID):
         ----------
         method: str
             the border noise removal method to be applied; one of the following:
+            
              - 'ESA': the pure implementation as described by ESA
              - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
 
@@ -1517,6 +1552,7 @@ class SAFE(ID):
             the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
         url_option: int
             the URL to query for scenes
+            
              - 1: https://scihub.copernicus.eu/gnss
              - 2: https://step.esa.int/auxdata/orbits/Sentinel-1
 
@@ -1626,9 +1662,9 @@ class SAFE(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file))
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
 
 
 class TSX(ID):
@@ -1683,7 +1719,7 @@ class TSX(ID):
         self.examine(include_folders=False)
         
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
-            raise IOError('folder does not match TSX scene naming convention')
+            raise RuntimeError('folder does not match TSX scene naming convention')
         
         self.meta = self.scanMetadata()
         self.meta['projection'] = crsConvert(4326, 'wkt')
@@ -1728,11 +1764,11 @@ class TSX(ID):
         meta['incidence'] = float(tree.find('.//sceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         match = self.findfiles(self.pattern, True)
         header = [x for x in match if not x.endswith('xml') and 'iif' not in x][0].replace(self.scene, '').strip('/')
         outdir = os.path.join(directory, os.path.basename(header))
-        self._unpack(outdir, offset=header, overwrite=overwrite)
+        self._unpack(outdir, offset=header, overwrite=overwrite, exist_ok=exist_ok)
 
 
 class Archive(object):
@@ -1775,6 +1811,7 @@ class Archive(object):
     >>>     archive.insert(scenes_s1)
 
     select all Sentinel-1 A/B scenes stored in the database, which
+    
      * overlap with a test site
      * were acquired in Ground-Range-Detected (GRD) Interferometric Wide Swath (IW) mode before 2018
      * contain a VV polarization image
@@ -1933,14 +1970,17 @@ class Archive(object):
     def add_tables(self, tables):
         """
         Add tables to the database per :class:`sqlalchemy.schema.Table`
-        Tables provided here will be added to the database. Notice that columns using Geometry must have setting
-        management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
+        Tables provided here will be added to the database.
+        
+        .. note::
+        
+            Columns using Geometry must have setting management=True for SQLite,
+            for example: ``bbox = Column(Geometry('POLYGON', management=True, srid=4326))``
         
         Parameters
         ----------
         tables: :class:`sqlalchemy.schema.Table` or :obj:`list` of :class:`sqlalchemy.schema.Table`
-            Tables provided here will be added to the database. Notice that columns using Geometry must have setting
-            management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
+            The table(s) to be added to the database.
         """
         created = []
         if isinstance(tables, list):
@@ -2052,7 +2092,7 @@ class Archive(object):
 
         Parameters
         ----------
-        scene_in: str or list
+        scene_in: str or ID or list
             a SAR scene or a list of scenes to be inserted
         pbar: bool
             show a progress bar?
@@ -2073,7 +2113,7 @@ class Archive(object):
             log.info('...nothing to be done')
             return
         log.info('identifying scenes and extracting metadata')
-        scenes = identify_many(scenes)
+        scenes = identify_many(scenes, pbar=pbar)
         
         if len(scenes) == 0:
             log.info('all scenes are already registered')
@@ -2099,10 +2139,12 @@ class Archive(object):
                 insertion = self.__prepare_insertion(id)
                 insertions.append(insertion)
                 counter_regulars += 1
+                log.debug('regular:   {}'.format(id.scene))
             elif not self.__is_registered_in_duplicates(id):
                 insertion = self.Duplicates(outname_base=basename, scene=id.scene)
                 insertions.append(insertion)
                 counter_duplicates += 1
+                log.debug('duplicate: {}'.format(id.scene))
             else:
                 list_duplicates.append(id.outname_base())
             
@@ -2263,7 +2305,7 @@ class Archive(object):
         """
         for item in scenelist:
             if not isinstance(item, (ID, str)):
-                raise IOError('items in scenelist must be of type "str" or pyroSAR.ID')
+                raise TypeError("items in scenelist must be of type 'str' or 'pyroSAR.ID'")
         
         # ORM query, get all scenes locations
         scenes_data = self.Session().query(self.Data.scene)
@@ -2431,15 +2473,15 @@ class Archive(object):
         ----------
         vectorobject: :class:`~spatialist.vector.Vector`
             a geometry with which the scenes need to overlap
-        mindate: str
-            the minimum acquisition date in format YYYYmmddTHHMMSS
-        maxdate: str
-            the maximum acquisition date in format YYYYmmddTHHMMSS
-        processdir: str
-            a directory to be scanned for already processed scenes;
-            the selected scenes will be filtered to those that have not yet been processed
+        mindate: str or datetime.datetime, optional
+            the minimum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
+        maxdate: str or datetime.datetime, optional
+            the maximum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
+        processdir: str, optional
+            A directory to be scanned for already processed scenes;
+            the selected scenes will be filtered to those that have not yet been processed. Default: None
         recursive: bool
-            should also the subdirectories of the processdir be scanned?
+            (only if `processdir` is not None) should also the subdirectories of the `processdir` be scanned?
         polarizations: list
             a list of polarization strings, e.g. ['HH', 'VV']
         **args:
@@ -2467,12 +2509,16 @@ class Archive(object):
                 elif isinstance(args[key], (tuple, list)):
                     arg_format.append('''{0} IN ('{1}')'''.format(key, "', '".join(map(str, args[key]))))
         if mindate:
+            if isinstance(mindate, datetime):
+                mindate = mindate.strftime('%Y%m%dT%H%M%S')
             if re.search('[0-9]{8}T[0-9]{6}', mindate):
                 arg_format.append('start>=?')
                 vals.append(mindate)
             else:
                 log.info('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
         if maxdate:
+            if isinstance(maxdate, datetime):
+                maxdate = maxdate.strftime('%Y%m%dT%H%M%S')
             if re.search('[0-9]{8}T[0-9]{6}', maxdate):
                 arg_format.append('stop<=?')
                 vals.append(maxdate)
@@ -2486,7 +2532,7 @@ class Archive(object):
         
         if vectorobject:
             if isinstance(vectorobject, Vector):
-                vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
+                vectorobject.reproject(4326)
                 site_geom = vectorobject.convert2wkt(set3D=False)[0]
                 # postgres has a different way to store geometries
                 if self.driver == 'postgresql':
@@ -2775,48 +2821,6 @@ def drop_archive(archive):
     else:
         raise RuntimeError('this function only works for PostgreSQL databases.'
                            'For SQLite databases it is recommended to just delete the DB file.')
-
-
-def findfiles(scene, pattern, include_folders=False):
-    """
-    find files in a scene archive, which match a pattern
-
-    Parameters
-    ----------
-    scene: str
-        the SAR scene to be scanned, can be a directory, a zip or tar.gz archive
-    pattern: str
-        the regular expression to match
-    include_folders: bool
-         also match folders (or just files)?
-    Returns
-    -------
-    list
-        the matched file names
-    """
-    if os.path.isdir(scene):
-        files = finder(scene, [pattern], regex=True, foldermode=1 if include_folders else 0)
-        if re.search(pattern, os.path.basename(scene)) and include_folders:
-            files.append(scene)
-    elif zf.is_zipfile(scene):
-        with zf.ZipFile(scene, 'r') as zip:
-            files = [os.path.join(scene, x) for x in zip.namelist() if
-                     re.search(pattern, os.path.basename(x.strip('/')))]
-            if include_folders:
-                files = [x.strip('/') for x in files]
-            else:
-                files = [x for x in files if not x.endswith('/')]
-    elif tf.is_tarfile(scene):
-        tar = tf.open(scene)
-        files = [x for x in tar.getnames() if re.search(pattern, os.path.basename(x.strip('/')))]
-        if not include_folders:
-            files = [x for x in files if not tar.getmember(x).isdir()]
-        tar.close()
-        files = [os.path.join(scene, x) for x in files]
-    else:
-        files = [scene] if re.search(pattern, scene) else []
-    files = [str(x) for x in files]
-    return files
 
 
 def getFileObj(scene, filename):

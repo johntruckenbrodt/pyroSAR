@@ -1,5 +1,5 @@
 ###############################################################################
-# preparation of srtm data for use in gamma
+# preparation of DEM data for use in GAMMA
 
 # Copyright (c) 2014-2021, the pyroSAR Developers.
 
@@ -13,7 +13,7 @@
 ################################################################################
 
 """
-A collection of functions to handle digital elevation models in Gamma
+A collection of functions to handle digital elevation models in GAMMA
 """
 from urllib.request import urlopen
 import os
@@ -150,10 +150,10 @@ def transform(infile, outfile, posting=90):
     par2hdr(outfile + '.par', outfile + '.hdr')
 
 
-def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None, logpath=None,
+def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None, logpath=None,
                    username=None, password=None, geoid_mode='gamma', resampling_method='bilinear'):
     """
-    | automatically create a DEM in Gamma format for a defined spatial geometry
+    | automatically create a DEM in GAMMA format for a defined spatial geometry
     | the following steps will be performed:
 
     - collect all tiles overlapping with the geometry
@@ -162,39 +162,39 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
       * the tiles will be downloaded into the SNAP auxdata directory structure,
         e.g. ``$HOME/.snap/auxdata/dem/SRTM 3Sec``
 
-    - create a mosaic GeoTiff of the same spatial extent as the input geometry
+    - create a mosaic GeoTIFF of the same spatial extent as the input geometry
       plus a defined buffer using ``gdalwarp``
     - subtract the EGM96-WGS84 Geoid-Ellipsoid difference and convert the result
-      to Gamma format using Gamma command ``srtm2dem``
+      to GAMMA format using GAMMA command ``srtm2dem``
     
       * this correction is not done for TanDEM-X data, which contains ellipsoid
-        heights; see `here <https://geoservice.dlr.de/web/dataguide/tdm90>`_
+        heights; see `TDX90m data guide <https://geoservice.dlr.de/web/dataguide/tdm90>`_
     
     - if the command ``create_dem_par`` accepts a parameter EPSG and the command ``dem_import`` exists
       (depending on the GAMMA version used),
       an arbitrary CRS can be defined via parameter ``t_srs``. In this case, and if parameter ``t_srs`` is not kept at
-      its default of 4326, conversion to Gamma format is done with command ``dem_import`` instead of ``srtm2dem``
+      its default of 4326, conversion to GAMMA format is done with command ``dem_import`` instead of ``srtm2dem``
 
     Parameters
     ----------
     geometry: spatialist.vector.Vector
-        a vector geometry delimiting the output DEM size; CRS must be WGS84 LatLon (EPSG 4326)
+        a vector geometry delimiting the output DEM size
     demType: str
         the type of DEM to be used; see :func:`~pyroSAR.auxdata.dem_autoload` for options
     outfile: str
         the name of the final DEM file
-    buffer: float
+    buffer: float or None
         a buffer in degrees to create around the geometry
     t_srs: int, str or osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
-        Default: `4326 <http://spatialreference.org/ref/epsg/4326/>`_.
+        Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
     tr: tuple or None
         the target resolution as (xres, yres) in units of ``t_srs``; if ``t_srs`` is kept at its default value of 4326,
         ``tr`` does not need to be defined and the original resolution is preserved;
         in all other cases the default of None is rejected
     logpath: str
-        a directory to write Gamma logfiles to
+        a directory to write GAMMA logfiles to
     username: str or None
         (optional) the user name for services requiring registration;
         see :func:`~pyroSAR.auxdata.dem_autoload`
@@ -202,6 +202,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
         (optional) the password for the registration account
     geoid_mode: str
         the software to be used for converting geoid to ellipsoid heights; does not apply to demType TDX90m; options:
+        
          - 'gamma'
          - 'gdal'
     resampling_method: str
@@ -212,15 +213,16 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
     -------
 
     """
+    geometry = geometry.clone()
     
     epsg = crsConvert(t_srs, 'epsg') if t_srs != 4326 else t_srs
     
     if epsg != 4326:
         if not hasarg(diff.create_dem_par, 'EPSG'):
-            raise RuntimeError('using a different CRS than 4326 is currently not supported for this version of Gamma')
+            raise RuntimeError('using a different CRS than 4326 is currently not supported for this version of GAMMA')
         if 'dem_import' not in dir(diff):
             raise RuntimeError('using a different CRS than 4326 currently requires command dem_import, '
-                               'which is not part of this version of Gamma')
+                               'which is not part of this version of GAMMA')
         if tr is None:
             raise RuntimeError('tr needs to be defined if t_srs is not 4326')
     
@@ -238,18 +240,24 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
         vrt = os.path.join(tmpdir, 'dem.vrt')
         dem = os.path.join(tmpdir, 'dem.tif')
         
+        if epsg == geometry.getProjection('epsg') and buffer is None:
+            ext = geometry.extent
+            bounds = [ext['xmin'], ext['ymin'], ext['xmax'], ext['ymax']]
+        else:
+            bounds = None
+        geometry.reproject(4326)
         log.info('collecting DEM tiles')
         dem_autoload([geometry], demType, vrt=vrt, username=username,
                      password=password, buffer=buffer)
         
         # The heights of the TanDEM-X DEM products are ellipsoidal heights, all others are EGM96 Geoid heights
-        # Gamma works only with Ellipsoid heights and the offset needs to be corrected
+        # GAMMA works only with Ellipsoid heights and the offset needs to be corrected
         # starting from GDAL 2.2 the conversion can be done directly in GDAL; see docs of gdalwarp
         gflg = 0
         gdal_geoid = False
-        message = 'conversion to Gamma format'
+        message = 'conversion to GAMMA format'
         if demType != 'TDX90m':
-            message = 'geoid correction and conversion to Gamma format'
+            message = 'geoid correction and conversion to GAMMA format'
             if geoid_mode == 'gdal':
                 gdal_geoid = True
             elif geoid_mode == 'gamma':
@@ -258,7 +266,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=0.01, t_srs=4326, tr=None,
                 raise RuntimeError("'geoid_mode' not supported")
         
         dem_create(vrt, dem, t_srs=epsg, tr=tr, geoid_convert=gdal_geoid,
-                   resampling_method=resampling_method)
+                   resampling_method=resampling_method, outputBounds=bounds)
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
@@ -409,7 +417,7 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
         - 1: big endian
 
     gammapar: bool
-        create a Gamma parameter file for the mosaic?
+        create a GAMMA parameter file for the mosaic?
 
     Returns
     -------
@@ -451,7 +459,7 @@ def hgt(parfiles):
     Parameters
     ----------
     parfiles: list of str or pyroSAR.ID
-        a list of Gamma parameter files or pyroSAR ID objects
+        a list of GAMMA parameter files or pyroSAR ID objects
 
     Returns
     -------
@@ -467,7 +475,7 @@ def hgt(parfiles):
         elif parfile.endswith('.par'):
             corners = slc_corners(parfile)
         else:
-            raise RuntimeError('parfiles items must be of type pyroSAR.ID or Gamma parfiles with suffix .par')
+            raise RuntimeError('parfiles items must be of type pyroSAR.ID or GAMMA parfiles with suffix .par')
         lat += [int(float(corners[x]) // 1) for x in ['ymin', 'ymax']]
         lon += [int(float(corners[x]) // 1) for x in ['xmin', 'xmax']]
     
@@ -488,15 +496,15 @@ def hgt(parfiles):
 
 def makeSRTM(scenes, srtmdir, outname):
     """
-    Create a DEM in Gamma format from SRTM tiles
+    Create a DEM in GAMMA format from SRTM tiles
 
     - coordinates are read to determine the required DEM extent and select the necessary hgt tiles
-    - mosaics SRTM DEM tiles, converts them to Gamma format and subtracts offset to WGS84 ellipsoid
+    - mosaics SRTM DEM tiles, converts them to GAMMA format and subtracts offset to WGS84 ellipsoid
 
     intended for SRTM products downloaded from:
 
     - USGS: https://gdex.cr.usgs.gov/gdex/
-    - CGIAR: http://srtm.csi.cgiar.org
+    - CGIAR: https://srtm.csi.cgiar.org
 
     Parameters
     ----------

@@ -1,5 +1,5 @@
 ###############################################################################
-# import wrapper for the pyroSAR Gamma API
+# import wrapper for the pyroSAR GAMMA API
 
 # Copyright (c) 2018-2019, the pyroSAR Developers.
 
@@ -25,7 +25,7 @@ try:
     try:
         from gammaparse import *
     except ImportError:
-        warnings.warn('found a Gamma installation directory, but module parsing failed')
+        warnings.warn('found a GAMMA installation directory, but module parsing failed')
 
 except RuntimeError:
-    warnings.warn('could not find Gamma installation directory; please set the GAMMA_HOME environment variable')
+    warnings.warn('could not find GAMMA installation directory; please set the GAMMA_HOME environment variable')

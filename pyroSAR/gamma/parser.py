@@ -1,5 +1,5 @@
 ###############################################################################
-# parse Gamma command docstrings to Python functions
+# parse GAMMA command docstrings to Python functions
 
 # Copyright (c) 2015-2021, the pyroSAR Developers.
 
@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 def parse_command(command, indent='    '):
     """
-    Parse the help text of a Gamma command to a Python function including a docstring.
+    Parse the help text of a GAMMA command to a Python function including a docstring.
     The docstring is in rst format and can thu be parsed by e.g. sphinx.
     This function is not intended to be used by itself, but rather within function :func:`parse_module`.
 
@@ -77,6 +77,11 @@ def parse_command(command, indent='    '):
                        'atm_mod_2d': [('xref', 'rref'),
                                       ('yref', 'azref')],
                        'atm_mod_2d_pt': [('[sigma_min]', '[sigma_max]')],
+                       'base_calc': [('plt_flg', 'plt_flag'),
+                                     ('pltflg', 'plt_flag')],
+                       'base_init': [('<base>', '<baseline>')],
+                       'base_plot': [('plt_flg', 'plt_flag'),
+                                     ('pltflg', 'plt_flag')],
                        'cc_monitoring': [('...', '<...>')],
                        'cct_sp_pt': [('pcct_sp_pt', 'pcct_sp')],
                        'comb_interfs': [('combi_out', 'combi_int')],
@@ -84,11 +89,7 @@ def parse_command(command, indent='    '):
                                            ('east/lon', 'east_lon'),
                                            ('SLC_par', '<SLC_MLI_par>'),
                                            ('SLC/MLI_par', 'SLC_MLI_par')],
-                       'base_calc': [('plt_flg', 'plt_flag'),
-                                     ('pltflg', 'plt_flag')],
-                       'base_init': [('<base>', '<baseline>')],
-                       'base_plot': [('plt_flg', 'plt_flag'),
-                                     ('pltflg', 'plt_flag')],
+                       'data2geotiff': [('nodata', 'no_data')],
                        'dis2hgt': [('m/cycle', 'm_cycle')],
                        'discc': [('min_corr', 'cmin'),
                                  ('max_corr', 'cmax')],
@@ -234,6 +235,7 @@ def parse_command(command, indent='    '):
                                     ('SLC2Rs_par', 'SLC-2Rs_par')],
                        'SLC_intf_geo2': [('cc        (', 'CC        (')],
                        'SLC_interp_map': [('coffs2_sm', 'coffs_sm')],
+                       'SLC_mosaic_S1_TOPS': [('wflg', 'bflg')],
                        'srtm_mosaic': [('<lon>', '<lon2>')],
                        'SSI_INT_S1': [('<SLC2> <par2>', '<SLC_tab2>')],
                        'texture': [('weights_flag', 'wgt_flag')],
