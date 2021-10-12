@@ -213,6 +213,12 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
     if geoid_convert:
         if geoid == 'EGM96':
             gdalwarp_args['srcSRS'] += '+5773'
+            # the following line is a temporary workaround until compound EPSG codes can
+            # directly be used for vertical CRS transformations
+            # see https://github.com/OSGeo/gdal/pull/4639
+            gdalwarp_args['srcSRS'] = crsConvert(gdalwarp_args['srcSRS'], 'proj4') \
+                .replace('us_nga_egm96_15.tif', 'egm96_15.gtx') \
+                .replace('us_nga_egm08_25.tif', 'egm08_25.gtx')
         else:
             raise RuntimeError('geoid model not yet supported')
         try:
