@@ -19,8 +19,6 @@ import zipfile as zf
 from urllib.request import urlopen
 from urllib.error import HTTPError
 
-from osgeo import gdal
-
 from pyroSAR.examine import ExamineSnap
 from spatialist import Raster
 from spatialist.ancillary import dissolve, finder
@@ -28,6 +26,7 @@ from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
 
 import logging
+
 log = logging.getLogger(__name__)
 
 
@@ -156,7 +155,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             product=product)
 
 
-def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoid_convert=False, geoid='EGM96', outputBounds=None):
+def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
+               geoid_convert=False, geoid='EGM96', outputBounds=None):
     """
     create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
     
@@ -215,6 +215,15 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
             gdalwarp_args['srcSRS'] += '+5773'
         else:
             raise RuntimeError('geoid model not yet supported')
+        try:
+            get_egm_lookup(geoid=geoid, software='PROJ')
+        except OSError as e:
+            errstr = str(e)
+            addition = '\nplease refer to the following site for instructions ' \
+                       'on how to use EGM GTX files (requires PROJ >= 5.0.0):\n' \
+                       'https://gis.stackexchange.com/questions/258532/' \
+                       'noaa-vdatum-gdal-variable-paths-for-linux-ubuntu'
+            raise RuntimeError(errstr + addition)
     
     try:
         message = 'creating mosaic'
@@ -223,18 +232,10 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', geoi
             message += ' and reprojecting to {}'.format(crs)
         log.info(message)
         gdalwarp(src, dst, gdalwarp_args)
-    except RuntimeError as e:
+    except Exception:
         if os.path.isfile(dst):
             os.remove(dst)
-        errstr = str(e)
-        if 'Cannot open egm96_15.gtx' in errstr:
-            addition = '\nplease refer to the following site for instructions ' \
-                       'on how to use the file egm96_15.gtx (requires PROJ >= 5.0.0):\n' \
-                       'https://gis.stackexchange.com/questions/258532/' \
-                       'noaa-vdatum-gdal-variable-paths-for-linux-ubuntu'
-            raise RuntimeError(errstr + addition)
-        else:
-            raise e
+        raise
 
 
 class DEMHandler:
