@@ -14,8 +14,10 @@ sys.path.insert(0, os.path.abspath('..'))
 
 # The full version, including alpha/beta/rc tags.
 version_full = get_version(project)
-# The short X.Y version. release is automatically added to the latex document title and header
-release, version = '.'.join(version_full.split('.')[:2])
+# The short X.Y version.
+version = '.'.join(version_full.split('.')[:2])
+# release is automatically added to the latex document title and header
+release = version
 
 autodoc_mock_imports = ['osgeo', 'sqlite3']
 
