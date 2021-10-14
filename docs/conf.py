@@ -1,7 +1,7 @@
 import sys
 import os
 import datetime
-from pkg_resources import get_distribution
+from importlib.metadata import version as get_version
 
 project = 'pyroSAR'
 authors = 'the pyroSAR Developers'
@@ -12,15 +12,10 @@ year = datetime.datetime.now().year
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath('..'))
 
-# The version info for the project you're documenting, acts as replacement for
-# |version| and |release|, also used in various other places throughout the
-# built documents.
-#
 # The full version, including alpha/beta/rc tags.
-# release = get_distribution('pyroSAR').version
+release = get_version(project)
 # The short X.Y version.
-# version = '.'.join(release.split('.')[:2])
-version = get_distribution(project).version
+version = '.'.join(release.split('.')[:2])
 
 autodoc_mock_imports = ['osgeo', 'sqlite3']
 
@@ -48,7 +43,7 @@ autosummary_generate = []
 
 # explicitly link to documentation of the spatialist version installed alongside pyroSAR,
 # which is defined in setup.py and requirements.txt
-version_spatialist = get_distribution('spatialist').version
+version_spatialist = get_version('spatialist')
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
                        'requests': ('https://requests.readthedocs.io/en/latest/', None),
