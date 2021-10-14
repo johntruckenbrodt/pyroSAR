@@ -93,7 +93,7 @@ def S1_HA_proc(infiles, out_dir=None, tmpdir=None, t_res=20, t_crs=4326, out_for
     tpm_format = "BEAM-DIMAP"
     ## create temp dir for intermediate .dim files
     if tmpdir is None:
-        tmpdir = os.getcwd() + "/tmp_dim"
+        tmpdir = os.path.join(os.getcwd(), "tmp_dim")
         if os.path.isdir(tmpdir) == False:
             os.mkdir(tmpdir)
     ##check if a single IW or consecutive IWs are selected
@@ -284,8 +284,8 @@ def S1_HA_proc(infiles, out_dir=None, tmpdir=None, t_res=20, t_crs=4326, out_for
             for dc in decompFeats:
                 dc_label = dc.upper()[0:3]
                 ##load temporary files
-                tpm_in = glob.glob(
-                    tmpdir + "/" + sensor + "_HA_relOrb_" + str(relOrb) + "_" + unique_dates_info[i] + "*_2TPM.dim")
+                tpm_in = glob.glob(os.path.join(
+                    tmpdir,  sensor + "_HA_relOrb_" + str(relOrb) + "_" + unique_dates_info[i] + "*_2TPM.dim"))
                 ## parse_workflow of INT processing
                 workflow_tpm = parse_recipe("blank")
                 
@@ -369,7 +369,7 @@ def S1_HA_proc(infiles, out_dir=None, tmpdir=None, t_res=20, t_crs=4326, out_for
                         relOrb) + "_HA_" + dc_label + "_" + date_str + "_Orb_Cal_Deb_ML_Spk_TC"
                 ##create default output folder for each selected polarization
                 if out_dir is None:
-                    out_dir_fp = "INT/" + dc_label
+                    out_dir_fp = os.path.join("INT", dc_label)
                     if os.path.isdir(out_dir_fp) == False:
                         os.makedirs(os.path.join(os.getcwd(), out_dir_fp))
                 elif os.path.isdir(out_dir):
@@ -405,7 +405,7 @@ def S1_HA_proc(infiles, out_dir=None, tmpdir=None, t_res=20, t_crs=4326, out_for
             continue
             
             ##clean tmp folder to avoid overwriting errors
-        files = glob.glob(tmpdir + '/*')
+        files = glob.glob(os.path.join(tmpdir, '*'))
         for f in files:
             if os.path.isfile(f) or os.path.islink(f):
                 os.unlink(f)

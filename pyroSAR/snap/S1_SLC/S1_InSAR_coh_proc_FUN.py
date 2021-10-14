@@ -89,7 +89,7 @@ def S1_InSAR_coh_proc(infiles, out_dir="default", tmpdir=None, t_res=20, t_crs=3
     tpm_format = "BEAM-DIMAP"
     ## create temp dir for intermediate .dim files
     if tmpdir is None:
-        tmpdir = os.getcwd() + "/tmp_dim"
+        tmpdir = os.path.join(os.getcwd(), "tmp_dim")
         if os.path.isdir(tmpdir) == False:
             os.mkdir(tmpdir)
     ##queck if at least two files are loaded for coh estiamtion
@@ -284,12 +284,12 @@ def S1_InSAR_coh_proc(infiles, out_dir="default", tmpdir=None, t_res=20, t_crs=3
                 
                 ###import sliceAssemblies according to how many files per time step are needed   
                 if len(fps1) > 1 and len(fps2) == 1:
-                    slcAs_fps_slv = glob.glob(tmpdir + "/" + "*" + "_SLC_slv.dim")
+                    slcAs_fps_slv = glob.glob(os.path.join(tmpdir, "*" + "_SLC_slv.dim"))
                 elif len(fps1) == 1 and len(fps2) > 1:
-                    slcAs_fps_ms = glob.glob(tmpdir + "/" + "*" + "_SLC_ms.dim")
+                    slcAs_fps_ms = glob.glob(os.path.join(tmpdir, "*" + "_SLC_ms.dim"))
                 elif len(fps1) > 1 and len(fps2) > 1:
-                    slcAs_fps_slv = glob.glob(tmpdir + "/" + "*" + "_SLC_slv.dim")
-                    slcAs_fps_ms = glob.glob(tmpdir + "/" + "*" + "_SLC_ms.dim")
+                    slcAs_fps_slv = glob.glob(os.path.join(tmpdir, "*" + "_SLC_slv.dim"))
+                    slcAs_fps_ms = glob.glob(os.path.join(tmpdir, "*" + "_SLC_ms.dim"))
             
             ##start coherence estimation for each IW
             for p in pol:
@@ -394,8 +394,8 @@ def S1_InSAR_coh_proc(infiles, out_dir="default", tmpdir=None, t_res=20, t_crs=3
                 # search_criteria = "S1_relOrb_"+ str(info[0].orbitNumber_rel)+ "*"+p +"_"+ date2+"_"+ date1+"_TPD.dim"
                 # dirpath= os.getcwd()
                 # q = os.path.join(dirpath, search_criteria)
-                tmp_fps = glob.glob(
-                    tmpdir + "/" + "S1_relOrb_" + str(relOrbs[0]) + "*" + p + "_" + date2 + "_" + date1 + "_TPD.dim")
+                tmp_fps = glob.glob(os.path.join(
+                    tmpdir , "S1_relOrb_" + str(relOrbs[0]) + "*" + p + "_" + date2 + "_" + date1 + "_TPD.dim"))
                 
                 if len(IWs) == 1:
                     tpm_source = "coh_" + IWs[0] + "_" + p + "_" + dates[1] + "_" + dates[0]
@@ -412,7 +412,7 @@ def S1_InSAR_coh_proc(infiles, out_dir="default", tmpdir=None, t_res=20, t_crs=3
                         relOrbs[0]) + "_COH_" + iw_str + "_" + p + "_" + datetime2 + "_" + datetime1
                 ##create default output folder based on selected polarizations
                 if out_dir is None:
-                    out_dir_p = "COH/" + p
+                    out_dir_p = os.path.join("COH",p)
                     if os.path.isdir(out_dir_p) == False:
                         os.makedirs(os.path.join(os.getcwd(), out_dir_p))
                 elif os.path.isdir(out_dir):
@@ -488,7 +488,7 @@ def S1_InSAR_coh_proc(infiles, out_dir="default", tmpdir=None, t_res=20, t_crs=3
             with open("S1_COH_proc_ERROR_" + datetime1 + "_" + datetime2 + ".log", "w") as logf:
                 logf.write(str(e))
             ##clean tmp folder to avoid overwriting errors even if exception is valid
-            files = glob.glob(tmpdir + '/*')
+            files = glob.glob(os.path.join(tmpdir,'*'))
             for f in files:
                 if os.path.isfile(f) or os.path.islink(f):
                     os.unlink(f)
@@ -498,7 +498,7 @@ def S1_InSAR_coh_proc(infiles, out_dir="default", tmpdir=None, t_res=20, t_crs=3
             continue
         
         ##clean tmp folder to avoid overwriting errors 
-        files = glob.glob(tmpdir + '/*')
+        files = glob.glob(os.path.join(tmpdir,'*'))
         for f in files:
             if os.path.isfile(f) or os.path.islink(f):
                 os.unlink(f)
