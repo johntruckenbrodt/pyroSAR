@@ -13,9 +13,9 @@ year = datetime.datetime.now().year
 sys.path.insert(0, os.path.abspath('..'))
 
 # The full version, including alpha/beta/rc tags.
-release = get_version(project)
-# The short X.Y version.
-version = '.'.join(release.split('.')[:2])
+version_full = get_version(project)
+# The short X.Y version. release is automatically added to the latex document title and header
+release, version = '.'.join(version_full.split('.')[:2])
 
 autodoc_mock_imports = ['osgeo', 'sqlite3']
 
@@ -228,7 +228,7 @@ latex_elements = {
 latex_documents = [
     ('index',
      '{}.tex'.format(project),
-     r'{0} Documentation \\ \LARGE Version {1}'.format(project, version),
+     r'{} Documentation'.format(project),
      authors, 'manual'),
 ]
 

@@ -555,8 +555,8 @@ general
 
   See section :doc:`Logging </general/logging>` for details.
 
-0.14 | 2021-10-12
-=================
+0.14.0 | 2021-10-12
+===================
 
 Drivers
 -------
