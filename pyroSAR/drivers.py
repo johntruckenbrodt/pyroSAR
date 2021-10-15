@@ -52,6 +52,7 @@ from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder
 
 from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
+from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import select, func
@@ -1948,10 +1949,10 @@ class Archive(object):
                                        Column('scene', String, primary_key=True))
         
         # create tables if not existing
-        if not self.engine.dialect.has_table(self.engine, 'data'):
+        if not sql_inspect(self.engine).has_table('data'):
             log.debug("creating DB table 'data'")
             self.data_schema.create(self.engine)
-        if not self.engine.dialect.has_table(self.engine, 'duplicates'):
+        if not sql_inspect(self.engine).has_table('duplicates'):
             log.debug("creating DB table 'duplicates'")
             self.duplicates_schema.create(self.engine)
         
