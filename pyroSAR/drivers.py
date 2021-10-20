@@ -1987,13 +1987,13 @@ class Archive(object):
         if isinstance(tables, list):
             for table in tables:
                 table.metadata = self.meta
-                if not self.engine.dialect.has_table(self.engine, str(table)):
+                if not sql_inspect(self.engine).has_table(str(table)):
                     table.create(self.engine)
                     created.append(str(table))
         else:
             table = tables
             table.metadata = self.meta
-            if not self.engine.dialect.has_table(self.engine, str(table)):
+            if not sql_inspect(self.engine).has_table(str(table)):
                 table.create(self.engine)
                 created.append(str(table))
         log.info('created table(s) {}.'.format(', '.join(created)))
