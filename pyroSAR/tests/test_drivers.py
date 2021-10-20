@@ -193,9 +193,13 @@ def test_archive2(tmpdir, testdata):
         assert db.size == (1, 0)
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
-    
-    os.remove(dbfile)
-    assert not os.path.isfile(dbfile)
+
+    try:
+        os.remove(dbfile)
+        assert not os.path.isfile(dbfile)
+    except PermissionError:
+        pass
+
     assert Vector(shp).nfeatures == 1
     with pytest.raises(OSError):
         with pyroSAR.Archive(dbfile) as db:
