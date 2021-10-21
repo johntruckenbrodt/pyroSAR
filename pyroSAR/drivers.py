@@ -41,7 +41,7 @@ from datetime import datetime, timedelta
 from time import strptime, strftime
 
 import progressbar as pb
-from osgeo import gdal, osr
+from osgeo import gdal, osr, ogr
 from osgeo.gdalconst import GA_ReadOnly
 
 from . import S1
@@ -225,7 +225,7 @@ class ID(object):
     
     def bbox(self, outname=None, driver=None, overwrite=True):
         """
-        get the bounding box of a scene either as a vector object or written to a shapefile
+        get the bounding box of a scene either as a vector object or written to a file
 
         Parameters
         ----------
@@ -247,6 +247,46 @@ class ID(object):
         else:
             bbox(self.getCorners(), self.projection, outname=outname, driver=driver,
                  overwrite=overwrite)
+    
+    def geometry(self, outname=None, driver=None, overwrite=True):
+        """
+        get the footprint geometry of a scene either as a vector object or written to a file
+
+        Parameters
+        ----------
+        outname: str
+            the name of the shapefile to be written
+        driver: str
+            the output file format; needs to be defined if the format cannot
+            be auto-detected from the filename extension
+        overwrite: bool
+            overwrite an existing shapefile?
+
+        Returns
+        -------
+        ~spatialist.vector.Vector or None
+            the vector object if `outname` is None, None otherwise
+        """
+        srs = crsConvert(self.projection, 'osr')
+        ring = ogr.Geometry(ogr.wkbLinearRing)
+        for coordinate in self.meta['coordinates']:
+            ring.AddPoint(*coordinate)
+        ring.CloseRings()
+        
+        geom = ogr.Geometry(ogr.wkbPolygon)
+        geom.AddGeometry(ring)
+        
+        geom.FlattenTo2D()
+        
+        bbox = Vector(driver='Memory')
+        bbox.addlayer('geometry', srs, geom.GetGeometryType())
+        bbox.addfield('area', ogr.OFTReal)
+        bbox.addfeature(geom, fields={'area': geom.Area()})
+        geom = None
+        if outname is None:
+            return bbox
+        else:
+            bbox.write(outfile=outname, driver=driver, overwrite=overwrite)
     
     @property
     def compression(self):
