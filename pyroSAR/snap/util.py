@@ -14,7 +14,7 @@
 import os
 import pyroSAR
 from ..ancillary import multilook_factors
-from ..auxdata import get_egm96_lookup
+from ..auxdata import get_egm_lookup
 from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
@@ -675,7 +675,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     # download the EGM lookup table if necessary
     if dempar['externalDEMApplyEGM']:
-        get_egm96_lookup()
+        get_egm_lookup(geoid='EGM96', software='SNAP')
     ############################################
     ############################################
     # configure the resampling methods
