@@ -443,6 +443,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         srgr = workflow['SRGR']
         srgr.parameters['warpPolynomialOrder'] = 4
         srgr.parameters['interpolationMethod'] = 'Nearest-neighbor interpolation'
+        id_before = srgr.id
     ############################################
     # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
     if len(refarea) > 1 and terrainFlattening:
@@ -534,7 +535,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         
         subset = parse_node('Subset')
         if process_S1_SLC:
-            workflow.insert_node(subset, before=srgr.id)
+            workflow.insert_node(subset, before=id_before.id)
         else:
             workflow.insert_node(subset, before=read.id)
         subset.parameters['region'] = [0, 0, id.samples, id.lines]
@@ -545,7 +546,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if offset and not shapefile:
         subset = parse_node('Subset')
         if process_S1_SLC:
-            workflow.insert_node(subset, before=srgr.id)
+            workflow.insert_node(subset, before=id_before.id)
         else:
             workflow.insert_node(subset, before=read.id)
         
