@@ -1,4 +1,4 @@
-#import pyroSAR
+import pyroSAR
 import gc
 
 import pytest
