@@ -1,4 +1,6 @@
-import pyroSAR
+#import pyroSAR
+import gc
+
 import pytest
 import platform
 import tarfile as tf
@@ -194,12 +196,9 @@ def test_archive2(tmpdir, testdata):
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
 
-    try:
-        os.remove(dbfile)
-        assert not os.path.isfile(dbfile)
-    except PermissionError:
-        pass
-
+    gc.collect(2)
+    os.remove(dbfile)
+    assert not os.path.isfile(dbfile)
     assert Vector(shp).nfeatures == 1
     with pytest.raises(OSError):
         with pyroSAR.Archive(dbfile) as db:
