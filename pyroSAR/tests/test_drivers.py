@@ -1,5 +1,4 @@
 import pyroSAR
-import gc
 
 import pytest
 import platform
@@ -196,7 +195,6 @@ def test_archive2(tmpdir, testdata):
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
 
-    gc.collect(2)
     os.remove(dbfile)
     assert not os.path.isfile(dbfile)
     assert Vector(shp).nfeatures == 1

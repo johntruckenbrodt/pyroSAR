@@ -20,6 +20,7 @@ images from different SAR sensors.
 """
 
 import sys
+import gc
 
 from builtins import str
 from io import BytesIO
@@ -2347,13 +2348,15 @@ class Archive(object):
         list
             the table names
         """
+        #  TODO: make this dynamic
+        #  the method was intended to only return user generated tables by default, as well as data and duplicates
         all_tables = ['ElementaryGeometries', 'SpatialIndex', 'geometry_columns', 'geometry_columns_auth',
                       'geometry_columns_field_infos', 'geometry_columns_statistics', 'geometry_columns_time',
                       'spatial_ref_sys', 'spatial_ref_sys_aux', 'spatialite_history', 'sql_statements_log',
                       'sqlite_sequence', 'views_geometry_columns', 'views_geometry_columns_auth',
                       'views_geometry_columns_field_infos', 'views_geometry_columns_statistics',
                       'virts_geometry_columns', 'virts_geometry_columns_auth', 'virts_geometry_columns_field_infos',
-                      'virts_geometry_columns_statistics']
+                      'virts_geometry_columns_statistics', 'data_licenses', 'KNN']
         # get tablenames from metadata
         tables = sorted([self.encode(x) for x in self.meta.tables.keys()])
         if return_all:
@@ -2643,6 +2646,7 @@ class Archive(object):
         self.Session().close()
         self.conn.close()
         self.engine.dispose()
+        gc.collect(generation=2)  # this was added as a fix for win PermissionError when deleting sqlite.db files.
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
