@@ -15,6 +15,7 @@ import os
 import pyroSAR
 from ..ancillary import multilook_factors
 from ..auxdata import get_egm_lookup
+from ..examine import ExamineSnap
 from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
@@ -432,11 +433,17 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ml.parameters['sourceBands'] = None
         id_before = ml.id
     
-    if process_S1_SLC:
+    try:
+        s1tbx = ExamineSnap().get_version('s1tbx')
+    except (FileNotFoundError, AttributeError):
+        s1tbx = None
+    
+    if process_S1_SLC and s1tbx is not None and s1tbx['version'] < '8.0.5':
         workflow.insert_node(parse_node('SRGR'), before=id_before)
         srgr = workflow['SRGR']
         srgr.parameters['warpPolynomialOrder'] = 4
         srgr.parameters['interpolationMethod'] = 'Nearest-neighbor interpolation'
+        id_before = srgr.id
     ############################################
     # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
     if len(refarea) > 1 and terrainFlattening:
@@ -528,7 +535,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         
         subset = parse_node('Subset')
         if process_S1_SLC:
-            workflow.insert_node(subset, before=srgr.id)
+            workflow.insert_node(subset, before=id_before.id)
         else:
             workflow.insert_node(subset, before=read.id)
         subset.parameters['region'] = [0, 0, id.samples, id.lines]
@@ -539,7 +546,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if offset and not shapefile:
         subset = parse_node('Subset')
         if process_S1_SLC:
-            workflow.insert_node(subset, before=srgr.id)
+            workflow.insert_node(subset, before=id_before.id)
         else:
             workflow.insert_node(subset, before=read.id)
         
