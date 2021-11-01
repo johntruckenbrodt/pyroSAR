@@ -554,3 +554,53 @@ general
   + :func:`pyroSAR.snap.auxil.execute`: removed
 
   See section :doc:`Logging </general/logging>` for details.
+
+0.14.0 | 2021-10-12
+===================
+
+Drivers
+-------
+- raise more appropriate errors (`c430c59 <https://github.com/johntruckenbrodt/pyroSAR/commit/c430c59289016b5fe2e0f3044225dc5166c39e80>`_)
+
+- :func:`pyroSAR.drivers.findfiles`: removed (functionality contained in :meth:`pyroSAR.drivers.ID.findfiles`,
+  now making use of :func:`spatialist.ancillary.finder`)
+
+- :meth:`pyroSAR.drivers.Archive.select`:
+
+  + show progressbar for scene identification if ``pbar=True``
+  + enabled input of :obj:`~datetime.datetime` objects for arguments ``mindate`` and ``maxdate``
+
+- :func:`pyroSAR.drivers.identify_many`: issue a warning when a file cannot be accessed
+  (instead of raising a :obj:`PermissionError`)
+
+GAMMA API
+---------
+- :func:`pyroSAR.gamma.dem.dem_autocreate`: support for new DEM options provided by :func:`pyroSAR.auxdata.dem_autoload`
+
+SNAP API
+--------
+- :func:`pyroSAR.snap.auxil.get_egm96_lookup` removed in favor of new function :func:`pyroSAR.auxdata.get_egm_lookup`
+
+Auxiliary Data Handling
+-----------------------
+- method :meth:`pyroSAR.S1.OSV.retrieve`: thread-safe writing of orbit files
+
+- new function :func:`pyroSAR.auxdata.get_egm_lookup`
+
+- function :func:`pyroSAR.auxdata.dem_create`
+
+  + new geoid option 'EGM2008'
+  + make use of :func:`~pyroSAR.auxdata.get_egm_lookup` for auto-download of EGM lookup files
+  + several bug fixes related to vertical CRS transformation
+  + bug fix for target pixel alignment
+
+- function :func:`pyroSAR.auxdata.dem_autoload`: new DEM options:
+
+  + 'Copernicus 10m EEA DEM'
+  + 'Copernicus 30m Global DEM'
+  + 'Copernicus 90m Global DEM'
+
+general
+-------
+- replaced http URLs with https where applicable
+- improved documentation

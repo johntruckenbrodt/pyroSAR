@@ -153,27 +153,27 @@ def transform(infile, outfile, posting=90):
 def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None, logpath=None,
                    username=None, password=None, geoid_mode='gamma', resampling_method='bilinear'):
     """
-    | automatically create a DEM in GAMMA format for a defined spatial geometry
-    | the following steps will be performed:
+    | automatically create a DEM in GAMMA format for a defined spatial geometry.
+    | The following steps will be performed:
 
-    - collect all tiles overlapping with the geometry
+    - collect all tiles overlapping with the geometry using :func:`pyroSAR.auxdata.dem_autoload`
 
       * if they don't yet exist locally they will automatically be downloaded
       * the tiles will be downloaded into the SNAP auxdata directory structure,
         e.g. ``$HOME/.snap/auxdata/dem/SRTM 3Sec``
 
     - create a mosaic GeoTIFF of the same spatial extent as the input geometry
-      plus a defined buffer using ``gdalwarp``
-    - subtract the EGM96-WGS84 Geoid-Ellipsoid difference and convert the result
-      to GAMMA format using GAMMA command ``srtm2dem``
+      plus a defined buffer using :func:`pyroSAR.auxdata.dem_create`
     
-      * this correction is not done for TanDEM-X data, which contains ellipsoid
-        heights; see `TDX90m data guide <https://geoservice.dlr.de/web/dataguide/tdm90>`_
+    - if necessary, subtract the geoid-ellipsoid difference (see :func:`pyroSAR.auxdata.dem_autoload`
+      for height references of different supported DEMs)
     
-    - if the command ``create_dem_par`` accepts a parameter EPSG and the command ``dem_import`` exists
-      (depending on the GAMMA version used),
-      an arbitrary CRS can be defined via parameter ``t_srs``. In this case, and if parameter ``t_srs`` is not kept at
-      its default of 4326, conversion to GAMMA format is done with command ``dem_import`` instead of ``srtm2dem``
+    - convert the result to GAMMA format
+    
+      * If ``t_srs`` is `4326` and the DEM's height reference is either `WGS84` ellipsoid or `EGM96` geoid,
+        the command ``srtm2dem`` can be used. This is kept for backwards compatibility.
+      * For all other cases the newer command ``dem_import`` can be used if it exists and if the command
+        ``create_dem_par`` accepts a parameter `EPSG`.
 
     Parameters
     ----------
@@ -201,7 +201,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
     password: str or None
         (optional) the password for the registration account
     geoid_mode: str
-        the software to be used for converting geoid to ellipsoid heights; does not apply to demType TDX90m; options:
+        the software to be used for converting geoid to ellipsoid heights (if necessary); options:
         
          - 'gamma'
          - 'gdal'
@@ -254,25 +254,33 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
         # GAMMA works only with Ellipsoid heights and the offset needs to be corrected
         # starting from GDAL 2.2 the conversion can be done directly in GDAL; see docs of gdalwarp
         gflg = 0
+        geoid = 'EGM96'
         gdal_geoid = False
         message = 'conversion to GAMMA format'
-        if demType != 'TDX90m':
+        if demType not in ['TDX90m', 'GETASSE30']:
             message = 'geoid correction and conversion to GAMMA format'
             if geoid_mode == 'gdal':
                 gdal_geoid = True
             elif geoid_mode == 'gamma':
                 gflg = 2
             else:
-                raise RuntimeError("'geoid_mode' not supported")
+                raise RuntimeError("'geoid_mode' is not supported")
+            if re.search('Copernicus [139]0m', demType):
+                geoid = 'EGM2008'
+            elif demType in ['AW3D30', 'SRTM 1Sec HGT', 'SRTM 3Sec']:
+                pass  # defined above
+            else:
+                raise RuntimeError("'demType' is not supported")
         
         dem_create(vrt, dem, t_srs=epsg, tr=tr, geoid_convert=gdal_geoid,
-                   resampling_method=resampling_method, outputBounds=bounds)
+                   resampling_method=resampling_method, outputBounds=bounds,
+                   geoid=geoid)
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
         log.info(message)
         
-        if epsg == 4326:
+        if epsg == 4326 and geoid == 'EGM96':
             # old approach for backwards compatibility
             diff.srtm2dem(SRTM_DEM=dem,
                           DEM=outfile_tmp,
@@ -291,9 +299,14 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
                                'DEM_par': outfile_tmp + '.par'}
             if gflg == 2:
                 home = ExamineGamma().home
-                egm96 = os.path.join(home, 'DIFF', 'scripts', 'egm96.dem')
-                dem_import_pars['geoid'] = egm96
-                dem_import_pars['geoid_par'] = egm96 + '_par'
+                if geoid == 'EGM96':
+                    geoid_file = os.path.join(home, 'DIFF', 'scripts', 'egm96.dem')
+                elif geoid == 'EGM2008':
+                    geoid_file = os.path.join(home, 'DIFF', 'scripts', 'egm2008-5.dem')
+                else:
+                    raise RuntimeError('conversion of {} geoid is not supported by GAMMA'.format(geoid))
+                dem_import_pars['geoid'] = geoid_file
+                dem_import_pars['geoid_par'] = geoid_file + '_par'
             
             diff.dem_import(**dem_import_pars)
         
