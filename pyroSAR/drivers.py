@@ -20,6 +20,7 @@ images from different SAR sensors.
 """
 
 import sys
+import gc
 
 from builtins import str
 from io import BytesIO
@@ -52,6 +53,7 @@ from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder
 
 from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
+from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import select, func
@@ -1988,10 +1990,10 @@ class Archive(object):
                                        Column('scene', String, primary_key=True))
         
         # create tables if not existing
-        if not self.engine.dialect.has_table(self.engine, 'data'):
+        if not sql_inspect(self.engine).has_table('data'):
             log.debug("creating DB table 'data'")
             self.data_schema.create(self.engine)
-        if not self.engine.dialect.has_table(self.engine, 'duplicates'):
+        if not sql_inspect(self.engine).has_table('duplicates'):
             log.debug("creating DB table 'duplicates'")
             self.duplicates_schema.create(self.engine)
         
@@ -2026,13 +2028,13 @@ class Archive(object):
         if isinstance(tables, list):
             for table in tables:
                 table.metadata = self.meta
-                if not self.engine.dialect.has_table(self.engine, str(table)):
+                if not sql_inspect(self.engine).has_table(str(table)):
                     table.create(self.engine)
                     created.append(str(table))
         else:
             table = tables
             table.metadata = self.meta
-            if not self.engine.dialect.has_table(self.engine, str(table)):
+            if not sql_inspect(self.engine).has_table(str(table)):
                 table.create(self.engine)
                 created.append(str(table))
         log.info('created table(s) {}.'.format(', '.join(created)))
@@ -2386,13 +2388,15 @@ class Archive(object):
         list
             the table names
         """
+        #  TODO: make this dynamic
+        #  the method was intended to only return user generated tables by default, as well as data and duplicates
         all_tables = ['ElementaryGeometries', 'SpatialIndex', 'geometry_columns', 'geometry_columns_auth',
                       'geometry_columns_field_infos', 'geometry_columns_statistics', 'geometry_columns_time',
                       'spatial_ref_sys', 'spatial_ref_sys_aux', 'spatialite_history', 'sql_statements_log',
                       'sqlite_sequence', 'views_geometry_columns', 'views_geometry_columns_auth',
                       'views_geometry_columns_field_infos', 'views_geometry_columns_statistics',
                       'virts_geometry_columns', 'virts_geometry_columns_auth', 'virts_geometry_columns_field_infos',
-                      'virts_geometry_columns_statistics']
+                      'virts_geometry_columns_statistics', 'data_licenses', 'KNN']
         # get tablenames from metadata
         tables = sorted([self.encode(x) for x in self.meta.tables.keys()])
         if return_all:
@@ -2682,6 +2686,7 @@ class Archive(object):
         self.Session().close()
         self.conn.close()
         self.engine.dispose()
+        gc.collect(generation=2)  # this was added as a fix for win PermissionError when deleting sqlite.db files.
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()

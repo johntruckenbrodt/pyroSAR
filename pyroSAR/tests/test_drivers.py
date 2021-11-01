@@ -1,4 +1,5 @@
 import pyroSAR
+
 import pytest
 import platform
 import tarfile as tf
@@ -193,7 +194,7 @@ def test_archive2(tmpdir, testdata):
         assert db.size == (1, 0)
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
-    
+
     os.remove(dbfile)
     assert not os.path.isfile(dbfile)
     assert Vector(shp).nfeatures == 1
