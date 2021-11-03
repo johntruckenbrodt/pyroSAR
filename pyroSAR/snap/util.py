@@ -145,6 +145,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         Mask pixels acquired over sea? The sea mask depends on the selected DEM.
     demResamplingMethod: str
         One of the following:
+        
          - 'NEAREST_NEIGHBOUR'
          - 'BILINEAR_INTERPOLATION'
          - 'CUBIC_CONVOLUTION'
@@ -156,6 +157,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         The resampling method for geocoding the SAR image; the options are identical to demResamplingMethod.
     speckleFilter: str
         One of the following:
+        
          - 'Boxcar'
          - 'Median'
          - 'Frost'

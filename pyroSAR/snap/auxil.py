@@ -30,6 +30,7 @@ from spatialist.auxil import gdal_translate
 from spatialist.ancillary import finder, run
 
 import logging
+
 log = logging.getLogger(__name__)
 
 
@@ -310,11 +311,11 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         the name of the workflow XML file
     outdir: str
         the directory into which to write the final files
-    groups: list
+    groups: list or None
         a list of lists each containing IDs for individual nodes
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
-    gpt_exceptions: dict
+    gpt_exceptions: dict or None
         a dictionary to override the configured GPT executable for certain operators;
         each (sub-)workflow containing this operator will be executed with the define executable;
         
@@ -329,7 +330,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
-    basename_extensions: list of str
+    basename_extensions: list of str or None
         names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
     
     Returns
@@ -341,24 +342,23 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
     """
     
     workflow = Workflow(xmlfile)
-
+    
     if multisource:
         read = workflow['ProductSet-Reader']
-        # scene = identify_many(read.parameters['fileList'].split(",")) # not working
-    elif not multisource:
+        scene = identify(read.parameters['fileList'].split(',')[0])
+    else:
         read = workflow['Read']
         scene = identify(read.parameters['file'])
-
+    
     write = workflow['Write']
     tmpname = write.parameters['file']
     suffix = workflow.suffix()
     format = write.parameters['formatName']
     dem_name = workflow.tree.find('.//demName')
-    if dem_name is not None:
-        if dem_name.text == 'External DEM':
-            dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
-        else:
-            dem_nodata = 0
+    if dem_name is not None and dem_name.text == 'External DEM':
+        dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
+    else:
+        dem_nodata = 0
     
     if 'Remove-GRD-Border-Noise' in workflow.ids \
             and removeS1BorderNoiseMethod == 'pyroSAR' \
