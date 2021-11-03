@@ -15,7 +15,6 @@ import os
 import re
 import copy
 import shutil
-import requests
 import subprocess as sp
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
@@ -412,11 +411,20 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
         for item in finder(tmpname, ['*.img'], recursive=False):
-            if re.search('ma0_[HV]{2}', item):
-                pol = re.search('[HV]{2}', item).group()
-                name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
-                if 'Sigma0' in item:
-                    name_new = name_new.replace('TF_', '')
+            pattern = '(?P<refarea>(?:Sig|Gam)ma0)_(?P<pol>[HV]{2})'
+            match = re.search(pattern, item)
+            if match:
+                refarea, pol = match.groups()
+                if refarea == 'Gamma0':
+                    correction = 'rtc' if 'TF' in suffix else 'elp'
+                elif refarea == 'Sigma0':
+                    correction = 'elp'
+                else:
+                    raise RuntimeError('unsupported refarea: {}'.format(refarea))
+                suffix_new = '{0}-{1}'.format(refarea.lower(), correction)
+                if 'dB' in suffix:
+                    suffix_new += '_db'
+                name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix_new))
             else:
                 base = os.path.splitext(os.path.basename(item))[0] \
                     .replace('elevation', 'DEM')
