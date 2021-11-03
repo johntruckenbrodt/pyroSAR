@@ -490,7 +490,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 'UNIT["degree", 0.017453292519943295],' \
                 'AXIS["Geodetic longitude", EAST],' \
                 'AXIS["Geodetic latitude", NORTH]]'
-    else:
+    
+    if isinstance(t_srs, int):
         t_srs = 'EPSG:{}'.format(t_srs)
     
     tc.parameters['mapProjection'] = t_srs
