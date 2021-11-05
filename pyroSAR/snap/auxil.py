@@ -412,9 +412,13 @@ def writer(xmlfile, outdir, basename_extensions=None):
 
     """
     workflow = Workflow(xmlfile)
-    write = workflow['Write']
-    src = write.parameters['file']
-    src_format = write.parameters['formatName']
+    writers = workflow['operator=Write']
+    files = list(set([x.parameters['file'] for x in writers]))
+    if len(files) > 1:
+        raise RuntimeError('Multiple output files are not yet supported.')
+    else:
+        src = files[0]
+    src_format = writers[0].parameters['formatName']
     suffix = workflow.suffix()
     dem_name = workflow.tree.find('.//demName')
     if dem_name is not None and dem_name.text == 'External DEM':
@@ -453,6 +457,8 @@ def writer(xmlfile, outdir, basename_extensions=None):
             nodata = dem_nodata if re.search('elevation', item) else 0
             translateoptions['noData'] = nodata
             gdal_translate(item, name_new, translateoptions)
+    else:
+        raise RuntimeError('The output file format must be ENVI.')
     ###########################################################################
     # write the Sentinel-1 manifest.safe file as addition to the actual product
     readers = workflow['operator=Read']
