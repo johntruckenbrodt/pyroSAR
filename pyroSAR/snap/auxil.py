@@ -19,9 +19,6 @@ import subprocess as sp
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
 
-from osgeo import gdal
-from osgeo.gdalconst import GA_Update
-
 from pyroSAR import identify
 from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import windows_fileprefix
@@ -352,13 +349,6 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
     
     write = workflow['Write']
     tmpname = write.parameters['file']
-    suffix = workflow.suffix()
-    format = write.parameters['formatName']
-    dem_name = workflow.tree.find('.//demName')
-    if dem_name is not None and dem_name.text == 'External DEM':
-        dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
-    else:
-        dem_nodata = 0
     
     if 'Remove-GRD-Border-Noise' in workflow.ids \
             and removeS1BorderNoiseMethod == 'pyroSAR' \
@@ -404,13 +394,47 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
             shutil.rmtree(tmpname, onerror=windows_fileprefix)
         raise RuntimeError(str(e) + '\nfailed: {}'.format(xmlfile))
     
-    outname = os.path.join(outdir, os.path.basename(tmpname))
+    writer(xmlfile=xmlfile, outdir=outdir, basename_extensions=basename_extensions)
+    ###########################################################################
+    if cleanup and os.path.exists(tmpname):
+        shutil.rmtree(tmpname, onerror=windows_fileprefix)
+    log.info('done')
+
+
+def writer(xmlfile, outdir, basename_extensions=None):
+    """
+    SNAP product writing utility
     
-    if format == 'ENVI':
-        log.info('converting to GTiff')
+    Parameters
+    ----------
+    xmlfile: str
+        the name of the workflow XML file
+    outdir: str
+        the directory into which to write the final files
+    basename_extensions: list of str or None
+        names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
+
+    Returns
+    -------
+
+    """
+    workflow = Workflow(xmlfile)
+    write = workflow['Write']
+    src = write.parameters['file']
+    src_format = write.parameters['formatName']
+    suffix = workflow.suffix()
+    dem_name = workflow.tree.find('.//demName')
+    if dem_name is not None and dem_name.text == 'External DEM':
+        dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
+    else:
+        dem_nodata = 0
+    outname_base = os.path.join(outdir, os.path.basename(src))
+    os.makedirs(src, exist_ok=True)
+    if src_format == 'ENVI':
+        log.info('converting to GeoTIFF')
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
-        for item in finder(tmpname, ['*.img'], recursive=False):
+        for item in finder(src, ['*.img'], recursive=False):
             pattern = '(?P<refarea>(?:Sig|Gam)ma0)_(?P<pol>[HV]{2})'
             match = re.search(pattern, item)
             if match:
@@ -424,7 +448,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
                 suffix_new = '{0}-{1}'.format(refarea.lower(), correction)
                 if 'dB' in suffix:
                     suffix_new += '_db'
-                name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix_new))
+                name_new = outname_base.replace(suffix, '{0}_{1}.tif'.format(pol, suffix_new))
             else:
                 base = os.path.splitext(os.path.basename(item))[0] \
                     .replace('elevation', 'DEM')
@@ -432,37 +456,26 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
                     base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
                 if re.search('scatteringArea', base):
                     base = re.sub('scatteringArea_[HV]{2}', 'scatteringArea', base)
-                name_new = outname.replace(suffix, '{0}.tif'.format(base))
+                name_new = outname_base.replace(suffix, '{0}.tif'.format(base))
             nodata = dem_nodata if re.search('elevation', item) else 0
             translateoptions['noData'] = nodata
             gdal_translate(item, name_new, translateoptions)
-    # by default the nodata value is not registered in the GTiff metadata
-    elif format == 'GeoTiff-BigTIFF':
-        ras = gdal.Open(outname + '.tif', GA_Update)
-        for i in range(1, ras.RasterCount + 1):
-            ras.GetRasterBand(i).SetNoDataValue(0)
-        ras = None
     ###########################################################################
     # write the Sentinel-1 manifest.safe file as addition to the actual product
-    if not multisource:
-        readers = workflow['operator=Read']
-        for reader in readers:
-            infile = reader.parameters['file']
-            try:
-                id = identify(infile)
-                if id.sensor in ['S1A', 'S1B']:
-                    manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
-                    basename = id.outname_base(basename_extensions)
-                    basename = '{0}_manifest.safe'.format(basename)
-                    outname_manifest = os.path.join(outdir, basename)
-                    with open(outname_manifest, 'wb') as out:
-                        out.write(manifest.read())
-            except RuntimeError:
-                continue
-    ###########################################################################
-    if cleanup and os.path.exists(tmpname):
-        shutil.rmtree(tmpname, onerror=windows_fileprefix)
-    log.info('done')
+    readers = workflow['operator=Read']
+    for reader in readers:
+        infile = reader.parameters['file']
+        try:
+            id = identify(infile)
+            if id.sensor in ['S1A', 'S1B']:
+                manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
+                basename = id.outname_base(basename_extensions)
+                basename = '{0}_manifest.safe'.format(basename)
+                outname_manifest = os.path.join(outdir, basename)
+                with open(outname_manifest, 'wb') as out:
+                    out.write(manifest.read())
+        except RuntimeError:
+            continue
 
 
 def is_consistent(workflow):
@@ -1188,6 +1201,16 @@ class Par(object):
         self.__element.remove(par)
     
     def __getitem__(self, item):
+        """
+        
+        Parameters
+        ----------
+        item
+
+        Returns
+        -------
+        str
+        """
         if item not in self.keys():
             raise KeyError('key {} does not exist'.format(item))
         return self.__element.find('.//{}'.format(item)).text
