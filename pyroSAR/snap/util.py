@@ -12,11 +12,12 @@
 # to the terms contained in the LICENSE.txt file.
 ###############################################################################
 import os
+import shutil
 import pyroSAR
 from ..ancillary import multilook_factors
 from ..auxdata import get_egm_lookup
 from ..examine import ExamineSnap
-from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers
+from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, windows_fileprefix
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 from spatialist.ancillary import dissolve
@@ -129,7 +130,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         Default is True.
     tmpdir: str or None
         Path of custom temporary directory, useful to separate output folder and temp folder. If `None`, the `outdir`
-        location will be used. The created subdirectory will be deleted after processing.
+        location will be used. The created subdirectory will be deleted after processing if ``cleanup=True``.
     gpt_exceptions: dict or None
         A dictionary to override the configured GPT executable for certain operators;
         each (sub-)workflow containing this operator will be executed with the define executable;
@@ -145,6 +146,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         Mask pixels acquired over sea? The sea mask depends on the selected DEM.
     demResamplingMethod: str
         One of the following:
+        
          - 'NEAREST_NEIGHBOUR'
          - 'BILINEAR_INTERPOLATION'
          - 'CUBIC_CONVOLUTION'
@@ -156,6 +158,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         The resampling method for geocoding the SAR image; the options are identical to demResamplingMethod.
     speckleFilter: str
         One of the following:
+        
          - 'Boxcar'
          - 'Median'
          - 'Frost'
@@ -722,12 +725,18 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if not test:
         try:
             groups = groupbyWorkers(wf_name, groupsize)
-            gpt(wf_name, groups=groups, cleanup=cleanup,
+            gpt(wf_name, groups=groups, cleanup=cleanup, tmpdir=outname,
                 gpt_exceptions=gpt_exceptions, gpt_args=gpt_args,
-                removeS1BorderNoiseMethod=removeS1BorderNoiseMethod, outdir=outdir)
-        except RuntimeError as e:
+                removeS1BorderNoiseMethod=removeS1BorderNoiseMethod)
+            writer(xmlfile=wf_name, outdir=outdir, basename_extensions=basename_extensions)
+        except Exception as e:
             log.info(str(e))
             with open(wf_name.replace('_proc.xml', '_error.log'), 'w') as logfile:
                 logfile.write(str(e))
+        finally:
+            if cleanup and os.path.isdir(outname):
+                log.info('deleting temporary files')
+                shutil.rmtree(outname, onerror=windows_fileprefix)
+        log.info('done')
     if returnWF:
         return wf_name
