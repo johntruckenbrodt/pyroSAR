@@ -2,7 +2,7 @@
 ###############################################################################
 # pyroSAR configuration handling
 
-# Copyright (c) 2018-2020, the pyroSAR Developers.
+# Copyright (c) 2018-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -31,7 +31,7 @@ product_pattern = r'(?:.*[/\\]|)' \
                   r'(?:_(?P<extensions>\w*?)|)' \
                   r')_*' \
                   r'(?:(?P<polarization>[HV]{2})_' \
-                  r'(?P<proc_steps>\w*)|)' \
+                  r'(?P<proc_steps>[\w-]*)|)' \
                   r'(?P<filetype>(?:.tif|.nc|))$'
 
 
