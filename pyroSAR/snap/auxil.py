@@ -278,8 +278,7 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None):
 
 def gpt(xmlfile, groups=None, cleanup=True,
         gpt_exceptions=None, gpt_args=None,
-        removeS1BorderNoiseMethod='pyroSAR',
-        multisource=False):
+        removeS1BorderNoiseMethod='pyroSAR'):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
     Input is a readily formatted workflow XML file as
@@ -336,7 +335,7 @@ def gpt(xmlfile, groups=None, cleanup=True,
     
     workflow = Workflow(xmlfile)
     
-    if multisource:
+    if 'ProductSet-Reader' in workflow.operators:
         read = workflow['ProductSet-Reader']
         scene = identify(read.parameters['fileList'].split(',')[0])
     else:
