@@ -276,9 +276,9 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None):
         raise RuntimeError(submessage.format(out, err, os.path.basename(xmlfile), proc.returncode))
 
 
-def gpt(xmlfile, outdir, groups=None, cleanup=True,
+def gpt(xmlfile, groups=None, cleanup=True,
         gpt_exceptions=None, gpt_args=None,
-        removeS1BorderNoiseMethod='pyroSAR', basename_extensions=None,
+        removeS1BorderNoiseMethod='pyroSAR',
         multisource=False):
     """
     wrapper for ESA SNAP's Graph Processing Tool GPT.
@@ -306,8 +306,6 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
     ----------
     xmlfile: str
         the name of the workflow XML file
-    outdir: str
-        the directory into which to write the final files
     groups: list or None
         a list of lists each containing IDs for individual nodes
     cleanup: bool
@@ -327,8 +325,6 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
-    basename_extensions: list of str or None
-        names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
     
     Returns
     -------
@@ -381,6 +377,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         workflow.write(xmlfile)
     
     log.info('executing node sequence{}..'.format('s' if groups is not None else ''))
+    tmpdir = None
     try:
         if groups is not None:
             tmpdir = os.path.join(tmpname, 'tmp')
@@ -389,16 +386,12 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
                 execute(sub, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
         else:
             execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
-    except RuntimeError as e:
-        if cleanup and os.path.exists(tmpname):
-            shutil.rmtree(tmpname, onerror=windows_fileprefix)
-        raise RuntimeError(str(e) + '\nfailed: {}'.format(xmlfile))
-    
-    writer(xmlfile=xmlfile, outdir=outdir, basename_extensions=basename_extensions)
-    ###########################################################################
-    if cleanup and os.path.exists(tmpname):
-        shutil.rmtree(tmpname, onerror=windows_fileprefix)
-    log.info('done')
+    except Exception:
+        log.info('failed: {}'.format(xmlfile))
+        raise
+    finally:
+        if cleanup and tmpdir is not None and os.path.isdir(tmpdir):
+            shutil.rmtree(tmpdir, onerror=windows_fileprefix)
 
 
 def writer(xmlfile, outdir, basename_extensions=None):

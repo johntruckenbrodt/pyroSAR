@@ -12,11 +12,12 @@
 # to the terms contained in the LICENSE.txt file.
 ###############################################################################
 import os
+import shutil
 import pyroSAR
 from ..ancillary import multilook_factors
 from ..auxdata import get_egm_lookup
 from ..examine import ExamineSnap
-from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers
+from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, windows_fileprefix
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 from spatialist.ancillary import dissolve
@@ -726,10 +727,16 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             groups = groupbyWorkers(wf_name, groupsize)
             gpt(wf_name, groups=groups, cleanup=cleanup,
                 gpt_exceptions=gpt_exceptions, gpt_args=gpt_args,
-                removeS1BorderNoiseMethod=removeS1BorderNoiseMethod, outdir=outdir)
-        except RuntimeError as e:
+                removeS1BorderNoiseMethod=removeS1BorderNoiseMethod)
+            writer(xmlfile=wf_name, outdir=outdir, basename_extensions=basename_extensions)
+        except Exception as e:
             log.info(str(e))
             with open(wf_name.replace('_proc.xml', '_error.log'), 'w') as logfile:
                 logfile.write(str(e))
+        finally:
+            if cleanup and os.path.isdir(outname):
+                log.info('deleting temporary files')
+                shutil.rmtree(outname, onerror=windows_fileprefix)
+        log.info('done')
     if returnWF:
         return wf_name
