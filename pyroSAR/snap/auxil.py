@@ -420,6 +420,7 @@ def writer(xmlfile, outdir, basename_extensions=None):
         src = files[0]
     src_format = writers[0].parameters['formatName']
     suffix = workflow.suffix()
+    rtc = 'Terrain-Flattening' in workflow.operators
     dem_name = workflow.tree.find('.//demName')
     dem_nodata = None
     if dem_name is not None:
@@ -442,12 +443,14 @@ def writer(xmlfile, outdir, basename_extensions=None):
             match = re.search(pattern, item)
             if match:
                 refarea, pol = match.groups()
-                if refarea == 'Gamma0':
-                    correction = 'rtc' if 'TF' in suffix else 'elp'
-                elif refarea == 'Sigma0':
-                    correction = 'elp'
-                else:
-                    raise RuntimeError('unsupported refarea: {}'.format(refarea))
+                correction = 'elp'
+                if rtc:
+                    if refarea == 'Gamma0':
+                        correction = 'rtc'
+                    elif refarea == 'Sigma0':
+                        tf = workflow['Terrain-Flattening']
+                        if tf.parameters['outputSigma0']:
+                            correction = 'rtc'
                 suffix_new = '{0}-{1}'.format(refarea.lower(), correction)
                 if 'dB' in suffix:
                     suffix_new += '_db'

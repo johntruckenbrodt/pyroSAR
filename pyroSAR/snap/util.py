@@ -350,17 +350,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         if item not in ['sigma0', 'gamma0']:
             raise ValueError('unsupported value for refarea: {}'.format(item))
     if terrainFlattening:
-        if 'gamma0' not in refarea:
-            raise RuntimeError('if terrain flattening is applied refarea must be gamma0')
         cal.parameters['outputBetaBand'] = True
-        if 'sigma0' in refarea:
-            cal.parameters['outputSigmaBand'] = True
+        cal.parameters['outputSigmaBand'] = False
     else:
-        refarea_options = ['sigma0', 'gamma0']
         for opt in refarea:
-            if opt not in refarea_options:
-                message = '{0} must be one of the following:\n- {1}'
-                raise ValueError(message.format('refarea', '\n- '.join(refarea_options)))
             cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
     last = cal
     ############################################
@@ -462,6 +455,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 tf.parameters['reGridMethod'] = True
             else:
                 tf.parameters['reGridMethod'] = False
+        if 'sigma0' in refarea:
+            tf.parameters['outputSigma0'] = True
         last = tf
     ############################################
     # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
