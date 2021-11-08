@@ -23,6 +23,7 @@ from spatialist import crsConvert, Vector, Raster, bbox, intersect
 from spatialist.ancillary import dissolve
 
 import logging
+
 log = logging.getLogger(__name__)
 
 
@@ -295,7 +296,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         read = sliceAssembly
     ############################################
     # Remove-GRD-Border-Noise node configuration
-    if id.sensor in ['S1A', 'S1B'] and removeS1BorderNoise:
+    if id.sensor in ['S1A', 'S1B'] and id.product == 'GRD' and removeS1BorderNoise:
         bn = parse_node('Remove-GRD-Border-Noise')
         workflow.insert_node(bn, before=read.id)
         bn.parameters['selectedPolarisations'] = polarizations
@@ -307,7 +308,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             workflow.insert_node(tn, before=reader)
             tn.parameters['selectedPolarisations'] = polarizations
     ############################################
-    # orbit file application node configuration
+    # Apply-Orbit-File node configuration
     orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
                     'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
     orbitType = orbit_lookup[formatName]
@@ -351,6 +352,96 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         workflow.insert_node(deb, before=last)
         deb.parameters['selectedPolarisations'] = polarizations
         last = deb.id
+    ############################################
+    # Multilook node configuration
+    
+    try:
+        image_geometry = id.meta['image_geometry']
+        incidence = id.meta['incidence']
+    except KeyError:
+        raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
+    
+    rlks, azlks = multilook_factors(sp_rg=id.spacing[0],
+                                    sp_az=id.spacing[1],
+                                    tr_rg=tr,
+                                    tr_az=tr,
+                                    geometry=image_geometry,
+                                    incidence=incidence)
+    
+    if azlks > 1 or rlks > 1:
+        workflow.insert_node(parse_node('Multilook'), before=last)
+        ml = workflow['Multilook']
+        ml.parameters['nAzLooks'] = azlks
+        ml.parameters['nRgLooks'] = rlks
+        ml.parameters['sourceBands'] = None
+        last = ml.id
+    
+    try:
+        s1tbx = ExamineSnap().get_version('s1tbx')
+    except (FileNotFoundError, AttributeError):
+        s1tbx = None
+    ############################################
+    # conversion to ground range for older S1TBX versions
+    if process_S1_SLC and s1tbx is not None and s1tbx['version'] < '8.0.5':
+        workflow.insert_node(parse_node('SRGR'), before=last)
+        srgr = workflow['SRGR']
+        srgr.parameters['warpPolynomialOrder'] = 4
+        srgr.parameters['interpolationMethod'] = 'Nearest-neighbor interpolation'
+        last = srgr.id
+    ############################################
+    # (optionally) add subset node and add bounding box coordinates of defined shapefile
+    if shapefile:
+        if isinstance(shapefile, dict):
+            ext = shapefile
+        else:
+            if isinstance(shapefile, Vector):
+                shp = shapefile.clone()
+            elif isinstance(shapefile, str):
+                shp = Vector(shapefile)
+            else:
+                raise TypeError("argument 'shapefile' must be either a dictionary, a Vector object or a string.")
+            # reproject the geometry to WGS 84 latlon
+            shp.reproject(4326)
+            ext = shp.extent
+            shp.close()
+        # add an extra buffer of 0.01 degrees
+        buffer = 0.01
+        ext['xmin'] -= buffer
+        ext['ymin'] -= buffer
+        ext['xmax'] += buffer
+        ext['ymax'] += buffer
+        with bbox(ext, 4326) as bounds:
+            inter = intersect(id.bbox(), bounds)
+            if not inter:
+                raise RuntimeError('no bounding box intersection between shapefile and scene')
+            inter.close()
+            wkt = bounds.convert2wkt()[0]
+        
+        subset = parse_node('Subset')
+        if process_S1_SLC:
+            workflow.insert_node(subset, before=last.id)
+            last = subset.id
+        else:
+            workflow.insert_node(subset, before=read.id)
+        subset.parameters['region'] = [0, 0, id.samples, id.lines]
+        subset.parameters['geoRegion'] = wkt
+        subset.parameters['copyMetadata'] = True
+    #######################
+    # (optionally) configure subset node for pixel offsets
+    if offset and not shapefile:
+        subset = parse_node('Subset')
+        if process_S1_SLC:
+            workflow.insert_node(subset, before=last.id)
+            last = subset.id
+        else:
+            workflow.insert_node(subset, before=read.id)
+        
+        # left, right, top and bottom offset in pixels
+        l, r, t, b = offset
+        
+        subset_values = [l, t, id.samples - l - r, id.lines - t - b]
+        subset.parameters['region'] = subset_values
+        subset.parameters['geoRegion'] = ''
     ############################################
     # terrain flattening node configuration
     if terrainFlattening:
@@ -408,46 +499,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     tc.parameters['standardGridOriginX'] = standardGridOriginX
     tc.parameters['standardGridOriginY'] = standardGridOriginY
     ############################################
-    # Multilook node configuration
-    
-    try:
-        image_geometry = id.meta['image_geometry']
-        incidence = id.meta['incidence']
-    except KeyError:
-        raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
-    
-    rlks, azlks = multilook_factors(sp_rg=id.spacing[0],
-                                    sp_az=id.spacing[1],
-                                    tr_rg=tr,
-                                    tr_az=tr,
-                                    geometry=image_geometry,
-                                    incidence=incidence)
-    
-    if process_S1_SLC:
-        id_before = deb.id if swaths is not None else cal.id
-    else:
-        id_before = 'Calibration'
-    
-    if azlks > 1 or rlks > 1:
-        workflow.insert_node(parse_node('Multilook'), before=id_before)
-        ml = workflow['Multilook']
-        ml.parameters['nAzLooks'] = azlks
-        ml.parameters['nRgLooks'] = rlks
-        ml.parameters['sourceBands'] = None
-        id_before = ml.id
-    
-    try:
-        s1tbx = ExamineSnap().get_version('s1tbx')
-    except (FileNotFoundError, AttributeError):
-        s1tbx = None
-    
-    if process_S1_SLC and s1tbx is not None and s1tbx['version'] < '8.0.5':
-        workflow.insert_node(parse_node('SRGR'), before=id_before)
-        srgr = workflow['SRGR']
-        srgr.parameters['warpPolynomialOrder'] = 4
-        srgr.parameters['interpolationMethod'] = 'Nearest-neighbor interpolation'
-        id_before = srgr.id
-    ############################################
     # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
     if len(refarea) > 1 and terrainFlattening:
         bm_tc = parse_node('BandMerge')
@@ -469,7 +520,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             bands_long.append(''.join(comp))
         bm_tc.parameters['sourceBands'] = bands_long
         bm_tc.parameters['geographicError'] = 0.0
-        ############################################
+    ############################################
     # specify spatial resolution and coordinate reference system of the output dataset
     tc.parameters['pixelSpacingInMeter'] = tr
     
@@ -508,58 +559,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         workflow.insert_node(lin2db, before=tc.id)
         lin2db.parameters['sourceBands'] = bands
     
-    ############################################
-    # (optionally) add subset node and add bounding box coordinates of defined shapefile
-    if shapefile:
-        if isinstance(shapefile, dict):
-            ext = shapefile
-        else:
-            if isinstance(shapefile, Vector):
-                shp = shapefile.clone()
-            elif isinstance(shapefile, str):
-                shp = Vector(shapefile)
-            else:
-                raise TypeError("argument 'shapefile' must be either a dictionary, a Vector object or a string.")
-            # reproject the geometry to WGS 84 latlon
-            shp.reproject(4326)
-            ext = shp.extent
-            shp.close()
-        # add an extra buffer of 0.01 degrees
-        buffer = 0.01
-        ext['xmin'] -= buffer
-        ext['ymin'] -= buffer
-        ext['xmax'] += buffer
-        ext['ymax'] += buffer
-        with bbox(ext, 4326) as bounds:
-            inter = intersect(id.bbox(), bounds)
-            if not inter:
-                raise RuntimeError('no bounding box intersection between shapefile and scene')
-            inter.close()
-            wkt = bounds.convert2wkt()[0]
-        
-        subset = parse_node('Subset')
-        if process_S1_SLC:
-            workflow.insert_node(subset, before=id_before.id)
-        else:
-            workflow.insert_node(subset, before=read.id)
-        subset.parameters['region'] = [0, 0, id.samples, id.lines]
-        subset.parameters['geoRegion'] = wkt
-        subset.parameters['copyMetadata'] = True
-    ############################################
-    # (optionally) configure subset node for pixel offsets
-    if offset and not shapefile:
-        subset = parse_node('Subset')
-        if process_S1_SLC:
-            workflow.insert_node(subset, before=id_before.id)
-        else:
-            workflow.insert_node(subset, before=read.id)
-        
-        # left, right, top and bottom offset in pixels
-        l, r, t, b = offset
-        
-        subset_values = [l, t, id.samples - l - r, id.lines - t - b]
-        subset.parameters['region'] = subset_values
-        subset.parameters['geoRegion'] = ''
     ############################################
     # parametrize write node
     # create a suffix for the output file to identify processing steps performed in the workflow
