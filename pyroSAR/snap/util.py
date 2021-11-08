@@ -393,6 +393,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ml.parameters['sourceBands'] = None
         last = ml
     ############################################
+    # Subset node configuration
+    #######################
     # (optionally) add subset node and add bounding box coordinates of defined shapefile
     if shapefile:
         if isinstance(shapefile, dict):
@@ -460,7 +462,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 tf.parameters['reGridMethod'] = True
             else:
                 tf.parameters['reGridMethod'] = False
-        last = tf.id
+        last = tf
     ############################################
     # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
     bands = dissolve([bandnames[opt] for opt in refarea])
@@ -584,36 +586,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         tc_options = ['incidenceAngleFromEllipsoid',
                       'localIncidenceAngle',
                       'projectedLocalIncidenceAngle',
-                      'DEM']
+                      'DEM',
+                      'layoverShadowMask']
         tc_selection = []
         for item in export_extra:
             if item in tc_options:
                 key = 'save{}{}'.format(item[0].upper(), item[1:])
                 tc.parameters[key] = True
                 tc_selection.append(item)
-            elif item == 'layoverShadowMask':
-                sarsim = parse_node('SAR-Simulation')
-                sarsim.parameters['saveLayoverShadowMask'] = True
-                workflow.insert_node(sarsim, after=tc.id, resetSuccessorSource=False)
-                sarsim_select = parse_node('BandSelect')
-                sarsim_select.parameters['sourceBands'] = 'layover_shadow_mask'
-                workflow.insert_node(sarsim_select, before=sarsim.id, resetSuccessorSource=False)
-                
-                sarsim_tc = parse_node('Terrain-Correction')
-                workflow.insert_node(sarsim_tc, before=sarsim_select.id)
-                sarsim_tc.parameters['alignToStandardGrid'] = alignToStandardGrid
-                sarsim_tc.parameters['standardGridOriginX'] = standardGridOriginX
-                sarsim_tc.parameters['standardGridOriginY'] = standardGridOriginY
-                sarsim_tc.parameters['imgResamplingMethod'] = 'NEAREST_NEIGHBOUR'
-                sarsim_tc.parameters['pixelSpacingInMeter'] = tr
-                sarsim_tc.parameters['mapProjection'] = t_srs
-                
-                resampling_exceptions.append(sarsim_tc.id)
-                
-                sarsim_write = parse_node('Write')
-                sarsim_write.parameters['file'] = outname
-                sarsim_write.parameters['formatName'] = 'ENVI'
-                workflow.insert_node(sarsim_write, before=sarsim_tc.id, resetSuccessorSource=False)
             elif item == 'scatteringArea':
                 if not terrainFlattening:
                     raise RuntimeError('scatteringArea can only be created if terrain flattening is performed')
