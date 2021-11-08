@@ -280,31 +280,29 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     ############################################
     # parse base workflow
-    workflow = parse_recipe('base')
+    workflow = parse_recipe('blank')
     ############################################
-    # Read node configuration
-    read = workflow['Read']
+    # Read nodes configuration
+    read = parse_node('Read')
+    workflow.insert_node(read)
     read.parameters['file'] = id.scene
     read.parameters['formatName'] = formatName
     readers = [read.id]
+    last = read
     
     if isinstance(infile, list):
         for i in range(1, len(infile)):
             readn = parse_node('Read')
             readn.parameters['file'] = ids[i].scene
             readn.parameters['formatName'] = formatName
-            workflow.insert_node(readn, before=read.id, resetSuccessorSource=False)
+            workflow.insert_node(readn)
             readers.append(readn.id)
+        ############################################
+        # SliceAssembly node configuration
         sliceAssembly = parse_node('SliceAssembly')
         sliceAssembly.parameters['selectedPolarisations'] = polarizations
         workflow.insert_node(sliceAssembly, before=readers)
-        read = sliceAssembly
-    ############################################
-    # Remove-GRD-Border-Noise node configuration
-    if id.sensor in ['S1A', 'S1B'] and id.product == 'GRD' and removeS1BorderNoise:
-        bn = parse_node('Remove-GRD-Border-Noise')
-        workflow.insert_node(bn, before=read.id)
-        bn.parameters['selectedPolarisations'] = polarizations
+        last = sliceAssembly
     ############################################
     # ThermalNoiseRemoval node configuration
     if id.sensor in ['S1A', 'S1B'] and removeS1ThermalNoise:
@@ -312,6 +310,15 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             tn = parse_node('ThermalNoiseRemoval')
             workflow.insert_node(tn, before=reader)
             tn.parameters['selectedPolarisations'] = polarizations
+            if len(readers) == 1:
+                last = tn
+    ############################################
+    # Remove-GRD-Border-Noise node configuration
+    if id.sensor in ['S1A', 'S1B'] and id.product == 'GRD' and removeS1BorderNoise:
+        bn = parse_node('Remove-GRD-Border-Noise')
+        workflow.insert_node(bn, before=last.id)
+        bn.parameters['selectedPolarisations'] = polarizations
+        last = bn
     ############################################
     # Apply-Orbit-File node configuration
     orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
@@ -326,16 +333,22 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             id.getOSV(osvType='RES')
             orbitType = 'Sentinel Restituted (Auto Download)'
     
-    orb = workflow['Apply-Orbit-File']
+    orb = parse_node('Apply-Orbit-File')
+    workflow.insert_node(orb, before=last.id)
     orb.parameters['orbitType'] = orbitType
     orb.parameters['continueOnFail'] = False
+    last = orb
     ############################################
     # calibration node configuration
-    cal = workflow['Calibration']
+    cal = parse_node('Calibration')
+    workflow.insert_node(cal, before=last.id)
     cal.parameters['selectedPolarisations'] = polarizations
     cal.parameters['sourceBands'] = bandnames['int']
     if isinstance(refarea, str):
         refarea = [refarea]
+    for item in refarea:
+        if item not in ['sigma0', 'gamma0']:
+            raise ValueError('unsupported value for refarea: {}'.format(item))
     if terrainFlattening:
         if 'gamma0' not in refarea:
             raise RuntimeError('if terrain flattening is applied refarea must be gamma0')
@@ -349,17 +362,16 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 message = '{0} must be one of the following:\n- {1}'
                 raise ValueError(message.format('refarea', '\n- '.join(refarea_options)))
             cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
-    last = cal.id
+    last = cal
     ############################################
     # TOPSAR-Deburst node configuration
     if process_S1_SLC and swaths is not None:
         deb = parse_node('TOPSAR-Deburst')
-        workflow.insert_node(deb, before=last)
+        workflow.insert_node(deb, before=last.id)
         deb.parameters['selectedPolarisations'] = polarizations
-        last = deb.id
+        last = deb
     ############################################
     # Multilook node configuration
-    
     try:
         image_geometry = id.meta['image_geometry']
         incidence = id.meta['incidence']
@@ -374,12 +386,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                                     incidence=incidence)
     
     if azlks > 1 or rlks > 1:
-        workflow.insert_node(parse_node('Multilook'), before=last)
+        workflow.insert_node(parse_node('Multilook'), before=last.id)
         ml = workflow['Multilook']
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
         ml.parameters['sourceBands'] = None
-        last = ml.id
+        last = ml
     ############################################
     # (optionally) add subset node and add bounding box coordinates of defined shapefile
     if shapefile:
@@ -412,7 +424,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         subset = parse_node('Subset')
         if process_S1_SLC:
             workflow.insert_node(subset, before=last.id)
-            last = subset.id
+            last = subset
         else:
             workflow.insert_node(subset, before=read.id)
         subset.parameters['region'] = [0, 0, id.samples, id.lines]
@@ -424,7 +436,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         subset = parse_node('Subset')
         if process_S1_SLC:
             workflow.insert_node(subset, before=last.id)
-            last = subset.id
+            last = subset
         else:
             workflow.insert_node(subset, before=read.id)
         
@@ -438,7 +450,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # terrain flattening node configuration
     if terrainFlattening:
         tf = parse_node('Terrain-Flattening')
-        workflow.insert_node(tf, before=last)
+        workflow.insert_node(tf, before=last.id)
         if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
             tf.parameters['sourceBands'] = 'Beta0'
         else:
@@ -472,9 +484,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             bands_long.append(''.join(comp))
         bm_tc.parameters['sourceBands'] = bands_long
         bm_tc.parameters['geographicError'] = 0.0
-        last = bm_tc.id
+        last = bm_tc
     ############################################
-    # speckle filtering node configuration
+    # Speckle-Filter node configuration
     speckleFilter_options = ['Boxcar',
                              'Median',
                              'Frost',
@@ -488,19 +500,19 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         if speckleFilter not in speckleFilter_options:
             raise ValueError(message.format('speckleFilter', '\n- '.join(speckleFilter_options)))
         sf = parse_node('Speckle-Filter')
-        workflow.insert_node(sf, before=last)
+        workflow.insert_node(sf, before=last.id)
         sf.parameters['sourceBands'] = None
         sf.parameters['filter'] = speckleFilter
-        last = sf.id
+        last = sf
     ############################################
     # configuration of node sequence for specific geocoding approaches
     if geocoding_type == 'Range-Doppler':
         tc = parse_node('Terrain-Correction')
-        workflow.insert_node(tc, before=last)
+        workflow.insert_node(tc, before=last.id)
         tc.parameters['sourceBands'] = bands
     elif geocoding_type == 'SAR simulation cross correlation':
         sarsim = parse_node('SAR-Simulation')
-        workflow.insert_node(sarsim, before=last)
+        workflow.insert_node(sarsim, before=last.id)
         sarsim.parameters['sourceBands'] = bands
         
         workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
@@ -513,6 +525,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     tc.parameters['alignToStandardGrid'] = alignToStandardGrid
     tc.parameters['standardGridOriginX'] = standardGridOriginX
     tc.parameters['standardGridOriginY'] = standardGridOriginY
+    last = tc
     #######################
     # specify spatial resolution and coordinate reference system of the output dataset
     tc.parameters['pixelSpacingInMeter'] = tr
@@ -549,9 +562,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     if scaling in ['dB', 'db']:
         lin2db = parse_node('LinearToFromdB')
-        workflow.insert_node(lin2db, before=tc.id)
+        workflow.insert_node(lin2db, before=last.id)
         lin2db.parameters['sourceBands'] = bands
-    
+        last = lin2db
     ############################################
     # parametrize write node
     # create a suffix for the output file to identify processing steps performed in the workflow
@@ -561,7 +574,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     basename = os.path.join(tmpdir, id.outname_base(basename_extensions))
     outname = basename + '_' + suffix
     
-    write = workflow['Write']
+    write = parse_node('Write')
+    workflow.insert_node(write, before=last.id)
     write.parameters['file'] = outname
     write.parameters['formatName'] = 'ENVI'
     ############################################
