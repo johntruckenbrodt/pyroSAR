@@ -205,6 +205,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     :func:`spatialist.auxil.crsConvert()`
     """
     
+    s1tbx_version = ExamineSnap().get_version('s1tbx')['version']
+    if s1tbx_version < '8.0.5':
+        raise RuntimeError('this function requires S1TBX>=8.0.5, found: {}'.format(s1tbx_version))
+    
     if isinstance(infile, pyroSAR.ID):
         id = infile
     elif isinstance(infile, str):
@@ -375,19 +379,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ml.parameters['nRgLooks'] = rlks
         ml.parameters['sourceBands'] = None
         last = ml.id
-    
-    try:
-        s1tbx = ExamineSnap().get_version('s1tbx')
-    except (FileNotFoundError, AttributeError):
-        s1tbx = None
-    ############################################
-    # conversion to ground range for older S1TBX versions
-    if process_S1_SLC and s1tbx is not None and s1tbx['version'] < '8.0.5':
-        workflow.insert_node(parse_node('SRGR'), before=last)
-        srgr = workflow['SRGR']
-        srgr.parameters['warpPolynomialOrder'] = 4
-        srgr.parameters['interpolationMethod'] = 'Nearest-neighbor interpolation'
-        last = srgr.id
     ############################################
     # (optionally) add subset node and add bounding box coordinates of defined shapefile
     if shapefile:
