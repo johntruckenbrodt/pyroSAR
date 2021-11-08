@@ -421,10 +421,16 @@ def writer(xmlfile, outdir, basename_extensions=None):
     src_format = writers[0].parameters['formatName']
     suffix = workflow.suffix()
     dem_name = workflow.tree.find('.//demName')
-    if dem_name is not None and dem_name.text == 'External DEM':
-        dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
-    else:
-        dem_nodata = 0
+    dem_nodata = None
+    if dem_name is not None:
+        dem_name = dem_name.text
+        if dem_name == 'External DEM':
+            dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
+        else:
+            dem_nodata_lookup = {'SRTM 1Sec HGT': -32768}
+            if dem_name in dem_nodata_lookup.keys():
+                dem_nodata = dem_nodata_lookup[dem_name]
+    
     outname_base = os.path.join(outdir, os.path.basename(src))
     os.makedirs(src, exist_ok=True)
     if src_format == 'ENVI':
@@ -454,7 +460,10 @@ def writer(xmlfile, outdir, basename_extensions=None):
                 if re.search('scatteringArea', base):
                     base = re.sub('scatteringArea_[HV]{2}', 'scatteringArea', base)
                 name_new = outname_base.replace(suffix, '{0}.tif'.format(base))
-            nodata = dem_nodata if re.search('elevation', item) else 0
+            if re.search('elevation', item):
+                nodata = dem_nodata
+            else:
+                nodata = 0
             translateoptions['noData'] = nodata
             gdal_translate(item, name_new, translateoptions)
     else:
