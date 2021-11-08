@@ -462,6 +462,8 @@ def writer(xmlfile, outdir, basename_extensions=None):
                     base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
                 if re.search('scatteringArea', base):
                     base = re.sub('scatteringArea_[HV]{2}', 'scatteringArea', base)
+                if re.search('gammaSigmaRatio', base):
+                    base = re.sub('gammaSigmaRatio_[HV]{2}', 'gammaSigmaRatio', base)
                 name_new = outname_base.replace(suffix, '{0}.tif'.format(base))
             if re.search('elevation', item):
                 nodata = dem_nodata

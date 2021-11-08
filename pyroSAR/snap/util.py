@@ -123,7 +123,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - projectedLocalIncidenceAngle
          - DEM
          - layoverShadowMask
-         - scatteringArea
+         - scatteringArea (requires ``terrainFlattening=True``)
+         - gammaSigmaRatio (requires ``terrainFlattening=True`` and ``refarea=['sigma0', 'gamma0']``)
     groupsize: int
         The number of workers executed together in one gpt call.
     cleanup: bool
@@ -461,7 +462,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
     bands = dissolve([bandnames[opt] for opt in refarea])
-    if len(refarea) > 1 and terrainFlattening:
+    if len(refarea) > 1 and terrainFlattening and 'scatteringArea' in export_extra:
         bm_tc = parse_node('BandMerge')
         workflow.insert_node(bm_tc, before=[last.source, last.id])
         sources = bm_tc.source
@@ -627,6 +628,40 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 
                 # add scattering Area to list of band directly written from Terrain-Correction
                 tc_selection.append(area)
+            elif item == 'gammaSigmaRatio':
+                if not terrainFlattening:
+                    raise RuntimeError('gammaSigmaRatio can only be created if terrain flattening is performed')
+                if sorted(refarea) != ['gamma0', 'sigma0']:
+                    raise ValueError("For export_extra layer 'gammaSigmaRatio' 'refarea' "
+                                     "must contain both sigma0 and gamma0")
+                math = parse_node('BandMaths')
+                math.element.attrib['class'] = '"com.bc.ceres.binding.dom.XppDomElement"'
+                workflow.insert_node(math, before=tf.id, resetSuccessorSource=False)
+                
+                pol = polarizations[0]  # the result will be the same for each polarization
+                ratio = 'gammaSigmaRatio_{0}'.format(pol)
+                expression = 'Sigma0_{0} / Gamma0_{0}'.format(pol)
+                
+                math.parameters.clear_variables()
+                exp = math.parameters['targetBands'][0]
+                exp['name'] = ratio
+                exp['type'] = 'float32'
+                exp['expression'] = expression
+                exp['noDataValue'] = 0.0
+                
+                if len(refarea) > 1:
+                    bm_tc.source = bm_tc.source + [math.id]
+                else:
+                    bm_tc = parse_node('BandMerge')
+                    workflow.insert_node(bm_tc, before=[tf.id, math.id], resetSuccessorSource=False)
+                    tc.source = bm_tc.id
+                
+                # modify Terrain-Correction source bands
+                tc_bands = tc.parameters['sourceBands'] + ',' + ratio
+                tc.parameters['sourceBands'] = tc_bands
+                
+                # add scattering Area to list of band directly written from Terrain-Correction
+                tc_selection.append(ratio)
             else:
                 raise RuntimeError("ID '{}' not valid for argument 'export_extra'".format(item))
         # directly write export_extra layers to avoid dB scaling
