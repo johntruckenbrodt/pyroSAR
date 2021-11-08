@@ -342,8 +342,10 @@ class ExamineSnap(object):
         
         with open(fname, 'r') as m:
             content = m.read()
-            match = re.search(pattern, content)
-            return match.groupdict()
+        match = re.search(pattern, content)
+        if match is None:
+            raise RuntimeError('cannot read version information from {}.\nPlease restart SNAP.'.format(fname))
+        return match.groupdict()
 
 
 class ExamineGamma(object):
