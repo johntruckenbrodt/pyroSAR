@@ -256,13 +256,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     else:
         raise RuntimeError('polarizations must be of type str or list')
     
+    swaths = None
     if process_S1_SLC:
         if id.acquisition_mode == 'IW':
             swaths = ['IW1', 'IW2', 'IW3']
         elif id.acquisition_mode == 'EW':
             swaths = ['EW1', 'EW2', 'EW3', 'EW4', 'EW5']
         elif id.acquisition_mode == 'SM':
-            swaths = None
+            pass
         else:
             raise RuntimeError('acquisition mode {} not supported'.format(id.acquisition_mode))
     
@@ -449,6 +450,30 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 tf.parameters['reGridMethod'] = False
         last = tf.id
     ############################################
+    # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
+    bands = dissolve([bandnames[opt] for opt in refarea])
+    if len(refarea) > 1 and terrainFlattening:
+        bm_tc = parse_node('BandMerge')
+        workflow.insert_node(bm_tc, before=[last.source, last.id])
+        sources = bm_tc.source
+        gamma_index = sources.index('Terrain-Flattening')
+        sigma_index = abs(gamma_index - 1)
+        s1_id = os.path.basename(os.path.splitext(id.scene)[0])
+        bands_long = []
+        for band in bands:
+            comp = [band + '::']
+            if shapefile is not None:
+                comp.append('Subset_')
+            comp.append(s1_id)
+            if band.startswith('Gamma'):
+                comp.append('_' + workflow.suffix(stop=sources[gamma_index]))
+            else:
+                comp.append('_' + workflow.suffix(stop=sources[sigma_index]))
+            bands_long.append(''.join(comp))
+        bm_tc.parameters['sourceBands'] = bands_long
+        bm_tc.parameters['geographicError'] = 0.0
+        last = bm_tc.id
+    ############################################
     # speckle filtering node configuration
     speckleFilter_options = ['Boxcar',
                              'Median',
@@ -469,7 +494,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         last = sf.id
     ############################################
     # configuration of node sequence for specific geocoding approaches
-    bands = dissolve([bandnames[opt] for opt in refarea])
     if geocoding_type == 'Range-Doppler':
         tc = parse_node('Terrain-Correction')
         workflow.insert_node(tc, before=last)
@@ -489,29 +513,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     tc.parameters['alignToStandardGrid'] = alignToStandardGrid
     tc.parameters['standardGridOriginX'] = standardGridOriginX
     tc.parameters['standardGridOriginY'] = standardGridOriginY
-    ############################################
-    # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
-    if len(refarea) > 1 and terrainFlattening:
-        bm_tc = parse_node('BandMerge')
-        workflow.insert_node(bm_tc, before=[tf.source, tf.id])
-        sources = bm_tc.source
-        gamma_index = sources.index('Terrain-Flattening')
-        sigma_index = abs(gamma_index - 1)
-        s1_id = os.path.basename(os.path.splitext(id.scene)[0])
-        bands_long = []
-        for band in bands:
-            comp = [band + '::']
-            if shapefile is not None:
-                comp.append('Subset_')
-            comp.append(s1_id)
-            if band.startswith('Gamma'):
-                comp.append('_' + workflow.suffix(stop=sources[gamma_index]))
-            else:
-                comp.append('_' + workflow.suffix(stop=sources[sigma_index]))
-            bands_long.append(''.join(comp))
-        bm_tc.parameters['sourceBands'] = bands_long
-        bm_tc.parameters['geographicError'] = 0.0
-    ############################################
+    #######################
     # specify spatial resolution and coordinate reference system of the output dataset
     tc.parameters['pixelSpacingInMeter'] = tr
     
