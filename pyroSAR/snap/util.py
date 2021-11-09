@@ -206,11 +206,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     :class:`spatialist.vector.Vector`,
     :func:`spatialist.auxil.crsConvert()`
     """
-    
-    s1tbx_version = ExamineSnap().get_version('s1tbx')['version']
-    if s1tbx_version < '8.0.5':
-        raise RuntimeError('this function requires S1TBX>=8.0.5, found: {}'.format(s1tbx_version))
-    
     if isinstance(infile, pyroSAR.ID):
         id = infile
     elif isinstance(infile, str):
@@ -452,7 +447,11 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             else:
                 tf.parameters['reGridMethod'] = False
         if 'sigma0' in refarea:
-            tf.parameters['outputSigma0'] = True
+            try:
+                tf.parameters['outputSigma0'] = True
+            except KeyError:
+                raise RuntimeError("The Terrain-Flattening node does not accept "
+                                   "parameter 'outputSigma0'. Please update S1TBX.")
         last = tf
     ############################################
     # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
