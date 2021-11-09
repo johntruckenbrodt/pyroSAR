@@ -186,9 +186,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     .. figure:: figures/snap_geocode.svg
         :align: center
         
-        Workflow diagram for function geocode for processing a Sentinel-1 Ground Range
-        Detected (GRD) scene to radiometrically terrain corrected (RTC) backscatter.
-        An additional `Subset` node might be inserted in case a vector geometry is provided.
+        Function geocode workflow diagram for processing Sentinel-1 scenes.
+        Dashed lines depict optional steps. The output is sigma or gamma nought
+        backscatter with ellipsoid or radiometric terrain correction (suffix elp/rtc)
+        as well as several optional ancillary datasets (controlled via argument `export_extra`).
 
     Examples
     --------
