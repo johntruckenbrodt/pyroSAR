@@ -82,14 +82,22 @@ def parse_node(name, use_existing=True):
     >>> print(tnr.parameters)
     {'selectedPolarisations': None, 'removeThermalNoise': 'true', 'reIntroduceThermalNoise': 'false'}
     """
+    snap = ExamineSnap()
+    version = snap.get_version('s1tbx')['version']
     name = name if name.endswith('.xml') else name + '.xml'
     operator = os.path.splitext(name)[0]
-    abspath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')
+    nodepath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')
+    abspath = os.path.join(nodepath, version)
     os.makedirs(abspath, exist_ok=True)
     absname = os.path.join(abspath, name)
     
+    # remove all old XML files that were not stored in a version subdirectory
+    deprecated = finder(nodepath, ['*.xml'], recursive=False)
+    for item in deprecated:
+        os.remove(item)
+    
     if not os.path.isfile(absname) or not use_existing:
-        gpt = ExamineSnap().gpt
+        gpt = snap.gpt
         
         cmd = [gpt, operator, '-h']
         
