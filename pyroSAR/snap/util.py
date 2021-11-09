@@ -315,6 +315,13 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             if len(readers) == 1:
                 last = tn
     ############################################
+    # TOPSAR-Deburst node configuration
+    if process_S1_SLC and swaths is not None:
+        deb = parse_node('TOPSAR-Deburst')
+        workflow.insert_node(deb, before=last.id)
+        deb.parameters['selectedPolarisations'] = polarizations
+        last = deb
+    ############################################
     # Remove-GRD-Border-Noise node configuration
     if id.sensor in ['S1A', 'S1B'] and id.product == 'GRD' and removeS1BorderNoise:
         bn = parse_node('Remove-GRD-Border-Noise')
@@ -340,53 +347,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     orb.parameters['orbitType'] = orbitType
     orb.parameters['continueOnFail'] = False
     last = orb
-    ############################################
-    # calibration node configuration
-    cal = parse_node('Calibration')
-    workflow.insert_node(cal, before=last.id)
-    cal.parameters['selectedPolarisations'] = polarizations
-    cal.parameters['sourceBands'] = bandnames['int']
-    if isinstance(refarea, str):
-        refarea = [refarea]
-    for item in refarea:
-        if item not in ['sigma0', 'gamma0']:
-            raise ValueError('unsupported value for refarea: {}'.format(item))
-    if terrainFlattening:
-        cal.parameters['outputBetaBand'] = True
-        cal.parameters['outputSigmaBand'] = False
-    else:
-        for opt in refarea:
-            cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
-    last = cal
-    ############################################
-    # TOPSAR-Deburst node configuration
-    if process_S1_SLC and swaths is not None:
-        deb = parse_node('TOPSAR-Deburst')
-        workflow.insert_node(deb, before=last.id)
-        deb.parameters['selectedPolarisations'] = polarizations
-        last = deb
-    ############################################
-    # Multilook node configuration
-    try:
-        image_geometry = id.meta['image_geometry']
-        incidence = id.meta['incidence']
-    except KeyError:
-        raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
-    
-    rlks, azlks = multilook_factors(sp_rg=id.spacing[0],
-                                    sp_az=id.spacing[1],
-                                    tr_rg=tr,
-                                    tr_az=tr,
-                                    geometry=image_geometry,
-                                    incidence=incidence)
-    
-    if azlks > 1 or rlks > 1:
-        workflow.insert_node(parse_node('Multilook'), before=last.id)
-        ml = workflow['Multilook']
-        ml.parameters['nAzLooks'] = azlks
-        ml.parameters['nRgLooks'] = rlks
-        ml.parameters['sourceBands'] = None
-        last = ml
     ############################################
     # Subset node configuration
     #######################
@@ -419,23 +379,16 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             wkt = bounds.convert2wkt()[0]
         
         subset = parse_node('Subset')
-        if process_S1_SLC:
-            workflow.insert_node(subset, before=last.id)
-            last = subset
-        else:
-            workflow.insert_node(subset, before=read.id)
+        workflow.insert_node(subset, before=last.id)
         subset.parameters['region'] = [0, 0, id.samples, id.lines]
         subset.parameters['geoRegion'] = wkt
         subset.parameters['copyMetadata'] = True
+        last = subset
     #######################
     # (optionally) configure subset node for pixel offsets
     if offset and not shapefile:
         subset = parse_node('Subset')
-        if process_S1_SLC:
-            workflow.insert_node(subset, before=last.id)
-            last = subset
-        else:
-            workflow.insert_node(subset, before=read.id)
+        workflow.insert_node(subset, before=last.id)
         
         # left, right, top and bottom offset in pixels
         l, r, t, b = offset
@@ -443,6 +396,47 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         subset_values = [l, t, id.samples - l - r, id.lines - t - b]
         subset.parameters['region'] = subset_values
         subset.parameters['geoRegion'] = ''
+        last = subset
+    ############################################
+    # calibration node configuration
+    cal = parse_node('Calibration')
+    workflow.insert_node(cal, before=last.id)
+    cal.parameters['selectedPolarisations'] = polarizations
+    cal.parameters['sourceBands'] = bandnames['int']
+    if isinstance(refarea, str):
+        refarea = [refarea]
+    for item in refarea:
+        if item not in ['sigma0', 'gamma0']:
+            raise ValueError('unsupported value for refarea: {}'.format(item))
+    if terrainFlattening:
+        cal.parameters['outputBetaBand'] = True
+        cal.parameters['outputSigmaBand'] = False
+    else:
+        for opt in refarea:
+            cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
+    last = cal
+    ############################################
+    # Multilook node configuration
+    try:
+        image_geometry = id.meta['image_geometry']
+        incidence = id.meta['incidence']
+    except KeyError:
+        raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
+    
+    rlks, azlks = multilook_factors(sp_rg=id.spacing[0],
+                                    sp_az=id.spacing[1],
+                                    tr_rg=tr,
+                                    tr_az=tr,
+                                    geometry=image_geometry,
+                                    incidence=incidence)
+    
+    if azlks > 1 or rlks > 1:
+        workflow.insert_node(parse_node('Multilook'), before=last.id)
+        ml = workflow['Multilook']
+        ml.parameters['nAzLooks'] = azlks
+        ml.parameters['nRgLooks'] = rlks
+        ml.parameters['sourceBands'] = None
+        last = ml
     ############################################
     # terrain flattening node configuration
     if terrainFlattening:
@@ -666,7 +660,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             else:
                 raise RuntimeError("ID '{}' not valid for argument 'export_extra'".format(item))
         # directly write export_extra layers to avoid dB scaling
-        if scaling == 'dB' and len(tc_selection) > 0:
+        if scaling in ['db', 'dB'] and len(tc_selection) > 0:
             tc_write = parse_node('Write')
             workflow.insert_node(tc_write, before=tc.id, resetSuccessorSource=False)
             tc_write.parameters['file'] = outname
