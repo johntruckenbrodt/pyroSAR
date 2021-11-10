@@ -16,7 +16,6 @@ import shutil
 import pyroSAR
 from ..ancillary import multilook_factors
 from ..auxdata import get_egm_lookup
-from ..examine import ExamineSnap
 from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, windows_fileprefix
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
