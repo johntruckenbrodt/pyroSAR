@@ -16,13 +16,13 @@ import shutil
 import pyroSAR
 from ..ancillary import multilook_factors
 from ..auxdata import get_egm_lookup
-from ..examine import ExamineSnap
 from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, windows_fileprefix
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 from spatialist.ancillary import dissolve
 
 import logging
+
 log = logging.getLogger(__name__)
 
 
@@ -122,7 +122,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - projectedLocalIncidenceAngle
          - DEM
          - layoverShadowMask
-         - scatteringArea
+         - scatteringArea (requires ``terrainFlattening=True``)
+         - gammaSigmaRatio (requires ``terrainFlattening=True`` and ``refarea=['sigma0', 'gamma0']``)
     groupsize: int
         The number of workers executed together in one gpt call.
     cleanup: bool
@@ -184,9 +185,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     .. figure:: figures/snap_geocode.svg
         :align: center
         
-        Workflow diagram for function geocode for processing a Sentinel-1 Ground Range
-        Detected (GRD) scene to radiometrically terrain corrected (RTC) backscatter.
-        An additional `Subset` node might be inserted in case a vector geometry is provided.
+        Function geocode workflow diagram for processing Sentinel-1 scenes.
+        Dashed lines depict optional steps. The output is sigma or gamma nought
+        backscatter with ellipsoid or radiometric terrain correction (suffix elp/rtc)
+        as well as several optional ancillary datasets (controlled via argument `export_extra`).
 
     Examples
     --------
@@ -203,7 +205,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     :class:`spatialist.vector.Vector`,
     :func:`spatialist.auxil.crsConvert()`
     """
-    
     if isinstance(infile, pyroSAR.ID):
         id = infile
     elif isinstance(infile, str):
@@ -251,13 +252,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     else:
         raise RuntimeError('polarizations must be of type str or list')
     
+    swaths = None
     if process_S1_SLC:
         if id.acquisition_mode == 'IW':
             swaths = ['IW1', 'IW2', 'IW3']
         elif id.acquisition_mode == 'EW':
             swaths = ['EW1', 'EW2', 'EW3', 'EW4', 'EW5']
         elif id.acquisition_mode == 'SM':
-            swaths = None
+            pass
         else:
             raise RuntimeError('acquisition mode {} not supported'.format(id.acquisition_mode))
     
@@ -274,31 +276,29 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     ############################################
     ############################################
     # parse base workflow
-    workflow = parse_recipe('base')
+    workflow = parse_recipe('blank')
     ############################################
-    # Read node configuration
-    read = workflow['Read']
+    # Read nodes configuration
+    read = parse_node('Read')
+    workflow.insert_node(read)
     read.parameters['file'] = id.scene
     read.parameters['formatName'] = formatName
     readers = [read.id]
+    last = read
     
     if isinstance(infile, list):
         for i in range(1, len(infile)):
             readn = parse_node('Read')
             readn.parameters['file'] = ids[i].scene
             readn.parameters['formatName'] = formatName
-            workflow.insert_node(readn, before=read.id, resetSuccessorSource=False)
+            workflow.insert_node(readn)
             readers.append(readn.id)
+        ############################################
+        # SliceAssembly node configuration
         sliceAssembly = parse_node('SliceAssembly')
         sliceAssembly.parameters['selectedPolarisations'] = polarizations
         workflow.insert_node(sliceAssembly, before=readers)
-        read = sliceAssembly
-    ############################################
-    # Remove-GRD-Border-Noise node configuration
-    if id.sensor in ['S1A', 'S1B'] and removeS1BorderNoise:
-        bn = parse_node('Remove-GRD-Border-Noise')
-        workflow.insert_node(bn, before=read.id)
-        bn.parameters['selectedPolarisations'] = polarizations
+        last = sliceAssembly
     ############################################
     # ThermalNoiseRemoval node configuration
     if id.sensor in ['S1A', 'S1B'] and removeS1ThermalNoise:
@@ -306,8 +306,24 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             tn = parse_node('ThermalNoiseRemoval')
             workflow.insert_node(tn, before=reader)
             tn.parameters['selectedPolarisations'] = polarizations
+            if len(readers) == 1:
+                last = tn
     ############################################
-    # orbit file application node configuration
+    # TOPSAR-Deburst node configuration
+    if process_S1_SLC and swaths is not None:
+        deb = parse_node('TOPSAR-Deburst')
+        workflow.insert_node(deb, before=last.id)
+        deb.parameters['selectedPolarisations'] = polarizations
+        last = deb
+    ############################################
+    # Remove-GRD-Border-Noise node configuration
+    if id.sensor in ['S1A', 'S1B'] and id.product == 'GRD' and removeS1BorderNoise:
+        bn = parse_node('Remove-GRD-Border-Noise')
+        workflow.insert_node(bn, before=last.id)
+        bn.parameters['selectedPolarisations'] = polarizations
+        last = bn
+    ############################################
+    # Apply-Orbit-File node configuration
     orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
                     'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
     orbitType = orbit_lookup[formatName]
@@ -320,96 +336,81 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             id.getOSV(osvType='RES')
             orbitType = 'Sentinel Restituted (Auto Download)'
     
-    orb = workflow['Apply-Orbit-File']
+    orb = parse_node('Apply-Orbit-File')
+    workflow.insert_node(orb, before=last.id)
     orb.parameters['orbitType'] = orbitType
     orb.parameters['continueOnFail'] = False
+    last = orb
+    ############################################
+    # Subset node configuration
+    #######################
+    # (optionally) add subset node and add bounding box coordinates of defined shapefile
+    if shapefile:
+        if isinstance(shapefile, dict):
+            ext = shapefile
+        else:
+            if isinstance(shapefile, Vector):
+                shp = shapefile.clone()
+            elif isinstance(shapefile, str):
+                shp = Vector(shapefile)
+            else:
+                raise TypeError("argument 'shapefile' must be either a dictionary, a Vector object or a string.")
+            # reproject the geometry to WGS 84 latlon
+            shp.reproject(4326)
+            ext = shp.extent
+            shp.close()
+        # add an extra buffer of 0.01 degrees
+        buffer = 0.01
+        ext['xmin'] -= buffer
+        ext['ymin'] -= buffer
+        ext['xmax'] += buffer
+        ext['ymax'] += buffer
+        with bbox(ext, 4326) as bounds:
+            inter = intersect(id.bbox(), bounds)
+            if not inter:
+                raise RuntimeError('no bounding box intersection between shapefile and scene')
+            inter.close()
+            wkt = bounds.convert2wkt()[0]
+        
+        subset = parse_node('Subset')
+        workflow.insert_node(subset, before=last.id)
+        subset.parameters['region'] = [0, 0, id.samples, id.lines]
+        subset.parameters['geoRegion'] = wkt
+        subset.parameters['copyMetadata'] = True
+        last = subset
+    #######################
+    # (optionally) configure subset node for pixel offsets
+    if offset and not shapefile:
+        subset = parse_node('Subset')
+        workflow.insert_node(subset, before=last.id)
+        
+        # left, right, top and bottom offset in pixels
+        l, r, t, b = offset
+        
+        subset_values = [l, t, id.samples - l - r, id.lines - t - b]
+        subset.parameters['region'] = subset_values
+        subset.parameters['geoRegion'] = ''
+        last = subset
     ############################################
     # calibration node configuration
-    cal = workflow['Calibration']
+    cal = parse_node('Calibration')
+    workflow.insert_node(cal, before=last.id)
     cal.parameters['selectedPolarisations'] = polarizations
     cal.parameters['sourceBands'] = bandnames['int']
     if isinstance(refarea, str):
         refarea = [refarea]
+    for item in refarea:
+        if item not in ['sigma0', 'gamma0']:
+            raise ValueError('unsupported value for refarea: {}'.format(item))
     if terrainFlattening:
-        if 'gamma0' not in refarea:
-            raise RuntimeError('if terrain flattening is applied refarea must be gamma0')
         cal.parameters['outputBetaBand'] = True
-        if 'sigma0' in refarea:
-            cal.parameters['outputSigmaBand'] = True
+        cal.parameters['outputSigmaBand'] = False
     else:
-        refarea_options = ['sigma0', 'gamma0']
         for opt in refarea:
-            if opt not in refarea_options:
-                message = '{0} must be one of the following:\n- {1}'
-                raise ValueError(message.format('refarea', '\n- '.join(refarea_options)))
             cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
-    last = cal.id
-    ############################################
-    # TOPSAR-Deburst node configuration
-    if process_S1_SLC and swaths is not None:
-        deb = parse_node('TOPSAR-Deburst')
-        workflow.insert_node(deb, before=last)
-        deb.parameters['selectedPolarisations'] = polarizations
-        last = deb.id
-    ############################################
-    # terrain flattening node configuration
-    if terrainFlattening:
-        tf = parse_node('Terrain-Flattening')
-        workflow.insert_node(tf, before=last)
-        if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
-            tf.parameters['sourceBands'] = 'Beta0'
-        else:
-            tf.parameters['sourceBands'] = bandnames['beta0']
-        if 'reGridMethod' in tf.parameters.keys():
-            if externalDEMFile is None:
-                tf.parameters['reGridMethod'] = True
-            else:
-                tf.parameters['reGridMethod'] = False
-        last = tf.id
-    ############################################
-    # speckle filtering node configuration
-    speckleFilter_options = ['Boxcar',
-                             'Median',
-                             'Frost',
-                             'Gamma Map',
-                             'Refined Lee',
-                             'Lee',
-                             'Lee Sigma']
-    
-    if speckleFilter:
-        message = '{0} must be one of the following:\n- {1}'
-        if speckleFilter not in speckleFilter_options:
-            raise ValueError(message.format('speckleFilter', '\n- '.join(speckleFilter_options)))
-        sf = parse_node('Speckle-Filter')
-        workflow.insert_node(sf, before=last)
-        sf.parameters['sourceBands'] = None
-        sf.parameters['filter'] = speckleFilter
-        last = sf.id
-    ############################################
-    # configuration of node sequence for specific geocoding approaches
-    bands = dissolve([bandnames[opt] for opt in refarea])
-    if geocoding_type == 'Range-Doppler':
-        tc = parse_node('Terrain-Correction')
-        workflow.insert_node(tc, before=last)
-        tc.parameters['sourceBands'] = bands
-    elif geocoding_type == 'SAR simulation cross correlation':
-        sarsim = parse_node('SAR-Simulation')
-        workflow.insert_node(sarsim, before=last)
-        sarsim.parameters['sourceBands'] = bands
-        
-        workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
-        
-        tc = parse_node('SARSim-Terrain-Correction')
-        workflow.insert_node(tc, before='Cross-Correlation')
-    else:
-        raise RuntimeError('geocode_type not recognized')
-    
-    tc.parameters['alignToStandardGrid'] = alignToStandardGrid
-    tc.parameters['standardGridOriginX'] = standardGridOriginX
-    tc.parameters['standardGridOriginY'] = standardGridOriginY
+    last = cal
     ############################################
     # Multilook node configuration
-    
     try:
         image_geometry = id.meta['image_geometry']
         incidence = id.meta['incidence']
@@ -423,35 +424,40 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                                     geometry=image_geometry,
                                     incidence=incidence)
     
-    if process_S1_SLC:
-        id_before = deb.id if swaths is not None else cal.id
-    else:
-        id_before = 'Calibration'
-    
     if azlks > 1 or rlks > 1:
-        workflow.insert_node(parse_node('Multilook'), before=id_before)
+        workflow.insert_node(parse_node('Multilook'), before=last.id)
         ml = workflow['Multilook']
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
         ml.parameters['sourceBands'] = None
-        id_before = ml.id
-    
-    try:
-        s1tbx = ExamineSnap().get_version('s1tbx')
-    except (FileNotFoundError, AttributeError):
-        s1tbx = None
-    
-    if process_S1_SLC and s1tbx is not None and s1tbx['version'] < '8.0.5':
-        workflow.insert_node(parse_node('SRGR'), before=id_before)
-        srgr = workflow['SRGR']
-        srgr.parameters['warpPolynomialOrder'] = 4
-        srgr.parameters['interpolationMethod'] = 'Nearest-neighbor interpolation'
-        id_before = srgr.id
+        last = ml
+    ############################################
+    # terrain flattening node configuration
+    if terrainFlattening:
+        tf = parse_node('Terrain-Flattening')
+        workflow.insert_node(tf, before=last.id)
+        if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
+            tf.parameters['sourceBands'] = 'Beta0'
+        else:
+            tf.parameters['sourceBands'] = bandnames['beta0']
+        if 'reGridMethod' in tf.parameters.keys():
+            if externalDEMFile is None:
+                tf.parameters['reGridMethod'] = True
+            else:
+                tf.parameters['reGridMethod'] = False
+        if 'sigma0' in refarea:
+            try:
+                tf.parameters['outputSigma0'] = True
+            except KeyError:
+                raise RuntimeError("The Terrain-Flattening node does not accept "
+                                   "parameter 'outputSigma0'. Please update S1TBX.")
+        last = tf
     ############################################
     # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
-    if len(refarea) > 1 and terrainFlattening:
+    bands = dissolve([bandnames[opt] for opt in refarea])
+    if len(refarea) > 1 and terrainFlattening and 'scatteringArea' in export_extra:
         bm_tc = parse_node('BandMerge')
-        workflow.insert_node(bm_tc, before=[tf.source, tf.id])
+        workflow.insert_node(bm_tc, before=[last.source, last.id])
         sources = bm_tc.source
         gamma_index = sources.index('Terrain-Flattening')
         sigma_index = abs(gamma_index - 1)
@@ -468,8 +474,49 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 comp.append('_' + workflow.suffix(stop=sources[sigma_index]))
             bands_long.append(''.join(comp))
         bm_tc.parameters['sourceBands'] = bands_long
-        bm_tc.parameters['geographicError'] = 0.0
-        ############################################
+        last = bm_tc
+    ############################################
+    # Speckle-Filter node configuration
+    speckleFilter_options = ['Boxcar',
+                             'Median',
+                             'Frost',
+                             'Gamma Map',
+                             'Refined Lee',
+                             'Lee',
+                             'Lee Sigma']
+    
+    if speckleFilter:
+        message = '{0} must be one of the following:\n- {1}'
+        if speckleFilter not in speckleFilter_options:
+            raise ValueError(message.format('speckleFilter', '\n- '.join(speckleFilter_options)))
+        sf = parse_node('Speckle-Filter')
+        workflow.insert_node(sf, before=last.id)
+        sf.parameters['sourceBands'] = None
+        sf.parameters['filter'] = speckleFilter
+        last = sf
+    ############################################
+    # configuration of node sequence for specific geocoding approaches
+    if geocoding_type == 'Range-Doppler':
+        tc = parse_node('Terrain-Correction')
+        workflow.insert_node(tc, before=last.id)
+        tc.parameters['sourceBands'] = bands
+    elif geocoding_type == 'SAR simulation cross correlation':
+        sarsim = parse_node('SAR-Simulation')
+        workflow.insert_node(sarsim, before=last.id)
+        sarsim.parameters['sourceBands'] = bands
+        
+        workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
+        
+        tc = parse_node('SARSim-Terrain-Correction')
+        workflow.insert_node(tc, before='Cross-Correlation')
+    else:
+        raise RuntimeError('geocode_type not recognized')
+    
+    tc.parameters['alignToStandardGrid'] = alignToStandardGrid
+    tc.parameters['standardGridOriginX'] = standardGridOriginX
+    tc.parameters['standardGridOriginY'] = standardGridOriginY
+    last = tc
+    #######################
     # specify spatial resolution and coordinate reference system of the output dataset
     tc.parameters['pixelSpacingInMeter'] = tr
     
@@ -505,61 +552,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     if scaling in ['dB', 'db']:
         lin2db = parse_node('LinearToFromdB')
-        workflow.insert_node(lin2db, before=tc.id)
+        workflow.insert_node(lin2db, before=last.id)
         lin2db.parameters['sourceBands'] = bands
-    
-    ############################################
-    # (optionally) add subset node and add bounding box coordinates of defined shapefile
-    if shapefile:
-        if isinstance(shapefile, dict):
-            ext = shapefile
-        else:
-            if isinstance(shapefile, Vector):
-                shp = shapefile.clone()
-            elif isinstance(shapefile, str):
-                shp = Vector(shapefile)
-            else:
-                raise TypeError("argument 'shapefile' must be either a dictionary, a Vector object or a string.")
-            # reproject the geometry to WGS 84 latlon
-            shp.reproject(4326)
-            ext = shp.extent
-            shp.close()
-        # add an extra buffer of 0.01 degrees
-        buffer = 0.01
-        ext['xmin'] -= buffer
-        ext['ymin'] -= buffer
-        ext['xmax'] += buffer
-        ext['ymax'] += buffer
-        with bbox(ext, 4326) as bounds:
-            inter = intersect(id.bbox(), bounds)
-            if not inter:
-                raise RuntimeError('no bounding box intersection between shapefile and scene')
-            inter.close()
-            wkt = bounds.convert2wkt()[0]
-        
-        subset = parse_node('Subset')
-        if process_S1_SLC:
-            workflow.insert_node(subset, before=id_before.id)
-        else:
-            workflow.insert_node(subset, before=read.id)
-        subset.parameters['region'] = [0, 0, id.samples, id.lines]
-        subset.parameters['geoRegion'] = wkt
-        subset.parameters['copyMetadata'] = True
-    ############################################
-    # (optionally) configure subset node for pixel offsets
-    if offset and not shapefile:
-        subset = parse_node('Subset')
-        if process_S1_SLC:
-            workflow.insert_node(subset, before=id_before.id)
-        else:
-            workflow.insert_node(subset, before=read.id)
-        
-        # left, right, top and bottom offset in pixels
-        l, r, t, b = offset
-        
-        subset_values = [l, t, id.samples - l - r, id.lines - t - b]
-        subset.parameters['region'] = subset_values
-        subset.parameters['geoRegion'] = ''
+        last = lin2db
     ############################################
     # parametrize write node
     # create a suffix for the output file to identify processing steps performed in the workflow
@@ -569,7 +564,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     basename = os.path.join(tmpdir, id.outname_base(basename_extensions))
     outname = basename + '_' + suffix
     
-    write = workflow['Write']
+    write = parse_node('Write')
+    workflow.insert_node(write, before=last.id)
     write.parameters['file'] = outname
     write.parameters['formatName'] = 'ENVI'
     ############################################
@@ -578,36 +574,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         tc_options = ['incidenceAngleFromEllipsoid',
                       'localIncidenceAngle',
                       'projectedLocalIncidenceAngle',
-                      'DEM']
+                      'DEM',
+                      'layoverShadowMask']
         tc_selection = []
         for item in export_extra:
             if item in tc_options:
                 key = 'save{}{}'.format(item[0].upper(), item[1:])
                 tc.parameters[key] = True
                 tc_selection.append(item)
-            elif item == 'layoverShadowMask':
-                sarsim = parse_node('SAR-Simulation')
-                sarsim.parameters['saveLayoverShadowMask'] = True
-                workflow.insert_node(sarsim, after=tc.id, resetSuccessorSource=False)
-                sarsim_select = parse_node('BandSelect')
-                sarsim_select.parameters['sourceBands'] = 'layover_shadow_mask'
-                workflow.insert_node(sarsim_select, before=sarsim.id, resetSuccessorSource=False)
-                
-                sarsim_tc = parse_node('Terrain-Correction')
-                workflow.insert_node(sarsim_tc, before=sarsim_select.id)
-                sarsim_tc.parameters['alignToStandardGrid'] = alignToStandardGrid
-                sarsim_tc.parameters['standardGridOriginX'] = standardGridOriginX
-                sarsim_tc.parameters['standardGridOriginY'] = standardGridOriginY
-                sarsim_tc.parameters['imgResamplingMethod'] = 'NEAREST_NEIGHBOUR'
-                sarsim_tc.parameters['pixelSpacingInMeter'] = tr
-                sarsim_tc.parameters['mapProjection'] = t_srs
-                
-                resampling_exceptions.append(sarsim_tc.id)
-                
-                sarsim_write = parse_node('Write')
-                sarsim_write.parameters['file'] = outname
-                sarsim_write.parameters['formatName'] = 'ENVI'
-                workflow.insert_node(sarsim_write, before=sarsim_tc.id, resetSuccessorSource=False)
             elif item == 'scatteringArea':
                 if not terrainFlattening:
                     raise RuntimeError('scatteringArea can only be created if terrain flattening is performed')
@@ -619,7 +593,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 workflow.insert_node(area_merge1, before=[tf.id, area_select.id], resetSuccessorSource=False)
                 
                 math = parse_node('BandMaths')
-                math.element.attrib['class'] = '"com.bc.ceres.binding.dom.XppDomElement"'
                 workflow.insert_node(math, before=area_merge1.id, resetSuccessorSource=False)
                 
                 pol = polarizations[0]  # the result will be the same for each polarization
@@ -646,10 +619,43 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 
                 # add scattering Area to list of band directly written from Terrain-Correction
                 tc_selection.append(area)
+            elif item == 'gammaSigmaRatio':
+                if not terrainFlattening:
+                    raise RuntimeError('gammaSigmaRatio can only be created if terrain flattening is performed')
+                if sorted(refarea) != ['gamma0', 'sigma0']:
+                    raise ValueError("For export_extra layer 'gammaSigmaRatio' 'refarea' "
+                                     "must contain both sigma0 and gamma0")
+                math = parse_node('BandMaths')
+                workflow.insert_node(math, before=tf.id, resetSuccessorSource=False)
+                
+                pol = polarizations[0]  # the result will be the same for each polarization
+                ratio = 'gammaSigmaRatio_{0}'.format(pol)
+                expression = 'Sigma0_{0} / Gamma0_{0}'.format(pol)
+                
+                math.parameters.clear_variables()
+                exp = math.parameters['targetBands'][0]
+                exp['name'] = ratio
+                exp['type'] = 'float32'
+                exp['expression'] = expression
+                exp['noDataValue'] = 0.0
+                
+                if len(refarea) > 1:
+                    bm_tc.source = bm_tc.source + [math.id]
+                else:
+                    bm_tc = parse_node('BandMerge')
+                    workflow.insert_node(bm_tc, before=[tf.id, math.id], resetSuccessorSource=False)
+                    tc.source = bm_tc.id
+                
+                # modify Terrain-Correction source bands
+                tc_bands = tc.parameters['sourceBands'] + ',' + ratio
+                tc.parameters['sourceBands'] = tc_bands
+                
+                # add scattering Area to list of band directly written from Terrain-Correction
+                tc_selection.append(ratio)
             else:
                 raise RuntimeError("ID '{}' not valid for argument 'export_extra'".format(item))
         # directly write export_extra layers to avoid dB scaling
-        if scaling == 'dB' and len(tc_selection) > 0:
+        if scaling in ['db', 'dB'] and len(tc_selection) > 0:
             tc_write = parse_node('Write')
             workflow.insert_node(tc_write, before=tc.id, resetSuccessorSource=False)
             tc_write.parameters['file'] = outname
