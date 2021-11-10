@@ -474,7 +474,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 comp.append('_' + workflow.suffix(stop=sources[sigma_index]))
             bands_long.append(''.join(comp))
         bm_tc.parameters['sourceBands'] = bands_long
-        bm_tc.parameters['geographicError'] = 0.0
         last = bm_tc
     ############################################
     # Speckle-Filter node configuration
@@ -594,7 +593,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 workflow.insert_node(area_merge1, before=[tf.id, area_select.id], resetSuccessorSource=False)
                 
                 math = parse_node('BandMaths')
-                math.element.attrib['class'] = '"com.bc.ceres.binding.dom.XppDomElement"'
                 workflow.insert_node(math, before=area_merge1.id, resetSuccessorSource=False)
                 
                 pol = polarizations[0]  # the result will be the same for each polarization
@@ -628,7 +626,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                     raise ValueError("For export_extra layer 'gammaSigmaRatio' 'refarea' "
                                      "must contain both sigma0 and gamma0")
                 math = parse_node('BandMaths')
-                math.element.attrib['class'] = '"com.bc.ceres.binding.dom.XppDomElement"'
                 workflow.insert_node(math, before=tf.id, resetSuccessorSource=False)
                 
                 pol = polarizations[0]  # the result will be the same for each polarization

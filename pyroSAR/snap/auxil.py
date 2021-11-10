@@ -127,14 +127,13 @@ def parse_node(name, use_existing=True):
             child.attrib['refid'] = 'Read'
             child.text = None
         if operator == 'BandMaths':
-            tree.find('.//parameters').set('class', 'com.bc.ceres.binding.dom.XppDomElement')
             tband = tree.find('.//targetBand')
             for item in ['spectralWavelength', 'spectralBandwidth',
                          'scalingOffset', 'scalingFactor',
                          'validExpression', 'spectralBandIndex']:
                 el = tband.find('.//{}'.format(item))
                 tband.remove(el)
-        
+        tree.find('.//parameters').set('class', 'com.bc.ceres.binding.dom.XppDomElement')
         node = Node(node)
         
         # read the default values from the parameter documentation
