@@ -24,7 +24,6 @@ setup(name='pyroSAR',
           'Programming Language :: Python :: 3'
       ],
       install_requires=['progressbar2',
-                        'pathos>=0.2',
                         'numpy',
                         'spatialist>=0.8',
                         'pyyaml',
