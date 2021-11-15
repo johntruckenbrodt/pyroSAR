@@ -20,6 +20,7 @@ images from different SAR sensors.
 """
 
 import sys
+import gc
 
 from builtins import str
 from io import BytesIO
@@ -41,7 +42,7 @@ from datetime import datetime, timedelta
 from time import strptime, strftime
 
 import progressbar as pb
-from osgeo import gdal, osr
+from osgeo import gdal, osr, ogr
 from osgeo.gdalconst import GA_ReadOnly
 
 from . import S1
@@ -52,6 +53,7 @@ from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder
 
 from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
+from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import select, func
@@ -225,7 +227,7 @@ class ID(object):
     
     def bbox(self, outname=None, driver=None, overwrite=True):
         """
-        get the bounding box of a scene either as a vector object or written to a shapefile
+        get the bounding box of a scene either as a vector object or written to a file
 
         Parameters
         ----------
@@ -247,6 +249,46 @@ class ID(object):
         else:
             bbox(self.getCorners(), self.projection, outname=outname, driver=driver,
                  overwrite=overwrite)
+    
+    def geometry(self, outname=None, driver=None, overwrite=True):
+        """
+        get the footprint geometry of a scene either as a vector object or written to a file
+
+        Parameters
+        ----------
+        outname: str
+            the name of the shapefile to be written
+        driver: str
+            the output file format; needs to be defined if the format cannot
+            be auto-detected from the filename extension
+        overwrite: bool
+            overwrite an existing shapefile?
+
+        Returns
+        -------
+        ~spatialist.vector.Vector or None
+            the vector object if `outname` is None, None otherwise
+        """
+        srs = crsConvert(self.projection, 'osr')
+        ring = ogr.Geometry(ogr.wkbLinearRing)
+        for coordinate in self.meta['coordinates']:
+            ring.AddPoint(*coordinate)
+        ring.CloseRings()
+        
+        geom = ogr.Geometry(ogr.wkbPolygon)
+        geom.AddGeometry(ring)
+        
+        geom.FlattenTo2D()
+        
+        bbox = Vector(driver='Memory')
+        bbox.addlayer('geometry', srs, geom.GetGeometryType())
+        bbox.addfield('area', ogr.OFTReal)
+        bbox.addfeature(geom, fields={'area': geom.Area()})
+        geom = None
+        if outname is None:
+            return bbox
+        else:
+            bbox.write(outfile=outname, driver=driver, overwrite=overwrite)
     
     @property
     def compression(self):
@@ -1948,10 +1990,10 @@ class Archive(object):
                                        Column('scene', String, primary_key=True))
         
         # create tables if not existing
-        if not self.engine.dialect.has_table(self.engine, 'data'):
+        if not sql_inspect(self.engine).has_table('data'):
             log.debug("creating DB table 'data'")
             self.data_schema.create(self.engine)
-        if not self.engine.dialect.has_table(self.engine, 'duplicates'):
+        if not sql_inspect(self.engine).has_table('duplicates'):
             log.debug("creating DB table 'duplicates'")
             self.duplicates_schema.create(self.engine)
         
@@ -1986,13 +2028,13 @@ class Archive(object):
         if isinstance(tables, list):
             for table in tables:
                 table.metadata = self.meta
-                if not self.engine.dialect.has_table(self.engine, str(table)):
+                if not sql_inspect(self.engine).has_table(str(table)):
                     table.create(self.engine)
                     created.append(str(table))
         else:
             table = tables
             table.metadata = self.meta
-            if not self.engine.dialect.has_table(self.engine, str(table)):
+            if not sql_inspect(self.engine).has_table(str(table)):
                 table.create(self.engine)
                 created.append(str(table))
         log.info('created table(s) {}.'.format(', '.join(created)))
@@ -2346,13 +2388,15 @@ class Archive(object):
         list
             the table names
         """
+        #  TODO: make this dynamic
+        #  the method was intended to only return user generated tables by default, as well as data and duplicates
         all_tables = ['ElementaryGeometries', 'SpatialIndex', 'geometry_columns', 'geometry_columns_auth',
                       'geometry_columns_field_infos', 'geometry_columns_statistics', 'geometry_columns_time',
                       'spatial_ref_sys', 'spatial_ref_sys_aux', 'spatialite_history', 'sql_statements_log',
                       'sqlite_sequence', 'views_geometry_columns', 'views_geometry_columns_auth',
                       'views_geometry_columns_field_infos', 'views_geometry_columns_statistics',
                       'virts_geometry_columns', 'virts_geometry_columns_auth', 'virts_geometry_columns_field_infos',
-                      'virts_geometry_columns_statistics']
+                      'virts_geometry_columns_statistics', 'data_licenses', 'KNN']
         # get tablenames from metadata
         tables = sorted([self.encode(x) for x in self.meta.tables.keys()])
         if return_all:
@@ -2642,6 +2686,7 @@ class Archive(object):
         self.Session().close()
         self.conn.close()
         self.engine.dispose()
+        gc.collect(generation=2)  # this was added as a fix for win PermissionError when deleting sqlite.db files.
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()

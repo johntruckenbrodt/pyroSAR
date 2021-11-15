@@ -120,8 +120,6 @@ class Test_geocode_opts():
     
     def test_refarea(self, tmpdir, testdata):
         scene = testdata['s1']
-        with pytest.raises(RuntimeError):
-            geocode(scene, str(tmpdir), terrainFlattening=True, refarea='beta0', test=True)
         with pytest.raises(ValueError):
             geocode(scene, str(tmpdir), terrainFlattening=False, refarea='foobar', test=True)
         geocode(scene, str(tmpdir), terrainFlattening=True, refarea='gamma0', test=True)

@@ -186,7 +186,7 @@ Auxiliary Data Tools
 ====================
 
 .. automodule:: pyroSAR.auxdata
-    :members: dem_autoload, dem_create, get_egm96_lookup
+    :members: dem_autoload, dem_create, get_egm_lookup
     :undoc-members:
     :show-inheritance:
 
@@ -195,7 +195,7 @@ Auxiliary Data Tools
 
         dem_autoload
         dem_create
-        get_egm96_lookup
+        get_egm_lookup
 
 Datacube Tools
 ==============
