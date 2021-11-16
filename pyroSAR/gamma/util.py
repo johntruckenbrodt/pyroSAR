@@ -47,7 +47,7 @@ except ImportError:
     pass
 
 
-def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscript=None):
+def calibrate(id, directory, return_fnames=False, logpath=None, outdir=None, shellscript=None):
     """
     radiometric calibration of SAR scenes
     
@@ -57,8 +57,8 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
         an SAR scene object of type pyroSAR.ID or any subclass
     directory: str
         the directory to search for GAMMA calibration candidates
-    replace: bool
-        replace the input images by the new files? If True, the input images will be deleted.
+    return_fnames: bool
+        return the names of the output image files? Default: False.
     logpath: str or None
         a directory to write command logfiles to
     outdir: str or None
@@ -71,6 +71,7 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
 
     """
     cname = type(id).__name__
+    new = []
     if cname == 'CEOS_PSR':
         for image in id.getGammaImages(directory):
             if image.endswith('_slc'):
@@ -83,10 +84,10 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
                                outdir=outdir,
                                shellscript=shellscript)
                 par2hdr(image + '_cal.par', image + '_cal.hdr')
+                new.append(image + '_cal')
     
     elif cname == 'EORC_PSR':
         for image in id.getGammaImages(directory):
-            pol = re.search('[HV]{2}', os.path.basename(image)).group(0)
             if image.endswith('_mli'):
                 isp.radcal_MLI(MLI=image,
                                MLI_par=image + '.par',
@@ -106,6 +107,7 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
                 par2hdr(image + '.par', image + '_cal_pix_ell' + '.hdr')
                 # rename parameter file 
                 os.rename(image + '.par', image + '_cal.par')
+                new.append(image + '_cal')
     
     elif cname == 'ESA':
         k_db = {'ASAR': 55., 'ERS1': 58.24, 'ERS2': 59.75}[id.sensor]
@@ -123,16 +125,16 @@ def calibrate(id, directory, replace=False, logpath=None, outdir=None, shellscri
                            outdir=outdir,
                            shellscript=shellscript)
             par2hdr(out + '.par', out + '.hdr')
-            if replace:
-                for item in [image, image + '.par', image + '.hdr']:
-                    if os.path.isfile(item):
-                        os.remove(item)
+            new.append(out)
     
     elif cname == 'SAFE':
         log.info('calibration already performed during import')
     
     else:
         raise NotImplementedError('calibration for class {} is not implemented yet'.format(cname))
+    
+    if return_fnames and len(new) > 0:
+        return new
 
 
 def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
