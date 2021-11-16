@@ -671,6 +671,12 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     """
     
+    # experimental option to reuse intermediate products; currently affects:
+    # - scene unpacking
+    # - conversion to GAMMA format
+    # - multilooking
+    exist_ok = False
+    
     scenes = scene if isinstance(scene, list) else [scene]
     if len(scenes) > 2:
         raise RuntimeError("currently only one or two scenes can be passed via argument 'scene'")
@@ -704,7 +710,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         if scene.compression is not None:
             log.info('unpacking scene')
             try:
-                scene.unpack(tmpdir)
+                scene.unpack(tmpdir, exist_ok=exist_ok)
             except RuntimeError:
                 log.info('scene was attempted to be processed before, exiting')
                 return
@@ -727,7 +733,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     for scene in scenes:
         files = convert2gamma(scene, directory=tmpdir, logpath=path_log, outdir=tmpdir,
                               basename_extensions=basename_extensions, shellscript=shellscript,
-                              S1_bnr=gamma_bnr, return_fnames=True)
+                              S1_bnr=gamma_bnr, exist_ok=exist_ok, return_fnames=True)
         images.extend(files)
     
     for scene in scenes:
@@ -781,7 +787,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         for group in groups:
             out = group[0].replace('IW1', 'IW_') + '_mli'
             infile = group[0] if len(group) == 1 else group
-            multilook(infile=infile, outfile=out, targetres=targetres,
+            multilook(infile=infile, outfile=out, targetres=targetres, exist_ok=exist_ok,
                       logpath=path_log, outdir=tmpdir, shellscript=shellscript)
             images.append(out)
     products = list(images)
