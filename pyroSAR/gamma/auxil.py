@@ -53,12 +53,12 @@ class ISPPar(object):
     
     Attributes
     ----------
-    keys : list
+    keys: list
         the names of all parameters
     """
     
     _re_kv_pair = re.compile(r'^(\w+):\s*(.+)\s*')
-    _re_float_literal = re.compile(r'^[+-]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[Ee][+-]?\d+)?')
+    _re_float_literal = re.compile(r'^[+-]?(?:(\d*\.\d+)|(\d+\.?))(?:[Ee][+-]?\d+)?')
     
     def __init__(self, filename):
         """Parses an ISP parameter file from disk.
@@ -71,10 +71,9 @@ class ISPPar(object):
         else:
             par_file = filename
         
-        self.keys = []
+        self.keys = ['filetype']
         
         try:
-            par_file.readline()  # Skip header line
             content = par_file.read().split('\n')
         except UnicodeDecodeError:
             par_file = codecs.open(filename, 'r', encoding='utf-8', errors='ignore')
@@ -82,38 +81,45 @@ class ISPPar(object):
             printable = set(string.printable)
             content = filter(lambda x: x in printable, content)
             content = ''.join(list(content)).split('\n')
-        try:
-            for line in content:
-                match = ISPPar._re_kv_pair.match(line)
-                if not match:
-                    continue  # Skip malformed lines with no key-value pairs
-                key = match.group(1)
-                items = match.group(2).split()
-                if len(items) == 0:
-                    value = None
-                elif len(items) == 1:
-                    value = parse_literal(items[0])
-                else:
-                    if not ISPPar._re_float_literal.match(items[0]):
-                        # Value is a string literal containing whitespace characters
-                        value = match.group(2)
-                    else:
-                        # Evaluate each item and stop at the first non-float literal
-                        value = []
-                        for i in items:
-                            match = ISPPar._re_float_literal.match(i)
-                            if match:
-                                value.append(parse_literal(match.group()))
-                            else:
-                                # If the first float literal is immediately followed by a non-float literal handle the
-                                # first one as singular value, e.g. in '20.0970 dB'
-                                if len(value) == 1:
-                                    value = value[0]
-                                break
-                self.keys.append(key)
-                setattr(self, key, value)
         finally:
             par_file.close()
+        
+        if 'Image Parameter File' in content[0]:
+            setattr(self, 'filetype', 'isp')
+        elif 'DEM/MAP parameter file' in content[0]:
+            setattr(self, 'filetype', 'dem')
+        else:
+            setattr(self, 'filetype', 'unknown')
+        
+        for line in content:
+            match = ISPPar._re_kv_pair.match(line)
+            if not match:
+                continue  # Skip malformed lines with no key-value pairs
+            key = match.group(1)
+            items = match.group(2).split()
+            if len(items) == 0:
+                value = None
+            elif len(items) == 1:
+                value = parse_literal(items[0])
+            else:
+                if not ISPPar._re_float_literal.match(items[0]):
+                    # Value is a string literal containing whitespace characters
+                    value = match.group(2)
+                else:
+                    # Evaluate each item and stop at the first non-float literal
+                    value = []
+                    for i in items:
+                        match = ISPPar._re_float_literal.match(i)
+                        if match:
+                            value.append(parse_literal(match.group()))
+                        else:
+                            # If the first float literal is immediately followed by a non-float literal handle the
+                            # first one as singular value, e.g. in '20.0970 dB'
+                            if len(value) == 1:
+                                value = value[0]
+                            break
+            self.keys.append(key)
+            setattr(self, key, value)
 
         if hasattr(self, 'date'):
             try:
