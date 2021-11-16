@@ -809,45 +809,14 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     if refine_lut:
         n.appreciate(['pix_area_sigma0'])
-    
-    ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
-    
+
     reference_par = ISPPar(reference + '.par')
-    
-    gc_map_args = {'DEM_par': dem + '.par',
-                   'DEM': dem,
-                   'DEM_seg_par': n.dem_seg_geo + '.par',
-                   'DEM_seg': n.dem_seg_geo,
-                   'lookup_table': n.lut_init,
-                   'lat_ovr': ovs_lat,
-                   'lon_ovr': ovs_lon,
-                   'sim_sar': n.sim_sar_geo,
-                   'u': n.u_geo,
-                   'v': n.v_geo,
-                   'inc': n.inc_geo,
-                   'psi': n.psi_geo,
-                   'pix': n.pix_geo,
-                   'ls_map': n.ls_map_geo,
-                   'frame': 8,
-                   'ls_mode': 2,
-                   'logpath': path_log,
-                   'shellscript': shellscript,
-                   'outdir': tmpdir}
-    
+    ######################################################################
+    # DEM product generation #############################################
+    ######################################################################
     log.info('creating DEM products')
-    if reference_par.image_geometry == 'GROUND_RANGE':
-        gc_map_args.update({'GRD_par': reference + '.par'})
-        diff.gc_map_grd(**gc_map_args)
-    else:
-        gc_map_args.update({'MLI_par': reference + '.par',
-                            'OFF_par': '-'})
-        diff.gc_map(**gc_map_args)
-    
-    for item in ['dem_seg_geo', 'sim_sar_geo', 'u_geo', 'v_geo',
-                 'psi_geo', 'pix_geo', 'inc_geo', 'ls_map_geo']:
-        if n.isappreciated(item):
-            mods = {'data_type': 1} if item == 'ls_map_geo' else None
-            par2hdr(n.dem_seg_geo + '.par', n.get(item) + '.hdr', mods)
+    gc_map_wrap(image=reference, namespace=n, dem=dem, targetres=targetres,
+                path_log=path_log, outdir=tmpdir, shellscript=shellscript)
     
     sim_width = ISPPar(n.dem_seg_geo + '.par').width
     ######################################################################
@@ -1343,3 +1312,65 @@ def pixel_area_wrap(image, namespace, lut, path_log, outdir, shellscript):
                  'pix_ratio', 'pix_ellip_sigma0', 'gs_ratio']:
         if namespace.isappreciated(item):
             par2hdr(image + '.par', namespace[item] + '.hdr')
+
+
+def gc_map_wrap(image, namespace, dem, targetres, path_log, outdir, shellscript):
+    """
+    helper function for computing DEM products in function geocode.
+
+    Parameters
+    ----------
+    image: str
+        the reference SAR image
+    namespace: pyroSAR.gamma.auxil.Namespace
+        an object collecting all output file names
+    dem: str
+        the digital elevation model
+    path_log: str
+        a directory to write command logfiles to
+    outdir: str
+        the directory to execute the command in
+    shellscript: str
+        a file to write the GAMMA commands to in shell format
+
+    Returns
+    -------
+
+    """
+    ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
+    
+    image_par = ISPPar(image + '.par')
+    
+    gc_map_args = {'DEM_par': dem + '.par',
+                   'DEM': dem,
+                   'DEM_seg_par': namespace.dem_seg_geo + '.par',
+                   'DEM_seg': namespace.dem_seg_geo,
+                   'lookup_table': namespace.lut_init,
+                   'lat_ovr': ovs_lat,
+                   'lon_ovr': ovs_lon,
+                   'sim_sar': namespace.sim_sar_geo,
+                   'u': namespace.u_geo,
+                   'v': namespace.v_geo,
+                   'inc': namespace.inc_geo,
+                   'psi': namespace.psi_geo,
+                   'pix': namespace.pix_geo,
+                   'ls_map': namespace.ls_map_geo,
+                   'frame': 8,
+                   'ls_mode': 2,
+                   'logpath': path_log,
+                   'shellscript': shellscript,
+                   'outdir': outdir}
+    
+    if image_par.image_geometry == 'GROUND_RANGE':
+        gc_map_args.update({'GRD_par': image + '.par'})
+        diff.gc_map_grd(**gc_map_args)
+    else:
+        gc_map_args.update({'MLI_par': image + '.par',
+                            'OFF_par': '-'})
+        diff.gc_map(**gc_map_args)
+    
+    for item in ['dem_seg_geo', 'sim_sar_geo', 'u_geo', 'v_geo',
+                 'psi_geo', 'pix_geo', 'inc_geo', 'ls_map_geo']:
+        if namespace.isappreciated(item):
+            mods = {'data_type': 1} if item == 'ls_map_geo' else None
+            par2hdr(namespace.dem_seg_geo + '.par', namespace.get(item) + '.hdr', mods)
