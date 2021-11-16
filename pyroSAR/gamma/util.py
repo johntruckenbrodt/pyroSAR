@@ -503,9 +503,9 @@ def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpa
         log.warning('..no internet access')
     
     target = directory if directory is not None else id.scene
-    images = id.getGammaImages(target)
+    parfiles = finder(target, ['*.par'])
     # read parameter file entries into object
-    with ISPPar(images[0] + '.par') as par:
+    with ISPPar(parfiles[0]) as par:
         # extract acquisition time stamp
         timestamp = datetime.strptime(par.date, '%Y-%m-%dT%H:%M:%S.%f').strftime('%Y%m%dT%H%M%S')
     
@@ -522,9 +522,10 @@ def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpa
         osvfile = os.path.join(osvdir, os.path.basename(osvfile).replace('.zip', ''))
     
     # update the GAMMA parameter file with the selected orbit state vectors
-    log.info('correcting state vectors with file {}'.format(osvfile))
-    for image in images:
-        isp.S1_OPOD_vec(SLC_par=image + '.par',
+    log.debug('correcting state vectors with file {}'.format(osvfile))
+    for par in parfiles:
+        log.debug(par)
+        isp.S1_OPOD_vec(SLC_par=par,
                         OPOD=osvfile,
                         logpath=logpath,
                         outdir=outdir,
