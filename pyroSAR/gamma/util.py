@@ -774,17 +774,17 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             images_new.append(out)
         images = images_new
     
-    products = list(images)
-    
     if scene.sensor in ['S1A', 'S1B']:
         log.info('multilooking')
-        for image in images:
-            multilook(infile=image, outfile=image + '_mli', targetres=targetres,
+        groups = groupby(images, 'polarization')
+        images = []
+        for group in groups:
+            out = group[0].replace('IW1', 'IW_') + '_mli'
+            infile = group[0] if len(group) == 1 else group
+            multilook(infile=infile, outfile=out, targetres=targetres,
                       logpath=path_log, outdir=tmpdir, shellscript=shellscript)
-        
-        images = [x + '_mli' for x in images]
-        products.extend(images)
-    
+            images.append(out)
+    products = list(images)
     reference = images[0]
     
     # create output names for files to be written
