@@ -783,17 +783,17 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         images = [x + '_mli' for x in images]
         products.extend(images)
     
-    master = images[0]
+    reference = images[0]
     
     # create output names for files to be written
     # appreciated files will be written
     n = Namespace(tmpdir, scene.outname_base(extensions=basename_extensions))
     n.appreciate(['dem_seg_geo', 'lut_init', 'inc_geo', 'ls_map_geo'])
-    
+
+    pix_geo = []
     if export_extra is not None:
         n.appreciate(export_extra)
         pix = ['pix_area_sigma0', 'pix_area_gamma0', 'pix_ratio', 'gs_ratio', 'pix_ellip_sigma0']
-        pix_geo = []
         for item in pix:
             if item + '_geo' in export_extra:
                 pix_geo.append(item + '_geo')
@@ -804,7 +804,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
     
-    master_par = ISPPar(master + '.par')
+    reference_par = ISPPar(reference + '.par')
     
     gc_map_args = {'DEM_par': dem + '.par',
                    'DEM': dem,
@@ -827,11 +827,11 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                    'outdir': tmpdir}
     
     log.info('creating DEM products')
-    if master_par.image_geometry == 'GROUND_RANGE':
-        gc_map_args.update({'GRD_par': master + '.par'})
+    if reference_par.image_geometry == 'GROUND_RANGE':
+        gc_map_args.update({'GRD_par': reference + '.par'})
         diff.gc_map_grd(**gc_map_args)
     else:
-        gc_map_args.update({'MLI_par': master + '.par',
+        gc_map_args.update({'MLI_par': reference + '.par',
                             'OFF_par': '-'})
         diff.gc_map(**gc_map_args)
     
@@ -846,82 +846,83 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     ######################################################################
     # RTC reference area computation #####################################
     ######################################################################
-    
-    pixel_area_wrap(master=master, namespace=n, lut=n.lut_init,
+    log.info('computing pixel area')
+    pixel_area_wrap(master=reference, namespace=n, lut=n.lut_init,
                     path_log=path_log, outdir=tmpdir, shellscript=shellscript)
     
     ######################################################################
     # lookup table Refinement ############################################
     ######################################################################
     lut_final = n.lut_init
+    if refine_lut:
+        log.info('refining lookup table')
+        # Refinement of geocoding lookup table
+        diff.create_diff_par(PAR_1=reference + '.par',
+                             PAR_2='-',
+                             DIFF_par=reference + '_diff.par',
+                             PAR_type=1,
+                             iflg=0,
+                             logpath=path_log,
+                             outdir=tmpdir,
+                             shellscript=shellscript)
+        # Refinement Lookuptable
+        # for "shift" data offset window size enlarged twice to 512 and 256, for data without shift 256 128
+        diff.offset_pwrm(MLI_1=n.pix_area_sigma0,
+                         MLI_2=reference,
+                         DIFF_par=reference + '_diff.par',
+                         offs=reference + '_offs',
+                         ccp=reference + '_ccp',
+                         rwin=512,
+                         azwin=256,
+                         offsets=reference + '_offsets.txt',
+                         n_ovr=2,
+                         nr=64,
+                         naz=32,
+                         thres=0.2,
+                         logpath=path_log,
+                         outdir=tmpdir,
+                         shellscript=shellscript)
+        # par2hdr(master + '.par', master + '_offs' + '.hdr')
+        diff.offset_fitm(offs=reference + '_offs',
+                         ccp=reference + '_ccp',
+                         DIFF_par=reference + '_diff.par',
+                         coffs=reference + '_coffs',
+                         coffsets=reference + '_coffsets',
+                         thres=0.2,
+                         npoly=4,
+                         logpath=path_log,
+                         outdir=tmpdir,
+                         shellscript=shellscript)
+        # Updating of the look-up table
+        diff.gc_map_fine(gc_in=lut_final,
+                         width=sim_width,
+                         DIFF_par=reference + '_diff.par',
+                         gc_out=lut_final + '.fine',
+                         ref_flg=1,
+                         logpath=path_log,
+                         outdir=tmpdir,
+                         shellscript=shellscript)
+        # Reproduce pixel area estimate
+        pixel_area_wrap(master=reference, namespace=n, lut=lut_final + '.fine',
+                        path_log=path_log, outdir=tmpdir, shellscript=shellscript)
+        lut_final = lut_final + '.fine'
+    ######################################################################
+    # radiometric terrain correction and backward geocoding ##############
+    ######################################################################
+    log.info('radiometric terrain correction and backward geocoding')
     for image in images:
-        if refine_lut:
-            log.info('refining LUT of {}'.format(image))
-            # Refinement of geocoding lookup table
-            diff.create_diff_par(PAR_1=image + '.par',
-                                 PAR_2='-',
-                                 DIFF_par=image + '_diff.par',
-                                 PAR_type=1,
-                                 iflg=0,
-                                 logpath=path_log,
-                                 outdir=tmpdir,
-                                 shellscript=shellscript)
-            # Refinement Lookuptable
-            # for "shift" data offset window size enlarged twice to 512 and 256, for data without shift 256 128
-            diff.offset_pwrm(MLI_1=n.pix_area_sigma0,
-                             MLI_2=image,
-                             DIFF_par=image + '_diff.par',
-                             offs=image + '_offs',
-                             ccp=image + '_ccp',
-                             rwin=512,
-                             azwin=256,
-                             offsets=image + '_offsets.txt',
-                             n_ovr=2,
-                             nr=64,
-                             naz=32,
-                             thres=0.2,
-                             logpath=path_log,
-                             outdir=tmpdir,
-                             shellscript=shellscript)
-            # par2hdr(master + '.par', master + '_offs' + '.hdr')
-            diff.offset_fitm(offs=image + '_offs',
-                             ccp=image + '_ccp',
-                             DIFF_par=image + '_diff.par',
-                             coffs=image + '_coffs',
-                             coffsets=image + '_coffsets',
-                             thres=0.2,
-                             npoly=4,
-                             logpath=path_log,
-                             outdir=tmpdir,
-                             shellscript=shellscript)
-            # Updating of the look-up table
-            diff.gc_map_fine(gc_in=lut_final,
-                             width=sim_width,
-                             DIFF_par=image + '_diff.par',
-                             gc_out=lut_final + '.fine',
-                             ref_flg=1,
-                             logpath=path_log,
-                             outdir=tmpdir,
-                             shellscript=shellscript)
-            # Reproduce pixel area estimate
-            pixel_area_wrap(master=image, namespace=n, lut=lut_final + '.fine',
-                            path_log=path_log, outdir=tmpdir, shellscript=shellscript)
-            lut_final = lut_final + '.fine'
-        ######################################################################
-        # radiometric terrain correction and backward geocoding ##############
-        ######################################################################
         lat.product(data_1=image,
                     data_2=n.pix_ratio,
                     product=image + '_gamma0-rtc',
-                    width=master_par.range_samples,
+                    width=reference_par.range_samples,
                     bx=1,
                     by=1,
                     logpath=path_log,
                     outdir=tmpdir,
                     shellscript=shellscript)
-        par2hdr(master + '.par', image + '_gamma0-rtc.hdr')
+        par2hdr(reference + '.par', image + '_gamma0-rtc.hdr')
         diff.geocode_back(data_in=image + '_gamma0-rtc',
-                          width_in=master_par.range_samples,
+                          width_in=reference_par.range_samples,
                           lookup_table=lut_final,
                           data_out=image + '_gamma0-rtc_geo',
                           width_out=sim_width,
@@ -942,8 +943,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                 width = sim_width
                 refpar = n.dem_seg_geo + '.par'
             else:
-                width = master_par.range_samples
-                refpar = master + '.par'
+                width = reference_par.range_samples
+                refpar = reference + '.par'
             lat.linear_to_dB(data_in=data_in,
                              data_out=data_in + '_db',
                              width=width,
@@ -986,7 +987,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             if key in pix_geo:
                 fname = n.get(key)
                 diff.geocode_back(data_in=fname.replace('_geo', ''),
-                                  width_in=master_par.range_samples,
+                                  width_in=reference_par.range_samples,
                                   lookup_table=lut_final,
                                   data_out=fname,
                                   width_out=sim_width,
