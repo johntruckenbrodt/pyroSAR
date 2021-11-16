@@ -504,6 +504,7 @@ def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpa
     
     target = directory if directory is not None else id.scene
     parfiles = finder(target, ['*.par'])
+    parfiles = [x for x in parfiles if ISPPar(x).filetype == 'isp']
     # read parameter file entries into object
     with ISPPar(parfiles[0]) as par:
         # extract acquisition time stamp
