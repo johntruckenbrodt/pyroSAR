@@ -475,5 +475,5 @@ def do_execute(par, ids, exist_ok):
     bool
         execute the command because (a) not all output files exist or (b) existing files are not allowed
     """
-    all_exist = all([os.path.isfile(par[x]) for x in ids])
+    all_exist = all([os.path.isfile(par[x]) for x in ids if par[x] != '-'])
     return (exist_ok and not all_exist) or not exist_ok
