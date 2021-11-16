@@ -850,12 +850,11 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
             par2hdr(n.dem_seg_geo + '.par', n.get(item) + '.hdr', mods)
     
     sim_width = ISPPar(n.dem_seg_geo + '.par').width
-    
     ######################################################################
     # RTC reference area computation #####################################
     ######################################################################
     log.info('computing pixel area')
-    pixel_area_wrap(master=reference, namespace=n, lut=n.lut_init,
+    pixel_area_wrap(image=reference, namespace=n, lut=n.lut_init,
                     path_log=path_log, outdir=tmpdir, shellscript=shellscript)
     
     ######################################################################
@@ -911,7 +910,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                          outdir=tmpdir,
                          shellscript=shellscript)
         # Reproduce pixel area estimate
-        pixel_area_wrap(master=reference, namespace=n, lut=lut_final + '.fine',
+        pixel_area_wrap(image=reference, namespace=n, lut=lut_final + '.fine',
                         path_log=path_log, outdir=tmpdir, shellscript=shellscript)
         lut_final = lut_final + '.fine'
     ######################################################################
@@ -1250,32 +1249,32 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
     os.remove(tab_out)
 
 
-def pixel_area_wrap(master, namespace, lut, path_log, outdir, shellscript):
+def pixel_area_wrap(image, namespace, lut, path_log, outdir, shellscript):
     """
     helper function for computing pixel_area files in function geocode.
     
     Parameters
     ----------
-    master: str
-        the master SAR scene
+    image: str
+        the reference SAR image
     namespace: pyroSAR.gamma.auxil.Namespace
         an object collecting all output file names
     lut: str
-        the name of the lookpu table
+        the name of the lookup table
     path_log: str
         a directory to write command logfiles to
     outdir: str
         the directory to execute the command in
     shellscript: str
-        a file to write the Gamma commands to in shell format
+        a file to write the GAMMA commands to in shell format
 
     Returns
     -------
 
     """
-    master_par = ISPPar(master + '.par')
+    image_par = ISPPar(image + '.par')
     
-    pixel_area_args = {'MLI_par': master + '.par',
+    pixel_area_args = {'MLI_par': image + '.par',
                        'DEM_par': namespace.dem_seg_geo + '.par',
                        'DEM': namespace.dem_seg_geo,
                        'lookup_table': lut,
@@ -1287,10 +1286,10 @@ def pixel_area_wrap(master, namespace, lut, path_log, outdir, shellscript):
                        'outdir': outdir,
                        'shellscript': shellscript}
     
-    radcal_mli_args = {'MLI': master,
-                       'MLI_par': master + '.par',
+    radcal_mli_args = {'MLI': image,
+                       'MLI_par': image + '.par',
                        'OFF_par': '-',
-                       'CMLI': master + '_cal',
+                       'CMLI': image + '_cal',
                        'refarea_flag': 1,  # calculate sigma0, scale area by sin(inc_ang)/sin(ref_inc_ang)
                        'pix_area': namespace.pix_ellip_sigma0,
                        'logpath': path_log,
@@ -1306,7 +1305,7 @@ def pixel_area_wrap(master, namespace, lut, path_log, outdir, shellscript):
         
         if namespace.isappreciated('pix_ellip_sigma0'):
             isp.radcal_MLI(**radcal_mli_args)
-            par2hdr(master + '.par', master + '_cal.hdr')
+            par2hdr(image + '.par', image + '_cal.hdr')
     else:
         # sigma0 = MLI * ellip_pix_sigma0 / pix_area_sigma0
         # gamma0 = MLI * ellip_pix_sigma0 / pix_area_gamma0
@@ -1316,13 +1315,13 @@ def pixel_area_wrap(master, namespace, lut, path_log, outdir, shellscript):
         
         # ellipsoid-based pixel area (ellip_pix_sigma0)
         isp.radcal_MLI(**radcal_mli_args)
-        par2hdr(master + '.par', master + '_cal.hdr')
+        par2hdr(image + '.par', image + '_cal.hdr')
         
         # ratio of ellipsoid based pixel area and DEM-facet pixel area
         lat.ratio(d1=namespace.pix_ellip_sigma0,
                   d2=namespace.pix_area_gamma0,
                   ratio=namespace.pix_ratio,
-                  width=master_par.range_samples,
+                  width=image_par.range_samples,
                   bx=1,
                   by=1,
                   logpath=path_log,
@@ -1333,7 +1332,7 @@ def pixel_area_wrap(master, namespace, lut, path_log, outdir, shellscript):
         lat.ratio(d1=namespace.pix_area_gamma0,
                   d2=namespace.pix_area_sigma0,
                   ratio=namespace.gs_ratio,
-                  width=master_par.range_samples,
+                  width=image_par.range_samples,
                   bx=1,
                   by=1,
                   logpath=path_log,
@@ -1343,4 +1342,4 @@ def pixel_area_wrap(master, namespace, lut, path_log, outdir, shellscript):
     for item in ['pix_area_sigma0', 'pix_area_gamma0',
                  'pix_ratio', 'pix_ellip_sigma0', 'gs_ratio']:
         if namespace.isappreciated(item):
-            par2hdr(master + '.par', namespace[item] + '.hdr')
+            par2hdr(image + '.par', namespace[item] + '.hdr')
