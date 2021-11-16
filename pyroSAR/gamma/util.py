@@ -723,10 +723,12 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     log.info('converting scene to GAMMA format')
     gamma_bnr = True if removeS1BorderNoiseMethod == 'gamma' else False
+    images = []
     for scene in scenes:
-        convert2gamma(scene, directory=tmpdir, logpath=path_log, outdir=tmpdir,
-                      basename_extensions=basename_extensions, shellscript=shellscript,
-                      S1_bnr=gamma_bnr)
+        files = convert2gamma(scene, directory=tmpdir, logpath=path_log, outdir=tmpdir,
+                              basename_extensions=basename_extensions, shellscript=shellscript,
+                              S1_bnr=gamma_bnr, return_fnames=True)
+        images.extend(files)
     
     for scene in scenes:
         if scene.sensor in ['S1A', 'S1B']:
@@ -743,14 +745,14 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                 return
     
     log.info('calibrating')
+    images_cal = []
     for scene in scenes:
-        calibrate(id=scene, directory=tmpdir, logpath=path_log, outdir=tmpdir, shellscript=shellscript)
-    
-    images = []
-    for scene in scenes:
-        img = [x for x in scene.getGammaImages(tmpdir) if
-               x.endswith('_grd') or x.endswith('_slc_cal') or x.endswith('_mli_cal')]
-        images.extend(img)
+        files = calibrate(id=scene, directory=tmpdir, return_fnames=True,
+                          logpath=path_log, outdir=tmpdir, shellscript=shellscript)
+        if files is not None:
+            images_cal.extend(files)
+    if len(images_cal) > 0:
+        images = images_cal
     
     if len(scenes) > 1:
         images_new = []
@@ -789,7 +791,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     # appreciated files will be written
     n = Namespace(tmpdir, scene.outname_base(extensions=basename_extensions))
     n.appreciate(['dem_seg_geo', 'lut_init', 'inc_geo', 'ls_map_geo'])
-
+    
     pix_geo = []
     if export_extra is not None:
         n.appreciate(export_extra)
