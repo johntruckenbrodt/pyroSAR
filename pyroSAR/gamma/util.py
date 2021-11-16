@@ -817,7 +817,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     ######################################################################
     log.info('creating DEM products')
     gc_map_wrap(image=reference, namespace=n, dem=dem, targetres=targetres, exist_ok=exist_ok,
-                path_log=path_log, outdir=tmpdir, shellscript=shellscript)
+                logpath=path_log, outdir=tmpdir, shellscript=shellscript)
     
     sim_width = ISPPar(n.dem_seg_geo + '.par').width
     ######################################################################
@@ -825,7 +825,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     ######################################################################
     log.info('computing pixel area')
     pixel_area_wrap(image=reference, namespace=n, lut=n.lut_init,
-                    path_log=path_log, outdir=tmpdir, shellscript=shellscript)
+                    logpath=path_log, outdir=tmpdir, shellscript=shellscript)
     
     ######################################################################
     # lookup table Refinement ############################################
@@ -881,7 +881,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
                          shellscript=shellscript)
         # Reproduce pixel area estimate
         pixel_area_wrap(image=reference, namespace=n, lut=lut_final + '.fine',
-                        path_log=path_log, outdir=tmpdir, shellscript=shellscript)
+                        logpath=path_log, outdir=tmpdir, shellscript=shellscript)
         lut_final = lut_final + '.fine'
     ######################################################################
     # radiometric terrain correction and backward geocoding ##############
@@ -1219,7 +1219,7 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
     os.remove(tab_out)
 
 
-def pixel_area_wrap(image, namespace, lut, path_log, outdir, shellscript):
+def pixel_area_wrap(image, namespace, lut, logpath=None, outdir=None, shellscript=None):
     """
     helper function for computing pixel_area files in function geocode.
     
@@ -1231,7 +1231,7 @@ def pixel_area_wrap(image, namespace, lut, path_log, outdir, shellscript):
         an object collecting all output file names
     lut: str
         the name of the lookup table
-    path_log: str
+    logpath: str
         a directory to write command logfiles to
     outdir: str
         the directory to execute the command in
@@ -1252,7 +1252,7 @@ def pixel_area_wrap(image, namespace, lut, path_log, outdir, shellscript):
                        'inc_map': namespace.inc_geo,
                        'pix_sigma0': namespace.pix_area_sigma0,
                        'pix_gamma0': namespace.pix_area_gamma0,
-                       'logpath': path_log,
+                       'logpath': logpath,
                        'outdir': outdir,
                        'shellscript': shellscript}
     
@@ -1262,7 +1262,7 @@ def pixel_area_wrap(image, namespace, lut, path_log, outdir, shellscript):
                        'CMLI': image + '_cal',
                        'refarea_flag': 1,  # calculate sigma0, scale area by sin(inc_ang)/sin(ref_inc_ang)
                        'pix_area': namespace.pix_ellip_sigma0,
-                       'logpath': path_log,
+                       'logpath': logpath,
                        'outdir': outdir,
                        'shellscript': shellscript}
     
@@ -1294,7 +1294,7 @@ def pixel_area_wrap(image, namespace, lut, path_log, outdir, shellscript):
                   width=image_par.range_samples,
                   bx=1,
                   by=1,
-                  logpath=path_log,
+                  logpath=logpath,
                   outdir=outdir,
                   shellscript=shellscript)
     
@@ -1305,7 +1305,7 @@ def pixel_area_wrap(image, namespace, lut, path_log, outdir, shellscript):
                   width=image_par.range_samples,
                   bx=1,
                   by=1,
-                  logpath=path_log,
+                  logpath=logpath,
                   outdir=outdir,
                   shellscript=shellscript)
     
@@ -1315,7 +1315,7 @@ def pixel_area_wrap(image, namespace, lut, path_log, outdir, shellscript):
             par2hdr(image + '.par', namespace[item] + '.hdr')
 
 
-def gc_map_wrap(image, namespace, dem, targetres, exist_ok=False, path_log=None, outdir=None, shellscript=None):
+def gc_map_wrap(image, namespace, dem, targetres, exist_ok=False, logpath=None, outdir=None, shellscript=None):
     """
     helper function for computing DEM products in function geocode.
 
@@ -1327,7 +1327,7 @@ def gc_map_wrap(image, namespace, dem, targetres, exist_ok=False, path_log=None,
         an object collecting all output file names
     dem: str
         the digital elevation model
-    path_log: str
+    logpath: str
         a directory to write command logfiles to
     outdir: str
         the directory to execute the command in
@@ -1358,7 +1358,7 @@ def gc_map_wrap(image, namespace, dem, targetres, exist_ok=False, path_log=None,
                    'ls_map': namespace.ls_map_geo,
                    'frame': 8,
                    'ls_mode': 2,
-                   'logpath': path_log,
+                   'logpath': logpath,
                    'shellscript': shellscript,
                    'outdir': outdir}
     out_id = ['DEM_seg_par', 'DEM_seg', 'lookup_table', 'sim_sar',
