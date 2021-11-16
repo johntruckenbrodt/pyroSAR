@@ -675,6 +675,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     # - scene unpacking
     # - conversion to GAMMA format
     # - multilooking
+    # - DEM product generation
     exist_ok = False
     
     scenes = scene if isinstance(scene, list) else [scene]
@@ -815,7 +816,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     # DEM product generation #############################################
     ######################################################################
     log.info('creating DEM products')
-    gc_map_wrap(image=reference, namespace=n, dem=dem, targetres=targetres,
+    gc_map_wrap(image=reference, namespace=n, dem=dem, targetres=targetres, exist_ok=exist_ok,
                 path_log=path_log, outdir=tmpdir, shellscript=shellscript)
     
     sim_width = ISPPar(n.dem_seg_geo + '.par').width
@@ -1314,7 +1315,7 @@ def pixel_area_wrap(image, namespace, lut, path_log, outdir, shellscript):
             par2hdr(image + '.par', namespace[item] + '.hdr')
 
 
-def gc_map_wrap(image, namespace, dem, targetres, path_log, outdir, shellscript):
+def gc_map_wrap(image, namespace, dem, targetres, exist_ok=False, path_log=None, outdir=None, shellscript=None):
     """
     helper function for computing DEM products in function geocode.
 
@@ -1360,14 +1361,18 @@ def gc_map_wrap(image, namespace, dem, targetres, path_log, outdir, shellscript)
                    'logpath': path_log,
                    'shellscript': shellscript,
                    'outdir': outdir}
+    out_id = ['DEM_seg_par', 'DEM_seg', 'lookup_table', 'sim_sar',
+              'u', 'v', 'inc', 'psi', 'pix', 'ls_map']
     
     if image_par.image_geometry == 'GROUND_RANGE':
         gc_map_args.update({'GRD_par': image + '.par'})
-        diff.gc_map_grd(**gc_map_args)
+        if do_execute(gc_map_args, out_id, exist_ok):
+            diff.gc_map_grd(**gc_map_args)
     else:
         gc_map_args.update({'MLI_par': image + '.par',
                             'OFF_par': '-'})
-        diff.gc_map(**gc_map_args)
+        if do_execute(gc_map_args, out_id, exist_ok):
+            diff.gc_map(**gc_map_args)
     
     for item in ['dem_seg_geo', 'sim_sar_geo', 'u_geo', 'v_geo',
                  'psi_geo', 'pix_geo', 'inc_geo', 'ls_map_geo']:
