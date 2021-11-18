@@ -1365,6 +1365,16 @@ def gc_map_wrap(image, namespace, dem, targetres, exist_ok=False, logpath=None, 
     out_id = ['DEM_seg_par', 'DEM_seg', 'lookup_table', 'sim_sar',
               'u', 'v', 'inc', 'psi', 'pix', 'ls_map']
     
+    # remove all output files to make sure they are replaced and not updated
+    if not exist_ok:
+        for id in out_id:
+            base = gc_map_args[id]
+            if base != '-':
+                for suffix in ['', '.par', '.hdr']:
+                    fname = base + suffix
+                    if os.path.isfile(fname):
+                        os.remove(fname)
+    
     if image_par.image_geometry == 'GROUND_RANGE':
         gc_map_args.update({'GRD_par': image + '.par'})
         if do_execute(gc_map_args, out_id, exist_ok):
@@ -1375,6 +1385,7 @@ def gc_map_wrap(image, namespace, dem, targetres, exist_ok=False, logpath=None, 
         if do_execute(gc_map_args, out_id, exist_ok):
             diff.gc_map(**gc_map_args)
     
+    # create ENVI header files for all created images
     for item in ['dem_seg_geo', 'sim_sar_geo', 'u_geo', 'v_geo',
                  'psi_geo', 'pix_geo', 'inc_geo', 'ls_map_geo']:
         if namespace.isappreciated(item):
