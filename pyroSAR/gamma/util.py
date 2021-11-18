@@ -533,7 +533,7 @@ def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpa
                         shellscript=shellscript)
 
 
-def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geoback=1,
+def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=1,
             nodata=(0, -99), osvdir=None, allow_RES_OSV=False,
             cleanup=True, export_extra=None, basename_extensions=None,
             removeS1BorderNoiseMethod='gamma', refine_lut=False):
@@ -551,8 +551,8 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         a temporary directory for writing intermediate files
     outdir: str
         the directory for the final GeoTIFF output files
-    targetres: int
-        the target resolution in meters
+    spacing: int
+        the target pixel spacing in meters
     scaling: {'linear', 'db'} or list
         the value scaling of the backscatter values; either 'linear', 'db' or a list of both, i.e. ['linear', 'db']
     func_geoback: {0, 1, 2, 3, 4, 5, 6, 7}
@@ -661,7 +661,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     
     >>> from pyroSAR.gamma import geocode
     >>> filename = 'S1A_IW_GRDH_1SDV_20180829T170656_20180829T170721_023464_028DE0_F7BD.zip'
-    >>> geocode(scene=filename, dem='demfile', outdir='outdir', targetres=20, scaling='db',
+    >>> geocode(scene=filename, dem='demfile', outdir='outdir', spacing=20, scaling='db',
     >>>         export_extra=['dem_seg_geo', 'inc_geo', 'ls_map_geo'])
     
     .. figure:: figures/gamma_geocode.svg
@@ -789,7 +789,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         for group in groups:
             out = group[0].replace('IW1', 'IW_') + '_mli'
             infile = group[0] if len(group) == 1 else group
-            multilook(infile=infile, outfile=out, targetres=targetres, exist_ok=exist_ok,
+            multilook(infile=infile, outfile=out, spacing=spacing, exist_ok=exist_ok,
                       logpath=path_log, outdir=tmpdir, shellscript=shellscript)
             images.append(out)
     products = list(images)
@@ -817,7 +817,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
     # DEM product generation #############################################
     ######################################################################
     log.info('creating DEM products')
-    gc_map_wrap(image=reference, namespace=n, dem=dem, targetres=targetres, exist_ok=exist_ok,
+    gc_map_wrap(image=reference, namespace=n, dem=dem, spacing=spacing, exist_ok=exist_ok,
                 logpath=path_log, outdir=tmpdir, shellscript=shellscript)
     
     sim_width = ISPPar(n.dem_seg_geo + '.par').width
@@ -997,7 +997,7 @@ def geocode(scene, dem, tmpdir, outdir, targetres, scaling='linear', func_geobac
         shutil.rmtree(tmpdir)
 
 
-def ovs(parfile, targetres):
+def ovs(parfile, spacing):
     """
     compute DEM oversampling factors for a target resolution in meters
 
@@ -1005,8 +1005,8 @@ def ovs(parfile, targetres):
     ----------
     parfile: str
         a GAMMA DEM parameter file
-    targetres: int or float
-        the target resolution in meters
+    spacing: int or float
+        the target pixel spacing in meters
     
     Returns
     -------
@@ -1032,12 +1032,12 @@ def ovs(parfile, targetres):
         post_east = haversine(lat, lon, lat, lon + res_lon)
     
     # compute resampling factors for the DEM
-    ovs_lat = post_north / targetres
-    ovs_lon = post_east / targetres
+    ovs_lat = post_north / spacing
+    ovs_lon = post_east / spacing
     return ovs_lat, ovs_lon
 
 
-def multilook(infile, outfile, targetres, exist_ok=False, logpath=None, outdir=None, shellscript=None):
+def multilook(infile, outfile, spacing, exist_ok=False, logpath=None, outdir=None, shellscript=None):
     """
     Multilooking of SLC and MLI images.
 
@@ -1059,8 +1059,8 @@ def multilook(infile, outfile, targetres, exist_ok=False, logpath=None, outdir=N
           <outfile>_slc-tab.txt will be created, which is passed to the GAMMA command ``multi_look_ScanSAR``
     outfile: str
         the name of the output GAMMA MLI file
-    targetres: int
-        the target resolution in ground range
+    spacing: int
+        the target pixel spacing in ground range
     exist_ok: bool
         allow existing output files and do not create new ones?
     logpath: str or None
@@ -1097,8 +1097,8 @@ def multilook(infile, outfile, targetres, exist_ok=False, logpath=None, outdir=N
     
     rlks, azlks = multilook_factors(sp_rg=range_pixel_spacing,
                                     sp_az=azimuth_pixel_spacing,
-                                    tr_rg=targetres,
-                                    tr_az=targetres,
+                                    tr_rg=spacing,
+                                    tr_az=spacing,
                                     geometry=image_geometry,
                                     incidence=incidence_angle)
     
@@ -1316,7 +1316,7 @@ def pixel_area_wrap(image, namespace, lut, logpath=None, outdir=None, shellscrip
             par2hdr(image + '.par', namespace[item] + '.hdr')
 
 
-def gc_map_wrap(image, namespace, dem, targetres, exist_ok=False, logpath=None, outdir=None, shellscript=None):
+def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, outdir=None, shellscript=None):
     """
     helper function for computing DEM products in function geocode.
 
@@ -1328,6 +1328,8 @@ def gc_map_wrap(image, namespace, dem, targetres, exist_ok=False, logpath=None, 
         an object collecting all output file names
     dem: str
         the digital elevation model
+    spacing: int or float
+        the target pixel spacing in meters
     logpath: str
         a directory to write command logfiles to
     outdir: str
@@ -1339,7 +1341,8 @@ def gc_map_wrap(image, namespace, dem, targetres, exist_ok=False, logpath=None, 
     -------
 
     """
-    ovs_lat, ovs_lon = ovs(dem + '.par', targetres)
+    # compute DEM oversampling factors; will be 1 for range and azimuth if the DEM spacing matches the target spacing
+    ovs_lat, ovs_lon = ovs(dem + '.par', spacing)
     
     image_par = ISPPar(image + '.par')
     
