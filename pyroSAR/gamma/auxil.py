@@ -53,12 +53,12 @@ class ISPPar(object):
     
     Attributes
     ----------
-    keys : list
+    keys: list
         the names of all parameters
     """
     
     _re_kv_pair = re.compile(r'^(\w+):\s*(.+)\s*')
-    _re_float_literal = re.compile(r'^[+-]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[Ee][+-]?\d+)?')
+    _re_float_literal = re.compile(r'^[+-]?(?:(\d*\.\d+)|(\d+\.?))(?:[Ee][+-]?\d+)?')
     
     def __init__(self, filename):
         """Parses an ISP parameter file from disk.
@@ -71,10 +71,9 @@ class ISPPar(object):
         else:
             par_file = filename
         
-        self.keys = []
+        self.keys = ['filetype']
         
         try:
-            par_file.readline()  # Skip header line
             content = par_file.read().split('\n')
         except UnicodeDecodeError:
             par_file = codecs.open(filename, 'r', encoding='utf-8', errors='ignore')
@@ -82,38 +81,45 @@ class ISPPar(object):
             printable = set(string.printable)
             content = filter(lambda x: x in printable, content)
             content = ''.join(list(content)).split('\n')
-        try:
-            for line in content:
-                match = ISPPar._re_kv_pair.match(line)
-                if not match:
-                    continue  # Skip malformed lines with no key-value pairs
-                key = match.group(1)
-                items = match.group(2).split()
-                if len(items) == 0:
-                    value = None
-                elif len(items) == 1:
-                    value = parse_literal(items[0])
-                else:
-                    if not ISPPar._re_float_literal.match(items[0]):
-                        # Value is a string literal containing whitespace characters
-                        value = match.group(2)
-                    else:
-                        # Evaluate each item and stop at the first non-float literal
-                        value = []
-                        for i in items:
-                            match = ISPPar._re_float_literal.match(i)
-                            if match:
-                                value.append(parse_literal(match.group()))
-                            else:
-                                # If the first float literal is immediately followed by a non-float literal handle the
-                                # first one as singular value, e.g. in '20.0970 dB'
-                                if len(value) == 1:
-                                    value = value[0]
-                                break
-                self.keys.append(key)
-                setattr(self, key, value)
         finally:
             par_file.close()
+        
+        if 'Image Parameter File' in content[0]:
+            setattr(self, 'filetype', 'isp')
+        elif 'DEM/MAP parameter file' in content[0]:
+            setattr(self, 'filetype', 'dem')
+        else:
+            setattr(self, 'filetype', 'unknown')
+        
+        for line in content:
+            match = ISPPar._re_kv_pair.match(line)
+            if not match:
+                continue  # Skip malformed lines with no key-value pairs
+            key = match.group(1)
+            items = match.group(2).split()
+            if len(items) == 0:
+                value = None
+            elif len(items) == 1:
+                value = parse_literal(items[0])
+            else:
+                if not ISPPar._re_float_literal.match(items[0]):
+                    # Value is a string literal containing whitespace characters
+                    value = match.group(2)
+                else:
+                    # Evaluate each item and stop at the first non-float literal
+                    value = []
+                    for i in items:
+                        match = ISPPar._re_float_literal.match(i)
+                        if match:
+                            value.append(parse_literal(match.group()))
+                        else:
+                            # If the first float literal is immediately followed by a non-float literal handle the
+                            # first one as singular value, e.g. in '20.0970 dB'
+                            if len(value) == 1:
+                                value = value[0]
+                            break
+            self.keys.append(key)
+            setattr(self, key, value)
 
         if hasattr(self, 'date'):
             try:
@@ -357,15 +363,22 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
 
 
 class Spacing(object):
-    def __init__(self, par, targetres='automatic'):
-        """
-        compute ground multilooking factors and pixel spacings from an ISPPar object for a defined target resolution
-        """
+    """
+    compute multilooking factors and pixel spacings from an ISPPar object for a defined ground range target pixel spacing
+    
+    Parameters
+    ----------
+    par: str or ISPPar
+        the ISP parameter file
+    spacing: int or float
+        the target pixel spacing in ground range
+    """
+    def __init__(self, par, spacing='automatic'):
         # compute ground range pixel spacing
         par = par if isinstance(par, ISPPar) else ISPPar(par)
         self.groundRangePS = par.range_pixel_spacing / (math.sin(math.radians(par.incidence_angle)))
         # compute initial multilooking factors
-        if targetres == 'automatic':
+        if spacing == 'automatic':
             if self.groundRangePS > par.azimuth_pixel_spacing:
                 ratio = self.groundRangePS / par.azimuth_pixel_spacing
                 self.rlks = 1
@@ -375,8 +388,8 @@ class Spacing(object):
                 self.rlks = int(round(ratio))
                 self.azlks = 1
         else:
-            self.rlks = int(round(float(targetres) / self.groundRangePS))
-            self.azlks = int(round(float(targetres) / par.azimuth_pixel_spacing))
+            self.rlks = int(round(float(spacing) / self.groundRangePS))
+            self.azlks = int(round(float(spacing) / par.azimuth_pixel_spacing))
 
 
 class Namespace(object):
@@ -475,5 +488,5 @@ def do_execute(par, ids, exist_ok):
     bool
         execute the command because (a) not all output files exist or (b) existing files are not allowed
     """
-    all_exist = all([os.path.isfile(par[x]) for x in ids])
+    all_exist = all([os.path.isfile(par[x]) for x in ids if par[x] != '-'])
     return (exist_ok and not all_exist) or not exist_ok

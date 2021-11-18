@@ -82,14 +82,22 @@ def parse_node(name, use_existing=True):
     >>> print(tnr.parameters)
     {'selectedPolarisations': None, 'removeThermalNoise': 'true', 'reIntroduceThermalNoise': 'false'}
     """
+    snap = ExamineSnap()
+    version = snap.get_version('s1tbx')['version']
     name = name if name.endswith('.xml') else name + '.xml'
     operator = os.path.splitext(name)[0]
-    abspath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')
+    nodepath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')
+    abspath = os.path.join(nodepath, version)
     os.makedirs(abspath, exist_ok=True)
     absname = os.path.join(abspath, name)
     
+    # remove all old XML files that were not stored in a version subdirectory
+    deprecated = finder(nodepath, ['*.xml'], recursive=False)
+    for item in deprecated:
+        os.remove(item)
+    
     if not os.path.isfile(absname) or not use_existing:
-        gpt = ExamineSnap().gpt
+        gpt = snap.gpt
         
         cmd = [gpt, operator, '-h']
         
@@ -119,14 +127,13 @@ def parse_node(name, use_existing=True):
             child.attrib['refid'] = 'Read'
             child.text = None
         if operator == 'BandMaths':
-            tree.find('.//parameters').set('class', 'com.bc.ceres.binding.dom.XppDomElement')
             tband = tree.find('.//targetBand')
             for item in ['spectralWavelength', 'spectralBandwidth',
                          'scalingOffset', 'scalingFactor',
                          'validExpression', 'spectralBandIndex']:
                 el = tband.find('.//{}'.format(item))
                 tband.remove(el)
-        
+        tree.find('.//parameters').set('class', 'com.bc.ceres.binding.dom.XppDomElement')
         node = Node(node)
         
         # read the default values from the parameter documentation
@@ -420,11 +427,18 @@ def writer(xmlfile, outdir, basename_extensions=None):
         src = files[0]
     src_format = writers[0].parameters['formatName']
     suffix = workflow.suffix()
+    rtc = 'Terrain-Flattening' in workflow.operators
     dem_name = workflow.tree.find('.//demName')
-    if dem_name is not None and dem_name.text == 'External DEM':
-        dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
-    else:
-        dem_nodata = 0
+    dem_nodata = None
+    if dem_name is not None:
+        dem_name = dem_name.text
+        if dem_name == 'External DEM':
+            dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
+        else:
+            dem_nodata_lookup = {'SRTM 1Sec HGT': -32768}
+            if dem_name in dem_nodata_lookup.keys():
+                dem_nodata = dem_nodata_lookup[dem_name]
+    
     outname_base = os.path.join(outdir, os.path.basename(src))
     os.makedirs(src, exist_ok=True)
     if src_format == 'ENVI':
@@ -436,12 +450,14 @@ def writer(xmlfile, outdir, basename_extensions=None):
             match = re.search(pattern, item)
             if match:
                 refarea, pol = match.groups()
-                if refarea == 'Gamma0':
-                    correction = 'rtc' if 'TF' in suffix else 'elp'
-                elif refarea == 'Sigma0':
-                    correction = 'elp'
-                else:
-                    raise RuntimeError('unsupported refarea: {}'.format(refarea))
+                correction = 'elp'
+                if rtc:
+                    if refarea == 'Gamma0':
+                        correction = 'rtc'
+                    elif refarea == 'Sigma0':
+                        tf = workflow['Terrain-Flattening']
+                        if tf.parameters['outputSigma0']:
+                            correction = 'rtc'
                 suffix_new = '{0}-{1}'.format(refarea.lower(), correction)
                 if 'dB' in suffix:
                     suffix_new += '_db'
@@ -453,8 +469,13 @@ def writer(xmlfile, outdir, basename_extensions=None):
                     base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
                 if re.search('scatteringArea', base):
                     base = re.sub('scatteringArea_[HV]{2}', 'scatteringArea', base)
+                if re.search('gammaSigmaRatio', base):
+                    base = re.sub('gammaSigmaRatio_[HV]{2}', 'gammaSigmaRatio', base)
                 name_new = outname_base.replace(suffix, '{0}.tif'.format(base))
-            nodata = dem_nodata if re.search('elevation', item) else 0
+            if re.search('elevation', item):
+                nodata = dem_nodata
+            else:
+                nodata = 0
             translateoptions['noData'] = nodata
             gdal_translate(item, name_new, translateoptions)
     else:

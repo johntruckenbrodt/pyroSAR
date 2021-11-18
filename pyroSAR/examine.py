@@ -17,7 +17,7 @@ import shutil
 import platform
 import re
 import warnings
-
+import subprocess as sp
 import pkg_resources
 
 from pyroSAR._dev_config import ConfigHandler
@@ -293,8 +293,7 @@ class ExamineSnap(object):
         else:
             return None
     
-    @staticmethod
-    def get_version(module):
+    def get_version(self, module):
         """
         Read the version and date of different SNAP modules.
         This scans a file 'messages.log', which is re-written every time SNAP is started.
@@ -340,10 +339,20 @@ class ExamineSnap(object):
         
         fname = os.path.join(path, 'var', 'log', 'messages.log')
         
+        if not os.path.isfile(fname):
+            try:
+                # This will start SNAP and immediately stop it because of the invalid argument.
+                # Currently this seems to be the only way to create the messages.log file if it does not exist.
+                sp.check_call([self.path, '--nosplash', '--dummytest', '--console', 'suppress'])
+            except sp.CalledProcessError:
+                pass
+        
         with open(fname, 'r') as m:
             content = m.read()
-            match = re.search(pattern, content)
-            return match.groupdict()
+        match = re.search(pattern, content)
+        if match is None:
+            raise RuntimeError('cannot read version information from {}.\nPlease restart SNAP.'.format(fname))
+        return match.groupdict()
 
 
 class ExamineGamma(object):
