@@ -267,12 +267,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     bandnames['beta0'] = ['Beta0_' + x for x in polarizations]
     bandnames['gamma0'] = ['Gamma0_' + x for x in polarizations]
     bandnames['sigma0'] = ['Sigma0_' + x for x in polarizations]
-    
-    if process_S1_SLC and swaths is not None:
-        swaths_pols = ['_'.join((s, p)) for s in swaths for p in polarizations]
-        bandnames['int'] = ['Intensity_' + x for x in swaths_pols]
-    else:
-        bandnames['int'] = ['Intensity_' + x for x in polarizations]
+    bandnames['int'] = ['Intensity_' + x for x in polarizations]
     ############################################
     ############################################
     # parse base workflow
