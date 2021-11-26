@@ -2,7 +2,7 @@
 Changelog
 #########
 
-0.6 / 2018-11-20
+0.6 | 2018-11-20
 ================
 
 SAR metadata
@@ -51,7 +51,7 @@ Python package integrity
 - add trove classifiers for supported operating systems and MIT license for easier online search
 - exchange http with https for all URLs that support it
 
-0.7 / 2019-01-03
+0.7 | 2019-01-03
 ================
 
 several changes to the functioning of the Gamma command API
@@ -86,7 +86,7 @@ general
 - enable passing `logpath`, `outdir` and `shellscript` to all parsed functions via additional parameters for other
   convenience functions
 
-0.8 / 2019-02-11
+0.8 | 2019-02-11
 ================
 
 Auxiliary Data Handling
@@ -121,7 +121,7 @@ SNAP API
 
   + export temporarily written files (e.g. local incidence angle) via new parameter `export_extra`
 
-0.9 / 2019-06-15
+0.9 | 2019-06-15
 ================
 
 Drivers
@@ -209,7 +209,7 @@ Auxiliary Data Handling
   + download files specific to the Sentinel-1 sensor (S1A/S1B) instead of all matching the acquisition time
   + improved time span search, which occasionally resulted in missing OSV files
 
-0.9.1 / 2019-07-05
+0.9.1 | 2019-07-05
 ==================
 
 Auxiliary Data Handling
@@ -227,7 +227,7 @@ SNAP API
 
 - function :func:`pyroSAR.snap.util.geocode`: fixed typo of parameter `removeS1BorderNoise`
 
-0.10 / 2019-12-06
+0.10 | 2019-12-06
 =================
 
 Drivers
@@ -310,7 +310,7 @@ general
 -------
 - bug fixes and documentation improvements
 
-0.10.1 / 2019-12-12
+0.10.1 | 2019-12-12
 ===================
 
 GAMMA API
@@ -318,7 +318,7 @@ GAMMA API
 
 - :ref:`Command API <gamma-command-api>` compatibility with GAMMA version 20191203
 
-0.11 / 2020-05-29
+0.11 | 2020-05-29
 =================
 
 Drivers
@@ -370,7 +370,7 @@ general
 -------
 - bug fixes, new automated tests, documentation improvements
 
-0.11.1 / 2020-07-17
+0.11.1 | 2020-07-17
 ===================
 
 - bug fixes
@@ -380,7 +380,7 @@ GAMMA API
 
 - :ref:`Command API <gamma-command-api>` compatibility with GAMMA version 20200713
 
-0.12 / 2021-02-19
+0.12 | 2021-02-19
 =================
 
 Drivers
@@ -447,7 +447,7 @@ Auxiliary Data Handling
 
 - function :func:`pyroSAR.auxdata.dem_autoload`: return `None` if a VRT was defined
 
-0.12.1 / 2021-03-09
+0.12.1 | 2021-03-09
 ===================
 
 SNAP API
@@ -466,3 +466,141 @@ Auxiliary Data Handling
 - class :class:`pyroSAR.S1.OSV`:
 
   + download files from https://scihub.copernicus.eu/gnss
+
+0.13 | 2021-09-10
+=================
+
+Drivers
+-------
+
+- new class :class:`pyroSAR.drivers.EORC_PSR`
+- new argument `exist_ok` for ID object unpack methods to enable reuse of already unpacked scenes
+- :meth:`pyroSAR.drivers.SAFE.getOSV`: new argument `url_option` to choose between different download URLs
+- :class:`pyroSAR.drivers.SAFE` align coordinate sorting of attribute `meta['coordinates']` with CRS description
+- :func:`pyroSAR.drivers.identify_many`: disable progressbar by default
+
+GAMMA API
+---------
+
+- adaptations to enable processing of :class:`~pyroSAR.drivers.EORC_PSR` data:
+
+  + :func:`pyroSAR.gamma.calibrate`
+  + :func:`pyroSAR.gamma.convert2gamma`
+  + :func:`pyroSAR.gamma.geocode`
+
+- :func:`pyroSAR.gamma.geocode`:
+
+  + experimental optional refinement of the geocoding lookup table with new argument `refine_lut`
+  + removed arguments `normalization_method`, `func_interp`, `removeS1BorderNoise`, `sarSimCC`
+  + limit radiometric normalization to RTC correction method
+  + simplify and improve computation of RTC contribution area
+  + file suffices `pan` and `norm` have been replaced with `gamma0-rtc`
+  + argument `export_extra` options:
+
+    * removed `pix_geo`
+    * renamed `pix_fine` to `pix_ratio`
+    * added `pix_area_sigma0`, `pix_area_sigma0_geo`, `pix_area_gamma0_geo`, `gs_ratio` , `gs_ratio_geo`, `pix_ratio_geo`
+
+  + use a dedicated temporary directory to unpack the scene and write GAMMA files so that they are separated (the GAMMA
+    files used to be written to the unpacked scene's directory)
+  + enable multiple scenes as input so that they can be mosaiced in SAR geometry before geocoding
+
+- :func:`pyroSAR.gamma.correctOSV`: new argument `directory`
+
+- :func:`pyroSAR.gamma.multilook`: new argument `exist_ok`
+
+- :func:`pyroSAR.gamma.convert2gamma`: new argument `exist_ok`
+
+- function :func:`pyroSAR.gamma.dem.dem_autocreate`:
+
+  + do not apply an extent buffer by default
+  + allow geometry in arbitrary CRS
+
+SNAP API
+--------
+
+- function :func:`pyroSAR.snap.util.geocode`:
+
+  + new `export_extra` option `scatteringArea`
+
+- extended support for `BandMaths` operator
+
+Auxiliary Data Handling
+-----------------------
+
+- method :meth:`pyroSAR.S1.OSV.catch`: new argument `url_option` with two download URLs to choose from
+
+- function :func:`pyroSAR.auxdata.dem_autoload`:
+
+  + added new DEM option `GETASSE30`
+  + align pixels of subsetted VRT with original tiles
+
+- function :func:`pyroSAR.auxdata.dem_create`:
+
+  + new argument `outputBounds`
+
+general
+-------
+- replaced print messages with logging. This made the `verbose` argument that was used by several functions and
+  methods obsolete; affects the following:
+
+  + :func:`pyroSAR.drivers.identify_many`: replaced by argument `pbar`
+  + :meth:`pyroSAR.drivers.Archive.add_tables`: removed
+  + :meth:`pyroSAR.drivers.Archive.drop_table`: removed
+  + :meth:`pyroSAR.drivers.Archive.insert`: replaced by argument `pbar`
+  + :meth:`pyroSAR.drivers.Archive.import_outdated`: removed
+  + :meth:`pyroSAR.drivers.Archive.move`: replaced by argument `pbar`
+  + :meth:`pyroSAR.drivers.Archive.select`: removed
+  + :func:`pyroSAR.snap.auxil.execute`: removed
+
+  See section :doc:`Logging </general/logging>` for details.
+
+0.14.0 | 2021-10-12
+===================
+
+Drivers
+-------
+- raise more appropriate errors (`c430c59 <https://github.com/johntruckenbrodt/pyroSAR/commit/c430c59289016b5fe2e0f3044225dc5166c39e80>`_)
+
+- :func:`pyroSAR.drivers.findfiles`: removed (functionality contained in :meth:`pyroSAR.drivers.ID.findfiles`,
+  now making use of :func:`spatialist.ancillary.finder`)
+
+- :meth:`pyroSAR.drivers.Archive.select`:
+
+  + show progressbar for scene identification if ``pbar=True``
+  + enabled input of :obj:`~datetime.datetime` objects for arguments ``mindate`` and ``maxdate``
+
+- :func:`pyroSAR.drivers.identify_many`: issue a warning when a file cannot be accessed
+  (instead of raising a :obj:`PermissionError`)
+
+GAMMA API
+---------
+- :func:`pyroSAR.gamma.dem.dem_autocreate`: support for new DEM options provided by :func:`pyroSAR.auxdata.dem_autoload`
+
+SNAP API
+--------
+- :func:`pyroSAR.snap.auxil.get_egm96_lookup` removed in favor of new function :func:`pyroSAR.auxdata.get_egm_lookup`
+
+Auxiliary Data Handling
+-----------------------
+- method :meth:`pyroSAR.S1.OSV.retrieve`: thread-safe writing of orbit files
+
+- new function :func:`pyroSAR.auxdata.get_egm_lookup`
+
+- function :func:`pyroSAR.auxdata.dem_create`
+
+  + new geoid option 'EGM2008'
+  + make use of :func:`~pyroSAR.auxdata.get_egm_lookup` for auto-download of EGM lookup files
+  + several bug fixes related to vertical CRS transformation
+  + bug fix for target pixel alignment
+
+- function :func:`pyroSAR.auxdata.dem_autoload`: new DEM options:
+
+  + 'Copernicus 10m EEA DEM'
+  + 'Copernicus 30m Global DEM'
+  + 'Copernicus 90m Global DEM'
+
+general
+-------
+- replaced http URLs with https where applicable
+- improved documentation

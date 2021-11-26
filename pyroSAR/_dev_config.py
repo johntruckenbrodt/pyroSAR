@@ -2,7 +2,7 @@
 ###############################################################################
 # pyroSAR configuration handling
 
-# Copyright (c) 2018-2020, the pyroSAR Developers.
+# Copyright (c) 2018-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -31,7 +31,7 @@ product_pattern = r'(?:.*[/\\]|)' \
                   r'(?:_(?P<extensions>\w*?)|)' \
                   r')_*' \
                   r'(?:(?P<polarization>[HV]{2})_' \
-                  r'(?P<proc_steps>\w*)|)' \
+                  r'(?P<proc_steps>[\w-]*)|)' \
                   r'(?P<filetype>(?:.tif|.nc|))$'
 
 
@@ -117,7 +117,7 @@ LOOKUP = Storage(attributes={'sensor': 'TEXT',
 dem = Storage(ace2='https://step.esa.int/auxdata/dem/ACE2/5M/',
               ace='https://step.esa.int/auxdata/dem/ACE30/',
               srtm3_FTP='xftp.jrc.it',
-              srtm3='http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/SRTM_Data_GeoTiff/',
+              srtm3='https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF',
               srtm1Hgt='https://step.esa.int/auxdata/dem/SRTMGL1/', )
 
 orbit = Storage(doris='https://step.esa.int/auxdata/orbits/Doris/vor',

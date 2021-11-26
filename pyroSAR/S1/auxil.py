@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import requests
+import tempfile
 import zipfile as zf
 from io import BytesIO
 from datetime import datetime, timedelta
@@ -29,6 +30,9 @@ from pyroSAR.examine import ExamineSnap
 import progressbar as pb
 
 from spatialist.ancillary import finder
+
+import logging
+log = logging.getLogger(__name__)
 
 try:
     import argparse
@@ -149,7 +153,7 @@ class OSV(object):
                 os.makedirs(os.path.dirname(target), exist_ok=True)
                 if not os.path.isfile(target):
                     if message:
-                        print('compressing and reorganizing EOF files')
+                        log.info('compressing and reorganizing EOF files')
                         message = False
                     with zf.ZipFile(file=target,
                                     mode='w',
@@ -202,7 +206,7 @@ class OSV(object):
                 stop2 = datetime.strptime(match.group('stop'), '%Y%m%dT%H%M%S')
                 if sensor == match.group('sensor'):
                     if start2 < stop and stop2 > start:
-                        print(url_sub)
+                        log.info(url_sub)
                         files.append({'filename': file,
                                       'href': url_sub + '/' + file,
                                       'auth': None})
@@ -231,7 +235,7 @@ class OSV(object):
                                           sensor=sens,
                                           year=date_search.year,
                                           month=date_search.month)
-                print(url_sub)
+                log.info(url_sub)
                 result = requests.get(url_sub, timeout=self.timeout).text
                 files_sub = list(set(re.findall(self.pattern, result)))
                 if len(files_sub) == 0:
@@ -291,7 +295,7 @@ class OSV(object):
             query_list.append(query_elem)
         query_str = ' '.join(query_list)
         target = '{}/search?q={}&format=json'.format(url, query_str)
-        print(target)
+        log.info(target)
         
         def _parse_gnsssearch_json(search_dict):
             parsed_dict = {}
@@ -375,6 +379,7 @@ class OSV(object):
         ----------
         sensor: str or list
             The S1 mission(s):
+            
              - 'S1A'
              - 'S1B'
              - ['S1A', 'S1B']
@@ -385,7 +390,8 @@ class OSV(object):
         stop: str
             the date to stop searching for files in format YYYYmmddTHHMMSS
         url_option: int
-            the URL to query for scenes
+            the URL to query for OSV files
+            
              - 1: https://scihub.copernicus.eu/gnss
              - 2: https://step.esa.int/auxdata/orbits/Sentinel-1
 
@@ -395,7 +401,7 @@ class OSV(object):
             the product dictionary of the remote OSV files, with href
         """
         
-        print('searching for new {} files'.format(osvtype))
+        log.info('searching for new {} files'.format(osvtype))
         
         if start is not None:
             start = datetime.strptime(start, '%Y%m%dT%H%M%S')
@@ -417,7 +423,7 @@ class OSV(object):
         if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
             items = [x for x in items
                      if self.date(x['filename'], 'start') > self.maxdate('POE', 'stop')]
-        print('found {} results'.format(len(items)))
+        log.info('found {} results'.format(len(items)))
         
         return items
     
@@ -446,7 +452,7 @@ class OSV(object):
         maxdate_poe = self.maxdate('POE', 'stop')
         if maxdate_poe is not None:
             deprecated = [x for x in self.getLocals('RES') if self.date(x, 'stop') < maxdate_poe]
-            print('deleting {} RES file{}'.format(len(deprecated), '' if len(deprecated) == 1 else 's'))
+            log.info('deleting {} RES file{}'.format(len(deprecated), '' if len(deprecated) == 1 else 's'))
             for item in deprecated:
                 os.remove(item)
     
@@ -518,6 +524,7 @@ class OSV(object):
         ----------
         sensor: str
             The S1 mission:
+            
              - 'S1A'
              - 'S1B'
         timestamp: str
@@ -578,26 +585,37 @@ class OSV(object):
                 downloads.append((remote, local, basename, auth))
         if len(downloads) == 0:
             return
-        print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
+        log.info('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
         if pbar:
             progress = pb.ProgressBar(max_value=len(downloads))
         i = 0
         for remote, local, basename, auth in downloads:
             infile = requests.get(remote, auth=auth, timeout=self.timeout)
-            if remote.endswith('.zip'):
-                with zf.ZipFile(file=BytesIO(infile.content)) as tmp:
-                    members = tmp.namelist()
-                    target = [x for x in members if re.search(basename, x)][0]
-                    with zf.ZipFile(local, 'w') as outfile:
-                        outfile.write(filename=tmp.extract(target),
-                                      arcname=basename)
-            else:
-                with zf.ZipFile(file=local,
-                                mode='w',
-                                compression=zf.ZIP_DEFLATED) \
-                        as outfile:
-                    outfile.writestr(zinfo_or_arcname=basename,
-                                     data=infile.content)
+
+            # use a tempfile to allow atomic writes in the case of
+            # parallel executions dependent on the same orbit files
+            fd, tmp_path = tempfile.mkstemp(prefix=os.path.basename(local), dir=os.path.dirname(local))
+            os.close(fd)
+            try:
+                if remote.endswith('.zip'):
+                    with zf.ZipFile(file=BytesIO(infile.content)) as tmp:
+                        members = tmp.namelist()
+                        target = [x for x in members if re.search(basename, x)][0]
+                        with zf.ZipFile(tmp_path, 'w') as outfile:
+                            outfile.write(filename=tmp.extract(target),
+                                          arcname=basename)
+                else:
+                    with zf.ZipFile(file=tmp_path,
+                                    mode='w',
+                                    compression=zf.ZIP_DEFLATED) \
+                            as outfile:
+                        outfile.writestr(zinfo_or_arcname=basename,
+                                         data=infile.content)
+                os.rename(tmp_path, local)
+            except Exception as e:
+                os.unlink(tmp_path)
+                raise
+
             infile.close()
             if pbar:
                 i += 1
@@ -653,19 +671,11 @@ class OSV(object):
 def removeGRDBorderNoise(scene, method='pyroSAR'):
     """
     Mask out Sentinel-1 image border noise. This function implements the method for removing GRD border noise as
-    recommended by ESA and implemented in SNAP and additionally adds further refinement of the result using an image
+    published by ESA :cite:`Miranda2018` and implemented in SNAP and additionally adds further refinement of the result using an image
     border line simplification approach. In this approach the border between valid and invalid pixels is first
-    simplified using the method by Visvalingam and Whyatt references below. The line segments of the new border are then
-    shifted until all pixels considered invalid before the simplification are again on one side of the line.
-    See image below for further clarification.
-
-    References:
-        - 'Masking "No-value" Pixels on GRD Products generated by the Sentinel-1 ESA IPF'
-          (issue 2.1 Jan 29 2018); available online under
-          https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/document-library
-        - Visvalingam, M. and Whyatt J.D. (1993):
-          "Line Generalisation by Repeated Elimination of Points",
-          Cartographic J., 30 (1), 46 - 51
+    simplified using the poly-line vertex reduction method by Visvalingam and Whyatt :cite:`Visvalingam1993`.
+    The line segments of the new border are then shifted until all pixels considered invalid before the simplification
+    are again on one side of the line. See image below for further clarification.
 
     Parameters
     ----------
@@ -673,6 +683,7 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
         the Sentinel-1 scene object
     method: str
         the border noise removal method to be applied; one of the following:
+        
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
 
@@ -683,8 +694,8 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
         Demonstration of the border noise removal for a vertical left image border. The area under the respective lines
         covers pixels considered valid, everything above will be masked out. The blue line is the result of the noise
         removal as recommended by ESA, in which a lot of noise is still present. The red line is the over-simplified
-        result using the Visvalingam-Whyatt method of poly-line vertex reduction. The green line is the final result
-        after further correcting the VW-simplified result.
+        result using the Visvalingam-Whyatt method. The green line is the final result after further correcting the
+        VW-simplified result.
 
     """
     if scene.compression is not None:
@@ -697,7 +708,7 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
     
     # compute noise scaling factor
     if scene.meta['IPF_version'] >= 2.9:
-        print('border noise removal not necessary for IPF version {}'.format(scene.meta['IPF_version']))
+        log.info('border noise removal not necessary for IPF version {}'.format(scene.meta['IPF_version']))
         return
     elif scene.meta['IPF_version'] <= 2.5:
         knoise = {'IW': 75088.7, 'EW': 56065.87}[scene.acquisition_mode]
@@ -737,7 +748,7 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
     
     # iterate over the four image subsets
     for subset in subsets:
-        print(subset)
+        log.info(subset)
         xmin, ymin, xmax, ymax = subset
         xdiff = xmax - xmin
         ydiff = ymax - ymin

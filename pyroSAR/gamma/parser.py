@@ -1,5 +1,5 @@
 ###############################################################################
-# parse Gamma command docstrings to Python functions
+# parse GAMMA command docstrings to Python functions
 
 # Copyright (c) 2015-2021, the pyroSAR Developers.
 
@@ -19,10 +19,13 @@ from spatialist.ancillary import finder, which, dissolve
 
 from pyroSAR.examine import ExamineGamma
 
+import logging
+log = logging.getLogger(__name__)
+
 
 def parse_command(command, indent='    '):
     """
-    Parse the help text of a Gamma command to a Python function including a docstring.
+    Parse the help text of a GAMMA command to a Python function including a docstring.
     The docstring is in rst format and can thu be parsed by e.g. sphinx.
     This function is not intended to be used by itself, but rather within function :func:`parse_module`.
 
@@ -74,6 +77,11 @@ def parse_command(command, indent='    '):
                        'atm_mod_2d': [('xref', 'rref'),
                                       ('yref', 'azref')],
                        'atm_mod_2d_pt': [('[sigma_min]', '[sigma_max]')],
+                       'base_calc': [('plt_flg', 'plt_flag'),
+                                     ('pltflg', 'plt_flag')],
+                       'base_init': [('<base>', '<baseline>')],
+                       'base_plot': [('plt_flg', 'plt_flag'),
+                                     ('pltflg', 'plt_flag')],
                        'cc_monitoring': [('...', '<...>')],
                        'cct_sp_pt': [('pcct_sp_pt', 'pcct_sp')],
                        'comb_interfs': [('combi_out', 'combi_int')],
@@ -81,11 +89,7 @@ def parse_command(command, indent='    '):
                                            ('east/lon', 'east_lon'),
                                            ('SLC_par', '<SLC_MLI_par>'),
                                            ('SLC/MLI_par', 'SLC_MLI_par')],
-                       'base_calc': [('plt_flg', 'plt_flag'),
-                                     ('pltflg', 'plt_flag')],
-                       'base_init': [('<base>', '<baseline>')],
-                       'base_plot': [('plt_flg', 'plt_flag'),
-                                     ('pltflg', 'plt_flag')],
+                       'data2geotiff': [('nodata', 'no_data')],
                        'dis2hgt': [('m/cycle', 'm_cycle')],
                        'discc': [('min_corr', 'cmin'),
                                  ('max_corr', 'cmax')],
@@ -231,6 +235,7 @@ def parse_command(command, indent='    '):
                                     ('SLC2Rs_par', 'SLC-2Rs_par')],
                        'SLC_intf_geo2': [('cc        (', 'CC        (')],
                        'SLC_interp_map': [('coffs2_sm', 'coffs_sm')],
+                       'SLC_mosaic_S1_TOPS': [('wflg', 'bflg')],
                        'srtm_mosaic': [('<lon>', '<lon2>')],
                        'SSI_INT_S1': [('<SLC2> <par2>', '<SLC_tab2>')],
                        'texture': [('weights_flag', 'wgt_flag')],
@@ -645,7 +650,6 @@ def parse_module(bindir, outfile):
     for cmd in sorted(finder(bindir, [r'^\w+$'], regex=True), key=lambda s: s.lower()):
         basename = os.path.basename(cmd)
         if basename not in excludes:
-            # print(basename)
             try:
                 fun = parse_command(cmd)
             except RuntimeError as e:
@@ -664,7 +668,7 @@ def parse_module(bindir, outfile):
         with open(outfile, 'a') as out:
             out.write(outstring)
     if len(failed) > 0:
-        print('the following functions could not be parsed:\n{0}\n({1} total)'.format('\n'.join(failed), len(failed)))
+        log.info('the following functions could not be parsed:\n{0}\n({1} total)'.format('\n'.join(failed), len(failed)))
 
 
 def autoparse():
@@ -692,14 +696,14 @@ def autoparse():
     for module in finder(home, ['[A-Z]*'], foldermode=2):
         outfile = os.path.join(target, os.path.basename(module).lower() + '.py')
         if not os.path.isfile(outfile):
-            print('parsing module {} to {}'.format(os.path.basename(module), outfile))
+            log.info('parsing module {} to {}'.format(os.path.basename(module), outfile))
             for submodule in ['bin', 'scripts']:
-                print('-' * 10 + '\n{}'.format(submodule))
+                log.info('-' * 10 + '\n{}'.format(submodule))
                 try:
                     parse_module(os.path.join(module, submodule), outfile)
                 except OSError:
-                    print('..does not exist')
-            print('=' * 20)
+                    log.info('..does not exist')
+            log.info('=' * 20)
     modules = [re.sub(r'\.py', '', os.path.basename(x)) for x in finder(target, [r'[a-z]+\.py$'], regex=True)]
     if len(modules) > 0:
         with open(os.path.join(target, '__init__.py'), 'w') as init:
