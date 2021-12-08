@@ -24,7 +24,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlparse
 
 from pyroSAR.examine import ExamineSnap
-from spatialist import Raster
+from spatialist.raster import Raster, Dtype
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
@@ -192,7 +192,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
 
 def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
-               geoid_convert=False, geoid='EGM96', outputBounds=None):
+               geoid_convert=False, geoid='EGM96', outputBounds=None, dtype=None):
     """
     create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
     
@@ -220,6 +220,9 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
          - 'EGM2008'
     outputBounds: list or None
         output bounds as [xmin, ymin, xmax, ymax] in target SRS
+    dtype: str or None
+        override the data type of the written file; Default None: use same type as source data.
+        Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
     
     Returns
     -------
@@ -240,6 +243,9 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
                      'resampleAlg': resampling_method}
+    
+    if dtype is not None:
+        gdalwarp_args['outputType'] = Dtype(dtype).gdalint
     
     if outputBounds is not None:
         gdalwarp_args['outputBounds'] = outputBounds
