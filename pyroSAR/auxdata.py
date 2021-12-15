@@ -64,12 +64,24 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * url: https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/
           * height reference: EGM2008
 
+        - 'Copernicus 30m Global DEM II'
+        
+          * registration: https://spacedata.copernicus.eu/web/cscda/data-access/registration
+          * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-30-DGED/2021_1
+          * height reference: EGM2008
+        
         - 'Copernicus 90m Global DEM'
      
           * info: https://copernicus-dem-90m.s3.amazonaws.com/readme.html
           * url: https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com/
           * height reference: EGM2008
-          
+        
+        - 'Copernicus 90m Global DEM II'
+        
+          * registration: https://spacedata.copernicus.eu/web/cscda/data-access/registration
+          * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-90-DGED/2021_1
+          * height reference: EGM2008
+        
         - 'GETASSE30'
         
           * info: https://seadas.gsfc.nasa.gov/help-8.1.0/desktop/GETASSE30ElevationModel.html
@@ -119,7 +131,31 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * 'flm': filling mask
           * 'hem': height error mask
           * 'wbm': water body mask
-         
+        
+        - 'Copernicus 30m Global DEM'
+        
+          * 'dem': the actual Digital Elevation Model
+        
+        - 'Copernicus 30m Global DEM II'
+        
+          * 'dem': the actual Digital Elevation Model
+          * 'edm': editing mask
+          * 'flm': filling mask
+          * 'hem': height error mask
+          * 'wbm': water body mask
+        
+        - 'Copernicus 90m Global DEM'
+        
+          * 'dem': the actual Digital Elevation Model
+        
+        - 'Copernicus 90m Global DEM II'
+        
+          * 'dem': the actual Digital Elevation Model
+          * 'edm': editing mask
+          * 'flm': filling mask
+          * 'hem': height error mask
+          * 'wbm': water body mask
+        
         - 'GETASSE30'
         
           * 'dem': the actual Digital Elevation Model
@@ -445,11 +481,33 @@ class DEMHandler:
                                           'vsi': None,
                                           'pattern': {'dem': '*DSM*'}
                                           },
+            'Copernicus 30m Global DEM II': {
+                'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-30-DGED/2021_1',
+                'nodata': -32767.0,
+                'vsi': '/vsitar/',
+                'port': 990,
+                'pattern': {'dem': '*DEM.tif',
+                            'edm': '*EDM.tif',
+                            'flm': '*FLM.tif',
+                            'hem': '*HEM.tif',
+                            'wbm': '*WBM.tif'}
+            },
             'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com',
                                           'nodata': None,
                                           'vsi': None,
                                           'pattern': {'dem': '*DSM*'}
                                           },
+            'Copernicus 90m Global DEM II': {
+                'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-90-DGED/2021_1',
+                'nodata': -32767.0,
+                'vsi': '/vsitar/',
+                'port': 990,
+                'pattern': {'dem': '*DEM.tif',
+                            'edm': '*EDM.tif',
+                            'flm': '*FLM.tif',
+                            'hem': '*HEM.tif',
+                            'wbm': '*WBM.tif'}
+            },
             'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
                           'nodata': None,
                           'vsi': '/vsizip/',
@@ -516,11 +574,27 @@ class DEMHandler:
              - 'Copernicus 30m Global DEM'
              
               * 'dem': the actual Digital Elevation Model
-
+             
+             - 'Copernicus 30m Global DEM II'
+             
+              * 'dem': the actual Digital Elevation Model
+              * 'edm': Editing Mask
+              * 'flm': Filling Mask
+              * 'hem': Height Error Mask
+              * 'wbm': Water Body Mask
+             
              - 'Copernicus 90m Global DEM'
              
               * 'dem': the actual Digital Elevation Model
-              
+             
+             - 'Copernicus 90m Global DEM II'
+             
+              * 'dem': the actual Digital Elevation Model
+              * 'edm': Editing Mask
+              * 'flm': Filling Mask
+              * 'hem': Height Error Mask
+              * 'wbm': Water Body Mask
+             
              - 'GETASSE30'
              
               * 'dem': the actual Digital Elevation Model
@@ -568,7 +642,8 @@ class DEMHandler:
             remotes.extend(self.remote_ids(corners, demType=demType,
                                            username=username, password=password))
         
-        if demType in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM']:
+        if demType in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM',
+                       'Copernicus 30m Global DEM II', 'Copernicus 90m Global DEM II']:
             port = 0
             if 'port' in self.config[demType].keys():
                 port = self.config[demType]['port']
@@ -686,7 +761,9 @@ class DEMHandler:
                         int((float(extent['xmax']) + 180) // 5) + 2)
             remotes = ['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in lon for y in lat]
         
-        elif demType == 'Copernicus 10m EEA DEM':
+        elif demType in ['Copernicus 10m EEA DEM',
+                         'Copernicus 30m Global DEM II',
+                         'Copernicus 90m Global DEM II']:
             lat, lon = intrange(extent, step=1)
             indices = [''.join(index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
