@@ -101,6 +101,18 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         Processing is aborted if the correction fails (Apply-Orbit-File parameter continueOnFail set to false).
     demName: str
         The name of the auto-download DEM. Default is 'SRTM 1Sec HGT'. Is ignored when `externalDEMFile` is not None.
+        Supported options:
+        
+         - ACE2_5Min
+         - ACE30
+         - ASTER 1sec GDEM
+         - CDEM
+         - Copernicus 30m Global DEM
+         - Copernicus 90m Global DEM
+         - GETASSE30
+         - SRTM 1Sec Grid
+         - SRTM 1Sec HGT
+         - SRTM 3Sec
     externalDEMFile: str or None, optional
         The absolute path to an external DEM file. Default is None. Overrides `demName`.
     externalDEMNoDataValue: int, float or None, optional
