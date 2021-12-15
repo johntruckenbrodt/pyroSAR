@@ -55,11 +55,11 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         - 'Copernicus 10m EEA DEM' (Copernicus 10 m DEM available over EEA-39 countries)
 
           * registration: https://spacedata.copernicus.eu/web/cscda/data-access/registration
-          * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2020_1
+          * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1
           * height reference: EGM2008
 
         - 'Copernicus 30m Global DEM'
-     
+          
           * info: https://copernicus-dem-30m.s3.amazonaws.com/readme.html
           * url: https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/
           * height reference: EGM2008
@@ -105,13 +105,13 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         The following options are available for the respective DEM types:
         
         - 'AW3D30'
-         
+        
           * 'dem': the actual Digital Elevation Model
           * 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
             low correlation mask, Sea mask, Information of elevation dataset used
             for the void-filling processing)
-          * 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
-
+          * 'stk': number of DSM-scene files which were used to produce the 5 m resolution DSM
+        
         - 'Copernicus 10m EEA DEM'
         
           * 'dem': the actual Digital Elevation Model
@@ -125,15 +125,15 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * 'dem': the actual Digital Elevation Model
         
         - 'SRTM 1Sec HGT'
-         
+        
           * 'dem': the actual Digital Elevation Model
-          
+        
         - 'SRTM 3Sec'
-         
+        
           * 'dem': the actual Digital Elevation Model
-          
+        
         - 'TDX90m'
-         
+        
           * 'dem': the actual Digital Elevation Model
           * 'am2': Amplitude Mosaic representing the minimum value
           * 'amp': Amplitude Mosaic representing the mean value
@@ -430,7 +430,7 @@ class DEMHandler:
                                    'msk': '*MSK.tif',
                                    'stk': '*STK.tif'}
                        },
-            'Copernicus 10m EEA DEM': {'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2020_1',
+            'Copernicus 10m EEA DEM': {'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1',
                                        'nodata': -32767.0,
                                        'vsi': '/vsitar/',
                                        'port': 990,
@@ -492,27 +492,27 @@ class DEMHandler:
         buffer: int, float, None
             a buffer in degrees to add around the individual geometries
         username: str or None
-            the download account user name
+            the download account username
         password: str or None
             the download account password
         product: str
             the sub-product to extract from the DEM product
              - 'AW3D30'
-
+             
               * 'dem': the actual Digital Elevation Model
               * 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
                 low correlation mask, Sea mask, Information of elevation dataset used
                 for the void-filling processing)
               * 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
-
+             
              - 'Copernicus 10m EEA DEM'
-            
+             
               * 'dem': the actual Digital Elevation Model
               * 'edm': Editing Mask
               * 'flm': Filling Mask
               * 'hem': Height Error Mask
               * 'wbm': Water Body Mask
-              
+             
              - 'Copernicus 30m Global DEM'
              
               * 'dem': the actual Digital Elevation Model
@@ -522,19 +522,19 @@ class DEMHandler:
               * 'dem': the actual Digital Elevation Model
               
              - 'GETASSE30'
-            
+             
               * 'dem': the actual Digital Elevation Model
-          
+             
              - 'SRTM 1Sec HGT'
-
+             
               * 'dem': the actual Digital Elevation Model
-
+             
              - 'SRTM 3Sec'
-
+             
               * 'dem': the actual Digital Elevation Model
-
+             
              - 'TDX90m'
-
+             
               * 'dem': the actual Digital Elevation Model
               * 'am2': Amplitude Mosaic representing the minimum value
               * 'amp': Amplitude Mosaic representing the mean value
