@@ -1,7 +1,7 @@
 ###############################################################################
 # Convenience functions for SAR image batch processing with ESA SNAP
 
-# Copyright (c) 2016-2021, the pyroSAR Developers.
+# Copyright (c) 2016-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -219,8 +219,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     """
     if isinstance(infile, pyroSAR.ID):
         id = infile
+        ids = [id]
     elif isinstance(infile, str):
         id = pyroSAR.identify(infile)
+        ids = [id]
     elif isinstance(infile, list):
         ids = pyroSAR.identify_many(infile, sortkey='start')
         id = ids[0]
@@ -285,36 +287,59 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     # parse base workflow
     workflow = parse_recipe('blank')
     ############################################
-    # Read nodes configuration
-    read = parse_node('Read')
-    workflow.insert_node(read)
-    read.parameters['file'] = id.scene
-    read.parameters['formatName'] = formatName
-    readers = [read.id]
-    last = read
+    if not isinstance(infile, list):
+        infile = [infile]
     
-    if isinstance(infile, list):
-        for i in range(1, len(infile)):
-            readn = parse_node('Read')
-            readn.parameters['file'] = ids[i].scene
-            readn.parameters['formatName'] = formatName
-            workflow.insert_node(readn)
-            readers.append(readn.id)
+    last = None
+    collect = []
+    for i in range(0, len(infile)):
         ############################################
-        # SliceAssembly node configuration
+        # Read nodes configuration
+        read = parse_node('Read')
+        workflow.insert_node(read)
+        read.parameters['file'] = ids[i].scene
+        read.parameters['formatName'] = formatName
+        last = read
+        ############################################
+        # Remove-GRD-Border-Noise node configuration
+        if id.sensor in ['S1A', 'S1B'] and id.product == 'GRD' and removeS1BorderNoise:
+            bn = parse_node('Remove-GRD-Border-Noise')
+            workflow.insert_node(bn, before=last.id)
+            bn.parameters['selectedPolarisations'] = polarizations
+            last = bn
+        ############################################
+        # calibration node configuration
+        cal = parse_node('Calibration')
+        workflow.insert_node(cal, before=last.id)
+        cal.parameters['selectedPolarisations'] = polarizations
+        cal.parameters['sourceBands'] = bandnames['int']
+        if isinstance(refarea, str):
+            refarea = [refarea]
+        for item in refarea:
+            if item not in ['sigma0', 'gamma0']:
+                raise ValueError('unsupported value for refarea: {}'.format(item))
+        if terrainFlattening:
+            cal.parameters['outputBetaBand'] = True
+            cal.parameters['outputSigmaBand'] = False
+        else:
+            for opt in refarea:
+                cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
+        last = cal
+        ############################################
+        # ThermalNoiseRemoval node configuration
+        if id.sensor in ['S1A', 'S1B'] and removeS1ThermalNoise:
+            tn = parse_node('ThermalNoiseRemoval')
+            workflow.insert_node(tn, before=last.id)
+            tn.parameters['selectedPolarisations'] = polarizations
+            last = tn
+        collect.append(last.id)
+    ############################################
+    # SliceAssembly node configuration
+    if len(collect) > 1:
         sliceAssembly = parse_node('SliceAssembly')
         sliceAssembly.parameters['selectedPolarisations'] = polarizations
-        workflow.insert_node(sliceAssembly, before=readers)
+        workflow.insert_node(sliceAssembly, before=collect)
         last = sliceAssembly
-    ############################################
-    # ThermalNoiseRemoval node configuration
-    if id.sensor in ['S1A', 'S1B'] and removeS1ThermalNoise:
-        for reader in readers:
-            tn = parse_node('ThermalNoiseRemoval')
-            workflow.insert_node(tn, before=reader)
-            tn.parameters['selectedPolarisations'] = polarizations
-            if len(readers) == 1:
-                last = tn
     ############################################
     # TOPSAR-Deburst node configuration
     if process_S1_SLC and swaths is not None:
@@ -322,13 +347,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         workflow.insert_node(deb, before=last.id)
         deb.parameters['selectedPolarisations'] = polarizations
         last = deb
-    ############################################
-    # Remove-GRD-Border-Noise node configuration
-    if id.sensor in ['S1A', 'S1B'] and id.product == 'GRD' and removeS1BorderNoise:
-        bn = parse_node('Remove-GRD-Border-Noise')
-        workflow.insert_node(bn, before=last.id)
-        bn.parameters['selectedPolarisations'] = polarizations
-        last = bn
     ############################################
     # Apply-Orbit-File node configuration
     orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
@@ -399,24 +417,6 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         subset.parameters['geoRegion'] = ''
         last = subset
     ############################################
-    # calibration node configuration
-    cal = parse_node('Calibration')
-    workflow.insert_node(cal, before=last.id)
-    cal.parameters['selectedPolarisations'] = polarizations
-    cal.parameters['sourceBands'] = bandnames['int']
-    if isinstance(refarea, str):
-        refarea = [refarea]
-    for item in refarea:
-        if item not in ['sigma0', 'gamma0']:
-            raise ValueError('unsupported value for refarea: {}'.format(item))
-    if terrainFlattening:
-        cal.parameters['outputBetaBand'] = True
-        cal.parameters['outputSigmaBand'] = False
-    else:
-        for opt in refarea:
-            cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
-    last = cal
-    ############################################
     # Multilook node configuration
     try:
         image_geometry = id.meta['image_geometry']
@@ -460,7 +460,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                                    "parameter 'outputSigma0'. Please update S1TBX.")
         last = tf
     ############################################
-    # merge sigma0 and gamma0 bands to pass them to Terrain-Correction
+    # merge bands to pass them to Terrain-Correction
     bands = dissolve([bandnames[opt] for opt in refarea])
     if len(refarea) > 1 and terrainFlattening and 'scatteringArea' in export_extra:
         bm_tc = parse_node('BandMerge')
