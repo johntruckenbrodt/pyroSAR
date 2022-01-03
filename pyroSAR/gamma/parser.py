@@ -1,7 +1,7 @@
 ###############################################################################
 # parse GAMMA command docstrings to Python functions
 
-# Copyright (c) 2015-2021, the pyroSAR Developers.
+# Copyright (c) 2015-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -130,7 +130,8 @@ def parse_command(command, indent='    '):
                                       ('-m MLI_dir', 'mli_dir'),
                                       ('-s scale', 'scale'),
                                       ('-e exp', 'exponent'),
-                                      ('-u', 'update')],
+                                      ('-u', 'update'),
+                                      ('-D', 'dem_par')],
                        'mk_base_calc': [('<RSLC_tab>', '<SLC_tab>')],
                        'mk_cpd_all': [('dtab', 'data_tab')],
                        'mk_cpx_ref_2d': [('diff_tab', 'cpx_tab')],
@@ -264,19 +265,20 @@ def parse_command(command, indent='    '):
     
     # filter required and optional arguments from usage description text
     arg_req_raw = [re.sub(r'[^\w.-]*', '', x) for x in re.findall('[^<]*<([^>]*)>', usage)]
-    arg_opt_raw = [re.sub(r'[^\w.-]*', '', x) for x in re.findall(r'[^[]*\[([^]]*)\]', usage)]
+    arg_opt_raw = [re.sub(r'[^\w.-]*', '', x) for x in re.findall(r'[^[]*\[([^]]*)]', usage)]
     
     ###########################################
     # add parameters missing in the usage argument lists
     
-    appends = {'mk_adf2_2d': ['cc_min', 'cc_max', 'mli_dir', 'scale', 'exponent', 'update'],
+    appends = {'mk_adf2_2d': ['cc_min', 'cc_max', 'mli_dir', 'scale', 'exponent', 'update', 'dem_par'],
                'mk_pol2rec_2d': ['scale', 'exponent', 'min', 'max', 'rmax', 'mode', 'update'],
                'SLC_interp_S1_TOPS': ['mode', 'order'],
                'SLC_interp_map': ['mode', 'order']}
     
     if command_base in appends.keys():
         for var in appends[command_base]:
-            arg_opt_raw.append(var)
+            if var not in arg_opt_raw:
+                arg_opt_raw.append(var)
     ###########################################
     # define parameter replacements; this is intended for parameters which are to be aggregated into a list parameter
     replacements = {'cc_monitoring': [(['nfiles', 'f1', 'f2', '...'],
@@ -401,7 +403,8 @@ def parse_command(command, indent='    '):
     flag_args = {'mk_adf2_2d': [('mli_dir', '-m', None),
                                 ('scale', '-s', None),
                                 ('exponent', '-e', None),
-                                ('update', '-u', False)],
+                                ('update', '-u', False),
+                                ('dem_par', '-D', None)],
                  'mk_pol2rec_2d': [('scale', '-s', None),
                                    ('exp', '-e', None),
                                    ('min', '-a', None),
@@ -673,9 +676,9 @@ def parse_module(bindir, outfile):
 
 def autoparse():
     """
-    automatic parsing of Gamma commands.
-    This function will detect the Gamma installation via environment variable `GAMMA_HOME`, detect all available
-    modules (e.g. ISP, DIFF) and parse all of the module's commands via function :func:`parse_module`.
+    automatic parsing of GAMMA commands.
+    This function will detect the GAMMA installation via environment variable `GAMMA_HOME`, detect all available
+    modules (e.g. ISP, DIFF) and parse all the module's commands via function :func:`parse_module`.
     A new Python module will be created called `gammaparse`, which is stored under `$HOME/.pyrosar`.
     Upon importing the `pyroSAR.gamma` submodule, this function is run automatically and module `gammaparse`
     is imported as `api`.
@@ -698,12 +701,11 @@ def autoparse():
         if not os.path.isfile(outfile):
             log.info('parsing module {} to {}'.format(os.path.basename(module), outfile))
             for submodule in ['bin', 'scripts']:
-                log.info('-' * 10 + '\n{}'.format(submodule))
+                log.info(submodule)
                 try:
                     parse_module(os.path.join(module, submodule), outfile)
                 except OSError:
                     log.info('..does not exist')
-            log.info('=' * 20)
     modules = [re.sub(r'\.py', '', os.path.basename(x)) for x in finder(target, [r'[a-z]+\.py$'], regex=True)]
     if len(modules) > 0:
         with open(os.path.join(target, '__init__.py'), 'w') as init:
