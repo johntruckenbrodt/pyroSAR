@@ -62,4 +62,4 @@ install:
 build: false
 
 test_script:
-  - coverage run --source pyroSAR/ -m pytest
+  - coverage run -m pytest
