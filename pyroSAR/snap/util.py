@@ -294,7 +294,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     collect = []
     for i in range(0, len(infile)):
         ############################################
-        # Read nodes configuration
+        # Read node configuration
         read = parse_node('Read')
         workflow.insert_node(read)
         read.parameters['file'] = ids[i].scene
@@ -308,11 +308,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             bn.parameters['selectedPolarisations'] = polarizations
             last = bn
         ############################################
-        # calibration node configuration
+        # Calibration node configuration
         cal = parse_node('Calibration')
         workflow.insert_node(cal, before=last.id)
         cal.parameters['selectedPolarisations'] = polarizations
-        cal.parameters['sourceBands'] = bandnames['int']
         if isinstance(refarea, str):
             refarea = [refarea]
         for item in refarea:
@@ -404,7 +403,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         subset.parameters['copyMetadata'] = True
         last = subset
     #######################
-    # (optionally) configure subset node for pixel offsets
+    # (optionally) configure Subset node for pixel offsets
     if offset and not shapefile:
         subset = parse_node('Subset')
         workflow.insert_node(subset, before=last.id)
