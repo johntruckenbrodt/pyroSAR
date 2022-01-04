@@ -438,7 +438,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         ml.parameters['sourceBands'] = None
         last = ml
     ############################################
-    # terrain flattening node configuration
+    # Terrain-Flattening node configuration
+    tf = None
     if terrainFlattening:
         tf = parse_node('Terrain-Flattening')
         workflow.insert_node(tf, before=last.id)
@@ -460,6 +461,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         last = tf
     ############################################
     # merge bands to pass them to Terrain-Correction
+    bm_tc = None
     bands = dissolve([bandnames[opt] for opt in refarea])
     if len(refarea) > 1 and terrainFlattening and 'scatteringArea' in export_extra:
         bm_tc = parse_node('BandMerge')
