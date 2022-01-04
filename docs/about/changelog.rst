@@ -604,3 +604,75 @@ general
 -------
 - replaced http URLs with https where applicable
 - improved documentation
+
+0.15.0 | 2022-01-04
+===================
+
+Drivers
+-------
+- :meth:`pyroSAR.drivers.ID.geometry`: new method
+
+GAMMA API
+---------
+- :ref:`Command API <gamma-command-api>` compatibility with GAMMA version 20211208
+
+- renamed argument `resolution` to `spacing`; affects:
+
+  + :func:`pyroSAR.gamma.geocode`
+  + :func:`pyroSAR.gamma.ovs`
+  + :func:`pyroSAR.gamma.multilook`
+
+- function :func:`pyroSAR.gamma.calibrate`
+
+  + removed argument `replace`
+  + added argument `return_fnames`
+
+- function :func:`pyroSAR.gamma.convert2gamma`
+
+  + added argument `return_fnames`
+
+- function :func:`pyroSAR.gamma.multilook`
+
+  + pass multiple Sentinel-1 sub-swaths to argument `infile` which are then
+    combined into a single MLI using GAMMA command `isp.multi_look_ScanSAR`
+
+- class :class:`pyroSAR.gamma.ISPPar`:
+
+  + new object attribute `filetype` with possible values 'isp' and 'dem'
+
+SNAP API
+--------
+- function :func:`pyroSAR.snap.util.geocode`:
+
+  + enabled SLC processing
+  + enable processing of sigma nought RTC
+  + new `export_extra` argument `gammaSigmaRatio`
+  + simplified workflow by writing layover-shadow mask directly from `Terrain-Correction`
+  + changed processing node sequence:
+
+    * was: Read->ThermalNoiseRemoval->SliceAssembly->Remove-GRD-Border-Noise->Calibration
+    * is:  Read->Remove-GRD-Border-Noise->Calibration->ThermalNoiseRemoval->SliceAssembly
+
+  + new output image naming scheme, e.g.
+
+    * S1A__IW___A_20210914T191350_VV_gamma0-rtc.tif
+    * S1A__IW___A_20210914T191350_VH_sigma0-elp.tif
+
+- function :func:`pyroSAR.snap.auxil.gpt`:
+
+  + removed argument `multisource`
+  + added argument `tmpdir`
+
+Auxiliary Data Handling
+-----------------------
+- function :func:`pyroSAR.auxdata.dem_autoload`:
+
+  + updated version of 'Copernicus 10m EEA DEM' from '2020_1' to '2021_1'
+  + new DEM options:
+
+    * 'Copernicus 30m Global DEM II'
+    * 'Copernicus 90m Global DEM II'
+
+general
+-------
+- compatibility with sqlalchemy>=1.4
