@@ -13,6 +13,8 @@ env:
     - PGUSER=postgres
     - PGPORT=5432
     - PGPASSWORD=
+    - SNAP_VERSION=8
+    - SNAP_INSTALLER=esa-snap_sentinel_unix_"$SNAP_VERSION"_0.sh
 
 addons:
   postgresql: '9.6'
@@ -34,8 +36,8 @@ python:
   - '3.7'
 
 before_install:
-  - wget -O esa-snap_sentinel_unix_8_0.sh https://step.esa.int/downloads/8.0/installers/esa-snap_sentinel_unix_8_0.sh
-  - bash esa-snap_sentinel_unix_8_0.sh -q
+  - wget -O $SNAP_INSTALLER https://step.esa.int/downloads/$SNAP_VERSION.0/installers/$SNAP_INSTALLER
+  - bash $SNAP_INSTALLER -q
   - export PATH=$PATH:/opt/snap/bin
 
 install:
