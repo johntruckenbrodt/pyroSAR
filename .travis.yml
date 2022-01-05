@@ -16,7 +16,7 @@ env:
     - SNAP_VERSION=8
 
 addons:
-  postgresql: '9.6'
+  postgresql: '12.2'
   apt:
     sources:
       - sourceline: 'ppa:ubuntugis/ppa'
@@ -26,7 +26,7 @@ addons:
       - libsqlite3-mod-spatialite
       - libproj-dev
       - python3-dev
-      - postgresql-9.6-postgis-2.4
+      - postgresql-12-postgis-3
 
 services:
   - postgresql
