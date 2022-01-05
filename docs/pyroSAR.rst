@@ -28,7 +28,6 @@ Drivers
         identify
         identify_many
         filter_processed
-        findfiles
         getFileObj
         parse_date
         drop_archive
@@ -41,11 +40,11 @@ SNAP Processing
     :undoc-members:
     :show-inheritance:
 
-Workflow Parsing
-----------------
+Workflow Parsing and Execution
+------------------------------
 
 .. automodule:: pyroSAR.snap.auxil
-    :members: gpt, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par, get_egm96_lookup
+    :members: gpt, execute, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par
     :undoc-members:
     :show-inheritance:
 
@@ -53,6 +52,7 @@ Workflow Parsing
         :nosignatures:
 
         gpt
+        execute
         parse_node
         parse_recipe
         split
@@ -60,19 +60,19 @@ Workflow Parsing
         Workflow
         Node
         Par
-        get_egm96_lookup
 
 GAMMA Processing
 ================
 
 .. automodule:: pyroSAR.gamma
-    :members: geocode, convert2gamma, ISPPar, process, ovs, S1_deburst, correctOSV, multilook, par2hdr, UTM
+    :members: geocode, convert2gamma, ISPPar, process, ovs, S1_deburst, correctOSV, multilook, par2hdr, UTM, calibrate
     :undoc-members:
     :show-inheritance:
 
     .. autosummary::
         :nosignatures:
 
+        calibrate
         convert2gamma
         correctOSV
         geocode
@@ -109,7 +109,7 @@ DEM tools
 GAMMA Command API
 -----------------
 
-This is an attempt to make it easier to execute Gamma commands by offering automatically parsed Python functions.
+This is an attempt to make it easier to execute GAMMA commands by offering automatically parsed Python functions.
 Thus, instead of executing the command via shell:
 
 .. code-block:: shell
@@ -158,7 +158,7 @@ API Demo
 ********
 
 This is a demonstration of an output script as generated automatically by function
-:func:`~pyroSAR.gamma.parser.parse_module` for the Gamma module `ISP`.
+:func:`~pyroSAR.gamma.parser.parse_module` for the GAMMA module `ISP`.
 Within each function, the command name and all parameters are passed to function
 :func:`~pyroSAR.gamma.process`, which converts all input to :py:obj:`str` and then calls the command via the
 :mod:`subprocess` module.
@@ -186,7 +186,7 @@ Auxiliary Data Tools
 ====================
 
 .. automodule:: pyroSAR.auxdata
-    :members: dem_autoload, dem_create
+    :members: dem_autoload, dem_create, get_egm_lookup
     :undoc-members:
     :show-inheritance:
 
@@ -195,6 +195,7 @@ Auxiliary Data Tools
 
         dem_autoload
         dem_create
+        get_egm_lookup
 
 Datacube Tools
 ==============

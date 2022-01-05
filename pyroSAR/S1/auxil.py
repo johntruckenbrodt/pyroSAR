@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import requests
+import tempfile
 import zipfile as zf
 from io import BytesIO
 from datetime import datetime, timedelta
@@ -28,7 +29,10 @@ from . import linesimplify as ls
 from pyroSAR.examine import ExamineSnap
 import progressbar as pb
 
-from spatialist.ancillary import finder, urlQueryParser
+from spatialist.ancillary import finder
+
+import logging
+log = logging.getLogger(__name__)
 
 try:
     import argparse
@@ -149,7 +153,7 @@ class OSV(object):
                 os.makedirs(os.path.dirname(target), exist_ok=True)
                 if not os.path.isfile(target):
                     if message:
-                        print('compressing and reorganizing EOF files')
+                        log.info('compressing and reorganizing EOF files')
                         message = False
                     with zf.ZipFile(file=target,
                                     mode='w',
@@ -179,111 +183,85 @@ class OSV(object):
         else:
             return self.outdir_res
     
-    def __catch_aux_sentinel(self, sensor, osvtype='POE', start=None, stop=None):
+    def __catch_aux_sentinel(self, sensor, start, stop, osvtype='POE'):
         url = 'http://aux.sentinel1.eo.esa.int'
         skeleton = '{url}/{osvtype}ORB/{year}/{month:02d}/{day:02d}/'
         
-        print('searching for new {} files'.format(osvtype))
-        
-        if start is not None:
-            date_start = datetime.strptime(start, '%Y%m%dT%H%M%S')
-        else:
-            date_start = datetime.strptime('2014-07-31', '%Y-%m-%d')
-        # set the defined date or the current date otherwise
-        if stop is not None:
-            date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S')
-        else:
-            date_stop = datetime.now()
-        
         files = []
-        date_search = date_start
-        while True:
+        date_search = start
+        busy = True
+        while busy:
             url_sub = skeleton.format(url=url,
                                       osvtype=osvtype,
                                       year=date_search.year,
                                       month=date_search.month,
                                       day=date_search.day)
-            result = requests.get(url_sub, timeout=self.timeout).text
+            response = requests.get(url_sub, timeout=self.timeout)
+            response.raise_for_status()
+            result = response.text
             files_sub = list(set(re.findall(self.pattern, result)))
             if len(files_sub) == 0:
                 break
             for file in files_sub:
                 match = re.match(self.pattern_fine, file)
-                start = datetime.strptime(match.group('start'), '%Y%m%dT%H%M%S')
-                stop = datetime.strptime(match.group('stop'), '%Y%m%dT%H%M%S')
+                start2 = datetime.strptime(match.group('start'), '%Y%m%dT%H%M%S')
+                stop2 = datetime.strptime(match.group('stop'), '%Y%m%dT%H%M%S')
                 if sensor == match.group('sensor'):
-                    if start < date_stop and stop > date_start:
-                        print(url_sub)
+                    if start2 < stop and stop2 > start:
+                        log.info(url_sub)
                         files.append({'filename': file,
                                       'href': url_sub + '/' + file,
                                       'auth': None})
+                if start2 >= stop:
+                    busy = False
             date_search += timedelta(days=1)
-            if start >= date_stop:
-                break
         
-        if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
-            files = [x for x in files
-                     if self.date(x['filename'], 'start') > self.maxdate('POE', 'stop')]
-        print('found {} results'.format(len(files)))
         return files
     
-    def __catch_step_auxdata(self, sensor, osvtype='POE', start=None, stop=None):
-        url = 'http://step.esa.int/auxdata/orbits/Sentinel-1'
+    def __catch_step_auxdata(self, sensor, start, stop, osvtype='POE'):
+        url = 'https://step.esa.int/auxdata/orbits/Sentinel-1'
         skeleton = '{url}/{osvtype}ORB/{sensor}/{year}/{month:02d}/'
-        
-        print('searching for new {} files'.format(osvtype))
-        
-        if start is not None:
-            date_start = datetime.strptime(start, '%Y%m%dT%H%M%S')
-        else:
-            date_start = datetime.strptime('2014-07-31', '%Y-%m-%d')
-        # set the defined date or the current date otherwise
-        if stop is not None:
-            date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S')
-        else:
-            date_stop = datetime.now()
         
         if isinstance(sensor, str):
             sensor = [sensor]
         
         files = []
         for sens in sensor:
-            date_search = datetime(year=date_start.year,
-                                   month=date_start.month,
+            date_search = datetime(year=start.year,
+                                   month=start.month,
                                    day=1)
-            while True:
+            busy = True
+            while busy:
                 url_sub = skeleton.format(url=url,
                                           osvtype=osvtype,
                                           sensor=sens,
                                           year=date_search.year,
                                           month=date_search.month)
-                print(url_sub)
-                result = requests.get(url_sub, timeout=self.timeout).text
+                log.info(url_sub)
+                response = requests.get(url_sub, timeout=self.timeout)
+                response.raise_for_status()
+                result = response.text
                 files_sub = list(set(re.findall(self.pattern, result)))
                 if len(files_sub) == 0:
                     break
                 for file in files_sub:
                     match = re.match(self.pattern_fine, file)
-                    start = datetime.strptime(match.group('start'), '%Y%m%dT%H%M%S')
-                    stop = datetime.strptime(match.group('stop'), '%Y%m%dT%H%M%S')
-                    if start < date_stop and stop > date_start:
+                    start2 = datetime.strptime(match.group('start'), '%Y%m%dT%H%M%S')
+                    stop2 = datetime.strptime(match.group('stop'), '%Y%m%dT%H%M%S')
+                    if start2 < stop and stop2 > start:
                         files.append({'filename': file,
                                       'href': url_sub + '/' + file + '.zip',
                                       'auth': None})
+                    if start2 >= stop:
+                        busy = False
                 if date_search.month < 12:
                     date_search = date_search.replace(month=date_search.month + 1)
                 else:
                     date_search = date_search.replace(year=date_search.year + 1, month=1)
-                if start >= date_stop:
-                    break
         
-        if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
-            files = [x for x in files
-                     if self.date(x['filename'], 'start') > self.maxdate('POE', 'stop')]
-        print('found {} results'.format(len(files)))
         return files
     
-    def __catch_gnss(self, sensor, osvtype='POE', start=None, stop=None):
+    def __catch_gnss(self, sensor, start, stop, osvtype='POE'):
         url = 'https://scihub.copernicus.eu/gnss'
         redirect = 'https://dhusfeed.dhus.onda-dias.net/gnss'
         auth = ('gnssguest', 'gnssguest')
@@ -308,32 +286,20 @@ class OSV(object):
         
         # the collection of files to be returned
         collection = []
-        # set the defined date or the date of the first existing OSV file otherwise
-        # two days are added/subtracted from the defined start and stop dates since the
-        # online query does only allow for searching the start time; hence, if e.g.
-        # the start date is 2018-01-01T000000, the query would not return the corresponding
-        # file, whose start date is 2017-12-31 (V20171231T225942_20180102T005942)
-        if start is not None:
-            date_start = datetime.strptime(start, '%Y%m%dT%H%M%S').strftime('%Y-%m-%dT%H:%M:%SZ')
-        else:
-            date_start = datetime.strptime('2014-07-31', '%Y-%m-%d').strftime('%Y-%m-%dT%H:%M:%SZ')
-        # set the defined date or the current date otherwise
-        if stop is not None:
-            date_stop = datetime.strptime(stop, '%Y%m%dT%H%M%S').strftime('%Y-%m-%dT%H:%M:%SZ')
-        else:
-            date_stop = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        date_start = start.strftime('%Y-%m-%dT%H:%M:%SZ')
+        date_stop = stop.strftime('%Y-%m-%dT%H:%M:%SZ')
         
         # append the time frame to the query dictionary
         query['beginPosition'] = '[{} TO {}]'.format(date_start, date_stop)
         query['endPosition'] = '[{} TO {}]'.format(date_start, date_stop)
-        print('searching for new {} files'.format(osvtype))
         query_list = []
         for keyword, value in query.items():
             query_elem = '{}:{}'.format(keyword, value)
             query_list.append(query_elem)
         query_str = ' '.join(query_list)
         target = '{}/search?q={}&format=json'.format(url, query_str)
-        print(target)
+        log.info(target)
         
         def _parse_gnsssearch_json(search_dict):
             parsed_dict = {}
@@ -384,7 +350,6 @@ class OSV(object):
         response.raise_for_status()
         response_json = response.json()['feed']
         total_results = response_json['opensearch:totalResults']
-        print('found {} OSV results'.format(total_results))
         subquery = [link['href'] for link in response_json['link'] if link['rel'] == 'self'][0]
         subquery = subquery.replace(redirect, url.strip())
         if int(total_results) > 10:
@@ -418,6 +383,7 @@ class OSV(object):
         ----------
         sensor: str or list
             The S1 mission(s):
+            
              - 'S1A'
              - 'S1B'
              - ['S1A', 'S1B']
@@ -428,24 +394,41 @@ class OSV(object):
         stop: str
             the date to stop searching for files in format YYYYmmddTHHMMSS
         url_option: int
-            the URL to query for scenes
+            the URL to query for OSV files
+            
              - 1: https://scihub.copernicus.eu/gnss
-             - 2: http://aux.sentinel1.eo.esa.int
-             - 3: http://step.esa.int/auxdata/orbits/Sentinel-1
+             - 2: https://step.esa.int/auxdata/orbits/Sentinel-1
 
         Returns
         -------
         list
             the product dictionary of the remote OSV files, with href
         """
-        if url_option == 1:
-            items = self.__catch_gnss(sensor, osvtype, start, stop)
-        elif url_option == 2:
-            items = self.__catch_aux_sentinel(sensor, osvtype, start, stop)
-        elif url_option == 3:
-            items = self.__catch_step_auxdata(sensor, osvtype, start, stop)
+        
+        log.info('searching for new {} files'.format(osvtype))
+        
+        if start is not None:
+            start = datetime.strptime(start, '%Y%m%dT%H%M%S')
         else:
-            raise ValueError("'url_option' must be either 1, 2 or 3")
+            start = datetime.strptime('2014-07-31', '%Y-%m-%d')
+        # set the defined date or the current date otherwise
+        if stop is not None:
+            stop = datetime.strptime(stop, '%Y%m%dT%H%M%S')
+        else:
+            stop = datetime.now()
+        
+        if url_option == 1:
+            items = self.__catch_gnss(sensor, start, stop, osvtype)
+        elif url_option == 2:
+            items = self.__catch_step_auxdata(sensor, start, stop, osvtype)
+        else:
+            raise ValueError("'url_option' must be either 1 or 2")
+        
+        if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
+            items = [x for x in items
+                     if self.date(x['filename'], 'start') > self.maxdate('POE', 'stop')]
+        log.info('found {} results'.format(len(items)))
+        
         return items
     
     def date(self, file, datetype):
@@ -473,7 +456,7 @@ class OSV(object):
         maxdate_poe = self.maxdate('POE', 'stop')
         if maxdate_poe is not None:
             deprecated = [x for x in self.getLocals('RES') if self.date(x, 'stop') < maxdate_poe]
-            print('deleting {} RES file{}'.format(len(deprecated), '' if len(deprecated) == 1 else 's'))
+            log.info('deleting {} RES file{}'.format(len(deprecated), '' if len(deprecated) == 1 else 's'))
             for item in deprecated:
                 os.remove(item)
     
@@ -545,6 +528,7 @@ class OSV(object):
         ----------
         sensor: str
             The S1 mission:
+            
              - 'S1A'
              - 'S1B'
         timestamp: str
@@ -605,27 +589,39 @@ class OSV(object):
                 downloads.append((remote, local, basename, auth))
         if len(downloads) == 0:
             return
-        print('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
+        log.info('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
         if pbar:
             progress = pb.ProgressBar(max_value=len(downloads))
         i = 0
         for remote, local, basename, auth in downloads:
-            infile = requests.get(remote, auth=auth, timeout=self.timeout)
-            if remote.endswith('.zip'):
-                with zf.ZipFile(file=BytesIO(infile.content)) as tmp:
-                    members = tmp.namelist()
-                    target = [x for x in members if re.search(basename, x)][0]
-                    with zf.ZipFile(local, 'w') as outfile:
-                        outfile.write(filename=tmp.extract(target),
-                                      arcname=basename)
-            else:
-                with zf.ZipFile(file=local,
-                                mode='w',
-                                compression=zf.ZIP_DEFLATED) \
-                        as outfile:
-                    outfile.writestr(zinfo_or_arcname=basename,
-                                     data=infile.content)
-            infile.close()
+            response = requests.get(remote, auth=auth, timeout=self.timeout)
+            response.raise_for_status()
+            infile = response.content
+
+            # use a tempfile to allow atomic writes in the case of
+            # parallel executions dependent on the same orbit files
+            fd, tmp_path = tempfile.mkstemp(prefix=os.path.basename(local), dir=os.path.dirname(local))
+            os.close(fd)
+            try:
+                if remote.endswith('.zip'):
+                    with zf.ZipFile(file=BytesIO(infile)) as tmp:
+                        members = tmp.namelist()
+                        target = [x for x in members if re.search(basename, x)][0]
+                        with zf.ZipFile(tmp_path, 'w') as outfile:
+                            outfile.write(filename=tmp.extract(target),
+                                          arcname=basename)
+                else:
+                    with zf.ZipFile(file=tmp_path,
+                                    mode='w',
+                                    compression=zf.ZIP_DEFLATED) \
+                            as outfile:
+                        outfile.writestr(zinfo_or_arcname=basename,
+                                         data=infile)
+                os.rename(tmp_path, local)
+            except Exception as e:
+                os.unlink(tmp_path)
+                raise
+
             if pbar:
                 i += 1
                 progress.update(i)
@@ -680,19 +676,11 @@ class OSV(object):
 def removeGRDBorderNoise(scene, method='pyroSAR'):
     """
     Mask out Sentinel-1 image border noise. This function implements the method for removing GRD border noise as
-    recommended by ESA and implemented in SNAP and additionally adds further refinement of the result using an image
+    published by ESA :cite:`Miranda2018` and implemented in SNAP and additionally adds further refinement of the result using an image
     border line simplification approach. In this approach the border between valid and invalid pixels is first
-    simplified using the method by Visvalingam and Whyatt references below. The line segments of the new border are then
-    shifted until all pixels considered invalid before the simplification are again on one side of the line.
-    See image below for further clarification.
-
-    References:
-        - 'Masking "No-value" Pixels on GRD Products generated by the Sentinel-1 ESA IPF'
-          (issue 2.1 Jan 29 2018); available online under
-          https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/document-library
-        - Visvalingam, M. and Whyatt J.D. (1993):
-          "Line Generalisation by Repeated Elimination of Points",
-          Cartographic J., 30 (1), 46 - 51
+    simplified using the poly-line vertex reduction method by Visvalingam and Whyatt :cite:`Visvalingam1993`.
+    The line segments of the new border are then shifted until all pixels considered invalid before the simplification
+    are again on one side of the line. See image below for further clarification.
 
     Parameters
     ----------
@@ -700,6 +688,7 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
         the Sentinel-1 scene object
     method: str
         the border noise removal method to be applied; one of the following:
+        
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
 
@@ -710,8 +699,8 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
         Demonstration of the border noise removal for a vertical left image border. The area under the respective lines
         covers pixels considered valid, everything above will be masked out. The blue line is the result of the noise
         removal as recommended by ESA, in which a lot of noise is still present. The red line is the over-simplified
-        result using the Visvalingam-Whyatt method of poly-line vertex reduction. The green line is the final result
-        after further correcting the VW-simplified result.
+        result using the Visvalingam-Whyatt method. The green line is the final result after further correcting the
+        VW-simplified result.
 
     """
     if scene.compression is not None:
@@ -724,7 +713,7 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
     
     # compute noise scaling factor
     if scene.meta['IPF_version'] >= 2.9:
-        print('border noise removal not necessary for IPF version {}'.format(scene.meta['IPF_version']))
+        log.info('border noise removal not necessary for IPF version {}'.format(scene.meta['IPF_version']))
         return
     elif scene.meta['IPF_version'] <= 2.5:
         knoise = {'IW': 75088.7, 'EW': 56065.87}[scene.acquisition_mode]
@@ -764,7 +753,7 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
     
     # iterate over the four image subsets
     for subset in subsets:
-        print(subset)
+        log.info(subset)
         xmin, ymin, xmax, ymax = subset
         xdiff = xmax - xmin
         ydiff = ymax - ymin

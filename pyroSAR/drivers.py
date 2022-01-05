@@ -19,14 +19,10 @@ The :class:`ID` class and its subclasses allow easy and standardized access to t
 images from different SAR sensors.
 """
 
-from __future__ import print_function
 import sys
+import gc
 
-if sys.version_info >= (3, 0):
-    from builtins import str
-#     from io import BytesIO as StringIO
-# else:
-#     from StringIO import StringIO
+from builtins import str
 from io import BytesIO
 
 import abc
@@ -46,7 +42,7 @@ from datetime import datetime, timedelta
 from time import strptime, strftime
 
 import progressbar as pb
-from osgeo import gdal, osr
+from osgeo import gdal, osr, ogr
 from osgeo.gdalconst import GA_ReadOnly
 
 from . import S1
@@ -56,8 +52,8 @@ from .xml_util import getNamespaces
 from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder
 
-# new imports for postgres
 from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
+from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import select, func
@@ -122,22 +118,21 @@ def identify(scene):
     for handler in ID.__subclasses__():
         try:
             return handler(scene)
-        except (IOError, KeyError):
+        except (RuntimeError, KeyError):
             pass
     raise RuntimeError('data format not supported')
 
 
-def identify_many(scenes, verbose=True, sortkey=None):
+def identify_many(scenes, pbar=False, sortkey=None):
     """
     wrapper function for returning metadata handlers of all valid scenes in a list, similar to function
     :func:`~pyroSAR.drivers.identify`.
-    Prints a progressbar.
 
     Parameters
     ----------
     scenes: list
         the file names of the scenes to be identified
-    verbose: bool
+    pbar: bool
         adds a progressbar if True
     sortkey: str
         sort the handler object list by an attribute
@@ -150,11 +145,13 @@ def identify_many(scenes, verbose=True, sortkey=None):
     --------
     >>> from pyroSAR import identify_many
     >>> files = finder('/path', ['S1*.zip'])
-    >>> ids = identify_many(files, verbose=False, sortkey='start')
+    >>> ids = identify_many(files, pbar=False, sortkey='start')
     """
     idlist = []
-    if verbose:
-        pbar = pb.ProgressBar(max_value=len(scenes)).start()
+    if pbar:
+        progress = pb.ProgressBar(max_value=len(scenes)).start()
+    else:
+        progress = None
     for i, scene in enumerate(scenes):
         if isinstance(scene, ID):
             idlist.append(scene)
@@ -164,10 +161,12 @@ def identify_many(scenes, verbose=True, sortkey=None):
                 idlist.append(id)
             except RuntimeError:
                 continue
-        if verbose:
-            pbar.update(i + 1)
-    if verbose:
-        pbar.finish()
+            except PermissionError:
+                log.warning("Permission denied: '{}'".format(scene))
+        if progress is not None:
+            progress.update(i + 1)
+    if progress is not None:
+        progress.finish()
     if sortkey is not None:
         idlist.sort(key=operator.attrgetter(sortkey))
     return idlist
@@ -213,6 +212,9 @@ class ID(object):
         for item in self.locals:
             setattr(self, item, metadict[item])
     
+    def __getattr__(self, item):
+        raise AttributeError("object has no attribute '{}'".format(item))
+    
     def __str__(self):
         lines = ['pyroSAR ID object of type {}'.format(self.__class__.__name__)]
         for item in sorted(self.locals):
@@ -225,14 +227,14 @@ class ID(object):
     
     def bbox(self, outname=None, driver=None, overwrite=True):
         """
-        get the bounding box of a scene either as a vector object or written to a shapefile
+        get the bounding box of a scene either as a vector object or written to a file
 
         Parameters
         ----------
         outname: str
             the name of the shapefile to be written
         driver: str
-        the output file format; needs to be defined if the format cannot
+            the output file format; needs to be defined if the format cannot
             be auto-detected from the filename extension
         overwrite: bool
             overwrite an existing shapefile?
@@ -247,6 +249,46 @@ class ID(object):
         else:
             bbox(self.getCorners(), self.projection, outname=outname, driver=driver,
                  overwrite=overwrite)
+    
+    def geometry(self, outname=None, driver=None, overwrite=True):
+        """
+        get the footprint geometry of a scene either as a vector object or written to a file
+
+        Parameters
+        ----------
+        outname: str
+            the name of the shapefile to be written
+        driver: str
+            the output file format; needs to be defined if the format cannot
+            be auto-detected from the filename extension
+        overwrite: bool
+            overwrite an existing shapefile?
+
+        Returns
+        -------
+        ~spatialist.vector.Vector or None
+            the vector object if `outname` is None, None otherwise
+        """
+        srs = crsConvert(self.projection, 'osr')
+        ring = ogr.Geometry(ogr.wkbLinearRing)
+        for coordinate in self.meta['coordinates']:
+            ring.AddPoint(*coordinate)
+        ring.CloseRings()
+        
+        geom = ogr.Geometry(ogr.wkbPolygon)
+        geom.AddGeometry(ring)
+        
+        geom.FlattenTo2D()
+        
+        bbox = Vector(driver='Memory')
+        bbox.addlayer('geometry', srs, geom.GetGeometryType())
+        bbox.addfield('area', ogr.OFTReal)
+        bbox.addfeature(geom, fields={'area': geom.Area()})
+        geom = None
+        if outname is None:
+            return bbox
+        else:
+            bbox.write(outfile=outname, driver=driver, overwrite=overwrite)
     
     @property
     def compression(self):
@@ -279,7 +321,7 @@ class ID(object):
     
     def export2sqlite(self, dbfile):
         """
-        Export relevant metadata to a sqlite database
+        Export relevant metadata to an SQLite database
 
         Parameters
         ----------
@@ -305,19 +347,19 @@ class ID(object):
 
         Raises
         -------
-        IOError
+        RuntimeError
         """
         files = self.findfiles(self.pattern, include_folders=include_folders)
         if len(files) == 1:
             self.file = files[0]
         elif len(files) == 0:
-            raise IOError('scene does not match {} naming convention'.format(type(self).__name__))
+            raise RuntimeError('scene does not match {} naming convention'.format(type(self).__name__))
         else:
-            raise IOError('file ambiguity detected:\n{}'.format('\n'.join(files)))
+            raise RuntimeError('file ambiguity detected:\n{}'.format('\n'.join(files)))
     
     def findfiles(self, pattern, include_folders=False):
         """
-        find files in the scene archive, which match a pattern; see :func:`~findfiles`
+        find files in the scene archive, which match a pattern.
 
         Parameters
         ----------
@@ -329,17 +371,26 @@ class ID(object):
         -------
         list
             the matched file names
+        
+        See Also
+        --------
+        :func:`spatialist.ancillary.finder`
         """
-        return findfiles(self.scene, pattern, include_folders)
+        foldermode = 1 if include_folders else 0
+        
+        files = finder(target=self.scene, matchlist=[pattern],
+                       foldermode=foldermode, regex=True)
+        
+        if os.path.isdir(self.scene) \
+                and re.search(pattern, os.path.basename(self.scene)) \
+                and include_folders:
+            files.append(self.scene)
+        
+        return files
     
     def gdalinfo(self):
         """
         read metadata directly from the GDAL SAR image drivers
-
-        Parameters
-        ----------
-        scene: str
-            an archive containing a SAR scene
 
         Returns
         -------
@@ -352,9 +403,9 @@ class ID(object):
             prefix = {'zip': '/vsizip/', 'tar': '/vsitar/', None: ''}[self.compression]
             header = files[0]
         elif len(files) > 1:
-            raise IOError('file ambiguity detected')
+            raise RuntimeError('file ambiguity detected')
         else:
-            raise IOError('file type not supported')
+            raise RuntimeError('file type not supported')
         
         meta = {}
         
@@ -417,7 +468,7 @@ class ID(object):
 
         Parameters
         ----------
-        directory: str
+        directory: str or None
             the directory to be scanned; if left empty the object attribute `gammadir` is scanned
 
         Returns
@@ -427,13 +478,13 @@ class ID(object):
 
         Raises
         -------
-        IOError
+        RuntimeError
         """
         if directory is None:
             if hasattr(self, 'gammadir'):
                 directory = self.gammadir
             else:
-                raise IOError(
+                raise RuntimeError(
                     'directory missing; please provide directory to function or define object attribute "gammadir"')
         return [x for x in finder(directory, [self.outname_base()], regex=True) if
                 not re.search(r'\.(?:par|hdr|aux\.xml|swp|sh)$', x)]
@@ -494,7 +545,7 @@ class ID(object):
         Parameters
         ----------
         extensions: list of str
-            the names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
+            the names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
         Returns
         -------
         str
@@ -582,7 +633,7 @@ class ID(object):
         raise NotImplementedError
     
     @abc.abstractmethod
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         """
         Unpack the SAR scene into a defined directory.
 
@@ -592,6 +643,8 @@ class ID(object):
             the base directory into which the scene is unpacked
         overwrite: bool
             overwrite an existing unpacked scene?
+        exist_ok: bool
+            allow existing output files and do not create new ones?
 
         Returns
         -------
@@ -599,65 +652,84 @@ class ID(object):
         """
         raise NotImplementedError
     
-    def _unpack(self, directory, offset=None, overwrite=False):
+    def _unpack(self, directory, offset=None, overwrite=False, exist_ok=False):
         """
-        general function for unpacking scene archives; to be called by implementations of ID.unpack
-        :param directory: the name of the directory in which the files are written
-        :param offset: an archive directory offset; to be defined if only a subdirectory is to be unpacked (see e.g. TSX:unpack)
-        :param overwrite: should an existing directory be overwritten?
-        :return: None
+        general function for unpacking scene archives; to be called by implementations of ID.unpack.
+        Will reset object attributes `scene` and `file` to point to the locations of the unpacked scene
+        
+        Parameters
+        ----------
+        directory: str
+            the name of the directory in which the files are written
+        offset: str
+            an archive directory offset; to be defined if only a subdirectory is to be unpacked (see e.g. TSX.unpack)
+        overwrite: bool
+            should an existing directory be overwritten?
+        exist_ok: bool
+            do not attempt unpacking if the target directory already exists? Ignored if ``overwrite==True``
+        
+        Returns
+        -------
+        
         """
+        do_unpack = True
         if os.path.isdir(directory):
             if overwrite:
                 shutil.rmtree(directory)
             else:
-                raise RuntimeError('target scene directory already exists: {}'.format(directory))
-        os.makedirs(directory)
+                if exist_ok:
+                    do_unpack = False
+                else:
+                    raise RuntimeError('target scene directory already exists: {}'.format(directory))
+        os.makedirs(directory, exist_ok=True)
         
-        if tf.is_tarfile(self.scene):
-            archive = tf.open(self.scene, 'r')
-            names = archive.getnames()
-            if offset is not None:
-                names = [x for x in names if x.startswith(offset)]
-            header = os.path.commonprefix(names)
+        if do_unpack:
+            if tf.is_tarfile(self.scene):
+                archive = tf.open(self.scene, 'r')
+                names = archive.getnames()
+                if offset is not None:
+                    names = [x for x in names if x.startswith(offset)]
+                header = os.path.commonprefix(names)
+                
+                if header in names:
+                    if archive.getmember(header).isdir():
+                        for item in sorted(names):
+                            if item != header:
+                                member = archive.getmember(item)
+                                if offset is not None:
+                                    member.name = member.name.replace(offset + '/', '')
+                                archive.extract(member, directory)
+                        archive.close()
+                    else:
+                        archive.extractall(directory)
+                        archive.close()
             
-            if header in names:
-                if archive.getmember(header).isdir():
+            elif zf.is_zipfile(self.scene):
+                archive = zf.ZipFile(self.scene, 'r')
+                names = archive.namelist()
+                header = os.path.commonprefix(names)
+                if header.endswith('/'):
                     for item in sorted(names):
                         if item != header:
-                            member = archive.getmember(item)
-                            if offset is not None:
-                                member.name = member.name.replace(offset + '/', '')
-                            archive.extract(member, directory)
+                            repl = item.replace(header, '', 1)
+                            outname = os.path.join(directory, repl)
+                            outname = outname.replace('/', os.path.sep)
+                            if item.endswith('/'):
+                                os.makedirs(outname)
+                            else:
+                                try:
+                                    with open(outname, 'wb') as outfile:
+                                        outfile.write(archive.read(item))
+                                except zf.BadZipfile:
+                                    log.info('corrupt archive, unpacking failed')
+                                    continue
                     archive.close()
                 else:
                     archive.extractall(directory)
                     archive.close()
-        
-        elif zf.is_zipfile(self.scene):
-            archive = zf.ZipFile(self.scene, 'r')
-            names = archive.namelist()
-            header = os.path.commonprefix(names)
-            if header.endswith('/'):
-                for item in sorted(names):
-                    if item != header:
-                        outname = os.path.join(directory, item.replace(header, '', 1)).replace('/', os.path.sep)
-                        if item.endswith('/'):
-                            os.makedirs(outname)
-                        else:
-                            try:
-                                with open(outname, 'wb') as outfile:
-                                    outfile.write(archive.read(item))
-                            except zf.BadZipfile:
-                                print('corrupt archive, unpacking failed')
-                                continue
-                archive.close()
             else:
-                archive.extractall(directory)
-                archive.close()
-        else:
-            print('unpacking is only supported for TAR and ZIP archives')
-            return
+                log.info('unpacking is only supported for TAR and ZIP archives')
+                return
         
         self.scene = directory
         main = os.path.join(self.scene, os.path.basename(self.file))
@@ -704,7 +776,7 @@ class CEOS_ERS(ID):
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
         
         if re.search('IM__0', match.group('product_id')):
-            raise IOError('product level 0 not supported (yet)')
+            raise RuntimeError('product level 0 not supported (yet)')
         
         self.meta = self.gdalinfo()
         
@@ -728,14 +800,14 @@ class CEOS_ERS(ID):
         lon = [x[1][0] for x in self.meta['gcps']]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         if self.sensor in ['ERS1', 'ERS2']:
             base_file = re.sub(r'\.PS$', '', os.path.basename(self.file))
             base_dir = os.path.basename(directory.strip('/'))
             
             outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
             
-            self._unpack(outdir, overwrite=overwrite)
+            self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
         else:
             raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
     
@@ -882,7 +954,7 @@ class CEOS_PSR(ID):
             try:
                 self.examine()
                 break
-            except IOError as e:
+            except RuntimeError as e:
                 if i + 1 == len(patterns):
                     raise e
         
@@ -1137,9 +1209,9 @@ class CEOS_PSR(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
     
     def getCorners(self):
         if 'corners' not in self.meta.keys():
@@ -1193,19 +1265,19 @@ class EORC_PSR(ID):
     def __init__(self, scene):
         
         self.scene = os.path.realpath(scene)
-
+        
         self.pattern = r'^PSR2-' \
-                        r'(?P<prodlevel>SLTR)_'\
-                        r'(?P<pathnr>RSP[0-9]{3})_' \
-                        r'(?P<date>[0-9]{8})'\
-                        r'(?P<mode>FBD|WBD)'\
-                        r'(?P<beam>[0-9]{2})'\
-                        r'(?P<orbit_dir>A|D)'\
-                        r'(?P<look_dir>L|R)_'\
-                        r'(?P<replay_id1>[0-9A-Z]{16})-'\
-                        r'(?P<replay_id2>[0-9A-Z]{5})_'\
-                        r'(?P<internal>[0-9]{3})_'\
-                        r'HDR$'
+                       r'(?P<prodlevel>SLTR)_' \
+                       r'(?P<pathnr>RSP[0-9]{3})_' \
+                       r'(?P<date>[0-9]{8})' \
+                       r'(?P<mode>FBD|WBD)' \
+                       r'(?P<beam>[0-9]{2})' \
+                       r'(?P<orbit_dir>A|D)' \
+                       r'(?P<look_dir>L|R)_' \
+                       r'(?P<replay_id1>[0-9A-Z]{16})-' \
+                       r'(?P<replay_id2>[0-9A-Z]{5})_' \
+                       r'(?P<internal>[0-9]{3})_' \
+                       r'HDR$'
         
         self.examine()
         
@@ -1240,12 +1312,12 @@ class EORC_PSR(ID):
         ################################################################################################################
         # read header (HDR) file
         header = self._getHeaderfileContent()
-        header = [head.replace(" ","") for head in header]
+        header = [head.replace(" ", "") for head in header]
         
         # read summary text file
         facter_m = self._parseFacter_m()
-        facter_m = [fact.replace(" ","") for fact in facter_m]
-
+        facter_m = [fact.replace(" ", "") for fact in facter_m]
+        
         meta = {}
         
         # read polarizations from image file names
@@ -1253,34 +1325,33 @@ class EORC_PSR(ID):
         meta['product'] = header[3]
         ################################################################################################################
         # read start and stop time --> TODO: in what format is the start and stop time?
-
+        
         try:
-            start_time = facter_m[168].split('.')[0].zfill(2)+facter_m[168].split('.')[1][:4]
-            stop_time = facter_m[170].split('.')[0].zfill(2)+facter_m[170].split('.')[1][:4]
+            start_time = facter_m[168].split('.')[0].zfill(2) + facter_m[168].split('.')[1][:4]
+            stop_time = facter_m[170].split('.')[0].zfill(2) + facter_m[170].split('.')[1][:4]
         except (AttributeError):
             raise IndexError('start and stop time stamps cannot be extracted; see file facter_m.dat')
-
-        meta['start'] = str(header[6])#+'T'+start_time
-        meta['stop'] = str(header[6])#+'T'+stop_time
+        
+        meta['start'] = str(header[6])  # +'T'+start_time
+        meta['stop'] = str(header[6])  # +'T'+stop_time
         ################################################################################################################
         # read file metadata
         meta['sensor'] = header[2]
         ################################################################################################################
         # read leader file name information
-        meta['acquisition_mode']=header[12]
+        meta['acquisition_mode'] = header[12]
         # ###############################################################################################################
         # read map projection data 
-
-        lat = list(map(float, [header[33], header[35],header[37],header[39]]))
-        lon = list(map(float, [header[34], header[36],header[38],header[40]]))
-
+        
+        lat = list(map(float, [header[33], header[35], header[37], header[39]]))
+        lon = list(map(float, [header[34], header[36], header[38], header[40]]))
+        
         meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-        # print(meta['corners'])
-        # epsg=header[]
-        meta['projection'] = crsConvert(4918, 'wkt') #EPSG: 4918: ITRF97, GRS80
+        
+        meta['projection'] = crsConvert(4918, 'wkt')  # EPSG: 4918: ITRF97, GRS80
         ################################################################################################################
         # read data set summary record
-
+        
         orbitsPerCycle = int(207)
         
         meta['orbitNumber_rel'] = int(header[7])
@@ -1292,9 +1363,9 @@ class EORC_PSR(ID):
         meta['samples'] = int(float(facter_m[50]))
         meta['incidence'] = float(facter_m[119])
         meta['proc_facility'] = header[73]
-
+        
         meta['spacing'] = (float(header[51]), float(header[52]))
-
+        
         meta['orbit'] = header[9]
         ################################################################################################################
         # read radiometric data record
@@ -1302,11 +1373,11 @@ class EORC_PSR(ID):
         meta['k_dB'] = float(header[64])
         
         return meta
-
-    def unpack(self, directory, overwrite=False):
+    
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
-        self._unpack(outdir, overwrite=overwrite)
-
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
+    
     def getCorners(self):
         if 'corners' not in self.meta.keys():
             lat = [y for x, y in self.meta.items() if 'Latitude' in x]
@@ -1377,7 +1448,7 @@ class ESA(ID):
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
         
         if re.search('IM__0', match.group('product_id')):
-            raise IOError('product level 0 not supported (yet)')
+            raise RuntimeError('product level 0 not supported (yet)')
         
         self.meta = self.scanMetadata()
         self.meta['acquisition_mode'] = match2.group('image_mode')
@@ -1412,13 +1483,13 @@ class ESA(ID):
         meta['cycleNumber'] = meta['MPH_CYCLE']
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         base_file = os.path.basename(self.file).strip(r'\.zip|\.tar(?:\.gz|)')
         base_dir = os.path.basename(directory.strip('/'))
         
         outdir = directory if base_file == base_dir else os.path.join(directory, base_file)
         
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
 
 
 class SAFE(ID):
@@ -1465,15 +1536,11 @@ class SAFE(ID):
         self.examine(include_folders=True)
         
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
-            raise IOError('folder does not match S1 scene naming convention')
+            raise RuntimeError('folder does not match S1 scene naming convention')
         
         # scan the metadata XML files file and add selected attributes to a meta dictionary
         self.meta = self.scanMetadata()
-        self.meta['projection'] = 'GEOGCS["WGS 84",' \
-                                  'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' \
-                                  'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
-                                  'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
-                                  'AUTHORITY["EPSG","4326"]]'
+        self.meta['projection'] = crsConvert(4326, 'wkt')
         
         # register the standardized meta attributes as object attributes
         super(SAFE, self).__init__(self.meta)
@@ -1488,6 +1555,7 @@ class SAFE(ID):
         ----------
         method: str
             the border noise removal method to be applied; one of the following:
+            
              - 'ESA': the pure implementation as described by ESA
              - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
 
@@ -1502,11 +1570,11 @@ class SAFE(ID):
     
     def getCorners(self):
         coordinates = self.meta['coordinates']
-        lat = [x[0] for x in coordinates]
-        lon = [x[1] for x in coordinates]
+        lat = [x[1] for x in coordinates]
+        lon = [x[0] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=20):
+    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=20, url_option=1):
         """
         download Orbit State Vector files for the scene
 
@@ -1524,6 +1592,11 @@ class SAFE(ID):
             use locally existing files and do not search for files online if the right file has been found?
         timeout: int or tuple or None
             the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
+        url_option: int
+            the URL to query for scenes
+            
+             - 1: https://scihub.copernicus.eu/gnss
+             - 2: https://step.esa.int/auxdata/orbits/Sentinel-1
 
         Returns
         -------
@@ -1548,13 +1621,16 @@ class SAFE(ID):
         
         if osvType in ['POE', 'RES']:
             with S1.OSV(osvdir, timeout=timeout) as osv:
-                files = osv.catch(sensor=self.sensor, osvtype=osvType, start=before, stop=after)
+                files = osv.catch(sensor=self.sensor, osvtype=osvType, start=before, stop=after,
+                                  url_option=url_option)
         
         elif sorted(osvType) == ['POE', 'RES']:
             with S1.OSV(osvdir, timeout=timeout) as osv:
-                files = osv.catch(sensor=self.sensor, osvtype='POE', start=before, stop=after)
+                files = osv.catch(sensor=self.sensor, osvtype='POE', start=before, stop=after,
+                                  url_option=url_option)
                 if len(files) == 0:
-                    files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after)
+                    files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after,
+                                      url_option=url_option)
         else:
             raise TypeError("osvType must either be 'POE', 'RES' or a list of both")
         
@@ -1589,7 +1665,7 @@ class SAFE(ID):
         meta['acquisition_time'] = dict(
             [(x, tree.find('.//safe:{}Time'.format(x), namespaces).text) for x in ['start', 'stop']])
         meta['start'], meta['stop'] = (self.parse_date(meta['acquisition_time'][x]) for x in ['start', 'stop'])
-        meta['coordinates'] = [tuple([float(y) for y in x.split(',')]) for x in
+        meta['coordinates'] = [tuple([float(y) for y in x.split(',')][::-1]) for x in
                                tree.find('.//gml:coordinates', namespaces).text.split()]
         meta['orbit'] = tree.find('.//s1:pass', namespaces).text[0]
         
@@ -1628,9 +1704,9 @@ class SAFE(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file))
-        self._unpack(outdir, overwrite=overwrite)
+        self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
 
 
 class TSX(ID):
@@ -1685,16 +1761,10 @@ class TSX(ID):
         self.examine(include_folders=False)
         
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
-            raise IOError('folder does not match TSX scene naming convention')
+            raise RuntimeError('folder does not match TSX scene naming convention')
         
         self.meta = self.scanMetadata()
-        self.meta['projection'] = 'GEOGCS["WGS 84",' \
-                                  'DATUM["WGS_1984",' \
-                                  'SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],' \
-                                  'AUTHORITY["EPSG","6326"]],' \
-                                  'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],' \
-                                  'UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],' \
-                                  'AUTHORITY["EPSG","4326"]]'
+        self.meta['projection'] = crsConvert(4326, 'wkt')
         
         super(TSX, self).__init__(self.meta)
     
@@ -1736,11 +1806,11 @@ class TSX(ID):
         meta['incidence'] = float(tree.find('.//sceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
         return meta
     
-    def unpack(self, directory, overwrite=False):
+    def unpack(self, directory, overwrite=False, exist_ok=False):
         match = self.findfiles(self.pattern, True)
         header = [x for x in match if not x.endswith('xml') and 'iif' not in x][0].replace(self.scene, '').strip('/')
         outdir = os.path.join(directory, os.path.basename(header))
-        self._unpack(outdir, offset=header, overwrite=overwrite)
+        self._unpack(outdir, offset=header, overwrite=overwrite, exist_ok=exist_ok)
 
 
 class Archive(object):
@@ -1783,6 +1853,7 @@ class Archive(object):
     >>>     archive.insert(scenes_s1)
 
     select all Sentinel-1 A/B scenes stored in the database, which
+    
      * overlap with a test site
      * were acquired in Ground-Range-Detected (GRD) Interferometric Wide Swath (IW) mode before 2018
      * contain a VV polarization image
@@ -1911,7 +1982,7 @@ class Archive(object):
                 elif val in ['String', 'string', 'str']:
                     self.data_schema.append_column(Column(key, String))
                 else:
-                    print('Value in dict custom_fields must be "integer" or "string"!')
+                    log.info('Value in dict custom_fields must be "integer" or "string"!')
         
         # schema for duplicates
         self.duplicates_schema = Table('duplicates', self.meta,
@@ -1919,10 +1990,10 @@ class Archive(object):
                                        Column('scene', String, primary_key=True))
         
         # create tables if not existing
-        if not self.engine.dialect.has_table(self.engine, 'data'):
+        if not sql_inspect(self.engine).has_table('data'):
             log.debug("creating DB table 'data'")
             self.data_schema.create(self.engine)
-        if not self.engine.dialect.has_table(self.engine, 'duplicates'):
+        if not sql_inspect(self.engine).has_table('duplicates'):
             log.debug("creating DB table 'duplicates'")
             self.duplicates_schema.create(self.engine)
         
@@ -1934,40 +2005,39 @@ class Archive(object):
         self.dbfile = dbfile
         
         if cleanup:
-            sys.stdout.write('\rchecking for missing scenes..')
+            log.info('checking for missing scenes')
             self.cleanup()
-            sys.stdout.write('\rchecking for missing scenes..done\n')
             sys.stdout.flush()
     
-    def add_tables(self, tables, verbose=False):
+    def add_tables(self, tables):
         """
         Add tables to the database per :class:`sqlalchemy.schema.Table`
-        Tables provided here will be added to the database. Notice that columns using Geometry must have setting
-        management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
+        Tables provided here will be added to the database.
+        
+        .. note::
+        
+            Columns using Geometry must have setting management=True for SQLite,
+            for example: ``bbox = Column(Geometry('POLYGON', management=True, srid=4326))``
         
         Parameters
         ----------
         tables: :class:`sqlalchemy.schema.Table` or :obj:`list` of :class:`sqlalchemy.schema.Table`
-            Tables provided here will be added to the database. Notice that columns using Geometry must have setting
-            management=True for SQLite, for example: bbox = Column(Geometry('POLYGON', management=True, srid=4326))
-        verbose: bool
-            print info
+            The table(s) to be added to the database.
         """
         created = []
         if isinstance(tables, list):
             for table in tables:
                 table.metadata = self.meta
-                if not self.engine.dialect.has_table(self.engine, str(table)):
+                if not sql_inspect(self.engine).has_table(str(table)):
                     table.create(self.engine)
                     created.append(str(table))
         else:
             table = tables
             table.metadata = self.meta
-            if not self.engine.dialect.has_table(self.engine, str(table)):
+            if not sql_inspect(self.engine).has_table(str(table)):
                 table.create(self.engine)
                 created.append(str(table))
-        if verbose:
-            print('Created table(s) {}.'.format(', '.join(created)))
+        log.info('created table(s) {}.'.format(', '.join(created)))
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
     
@@ -2058,52 +2128,50 @@ class Archive(object):
         files = [self.encode(x[0]) for x in scenes]
         return [x for x in files if not os.path.isfile(x)]
     
-    def insert(self, scene_in, verbose=False, test=False):
+    def insert(self, scene_in, pbar=False, test=False):
         """
         Insert one or many scenes into the database
 
         Parameters
         ----------
-        scene_in: str or list
+        scene_in: str or ID or list
             a SAR scene or a list of scenes to be inserted
-        verbose: bool
-            should status information and a progress bar be printed into the console?
+        pbar: bool
+            show a progress bar?
         test: bool
             should the insertion only be tested or directly be committed to the database?
         """
-        if verbose:
-            length = len(scene_in) if isinstance(scene_in, list) else 1
-            print('...got {0} scene{1}'.format(length, 's' if length > 1 else ''))
+        length = len(scene_in) if isinstance(scene_in, list) else 1
+        
         if isinstance(scene_in, (ID, str)):
             scene_in = [scene_in]
         if not isinstance(scene_in, list):
             raise RuntimeError('scene_in must either be a string pointing to a file, a pyroSAR.ID object '
                                'or a list containing several of either')
         
-        if verbose:
-            print('filtering scenes by name...')
+        log.info('filtering scenes by name')
         scenes = self.filter_scenelist(scene_in)
         if len(scenes) == 0:
-            print('nothing to be done')
+            log.info('...nothing to be done')
             return
-        if verbose:
-            print('identifying scenes and extracting metadata...')
-        scenes = identify_many(scenes)
+        log.info('identifying scenes and extracting metadata')
+        scenes = identify_many(scenes, pbar=pbar)
         
-        if len(scenes) > 0:
-            if verbose:
-                print('...{0} scene{1} remaining'.format(len(scenes), 's' if len(scenes) > 1 else ''))
-        else:
-            print('all scenes are already registered')
+        if len(scenes) == 0:
+            log.info('all scenes are already registered')
             return
         
         counter_regulars = 0
         counter_duplicates = 0
         list_duplicates = []
-        pbar = None
-        if verbose:
-            print('inserting scenes into temporary database...')
-            pbar = pb.ProgressBar(max_value=len(scenes))
+        
+        message = 'inserting {0} scene{1} into database'
+        log.info(message.format(len(scenes), '' if len(scenes) == 1 else 's'))
+        log.debug('testing changes in temporary database')
+        if pbar:
+            progress = pb.ProgressBar(max_value=len(scenes))
+        else:
+            progress = None
         basenames = []
         insertions = []
         session = self.Session()
@@ -2113,37 +2181,37 @@ class Archive(object):
                 insertion = self.__prepare_insertion(id)
                 insertions.append(insertion)
                 counter_regulars += 1
+                log.debug('regular:   {}'.format(id.scene))
             elif not self.__is_registered_in_duplicates(id):
                 insertion = self.Duplicates(outname_base=basename, scene=id.scene)
                 insertions.append(insertion)
                 counter_duplicates += 1
+                log.debug('duplicate: {}'.format(id.scene))
             else:
                 list_duplicates.append(id.outname_base())
             
-            if pbar is not None:
-                pbar.update(i + 1)
+            if progress is not None:
+                progress.update(i + 1)
             basenames.append(basename)
         
-        if pbar is not None:
-            pbar.finish()
+        if progress is not None:
+            progress.finish()
         
         session.add_all(insertions)
         
         if not test:
-            if verbose:
-                print('committing transactions to permanent database...')
+            log.debug('committing transactions to permanent database')
             # commit changes of the session
             session.commit()
         else:
-            if verbose:
-                print('rolling back temporary database changes...')
+            log.info('rolling back temporary database changes')
             # roll back changes of the session
             session.rollback()
         
-        print('{} scenes registered regularly'.format(counter_regulars))
-        print('{} duplicates registered'.format(counter_duplicates))
-        if len(list_duplicates) != 0:
-            print('Scene(s) {} already registered as duplicate!'.format(list_duplicates))
+        message = '{0} scene{1} registered regularly'
+        log.info(message.format(counter_regulars, '' if counter_regulars == 1 else 's'))
+        message = '{0} duplicate{1} registered'
+        log.info(message.format(counter_duplicates, '' if counter_duplicates == 1 else 's'))
     
     def is_registered(self, scene):
         """
@@ -2204,11 +2272,10 @@ class Archive(object):
         -------
 
         """
-        for table in ['data', 'duplicates']:
-            missing = self.__select_missing(table)
-            for scene in missing:
-                print('Removing missing scene from database table {0}: {1}'.format(table, scene))
-                self.drop_element(scene, table)
+        missing = self.__select_missing('data')
+        for scene in missing:
+            log.info('Removing missing scene from database tables: {}'.format(scene))
+            self.drop_element(scene, with_duplicates=True)
     
     @staticmethod
     def encode(string, encoding='utf-8'):
@@ -2235,7 +2302,7 @@ class Archive(object):
         -------
         """
         if table not in ['data', 'duplicates']:
-            print('Only data and duplicates can be exported!')
+            log.warning('Only data and duplicates can be exported!')
             return
         
         # add the .shp extension if missing
@@ -2280,7 +2347,7 @@ class Archive(object):
         """
         for item in scenelist:
             if not isinstance(item, (ID, str)):
-                raise IOError('items in scenelist must be of type "str" or pyroSAR.ID')
+                raise TypeError("items in scenelist must be of type 'str' or 'pyroSAR.ID'")
         
         # ORM query, get all scenes locations
         scenes_data = self.Session().query(self.Data.scene)
@@ -2321,13 +2388,15 @@ class Archive(object):
         list
             the table names
         """
+        #  TODO: make this dynamic
+        #  the method was intended to only return user generated tables by default, as well as data and duplicates
         all_tables = ['ElementaryGeometries', 'SpatialIndex', 'geometry_columns', 'geometry_columns_auth',
                       'geometry_columns_field_infos', 'geometry_columns_statistics', 'geometry_columns_time',
                       'spatial_ref_sys', 'spatial_ref_sys_aux', 'spatialite_history', 'sql_statements_log',
                       'sqlite_sequence', 'views_geometry_columns', 'views_geometry_columns_auth',
                       'views_geometry_columns_field_infos', 'views_geometry_columns_statistics',
                       'virts_geometry_columns', 'virts_geometry_columns_auth', 'virts_geometry_columns_field_infos',
-                      'virts_geometry_columns_statistics']
+                      'virts_geometry_columns_statistics', 'data_licenses', 'KNN']
         # get tablenames from metadata
         tables = sorted([self.encode(x) for x in self.meta.tables.keys()])
         if return_all:
@@ -2353,7 +2422,7 @@ class Archive(object):
         registered = [os.path.dirname(self.encode(x[0])) for x in scenes]
         return list(set(registered))
     
-    def import_outdated(self, dbfile, verbose=False):
+    def import_outdated(self, dbfile):
         """
         import an older data base in csv format
 
@@ -2361,8 +2430,6 @@ class Archive(object):
         ----------
         dbfile: str
             the file name of the old data base
-        verbose: bool
-            should status information and a progress bar be printed into the console?
 
         Returns
         -------
@@ -2376,9 +2443,9 @@ class Archive(object):
             scenes = []
             for row in reader:
                 scenes.append(row['scene'])
-            self.insert(scenes, verbose=verbose)
+            self.insert(scenes)
     
-    def move(self, scenelist, directory, verbose=False):
+    def move(self, scenelist, directory, pbar=False):
         """
         Move a list of files while keeping the database entries up to date.
         If a scene is registered in the database (in either the data or duplicates table),
@@ -2390,6 +2457,8 @@ class Archive(object):
             the file locations
         directory: str
             a folder to which the files are moved
+        pbar: bool
+            show a progress bar?
 
         Returns
         -------
@@ -2400,10 +2469,10 @@ class Archive(object):
             raise RuntimeError('directory cannot be written to')
         failed = []
         double = []
-        if verbose:
-            pbar = pb.ProgressBar(max_value=len(scenelist)).start()
+        if pbar:
+            progress = pb.ProgressBar(max_value=len(scenelist)).start()
         else:
-            pbar = None
+            progress = None
         
         for i, scene in enumerate(scenelist):
             new = os.path.join(directory, os.path.basename(scene))
@@ -2416,8 +2485,8 @@ class Archive(object):
                 failed.append(scene)
                 continue
             finally:
-                if pbar is not None:
-                    pbar.update(i + 1)
+                if progress is not None:
+                    progress.update(i + 1)
             if self.select(scene=scene) != 0:
                 table = 'data'
             else:
@@ -2431,16 +2500,16 @@ class Archive(object):
             if table:
                 # using core connection to execute SQL syntax (as was before)
                 self.conn.execute('''UPDATE {0} SET scene= '{1}' WHERE scene='{2}' '''.format(table, new, scene))
-        if pbar is not None:
-            pbar.finish()
-        if verbose:
-            if len(failed) > 0:
-                print('The following scenes could not be moved:\n{}'.format('\n'.join(failed)))
-            if len(double) > 0:
-                print('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
+        if progress is not None:
+            progress.finish()
+        
+        if len(failed) > 0:
+            log.info('The following scenes could not be moved:\n{}'.format('\n'.join(failed)))
+        if len(double) > 0:
+            log.info('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
     
     def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None,
-               recursive=False, polarizations=None, verbose=False, **args):
+               recursive=False, polarizations=None, **args):
         """
         select scenes from the database
 
@@ -2448,19 +2517,17 @@ class Archive(object):
         ----------
         vectorobject: :class:`~spatialist.vector.Vector`
             a geometry with which the scenes need to overlap
-        mindate: str
-            the minimum acquisition date in format YYYYmmddTHHMMSS
-        maxdate: str
-            the maximum acquisition date in format YYYYmmddTHHMMSS
-        processdir: str
-            a directory to be scanned for already processed scenes;
-            the selected scenes will be filtered to those that have not yet been processed
+        mindate: str or datetime.datetime, optional
+            the minimum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
+        maxdate: str or datetime.datetime, optional
+            the maximum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
+        processdir: str, optional
+            A directory to be scanned for already processed scenes;
+            the selected scenes will be filtered to those that have not yet been processed. Default: None
         recursive: bool
-            should also the subdirectories of the processdir be scanned?
+            (only if `processdir` is not None) should also the subdirectories of the `processdir` be scanned?
         polarizations: list
             a list of polarization strings, e.g. ['HH', 'VV']
-        verbose: bool
-            print details about the selection including the SQL query?
         **args:
             any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
 
@@ -2473,7 +2540,7 @@ class Archive(object):
         arg_valid = [x for x in args.keys() if x in self.get_colnames()]
         arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
-            print('the following arguments will be ignored as they are not registered in the data base: {}'.format(
+            log.info('the following arguments will be ignored as they are not registered in the data base: {}'.format(
                 ', '.join(arg_invalid)))
         arg_format = []
         vals = []
@@ -2486,17 +2553,21 @@ class Archive(object):
                 elif isinstance(args[key], (tuple, list)):
                     arg_format.append('''{0} IN ('{1}')'''.format(key, "', '".join(map(str, args[key]))))
         if mindate:
+            if isinstance(mindate, datetime):
+                mindate = mindate.strftime('%Y%m%dT%H%M%S')
             if re.search('[0-9]{8}T[0-9]{6}', mindate):
                 arg_format.append('start>=?')
                 vals.append(mindate)
             else:
-                print('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
+                log.info('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
         if maxdate:
+            if isinstance(maxdate, datetime):
+                maxdate = maxdate.strftime('%Y%m%dT%H%M%S')
             if re.search('[0-9]{8}T[0-9]{6}', maxdate):
                 arg_format.append('stop<=?')
                 vals.append(maxdate)
             else:
-                print('WARNING: argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
+                log.info('WARNING: argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
         
         if polarizations:
             for pol in polarizations:
@@ -2505,7 +2576,7 @@ class Archive(object):
         
         if vectorobject:
             if isinstance(vectorobject, Vector):
-                vectorobject.reproject('+proj=longlat +datum=WGS84 +no_defs ')
+                vectorobject.reproject(4326)
                 site_geom = vectorobject.convert2wkt(set3D=False)[0]
                 # postgres has a different way to store geometries
                 if self.driver == 'postgresql':
@@ -2516,15 +2587,14 @@ class Archive(object):
                     arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
                     vals.append(site_geom)
             else:
-                print('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
+                log.info('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
         
         query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
         # the query gets assembled stepwise here
         for val in vals:
             query = query.replace('?', ''' '{0}' ''', 1).format(val)
+        log.debug(query)
         
-        if verbose:
-            print(query)
         # core SQL execution
         query_rs = self.conn.execute(query)
         
@@ -2616,6 +2686,7 @@ class Archive(object):
         self.Session().close()
         self.conn.close()
         self.engine.dispose()
+        gc.collect(generation=2)  # this was added as a fix for win PermissionError when deleting sqlite.db files.
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
@@ -2641,7 +2712,7 @@ class Archive(object):
         entry_data_outname_base = []
         for rowproxy in self.conn.execute(search):
             entry_data_outname_base.append((rowproxy[12]))
-        # print(entry_data_outname_base)
+        # log.info(entry_data_outname_base)
         
         # delete entry in data table
         delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
@@ -2655,7 +2726,7 @@ class Archive(object):
                 self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
             self.conn.execute(delete_statement_dup)
             
-            print(return_sentence + ' and duplicates!'.format(scene))
+            log.info(return_sentence + ' and duplicates!'.format(scene))
             return
         
         # else select scene info matching outname_base from duplicates
@@ -2675,12 +2746,13 @@ class Archive(object):
             # insert scene from duplicates into data
             self.insert(entry_duplicates_scene[0])
             
-            return_sentence += ' and entry with outname_base \n{} \nand scene \n{} \nwas moved from duplicates into data table'.format(
+            return_sentence += ' and entry with outname_base \n{} \nand scene \n{} \n' \
+                               'was moved from duplicates into data table'.format(
                 entry_data_outname_base[0], entry_duplicates_scene[0])
         
-        print(return_sentence + '!')
+        log.info(return_sentence + '!')
     
-    def drop_table(self, table, verbose=False):
+    def drop_table(self, table):
         """
         Drop a table from the database.
 
@@ -2688,8 +2760,6 @@ class Archive(object):
         ----------
         table: str
             tablename
-        verbose: bool
-            print additional info to console
 
         Returns
         -------
@@ -2704,10 +2774,9 @@ class Archive(object):
             else:
                 table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
                 table_info.drop(self.engine)
-            if verbose:
-                print('Table {} dropped from database.'.format(table))
+            log.info('table {} dropped from database.'.format(table))
         else:
-            raise ValueError("Table {} is not registered in the database!".format(table))
+            raise ValueError("table {} is not registered in the database!".format(table))
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
     
@@ -2797,48 +2866,6 @@ def drop_archive(archive):
     else:
         raise RuntimeError('this function only works for PostgreSQL databases.'
                            'For SQLite databases it is recommended to just delete the DB file.')
-
-
-def findfiles(scene, pattern, include_folders=False):
-    """
-    find files in a scene archive, which match a pattern
-
-    Parameters
-    ----------
-    scene: str
-        the SAR scene to be scanned, can be a directory, a zip or tar.gz archive
-    pattern: str
-        the regular expression to match
-    include_folders: bool
-         also match folders (or just files)?
-    Returns
-    -------
-    list
-        the matched file names
-    """
-    if os.path.isdir(scene):
-        files = finder(scene, [pattern], regex=True, foldermode=1 if include_folders else 0)
-        if re.search(pattern, os.path.basename(scene)) and include_folders:
-            files.append(scene)
-    elif zf.is_zipfile(scene):
-        with zf.ZipFile(scene, 'r') as zip:
-            files = [os.path.join(scene, x) for x in zip.namelist() if
-                     re.search(pattern, os.path.basename(x.strip('/')))]
-            if include_folders:
-                files = [x.strip('/') for x in files]
-            else:
-                files = [x for x in files if not x.endswith('/')]
-    elif tf.is_tarfile(scene):
-        tar = tf.open(scene)
-        files = [x for x in tar.getnames() if re.search(pattern, os.path.basename(x.strip('/')))]
-        if not include_folders:
-            files = [x for x in files if not tar.getmember(x).isdir()]
-        tar.close()
-        files = [os.path.join(scene, x) for x in files]
-    else:
-        files = [scene] if re.search(pattern, scene) else []
-    files = [str(x) for x in files]
-    return files
 
 
 def getFileObj(scene, filename):

@@ -1,7 +1,7 @@
 ###############################################################################
-# parse Gamma command docstrings to Python functions
+# parse GAMMA command docstrings to Python functions
 
-# Copyright (c) 2015-2021, the pyroSAR Developers.
+# Copyright (c) 2015-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -19,10 +19,13 @@ from spatialist.ancillary import finder, which, dissolve
 
 from pyroSAR.examine import ExamineGamma
 
+import logging
+log = logging.getLogger(__name__)
+
 
 def parse_command(command, indent='    '):
     """
-    Parse the help text of a Gamma command to a Python function including a docstring.
+    Parse the help text of a GAMMA command to a Python function including a docstring.
     The docstring is in rst format and can thu be parsed by e.g. sphinx.
     This function is not intended to be used by itself, but rather within function :func:`parse_module`.
 
@@ -74,6 +77,11 @@ def parse_command(command, indent='    '):
                        'atm_mod_2d': [('xref', 'rref'),
                                       ('yref', 'azref')],
                        'atm_mod_2d_pt': [('[sigma_min]', '[sigma_max]')],
+                       'base_calc': [('plt_flg', 'plt_flag'),
+                                     ('pltflg', 'plt_flag')],
+                       'base_init': [('<base>', '<baseline>')],
+                       'base_plot': [('plt_flg', 'plt_flag'),
+                                     ('pltflg', 'plt_flag')],
                        'cc_monitoring': [('...', '<...>')],
                        'cct_sp_pt': [('pcct_sp_pt', 'pcct_sp')],
                        'comb_interfs': [('combi_out', 'combi_int')],
@@ -81,11 +89,7 @@ def parse_command(command, indent='    '):
                                            ('east/lon', 'east_lon'),
                                            ('SLC_par', '<SLC_MLI_par>'),
                                            ('SLC/MLI_par', 'SLC_MLI_par')],
-                       'base_calc': [('plt_flg', 'plt_flag'),
-                                     ('pltflg', 'plt_flag')],
-                       'base_init': [('<base>', '<baseline>')],
-                       'base_plot': [('plt_flg', 'plt_flag'),
-                                     ('pltflg', 'plt_flag')],
+                       'data2geotiff': [('nodata', 'no_data')],
                        'dis2hgt': [('m/cycle', 'm_cycle')],
                        'discc': [('min_corr', 'cmin'),
                                  ('max_corr', 'cmax')],
@@ -126,7 +130,8 @@ def parse_command(command, indent='    '):
                                       ('-m MLI_dir', 'mli_dir'),
                                       ('-s scale', 'scale'),
                                       ('-e exp', 'exponent'),
-                                      ('-u', 'update')],
+                                      ('-u', 'update'),
+                                      ('-D', 'dem_par')],
                        'mk_base_calc': [('<RSLC_tab>', '<SLC_tab>')],
                        'mk_cpd_all': [('dtab', 'data_tab')],
                        'mk_cpx_ref_2d': [('diff_tab', 'cpx_tab')],
@@ -231,6 +236,7 @@ def parse_command(command, indent='    '):
                                     ('SLC2Rs_par', 'SLC-2Rs_par')],
                        'SLC_intf_geo2': [('cc        (', 'CC        (')],
                        'SLC_interp_map': [('coffs2_sm', 'coffs_sm')],
+                       'SLC_mosaic_S1_TOPS': [('wflg', 'bflg')],
                        'srtm_mosaic': [('<lon>', '<lon2>')],
                        'SSI_INT_S1': [('<SLC2> <par2>', '<SLC_tab2>')],
                        'texture': [('weights_flag', 'wgt_flag')],
@@ -259,19 +265,20 @@ def parse_command(command, indent='    '):
     
     # filter required and optional arguments from usage description text
     arg_req_raw = [re.sub(r'[^\w.-]*', '', x) for x in re.findall('[^<]*<([^>]*)>', usage)]
-    arg_opt_raw = [re.sub(r'[^\w.-]*', '', x) for x in re.findall(r'[^[]*\[([^]]*)\]', usage)]
+    arg_opt_raw = [re.sub(r'[^\w.-]*', '', x) for x in re.findall(r'[^[]*\[([^]]*)]', usage)]
     
     ###########################################
     # add parameters missing in the usage argument lists
     
-    appends = {'mk_adf2_2d': ['cc_min', 'cc_max', 'mli_dir', 'scale', 'exponent', 'update'],
+    appends = {'mk_adf2_2d': ['cc_min', 'cc_max', 'mli_dir', 'scale', 'exponent', 'update', 'dem_par'],
                'mk_pol2rec_2d': ['scale', 'exponent', 'min', 'max', 'rmax', 'mode', 'update'],
                'SLC_interp_S1_TOPS': ['mode', 'order'],
                'SLC_interp_map': ['mode', 'order']}
     
     if command_base in appends.keys():
         for var in appends[command_base]:
-            arg_opt_raw.append(var)
+            if var not in arg_opt_raw:
+                arg_opt_raw.append(var)
     ###########################################
     # define parameter replacements; this is intended for parameters which are to be aggregated into a list parameter
     replacements = {'cc_monitoring': [(['nfiles', 'f1', 'f2', '...'],
@@ -396,7 +403,8 @@ def parse_command(command, indent='    '):
     flag_args = {'mk_adf2_2d': [('mli_dir', '-m', None),
                                 ('scale', '-s', None),
                                 ('exponent', '-e', None),
-                                ('update', '-u', False)],
+                                ('update', '-u', False),
+                                ('dem_par', '-D', None)],
                  'mk_pol2rec_2d': [('scale', '-s', None),
                                    ('exp', '-e', None),
                                    ('min', '-a', None),
@@ -645,7 +653,6 @@ def parse_module(bindir, outfile):
     for cmd in sorted(finder(bindir, [r'^\w+$'], regex=True), key=lambda s: s.lower()):
         basename = os.path.basename(cmd)
         if basename not in excludes:
-            # print(basename)
             try:
                 fun = parse_command(cmd)
             except RuntimeError as e:
@@ -664,14 +671,14 @@ def parse_module(bindir, outfile):
         with open(outfile, 'a') as out:
             out.write(outstring)
     if len(failed) > 0:
-        print('the following functions could not be parsed:\n{0}\n({1} total)'.format('\n'.join(failed), len(failed)))
+        log.info('the following functions could not be parsed:\n{0}\n({1} total)'.format('\n'.join(failed), len(failed)))
 
 
 def autoparse():
     """
-    automatic parsing of Gamma commands.
-    This function will detect the Gamma installation via environment variable `GAMMA_HOME`, detect all available
-    modules (e.g. ISP, DIFF) and parse all of the module's commands via function :func:`parse_module`.
+    automatic parsing of GAMMA commands.
+    This function will detect the GAMMA installation via environment variable `GAMMA_HOME`, detect all available
+    modules (e.g. ISP, DIFF) and parse all the module's commands via function :func:`parse_module`.
     A new Python module will be created called `gammaparse`, which is stored under `$HOME/.pyrosar`.
     Upon importing the `pyroSAR.gamma` submodule, this function is run automatically and module `gammaparse`
     is imported as `api`.
@@ -692,14 +699,13 @@ def autoparse():
     for module in finder(home, ['[A-Z]*'], foldermode=2):
         outfile = os.path.join(target, os.path.basename(module).lower() + '.py')
         if not os.path.isfile(outfile):
-            print('parsing module {} to {}'.format(os.path.basename(module), outfile))
+            log.info('parsing module {} to {}'.format(os.path.basename(module), outfile))
             for submodule in ['bin', 'scripts']:
-                print('-' * 10 + '\n{}'.format(submodule))
+                log.info(submodule)
                 try:
                     parse_module(os.path.join(module, submodule), outfile)
                 except OSError:
-                    print('..does not exist')
-            print('=' * 20)
+                    log.info('..does not exist')
     modules = [re.sub(r'\.py', '', os.path.basename(x)) for x in finder(target, [r'[a-z]+\.py$'], regex=True)]
     if len(modules) > 0:
         with open(os.path.join(target, '__init__.py'), 'w') as init:

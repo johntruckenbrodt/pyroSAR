@@ -14,12 +14,15 @@ used for updating the metadata. pyroSAR offers several approaches for automatica
 files. The central tool for managing existing files and downloading new ones is the class :class:`pyroSAR.S1.OSV`, which
 is used for all approaches.
 
-NOTE: in the following a dedicated directory is defined into which the files will be downloaded. If this directory is
-not defined (default is `None`), the files will be downloaded to SNAP's auxiliary data location (see above). This is
-recommended as the files are kept in a central location that is accessible both by SNAP and by pyroSAR's GAMMA
-functionality.
+.. note::
 
-**approach 1: direct download by time span**
+    in the following a dedicated directory is defined into which the files will be downloaded. If this directory is
+    not defined (default is `None`), the files will be downloaded to SNAP's auxiliary data location (see above). This is
+    recommended as the files are kept in a central location that is accessible both by SNAP and by pyroSAR's GAMMA
+    functionality.
+
+approach 1: direct download by time span
+========================================
 
 In case a large number of scenes is to be processed and/or no internet access is available during processing, the files
 can be downloaded by time span to a central directory. This is the most basic approach using the central class
@@ -34,15 +37,17 @@ can be downloaded by time span to a central directory. This is the most basic ap
 
     with OSV(osvdir) as osv:
         files = osv.catch(sensor='S1A', osvtype='POE',
-                          start='20170101T000000', stop='20180101T000000')
+                          start='20170101T000000', stop='20180101T000000',
+                          url_option=1)
         osv.retrieve(files)
 
 Two sub-directories `POEORB` and `RESORB` will be created in `osvdir` containing the downloaded files. `POEORB` will
 contain the `Precise Orbit Ephemerides` files, which are the most accurate but are first available about two weeks after
 the scene's acquisition. `RESORB` describes the `Restituted Orbit` files, which are less accurate but available
-directly after acquisition. The files can be manually downloaded here: https://qc.sentinel1.eo.esa.int/.
+directly after acquisition. See method :meth:`~pyroSAR.S1.OSV.catch` for download URL options.
 
-**approach 2: manual download per scene**
+approach 2: manual download per scene
+=====================================
 
 The method :meth:`pyroSAR.drivers.SAFE.getOSV` can be used to directly retrieve the files relevant for the scene.
 This method internally uses the methods described above with a time span limited to that of the scene acquisition.
@@ -55,11 +60,12 @@ This method internally uses the methods described above with a time span limited
     match = id.getOSV(osvdir='/path/to/osvdir', osvType='POE', returnMatch=True)
     print(match)
 
-**approach 3: direct download and scene metadata update**
+approach 3: direct download and scene metadata update (GAMMA only)
+==================================================================
 
 The convenience function :func:`pyroSAR.gamma.correctOSV` internally makes use of approach 2 and additionally directly
 executes the GAMMA command `isp.S1_OPOD_vec` for updating the scene's metadata with the information of the OSV file.
-The scene has to be unpacked first.
+The scene has to be unpacked first (see :meth:`pyroSAR.drivers.SAFE.unpack`).
 
 .. code-block:: python
 
@@ -70,7 +76,8 @@ The scene has to be unpacked first.
     id.unpack('tmpdir')
     correctOSV(id=id, osvdir='/path/to/osvdir', osvType='POE')
 
-**approach 4: automatic download and use during processing**
+approach 4: automatic download and use during processing
+========================================================
 
 The processing function :func:`pyroSAR.gamma.geocode` automatically downloads OSV files needed for processing and
 updates the scene's metadata using function :func:`~pyroSAR.gamma.correctOSV`.
@@ -83,7 +90,7 @@ The parameter `allow_RES_OSV` can be used to allow processing with `RES` files i
     scene = 'S1A_IW_GRDH_1SDV_20180101T170648_20180101T170713_019964_021FFD_DA78.zip'
     geocode(scene=scene,
             dem='/path/to/demfile',
-            tempdir='tmpdir',
+            tmpdir='tmpdir',
             outdir='outdir',
             targetres=20,
             osvdir='/path/to/osvdir',
@@ -96,11 +103,11 @@ matching OSV type for processing.
 
     from pyroSAR.snap import geocode
     scene = 'S1A_IW_GRDH_1SDV_20180101T170648_20180101T170713_019964_021FFD_DA78.zip'
-    geocode(scene=scene,
+    geocode(infile=scene,
             outdir='outdir',
             allow_RES_OSV=True)
 
-In contrast to the GAMMA function the OSV download directory cannot be set because of the fixed SNAP auxiliary data
+In contrast to the GAMMA function, the OSV download directory cannot be set because of the fixed SNAP auxiliary data
 location. The type of the available OSV file is written to the workflow XML file for processing:
 
 .. code-block:: xml

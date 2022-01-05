@@ -1,7 +1,6 @@
 ###############################################################################
 # Examination of SAR processing software
-
-# Copyright (c) 2019-2020, the pyroSAR Developers.
+# Copyright (c) 2019-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -15,14 +14,18 @@ import ast
 import json
 import os
 import shutil
-
+import platform
 import re
 import warnings
-
+import subprocess as sp
 import pkg_resources
 
 from pyroSAR._dev_config import ConfigHandler
 from spatialist.ancillary import finder
+
+import logging
+
+log = logging.getLogger(__name__)
 
 config = ConfigHandler()
 
@@ -51,12 +54,11 @@ class ExamineSnap(object):
         self.sections = ['SNAP', 'OUTPUT', 'SNAP_SUFFIX']
         
         # try reading all necessary attributes from the config file
-        # print('reading config..')
         self.__read_config()
         
         # if SNAP could not be identified from the config attributes, do a system search for it
         if not self.__is_identified():
-            # print('identifying SNAP..')
+            log.debug('identifying SNAP')
             self.__identify_snap()
         
         # if the auxdatapath attribute was not yet set, create a default directory
@@ -67,10 +69,12 @@ class ExamineSnap(object):
         # if the SNAP auxdata properties attribute was not yet identified,
         # point it to the default file delivered with pyroSAR
         if not hasattr(self, 'properties'):
-            # print('using default properties file..')
+            # log.info('using default properties file..')
             template = os.path.join('snap', 'data', 'snap.auxdata.properties')
             self.properties = pkg_resources.resource_filename(__name__, template)
         
+        # if the SNAP suffices attribute was not yet identified,
+        # point it to the default file delivered with pyroSAR
         if not hasattr(self, 'suffices'):
             template = os.path.join('snap', 'data', 'snap.suffices.properties')
             fname_suffices = pkg_resources.resource_filename(__name__, template)
@@ -84,6 +88,9 @@ class ExamineSnap(object):
         
         # update the config file: this scans for config changes and re-writes the config file if any are found
         self.__update_config()
+    
+    def __getattr__(self, item):
+        raise AttributeError("'ExamineSnap' object has no attribute '{}'".format(item))
     
     def __is_identified(self):
         """
@@ -119,6 +126,7 @@ class ExamineSnap(object):
         # for each possible SNAP executable, check whether additional files and directories exist relative to it
         # to confirm whether it actually is a ESA SNAP installation or something else like e.g. the Ubuntu App Manager
         for path in executables:
+            log.debug('checking candidate {}'.format(path))
             if os.path.islink(path):
                 path = os.path.realpath(path)
             
@@ -148,9 +156,9 @@ class ExamineSnap(object):
             self.properties = auxdata_properties
             return
         
-        warnings.warn('SNAP could not be identified. If you have installed it please add the path to the SNAP '
-                      'executables (bin subdirectory) to the PATH environment. '
-                      'E.g. in the Linux .bashrc file add the following line:\nexport PATH=$PATH:path/to/snap/bin"')
+        log.warning('SNAP could not be identified. If you have installed it please add the path to the SNAP '
+                    'executables (bin subdirectory) to the PATH environment. '
+                    'E.g. in the Linux .bashrc file add the following line:\nexport PATH=$PATH:path/to/snap/bin"')
     
     def __read_config(self):
         """
@@ -202,13 +210,13 @@ class ExamineSnap(object):
                 else:
                     exist = os.path.isdir(val)
                 if exist:
-                    # print('setting attribute {}'.format(attr))
+                    # log.info('setting attribute {}'.format(attr))
                     setattr(self, attr, val)
     
     def __update_config(self):
         for section in self.sections:
             if section not in config.sections:
-                # print('creating section {}..'.format(section))
+                # log.info('creating section {}..'.format(section))
                 config.add_section(section)
         
         for key in self.identifiers + ['auxdatapath', 'properties']:
@@ -227,8 +235,8 @@ class ExamineSnap(object):
             value = json.dumps(value)
         
         if attr not in config[section].keys() or config[section][attr] != value:
-            # print('updating attribute {0}:{1}..'.format(section, attr))
-            # print('  {0} -> {1}'.format(repr(config[section][attr]), repr(value)))
+            # log.info('updating attribute {0}:{1}..'.format(section, attr))
+            # log.info('  {0} -> {1}'.format(repr(config[section][attr]), repr(value)))
             config.set(section, key=attr, value=value, overwrite=True)
     
     def __update_snap_properties(self):
@@ -284,6 +292,67 @@ class ExamineSnap(object):
             return self.__suffices[operator]
         else:
             return None
+    
+    def get_version(self, module):
+        """
+        Read the version and date of different SNAP modules.
+        This scans a file 'messages.log', which is re-written every time SNAP is started.
+        
+        Parameters
+        ----------
+        module: str
+            one of the following
+            
+            - core
+            - desktop
+            - rstbx
+            - s1tbx
+            - s2tbx
+            - s3tbx
+
+        Returns
+        -------
+        dict
+            a dictionary with keys 'version' and 'date'
+        """
+        # base search patterns for finding the right lines
+        patterns = {'core': r'org\.esa\.snap\.snap\.core',
+                    'desktop': r'org\.esa\.snap\.snap\.ui',
+                    'rstb': r'org\.csa\.rstb\.rstb\.kit',
+                    's1tbx': r'org\.esa\.s1tbx\.s1tbx\.kit',
+                    's2tbx': r'org\.esa\.s2tbx\.s2tbx\.kit',
+                    's3tbx': r'org\.esa\.s3tbx\.s3tbx\.kit'}
+        
+        if module in patterns.keys():
+            pattern = patterns[module]
+            pattern += r' \[(?P<version>[0-9.]+) [0-9.]+ (?P<date>[0-9]{12})'
+        else:
+            raise RuntimeError('module not supported')
+        
+        system = platform.system()
+        if system in ['Linux', 'Darwin']:
+            path = os.path.join(os.path.expanduser('~'), '.snap', 'system')
+        elif system == 'Windows':
+            path = os.path.join(os.environ['APPDATA'], 'SNAP')
+        else:
+            raise RuntimeError('operating system not supported')
+        
+        fname = os.path.join(path, 'var', 'log', 'messages.log')
+        
+        if not os.path.isfile(fname):
+            try:
+                # This will start SNAP and immediately stop it because of the invalid argument.
+                # Currently this seems to be the only way to create the messages.log file if it does not exist.
+                sp.check_call([self.path, '--nosplash', '--dummytest', '--console', 'suppress'])
+            except sp.CalledProcessError:
+                pass
+        
+        with open(fname, 'r') as m:
+            content = m.read()
+        match = re.search(pattern, content)
+        if match is None:
+            raise RuntimeError('cannot read version information from {}.\nPlease restart SNAP.'.format(fname))
+        return match.groupdict()
 
 
 class ExamineGamma(object):
@@ -297,11 +366,11 @@ class ExamineGamma(object):
         
         if hasattr(self, 'home'):
             if home_sys is not None and self.home != home_sys:
-                print('the value of GAMMA_HOME is different to that in the pyroSAR configuration;\n'
-                      '  was: {}\n'
-                      '  is : {}\n'
-                      'resetting the configuration and deleting parsed modules'
-                      .format(self.home, home_sys))
+                log.info('the value of GAMMA_HOME is different to that in the pyroSAR configuration;\n'
+                         '  was: {}\n'
+                         '  is : {}\n'
+                         'resetting the configuration and deleting parsed modules'
+                         .format(self.home, home_sys))
                 parsed = os.path.join(os.path.dirname(self.fname), 'gammaparse')
                 shutil.rmtree(parsed)
                 self.home = home_sys
@@ -309,7 +378,7 @@ class ExamineGamma(object):
             if home_sys is not None:
                 setattr(self, 'home', home_sys)
             else:
-                raise RuntimeError('could not read Gamma installation directory')
+                raise RuntimeError('could not read GAMMA installation directory')
         self.version = re.search('GAMMA_SOFTWARE-(?P<version>[0-9]{8})',
                                  getattr(self, 'home')).group('version')
         

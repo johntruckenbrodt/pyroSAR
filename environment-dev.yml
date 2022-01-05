@@ -4,17 +4,21 @@ channels:
   - defaults
 dependencies:
   - progressbar2
-  - pathos>=0.2
   - numpy
-  - spatialist>=0.5
+  - spatialist>=0.8
   - pyyaml
   - requests
   - psycopg2
-  - sqlalchemy<1.4.0
-  - sqlalchemy-utils
+  - sqlalchemy>=1.4
+  - sqlalchemy-utils>=0.37
   - geoalchemy2
   - coveralls
   - coverage
   - pytest
   - sphinx
-  - sphinxcontrib-bibtex<2.0.0
+  - sphinxcontrib-bibtex>=2.2
+  - pip
+  - cairosvg
+  - gdal>=2.4
+  - pip:
+      - sphinxcontrib-svg2pdfconverter

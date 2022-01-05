@@ -15,13 +15,9 @@ import os
 import re
 import copy
 import shutil
-import requests
 import subprocess as sp
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
-
-from osgeo import gdal
-from osgeo.gdalconst import GA_Update
 
 from pyroSAR import identify
 from pyroSAR.examine import ExamineSnap
@@ -44,7 +40,8 @@ def parse_recipe(name):
     name: str
         the name of the recipe; current options:
          * `blank`: a workflow without any nodes
-         * `geocode`: a basic workflow containing Read, Apply-Orbit-File, Calibration, Terrain-Flattening and Write nodes
+         * `geocode`: a basic workflow containing `Read`, `Apply-Orbit-File`,
+           `Calibration`, `Terrain-Flattening` and `Write` nodes
 
     Returns
     -------
@@ -85,14 +82,22 @@ def parse_node(name, use_existing=True):
     >>> print(tnr.parameters)
     {'selectedPolarisations': None, 'removeThermalNoise': 'true', 'reIntroduceThermalNoise': 'false'}
     """
+    snap = ExamineSnap()
+    version = snap.get_version('s1tbx')['version']
     name = name if name.endswith('.xml') else name + '.xml'
     operator = os.path.splitext(name)[0]
-    abspath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')
+    nodepath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')
+    abspath = os.path.join(nodepath, version)
     os.makedirs(abspath, exist_ok=True)
     absname = os.path.join(abspath, name)
     
+    # remove all old XML files that were not stored in a version subdirectory
+    deprecated = finder(nodepath, ['*.xml'], recursive=False)
+    for item in deprecated:
+        os.remove(item)
+    
     if not os.path.isfile(absname) or not use_existing:
-        gpt = ExamineSnap().gpt
+        gpt = snap.gpt
         
         cmd = [gpt, operator, '-h']
         
@@ -122,14 +127,13 @@ def parse_node(name, use_existing=True):
             child.attrib['refid'] = 'Read'
             child.text = None
         if operator == 'BandMaths':
-            tree.find('.//parameters').set('class', 'com.bc.ceres.binding.dom.XppDomElement')
             tband = tree.find('.//targetBand')
             for item in ['spectralWavelength', 'spectralBandwidth',
                          'scalingOffset', 'scalingFactor',
                          'validExpression', 'spectralBandIndex']:
                 el = tband.find('.//{}'.format(item))
                 tband.remove(el)
-        
+        tree.find('.//parameters').set('class', 'com.bc.ceres.binding.dom.XppDomElement')
         node = Node(node)
         
         # read the default values from the parameter documentation
@@ -163,13 +167,12 @@ def parse_node(name, use_existing=True):
         return Node(element)
 
 
-def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=True):
+def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None):
     """
-    execute SNAP workflows via the Graph Processing Tool gpt.
+    execute SNAP workflows via the Graph Processing Tool GPT.
     This function merely calls gpt with some additional command
     line arguments and raises a RuntimeError on fail. This
-    function is used internally by function :func:`gpt`, which
-    should be used instead.
+    function is used internally by function :func:`gpt`.
     
     Parameters
     ----------
@@ -183,11 +186,9 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
         
          - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
     gpt_args: list or None
-        a list of additional arguments to be passed to the gpt call
+        a list of additional arguments to be passed to the GPT call
         
         - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
-    verbose: bool
-        print out status messages?
     
     Returns
     -------
@@ -209,8 +210,7 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
                 gpt_exec = exec
                 message += ' (using {})'.format(exec)
                 break
-    if verbose:
-        print(message)
+    log.info(message)
     # try to find the GPT executable
     if gpt_exec is None:
         try:
@@ -255,12 +255,12 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
     elif proc.returncode == 1 and match is not None:
         replace = match.groupdict()
         with Workflow(xmlfile) as flow:
-            print('  removing parameter {id}:{par} and executing modified workflow'.format(**replace))
+            log.info('  removing parameter {id}:{par} and executing modified workflow'.format(**replace))
             node = flow[replace['id']]
             del node.parameters[replace['par']]
             flow.write(xmlfile)
         execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions,
-                gpt_args=gpt_args, verbose=verbose)
+                gpt_args=gpt_args)
     
     # append additional information to the error message and raise an error
     else:
@@ -274,38 +274,48 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None, verbose=T
                 os.remove(outname + '.tif')
             elif os.path.isdir(outname):
                 shutil.rmtree(outname, onerror=windows_fileprefix)
-            elif outname.endswith('.dim'):
+            elif outname.endswith('.dim') and os.path.isfile(outname):
                 os.remove(outname)
-                shutil.rmtree(outname.replace('.dim', '.data'),
-                              onerror=windows_fileprefix)
+                datadir = outname.replace('.dim', '.data')
+                if os.path.isdir(datadir):
+                    shutil.rmtree(datadir,
+                                  onerror=windows_fileprefix)
         raise RuntimeError(submessage.format(out, err, os.path.basename(xmlfile), proc.returncode))
 
 
-def gpt(xmlfile, outdir, groups=None, cleanup=True,
+def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
         gpt_exceptions=None, gpt_args=None,
-        removeS1BorderNoiseMethod='pyroSAR', basename_extensions=None,
-        multisource=False):
+        removeS1BorderNoiseMethod='pyroSAR'):
     """
-    wrapper for ESA SNAP's Graph Processing Tool GPT.
-    Input is a readily formatted workflow XML file as
+    Wrapper for ESA SNAP's Graph Processing Tool GPT.
+    Input is a readily formatted workflow XML file as for example
     created by function :func:`~pyroSAR.snap.util.geocode`.
     Additional to calling GPT, this function will
     
-     * execute the workflow in groups as defined by `groups`
-     * encode a nodata value into the output file if the format is GeoTiff-BigTIFF
-     * convert output files to GeoTiff if the output format is ENVI
+    - (if processing Sentinel-1 GRD data with IPF version <2.9 and ``removeS1BorderNoiseMethod='pyroSAR'``)
+      unpack the scene and perform the custom removal (:func:`pyroSAR.S1.removeGRDBorderNoise`).
+    - if `groups` is not None:
+    
+      * split the workflow into sub-workflows (:func:`pyroSAR.snap.auxil.split`)
+      * execute the sub-workflows (:func:`pyroSAR.snap.auxil.execute`)
+    
+    Note
+    ----
+    Depending on the parametrization this function might create two sub-directories in `tmpdir`,
+    carrying a suffix  \*_bnr for S1 GRD border noise removal and \*_sub for sub-workflows and their
+    intermediate outputs. Both are deleted if ``cleanup=True``. If `tmpdir` is empty afterwards, it is also deleted.
     
     Parameters
     ----------
     xmlfile: str
         the name of the workflow XML file
-    outdir: str
-        the directory into which to write the final files
-    groups: list
+    tmpdir: str
+        a temporary directory for storing intermediate files
+    groups: list or None
         a list of lists each containing IDs for individual nodes
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
-    gpt_exceptions: dict
+    gpt_exceptions: dict or None
         a dictionary to override the configured GPT executable for certain operators;
         each (sub-)workflow containing this operator will be executed with the define executable;
         
@@ -315,48 +325,40 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         
         - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
     removeS1BorderNoiseMethod: str
-        the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
+        the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details;
+        one of the following:
+        
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
-    basename_extensions: list of str
-        names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     
     Returns
     -------
     
     Raises
     ------
-    RuntimeError
-    """
     
+    """
     workflow = Workflow(xmlfile)
-
-    if multisource:
+    
+    if 'ProductSet-Reader' in workflow.operators:
         read = workflow['ProductSet-Reader']
-        # scene = identify_many(read.parameters['fileList'].split(",")) # not working
-    elif not multisource:
+        scene = identify(read.parameters['fileList'].split(',')[0])
+    else:
         read = workflow['Read']
         scene = identify(read.parameters['file'])
-
-    write = workflow['Write']
-    tmpname = write.parameters['file']
-    suffix = workflow.suffix()
-    format = write.parameters['formatName']
-    dem_name = workflow.tree.find('.//demName')
-    if dem_name is not None:
-        if dem_name.text == 'External DEM':
-            dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
-        else:
-            dem_nodata = 0
+    
+    tmp_base = os.path.basename(tmpdir)
+    tmpdir_bnr = os.path.join(tmpdir, tmp_base + '_bnr')
+    tmpdir_sub = os.path.join(tmpdir, tmp_base + '_sub')
     
     if 'Remove-GRD-Border-Noise' in workflow.ids \
             and removeS1BorderNoiseMethod == 'pyroSAR' \
             and scene.meta['IPF_version'] < 2.9:
         if 'SliceAssembly' in workflow.operators:
             raise RuntimeError("pyroSAR's custom border noise removal is not yet implemented for multiple scene inputs")
-        xmlfile = os.path.join(tmpname,
+        os.makedirs(tmpdir_bnr, exist_ok=True)
+        xmlfile = os.path.join(tmpdir_bnr,
                                os.path.basename(xmlfile.replace('_bnr', '')))
-        os.makedirs(tmpname, exist_ok=True)
         # border noise removal is done outside of SNAP and the node is thus removed from the workflow
         del workflow['Remove-GRD-Border-Noise']
         # remove the node name from the groups
@@ -369,42 +371,97 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
             else:
                 i += 1
         # unpack the scene if necessary and perform the custom border noise removal
-        print('unpacking scene')
+        log.info('unpacking scene')
         if scene.compression is not None:
-            scene.unpack(tmpname)
-        print('removing border noise..')
+            scene.unpack(tmpdir_bnr)
+        log.info('removing border noise..')
         scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
         # change the name of the input file to that of the unpacked archive
         read.parameters['file'] = scene.scene
         # write a new workflow file
         workflow.write(xmlfile)
     
-    print('executing node sequence{}..'.format('s' if groups is not None else ''))
+    log.info('executing node sequence{}..'.format('s' if groups is not None else ''))
     try:
         if groups is not None:
-            tmpdir = os.path.join(tmpname, 'tmp')
-            subs = split(xmlfile, groups, tmpdir)
+            subs = split(xmlfile=xmlfile, groups=groups, outdir=tmpdir_sub)
             for sub in subs:
                 execute(sub, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
         else:
             execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
-    except RuntimeError as e:
-        if cleanup and os.path.exists(tmpname):
-            shutil.rmtree(tmpname, onerror=windows_fileprefix)
-        raise RuntimeError(str(e) + '\nfailed: {}'.format(xmlfile))
+    except Exception:
+        log.info('failed: {}'.format(xmlfile))
+        raise
+    finally:
+        if cleanup:
+            for tmp in [tmpdir_bnr, tmpdir_sub]:
+                if os.path.isdir(tmp):
+                    shutil.rmtree(tmp, onerror=windows_fileprefix)
+            if os.path.isdir(tmpdir) and not os.listdir(tmpdir):
+                shutil.rmtree(tmpdir, onerror=windows_fileprefix)
+
+
+def writer(xmlfile, outdir, basename_extensions=None):
+    """
+    SNAP product writing utility
     
-    outname = os.path.join(outdir, os.path.basename(tmpname))
+    Parameters
+    ----------
+    xmlfile: str
+        the name of the workflow XML file
+    outdir: str
+        the directory into which to write the final files
+    basename_extensions: list of str or None
+        names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
+
+    Returns
+    -------
+
+    """
+    workflow = Workflow(xmlfile)
+    writers = workflow['operator=Write']
+    files = list(set([x.parameters['file'] for x in writers]))
+    if len(files) > 1:
+        raise RuntimeError('Multiple output files are not yet supported.')
+    else:
+        src = files[0]
+    src_format = writers[0].parameters['formatName']
+    suffix = workflow.suffix()
+    rtc = 'Terrain-Flattening' in workflow.operators
+    dem_name = workflow.tree.find('.//demName')
+    dem_nodata = None
+    if dem_name is not None:
+        dem_name = dem_name.text
+        if dem_name == 'External DEM':
+            dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
+        else:
+            dem_nodata_lookup = {'SRTM 1Sec HGT': -32768}
+            if dem_name in dem_nodata_lookup.keys():
+                dem_nodata = dem_nodata_lookup[dem_name]
     
-    if format == 'ENVI':
-        print('converting to GTiff')
+    outname_base = os.path.join(outdir, os.path.basename(src))
+    os.makedirs(src, exist_ok=True)
+    if src_format == 'ENVI':
+        log.info('converting to GeoTIFF')
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
-        for item in finder(tmpname, ['*.img'], recursive=False):
-            if re.search('ma0_[HV]{2}', item):
-                pol = re.search('[HV]{2}', item).group()
-                name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
-                if 'Sigma0' in item:
-                    name_new = name_new.replace('TF_', '')
+        for item in finder(src, ['*.img'], recursive=False):
+            pattern = '(?P<refarea>(?:Sig|Gam)ma0)_(?P<pol>[HV]{2})'
+            match = re.search(pattern, item)
+            if match:
+                refarea, pol = match.groups()
+                correction = 'elp'
+                if rtc:
+                    if refarea == 'Gamma0':
+                        correction = 'rtc'
+                    elif refarea == 'Sigma0':
+                        tf = workflow['Terrain-Flattening']
+                        if tf.parameters['outputSigma0']:
+                            correction = 'rtc'
+                suffix_new = '{0}-{1}'.format(refarea.lower(), correction)
+                if 'dB' in suffix:
+                    suffix_new += '_db'
+                name_new = outname_base.replace(suffix, '{0}_{1}.tif'.format(pol, suffix_new))
             else:
                 base = os.path.splitext(os.path.basename(item))[0] \
                     .replace('elevation', 'DEM')
@@ -412,37 +469,33 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
                     base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
                 if re.search('scatteringArea', base):
                     base = re.sub('scatteringArea_[HV]{2}', 'scatteringArea', base)
-                name_new = outname.replace(suffix, '{0}.tif'.format(base))
-            nodata = dem_nodata if re.search('elevation', item) else 0
+                if re.search('gammaSigmaRatio', base):
+                    base = re.sub('gammaSigmaRatio_[HV]{2}', 'gammaSigmaRatio', base)
+                name_new = outname_base.replace(suffix, '{0}.tif'.format(base))
+            if re.search('elevation', item):
+                nodata = dem_nodata
+            else:
+                nodata = 0
             translateoptions['noData'] = nodata
             gdal_translate(item, name_new, translateoptions)
-    # by default the nodata value is not registered in the GTiff metadata
-    elif format == 'GeoTiff-BigTIFF':
-        ras = gdal.Open(outname + '.tif', GA_Update)
-        for i in range(1, ras.RasterCount + 1):
-            ras.GetRasterBand(i).SetNoDataValue(0)
-        ras = None
+    else:
+        raise RuntimeError('The output file format must be ENVI.')
     ###########################################################################
     # write the Sentinel-1 manifest.safe file as addition to the actual product
-    if not multisource:
-        readers = workflow['operator=Read']
-        for reader in readers:
-            infile = reader.parameters['file']
-            try:
-                id = identify(infile)
-                if id.sensor in ['S1A', 'S1B']:
-                    manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
-                    basename = id.outname_base(basename_extensions)
-                    basename = '{0}_manifest.safe'.format(basename)
-                    outname_manifest = os.path.join(outdir, basename)
-                    with open(outname_manifest, 'wb') as out:
-                        out.write(manifest.read())
-            except RuntimeError:
-                continue
-    ###########################################################################
-    if cleanup and os.path.exists(tmpname):
-        shutil.rmtree(tmpname, onerror=windows_fileprefix)
-    print('done')
+    readers = workflow['operator=Read']
+    for reader in readers:
+        infile = reader.parameters['file']
+        try:
+            id = identify(infile)
+            if id.sensor in ['S1A', 'S1B']:
+                manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
+                basename = id.outname_base(basename_extensions)
+                basename = '{0}_manifest.safe'.format(basename)
+                outname_manifest = os.path.join(outdir, basename)
+                with open(outname_manifest, 'wb') as out:
+                    out.write(manifest.read())
+        except RuntimeError:
+            continue
 
 
 def is_consistent(workflow):
@@ -1168,6 +1221,16 @@ class Par(object):
         self.__element.remove(par)
     
     def __getitem__(self, item):
+        """
+        
+        Parameters
+        ----------
+        item
+
+        Returns
+        -------
+        str
+        """
         if item not in self.keys():
             raise KeyError('key {} does not exist'.format(item))
         return self.__element.find('.//{}'.format(item)).text
@@ -1264,25 +1327,3 @@ def value2str(value):
     else:
         strval = str(value)
     return strval
-
-
-def get_egm96_lookup():
-    """
-    If not found, download SNAP's lookup table for converting EGM96 geoid heights to WGS84 ellipsoid heights
-    
-    Returns
-    -------
-
-    """
-    try:
-        auxdatapath = ExamineSnap().auxdatapath
-    except AttributeError:
-        auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
-    local = os.path.join(auxdatapath, 'dem', 'egm96', 'ww15mgh_b.zip')
-    os.makedirs(os.path.dirname(local), exist_ok=True)
-    if not os.path.isfile(local):
-        remote = 'http://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
-        print('{} <<-- {}'.format(local, remote))
-        r = requests.get(remote)
-        with open(local, 'wb')as out:
-            out.write(r.content)
