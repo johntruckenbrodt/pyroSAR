@@ -12,7 +12,7 @@ env:
     - TESTDATA_DIR=$HOME/testdata
     - PGUSER=travis
     - PGPORT=5433
-    - PGPASSWORD=
+    - PGPASSWORD=Password12!
     - SNAP_VERSION=8
 
 addons:
@@ -52,8 +52,9 @@ install:
 #  - travis_wait 40 . ./pyroSAR/install/download_testdata.sh
 
 before_script:
-  - psql -U $PGUSER -c 'create database travis_ci_test;'
+  - psql -U $PGUSER -c 'create database travis_ci_test'
   - psql -U $PGUSER -c "create extension if not exists postgis"
+  - psql -U $PGUSER -c "alter user ${PGUSER} password '${PGPASSWORD}'"
 
 script:
   - coverage run -m pytest
