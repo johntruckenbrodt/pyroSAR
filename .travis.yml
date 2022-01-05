@@ -14,7 +14,7 @@ env:
     - PGPORT=5432
     - PGPASSWORD=
     - SNAP_VERSION=8
-    - SNAP_INSTALLER=esa-snap_sentinel_unix_"$SNAP_VERSION"_0.sh
+    - SNAP_INSTALLER=esa-snap_sentinel_unix_$SNAP_VERSION_0.sh
 
 addons:
   postgresql: '9.6'
