@@ -137,7 +137,7 @@ def calibrate(id, directory, return_fnames=False, logpath=None, outdir=None, she
         return new
 
 
-def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
+def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True, S1_slc_swaths=None,
                   basename_extensions=None, polarizations=None,
                   exist_ok=False, return_fnames=False,
                   logpath=None, outdir=None, shellscript=None):
@@ -155,6 +155,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
     S1_bnr: bool
         only Sentinel-1 GRD: should border noise removal be applied to the image?
         This is available since version 20191203, for older versions this argument is ignored.
+    S1_slc_swaths: list of str
+        the S1 SLC swaths to convert, e.g. `['IW1', 'IW2']`. At its default `None` all swaths are converted.
     basename_extensions: list of str
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     polarizations: list of str
@@ -332,15 +334,18 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         for xml_ann in finder(os.path.join(id.scene, 'annotation'), [id.pattern_ds], regex=True):
             base = os.path.basename(xml_ann)
             match = re.compile(id.pattern_ds).match(base)
+            product = match.group('product')
             
             polarization = match.group('pol').upper()
             if polarizations is not None and polarization not in polarizations:
                 continue
             
+            swath = match.group('swath').upper()
+            if product == 'slc' and S1_slc_swaths is not None and swath not in S1_slc_swaths:
+                continue
+            
             tiff = os.path.join(id.scene, 'measurement', base.replace('.xml', '.tiff'))
             xml_cal = os.path.join(id.scene, 'annotation', 'calibration', 'calibration-' + base)
-            
-            product = match.group('product')
             
             # specify noise calibration file
             # L1 GRD product: thermal noise already subtracted, specify xml_noise to add back thermal noise
@@ -366,7 +371,6 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                     'outdir': outdir}
             
             if product == 'slc':
-                swath = match.group('swath').upper()
                 old = '{:_<{length}}'.format(id.acquisition_mode, length=len(swath))
                 base_new = basename.replace(old, swath)
                 outname = os.path.join(os.path.dirname(outname), base_new)
@@ -824,7 +828,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     
     if refine_lut:
         n.appreciate(['pix_area_sigma0'])
-
+    
     reference_par = ISPPar(reference + '.par')
     ######################################################################
     # DEM product generation #############################################
