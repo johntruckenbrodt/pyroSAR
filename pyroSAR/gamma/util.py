@@ -1,7 +1,7 @@
 ###############################################################################
 # universal core routines for processing SAR images with GAMMA
 
-# Copyright (c) 2014-2021, the pyroSAR Developers.
+# Copyright (c) 2014-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -138,8 +138,8 @@ def calibrate(id, directory, return_fnames=False, logpath=None, outdir=None, she
 
 
 def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
-                  basename_extensions=None, exist_ok=False,
-                  return_fnames=False,
+                  basename_extensions=None, polarizations=None,
+                  exist_ok=False, return_fnames=False,
                   logpath=None, outdir=None, shellscript=None):
     """
     general function for converting SAR images to GAMMA format
@@ -157,6 +157,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         This is available since version 20191203, for older versions this argument is ignored.
     basename_extensions: list of str
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
+    polarizations: list of str
+        the polarizations to convert, e.g. `['VV', 'VH']`. At its default `None` all polarizations are converted.
     exist_ok: bool
         allow existing output files and do not create new ones?
     return_fnames: bool
@@ -227,6 +229,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
             raise RuntimeError('PALSAR level 1.0 products are not supported')
         for image in images:
             polarization = re.search('[HV]{2}', os.path.basename(image)).group(0)
+            if polarizations is not None and polarization not in polarizations:
+                continue
             outname_base = id.outname_base(extensions=basename_extensions)
             
             pars = {'CEOS_leader': id.file,
@@ -265,6 +269,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         
         for image in images:
             polarization = re.search('[HV]{2}', os.path.basename(image)).group(0)
+            if polarizations is not None and polarization not in polarizations:
+                continue
             outname_base = id.outname_base(extensions=basename_extensions)
             outname_base = '{}_{}'.format(outname_base, polarization)
             outname = os.path.join(directory, outname_base) + '_mli'
@@ -327,6 +333,10 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
             base = os.path.basename(xml_ann)
             match = re.compile(id.pattern_ds).match(base)
             
+            polarization = match.group('pol').upper()
+            if polarizations is not None and polarization not in polarizations:
+                continue
+            
             tiff = os.path.join(id.scene, 'measurement', base.replace('.xml', '.tiff'))
             xml_cal = os.path.join(id.scene, 'annotation', 'calibration', 'calibration-' + base)
             
@@ -342,7 +352,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 xml_noise = '-'
             
             fields = (id.outname_base(extensions=basename_extensions),
-                      match.group('pol').upper(),
+                      polarization,
                       product)
             basename = '_'.join(fields)
             outname = os.path.join(directory, basename)
@@ -383,12 +393,15 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         images = id.findfiles(id.pattern_ds)
         pattern = re.compile(id.pattern_ds)
         for image in images:
-            pol = pattern.match(os.path.basename(image)).group('pol')
+            polarization = pattern.match(os.path.basename(image)).group('pol')
+            if polarizations is not None and polarization not in polarizations:
+                continue
+            
             outname_base = id.outname_base(extensions=basename_extensions)
-            outname = os.path.join(directory, outname_base + '_' + pol)
+            outname = os.path.join(directory, outname_base + '_' + polarization)
             
             pars = {'annotation_XML': id.file,
-                    'pol': pol,
+                    'pol': polarization,
                     'logpath': logpath,
                     'shellscript': shellscript,
                     'outdir': outdir}
