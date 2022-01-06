@@ -219,7 +219,7 @@ class ID(object):
         lines = ['pyroSAR ID object of type {}'.format(self.__class__.__name__)]
         for item in sorted(self.locals):
             value = getattr(self, item)
-            if item == 'projection':
+            if item == 'projection' and value:
                 value = crsConvert(value, 'proj4')
             line = '{0}: {1}'.format(item, value)
             lines.append(line)
@@ -408,7 +408,6 @@ class ID(object):
             raise RuntimeError('file type not supported')
         
         meta = {}
-        
         ext_lookup = {'.N1': 'ASAR', '.E1': 'ERS1', '.E2': 'ERS2'}
         extension = os.path.splitext(header)[1]
         if extension in ext_lookup:
@@ -734,6 +733,79 @@ class ID(object):
         self.scene = directory
         main = os.path.join(self.scene, os.path.basename(self.file))
         self.file = main if os.path.isfile(main) else self.scene
+
+
+class BEAM_DIMAP(ID):
+    """
+    Handler class for BEAM-DIMAP data
+    """
+
+    def __init__(self, scene):
+
+        if not scene.lower().endswith('.dim'):
+            raise RuntimeError('Scene format is not BEAM-DIMAP')
+
+        self.root = None
+        self.scene = scene
+        self.meta = dict()
+        self.scanMetadata()
+        self.gdalinfo()
+
+        super(BEAM_DIMAP, self).__init__(self.meta)
+
+    def scanMetadata(self):
+
+        self.root = ET.parse(self.scene).getroot()
+
+        self.meta['acquisition_mode'] = self.root.find('.//MDATTR[@name="ACQUISITION_MODE"]').text
+        self.meta['IPF_version'] = self.root.find('.//MDATTR[@name="Processing_system_identifier"]').text
+        self.meta['sensor'] = self.root.find('.//MDATTR[@name="MISSION"]').text
+        self.meta['orbit'] = self.root.find('.//MDATTR[@name="PASS"]').text
+        self.meta['polarizations'] = list(set([x.text for x in self.root.findall('.//MDATTR[@desc="Polarization"]') if '-' not in x.text]))
+        self.meta['start'] = self.root.find('.//PRODUCT_SCENE_RASTER_START_TIME').text
+        self.meta['stop'] = self.root.find('.//PRODUCT_SCENE_RASTER_STOP_TIME').text
+        self.meta['spacing'] = ''
+        self.meta['samples'] = self.root.find('.//NCOLS').text
+        self.meta['lines'] = self.root.find('.//NROWS').text
+        self.meta['bands'] = self.root.find('.//NBANDS').text
+        self.meta['orbitNumber_abs'] = self.root.find('.//MDATTR[@name="ABS_ORBIT"]').text
+        self.meta['orbitNumber_rel'] = self.root.find('.//MDATTR[@name="REL_ORBIT"]').text
+        self.meta['cycleNumber'] = self.root.find('.//MDATTR[@name="cycleNumber"]').text
+        self.meta['frameNumber'] = ''
+        self.meta['product'] = self.root.find('.//DATASET_COMMENTS').text
+
+        # Get projection
+        if self.root.find('.//WKT') is not None:
+            self.meta['projection'] = self.root.find('.//WKT').text.lstrip()
+        else:
+            self.meta['projection'] = ''
+
+        return
+
+    def gdalinfo(self):
+
+        # Load sample image from dataset
+        meta_path = self.root.find('.//DATA_FILE_PATH').attrib['href'].replace('.hdr', '.img')
+        img_path = os.path.join(os.path.dirname(self.scene), meta_path)
+        img = gdal.Open(img_path, GA_ReadOnly)
+
+        # self.meta['projection'] = img.GetProjection()
+
+        xmin, xpixel, _, ymax, _, ypixel = img.GetGeoTransform()
+        width, height = img.RasterXSize, img.RasterYSize
+        xmax = xmin + width * xpixel
+        ymin = ymax + height * ypixel
+
+        self.meta['spacing'] = (xpixel, ypixel)
+        self.meta['corners'] = {
+            'xmin': xmin,
+            'xmax': xmax,
+            'ymin': ymin,
+            'ymax': ymax,
+        }
+
+    def getCorners(self):
+        return
 
 
 class CEOS_ERS(ID):
