@@ -49,7 +49,7 @@ install:
 
   # install ESA SNAP
   - appveyor DownloadFile https://step.esa.int/downloads/%SNAP_VERSION%.0/installers/%SNAP_INSTALLER%
-  - %SNAP_INSTALLER% -q -dir %SNAP_INSTALL%
+  - start %SNAP_INSTALLER% -q -dir %SNAP_INSTALL%
 
   - set PATH=%PATH%;%SNAP_INSTALL%\bin
 

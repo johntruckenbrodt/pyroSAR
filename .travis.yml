@@ -1,4 +1,4 @@
-dist: bionic
+dist: focal
 language: python
 sudo: required
 cache:
@@ -10,14 +10,13 @@ env:
     - PIP_WHEEL_DIR=$HOME/.cache/pip/wheels
     - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
     - TESTDATA_DIR=$HOME/testdata
-    - PGUSER=postgres
-    - PGPORT=5432
-    - PGPASSWORD=
+    - PGUSER=travis
+    - PGPORT=5433
+    - PGPASSWORD=Password12!
     - SNAP_VERSION=8
-    - SNAP_INSTALLER=esa-snap_sentinel_unix_"$SNAP_VERSION"_0.sh
 
 addons:
-  postgresql: '9.6'
+  postgresql: '12'
   apt:
     sources:
       - sourceline: 'ppa:ubuntugis/ppa'
@@ -27,7 +26,7 @@ addons:
       - libsqlite3-mod-spatialite
       - libproj-dev
       - python3-dev
-      - postgresql-9.6-postgis-2.4
+      - postgresql-12-postgis-3
 
 services:
   - postgresql
@@ -36,7 +35,8 @@ python:
   - '3.7'
 
 before_install:
-  - wget -O $SNAP_INSTALLER https://step.esa.int/downloads/$SNAP_VERSION.0/installers/$SNAP_INSTALLER
+  - export SNAP_INSTALLER=esa-snap_sentinel_unix_"$SNAP_VERSION"_0.sh
+  - wget -O $SNAP_INSTALLER https://step.esa.int/downloads/"$SNAP_VERSION".0/installers/"$SNAP_INSTALLER"
   - bash $SNAP_INSTALLER -q
   - export PATH=$PATH:/opt/snap/bin
 
@@ -52,7 +52,9 @@ install:
 #  - travis_wait 40 . ./pyroSAR/install/download_testdata.sh
 
 before_script:
-  - psql -c 'create database travis_ci_test;' -U postgres
+  - psql -U $PGUSER -c 'create database travis_ci_test'
+  - psql -U $PGUSER -c "create extension if not exists postgis"
+  - psql -U $PGUSER -c "alter user ${PGUSER} password '${PGPASSWORD}'"
 
 script:
   - coverage run -m pytest

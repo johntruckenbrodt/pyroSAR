@@ -904,6 +904,7 @@ def get_egm_lookup(geoid, software):
             remote = 'https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
             log.info('{} <<-- {}'.format(local, remote))
             r = requests.get(remote)
+            r.raise_for_status()
             with open(local, 'wb') as out:
                 out.write(r.content)
     
@@ -921,6 +922,7 @@ def get_egm_lookup(geoid, software):
             if not os.path.isfile(gtx_local):
                 log.info('{} <<-- {}'.format(gtx_local, gtx_remote))
                 r = requests.get(gtx_remote)
+                r.raise_for_status()
                 with open(gtx_local, 'wb') as out:
                     out.write(r.content)
         else:
