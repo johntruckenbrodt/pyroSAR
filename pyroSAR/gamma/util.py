@@ -1105,7 +1105,7 @@ def multilook(infile, outfile, spacing, exist_ok=False, logpath=None, outdir=Non
         range_pixel_spacing = sum(range_pixel_spacings) / len(par)
         azimuth_pixel_spacings = [getattr(x, 'azimuth_pixel_spacing') for x in par]
         azimuth_pixel_spacing = sum(azimuth_pixel_spacings) / len(par)
-        incidence_angles = [getattr(x, 'azimuth_pixel_spacing') for x in par]
+        incidence_angles = [getattr(x, 'incidence_angle') for x in par]
         incidence_angle = sum(incidence_angles) / len(par)
         image_geometry = par[0].image_geometry
         image_format = par[0].image_format
