@@ -676,3 +676,9 @@ Auxiliary Data Handling
 general
 -------
 - compatibility with sqlalchemy>=1.4
+
+0.15.1 | 2022-01-07
+===================
+general
+-------
+- bug fixes
