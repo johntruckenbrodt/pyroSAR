@@ -738,6 +738,9 @@ class ID(object):
 class BEAM_DIMAP(ID):
     """
     Handler class for BEAM-DIMAP data
+
+    Sensors:
+        * SNAP supported sensors
     """
 
     def __init__(self, scene):
@@ -749,60 +752,44 @@ class BEAM_DIMAP(ID):
         self.scene = scene
         self.meta = dict()
         self.scanMetadata()
-        self.gdalinfo()
 
         super(BEAM_DIMAP, self).__init__(self.meta)
 
     def scanMetadata(self):
-
         self.root = ET.parse(self.scene).getroot()
 
         self.meta['acquisition_mode'] = self.root.find('.//MDATTR[@name="ACQUISITION_MODE"]').text
         self.meta['IPF_version'] = self.root.find('.//MDATTR[@name="Processing_system_identifier"]').text
-        self.meta['sensor'] = self.root.find('.//MDATTR[@name="MISSION"]').text
-        self.meta['orbit'] = self.root.find('.//MDATTR[@name="PASS"]').text
-        self.meta['polarizations'] = list(set([x.text for x in self.root.findall('.//MDATTR[@desc="Polarization"]') if '-' not in x.text]))
-        self.meta['start'] = self.root.find('.//PRODUCT_SCENE_RASTER_START_TIME').text
-        self.meta['stop'] = self.root.find('.//PRODUCT_SCENE_RASTER_STOP_TIME').text
-        self.meta['spacing'] = ''
-        self.meta['samples'] = self.root.find('.//NCOLS').text
-        self.meta['lines'] = self.root.find('.//NROWS').text
-        self.meta['bands'] = self.root.find('.//NBANDS').text
-        self.meta['orbitNumber_abs'] = self.root.find('.//MDATTR[@name="ABS_ORBIT"]').text
-        self.meta['orbitNumber_rel'] = self.root.find('.//MDATTR[@name="REL_ORBIT"]').text
-        self.meta['cycleNumber'] = self.root.find('.//MDATTR[@name="cycleNumber"]').text
-        self.meta['frameNumber'] = ''
-        self.meta['product'] = self.root.find('.//DATASET_COMMENTS').text
+        self.meta['sensor'] = self.root.find('.//MDATTR[@name="MISSION"]').text.replace('ENTINEL-', '')
+        self.meta['orbit'] = self.root.find('.//MDATTR[@name="PASS"]').text[0]
+        self.meta['polarizations'] = list(set([x.text for x in self.root.findall('.//MDATTR[@desc="Polarization"]')
+                                               if '-' not in x.text]))
+        self.meta['spacing'] = (round(float(self.root.find('.//MDATTR[@name="range_spacing"]').text), 6),
+                                round(float(self.root.find('.//MDATTR[@name="azimuth_spacing"]').text), 6))
+        self.meta['samples'] = int(self.root.find('.//BAND_RASTER_WIDTH').text)
+        self.meta['lines'] = int(self.root.find('.//BAND_RASTER_HEIGHT').text)
+        self.meta['bands'] = int(self.root.find('.//NBANDS').text)
+        self.meta['orbitNumber_abs'] = int(self.root.find('.//MDATTR[@name="ABS_ORBIT"]').text)
+        self.meta['orbitNumber_rel'] = int(self.root.find('.//MDATTR[@name="REL_ORBIT"]').text)
+        self.meta['cycleNumber'] = int(self.root.find('.//MDATTR[@name="cycleNumber"]').text)
+        self.meta['frameNumber'] = int(self.root.find('.//MDATTR[@name="data_take_id"]').text)
+        self.meta['product'] = self.root.find('.//PRODUCT_TYPE').text
 
-        # Get projection
+        # Metadata sections that need some parsing to match naming convention with SAFE format
+        start = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_START_TIME').text, '%d-%b-%Y %H:%M:%S.%f')
+        self.meta['start'] = start.strftime('%Y%m%dT%H%M%S')
+        stop = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_STOP_TIME').text, '%d-%b-%Y %H:%M:%S.%f')
+        self.meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
+
         if self.root.find('.//WKT') is not None:
             self.meta['projection'] = self.root.find('.//WKT').text.lstrip()
         else:
-            self.meta['projection'] = ''
+            self.meta['projection'] = crsConvert(4326, 'wkt')
 
         return
 
     def gdalinfo(self):
-
-        # Load sample image from dataset
-        meta_path = self.root.find('.//DATA_FILE_PATH').attrib['href'].replace('.hdr', '.img')
-        img_path = os.path.join(os.path.dirname(self.scene), meta_path)
-        img = gdal.Open(img_path, GA_ReadOnly)
-
-        # self.meta['projection'] = img.GetProjection()
-
-        xmin, xpixel, _, ymax, _, ypixel = img.GetGeoTransform()
-        width, height = img.RasterXSize, img.RasterYSize
-        xmax = xmin + width * xpixel
-        ymin = ymax + height * ypixel
-
-        self.meta['spacing'] = (xpixel, ypixel)
-        self.meta['corners'] = {
-            'xmin': xmin,
-            'xmax': xmax,
-            'ymin': ymin,
-            'ymax': ymax,
-        }
+        return
 
     def getCorners(self):
         return
