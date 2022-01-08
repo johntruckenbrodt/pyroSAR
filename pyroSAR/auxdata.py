@@ -915,11 +915,10 @@ def get_egm_lookup(geoid, software):
         
         proj_lib = os.environ.get('PROJ_LIB')
         if proj_lib is not None:
-            if not os.access(proj_lib, os.W_OK):
-                raise OSError("cannot write to 'PROJ_LIB' path: {}".format(proj_lib))
-            
             gtx_local = os.path.join(proj_lib, os.path.basename(gtx_remote))
             if not os.path.isfile(gtx_local):
+                if not os.access(proj_lib, os.W_OK):
+                    raise OSError("cannot write to 'PROJ_LIB' path: {}".format(proj_lib))
                 log.info('{} <<-- {}'.format(gtx_local, gtx_remote))
                 r = requests.get(gtx_remote)
                 r.raise_for_status()
