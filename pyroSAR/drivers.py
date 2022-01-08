@@ -219,7 +219,7 @@ class ID(object):
         lines = ['pyroSAR ID object of type {}'.format(self.__class__.__name__)]
         for item in sorted(self.locals):
             value = getattr(self, item)
-            if item == 'projection' and value:
+            if item == 'projection':
                 value = crsConvert(value, 'proj4')
             line = '{0}: {1}'.format(item, value)
             lines.append(line)
@@ -408,6 +408,7 @@ class ID(object):
             raise RuntimeError('file type not supported')
         
         meta = {}
+
         ext_lookup = {'.N1': 'ASAR', '.E1': 'ERS1', '.E2': 'ERS2'}
         extension = os.path.splitext(header)[1]
         if extension in ext_lookup:
