@@ -753,7 +753,6 @@ class BEAM_DIMAP(ID):
         self.scene = scene
         self.meta = dict()
         self.scanMetadata()
-        self.getCorners()
 
         super(BEAM_DIMAP, self).__init__(self.meta)
 
@@ -788,38 +787,23 @@ class BEAM_DIMAP(ID):
         else:
             self.meta['projection'] = crsConvert(4326, 'wkt')
 
-        return
+        longs = [
+            self.root.find('.//MDATTR[@name="first_far_long"]').text,
+            self.root.find('.//MDATTR[@name="first_near_long"]').text,
+            self.root.find('.//MDATTR[@name="last_far_long"]').text,
+            self.root.find('.//MDATTR[@name="last_near_long"]').text
+        ]
+        lats = [
+            self.root.find('.//MDATTR[@name="first_far_lat"]').text,
+            self.root.find('.//MDATTR[@name="first_near_lat"]').text,
+            self.root.find('.//MDATTR[@name="last_far_lat"]').text,
+            self.root.find('.//MDATTR[@name="last_near_lat"]').text
+        ]
+        # Convert to floats
+        longs = [float(lon) for lon in longs]
+        lats = [float(lat) for lat in lats]
+        self.meta['corners'] = {'xmin': min(longs), 'xmax': max(longs), 'ymin': min(lats), 'ymax': max(lats)}
 
-    def getCorners(self):
-        """
-        Calculate corner using IMAGE_TO_MODEL_TRANSFORM. The format of the
-        geotransform data does not follow the GDAL Geotransform styling so
-        the coefficients need to be moved around a bit.
-
-        Reference:
-            https://forum.step.esa.int/t/what-are-the-values-of-image-to-model-transform-in-a-dim-file/5255
-        """
-        gt = self.root.find('.//IMAGE_TO_MODEL_TRANSFORM')
-        if gt:
-            gt = gt.text
-            # Transform string attribute into list of floats
-            gt = [float(x) for x in gt.split(',')]
-            # Re-order coefficients to match GDAL geotransform styling
-            gt = [gt[4], gt[0], gt[2], gt[5], gt[4], gt[3]]
-            xmin, xpixel, _, ymax, _, ypixel = gt
-            width = int(self.root.find('.//NCOLS').text)
-            height = int(self.root.find('.//NROWS').text)
-            xmax = xmin + width * xpixel
-            ymin = ymax + height * ypixel
-
-            self.meta['corners'] = {
-                'xmin': xmin,
-                'xmax': xmax,
-                'ymin': ymin,
-                'ymax': ymax,
-            }
-        else:
-            self.meta['corners'] = ''
         return
 
 
