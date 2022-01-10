@@ -408,7 +408,7 @@ class ID(object):
             raise RuntimeError('file type not supported')
         
         meta = {}
-
+        
         ext_lookup = {'.N1': 'ASAR', '.E1': 'ERS1', '.E2': 'ERS2'}
         extension = os.path.splitext(header)[1]
         if extension in ext_lookup:
@@ -753,6 +753,7 @@ class BEAM_DIMAP(ID):
         self.scene = scene
         self.meta = dict()
         self.scanMetadata()
+        self.getCorners()
 
         super(BEAM_DIMAP, self).__init__(self.meta)
 
@@ -789,10 +790,36 @@ class BEAM_DIMAP(ID):
 
         return
 
-    def gdalinfo(self):
-        return
-
     def getCorners(self):
+        """
+        Calculate corner using IMAGE_TO_MODEL_TRANSFORM. The format of the
+        geotransform data does not follow the GDAL Geotransform styling so
+        the coefficients need to be moved around a bit.
+
+        Reference:
+            https://forum.step.esa.int/t/what-are-the-values-of-image-to-model-transform-in-a-dim-file/5255
+        """
+        gt = self.root.find('.//IMAGE_TO_MODEL_TRANSFORM')
+        if gt:
+            gt = gt.text
+            # Transform string attribute into list of floats
+            gt = [float(x) for x in gt.split(',')]
+            # Re-order coefficients to match GDAL geotransform styling
+            gt = [gt[4], gt[0], gt[2], gt[5], gt[4], gt[3]]
+            xmin, xpixel, _, ymax, _, ypixel = gt
+            width = int(self.root.find('.//NCOLS').text)
+            height = int(self.root.find('.//NROWS').text)
+            xmax = xmin + width * xpixel
+            ymin = ymax + height * ypixel
+
+            self.meta['corners'] = {
+                'xmin': xmin,
+                'xmax': xmax,
+                'ymin': ymin,
+                'ymax': ymax,
+            }
+        else:
+            self.meta['corners'] = ''
         return
 
 
