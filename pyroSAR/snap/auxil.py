@@ -890,11 +890,11 @@ class Workflow(object):
         ----------
         node: Node
             the node to be inserted
-        before: str or list
-            the ID(s) of the node(s) before the newly inserted node; a list of node IDs is intended for nodes that
-            require multiple sources, e.g. sliceAssembly
-        after: str
-            the ID of the node after the newly inserted node
+        before: Node, str or list
+            a Node object; the ID(s) of the node(s) before the newly inserted node; a list of node IDs is intended for
+            nodes that require multiple sources, e.g. sliceAssembly
+        after: Node, str
+            a Node object; the ID of the node after the newly inserted node
         resetSuccessorSource: bool
             reset the source of the successor node to the ID of the newly inserted node?
         void: bool
@@ -910,7 +910,12 @@ class Workflow(object):
             node.id = '{0} ({1})'.format(node.operator, ncopies + 1)
         else:
             node.id = node.operator
-        
+
+        if isinstance(before, Node):
+            before = before.id
+        if isinstance(after, Node):
+            after = after.id
+
         if before is None and after is None and len(self) > 0:
             before = self[len(self) - 1].id
         if before and not after:
