@@ -736,6 +736,77 @@ class ID(object):
         self.file = main if os.path.isfile(main) else self.scene
 
 
+class BEAM_DIMAP(ID):
+    """
+    Handler class for BEAM-DIMAP data
+
+    Sensors:
+        * SNAP supported sensors
+    """
+
+    def __init__(self, scene):
+
+        if not scene.lower().endswith('.dim'):
+            raise RuntimeError('Scene format is not BEAM-DIMAP')
+
+        self.root = None
+        self.scene = scene
+        self.meta = dict()
+        self.scanMetadata()
+
+        super(BEAM_DIMAP, self).__init__(self.meta)
+
+    def scanMetadata(self):
+        self.root = ET.parse(self.scene).getroot()
+
+        self.meta['acquisition_mode'] = self.root.find('.//MDATTR[@name="ACQUISITION_MODE"]').text
+        self.meta['IPF_version'] = self.root.find('.//MDATTR[@name="Processing_system_identifier"]').text
+        self.meta['sensor'] = self.root.find('.//MDATTR[@name="MISSION"]').text.replace('ENTINEL-', '')
+        self.meta['orbit'] = self.root.find('.//MDATTR[@name="PASS"]').text[0]
+        self.meta['polarizations'] = list(set([x.text for x in self.root.findall('.//MDATTR[@desc="Polarization"]')
+                                               if '-' not in x.text]))
+        self.meta['spacing'] = (round(float(self.root.find('.//MDATTR[@name="range_spacing"]').text), 6),
+                                round(float(self.root.find('.//MDATTR[@name="azimuth_spacing"]').text), 6))
+        self.meta['samples'] = int(self.root.find('.//BAND_RASTER_WIDTH').text)
+        self.meta['lines'] = int(self.root.find('.//BAND_RASTER_HEIGHT').text)
+        self.meta['bands'] = int(self.root.find('.//NBANDS').text)
+        self.meta['orbitNumber_abs'] = int(self.root.find('.//MDATTR[@name="ABS_ORBIT"]').text)
+        self.meta['orbitNumber_rel'] = int(self.root.find('.//MDATTR[@name="REL_ORBIT"]').text)
+        self.meta['cycleNumber'] = int(self.root.find('.//MDATTR[@name="cycleNumber"]').text)
+        self.meta['frameNumber'] = int(self.root.find('.//MDATTR[@name="data_take_id"]').text)
+        self.meta['product'] = self.root.find('.//PRODUCT_TYPE').text
+
+        # Metadata sections that need some parsing to match naming convention with SAFE format
+        start = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_START_TIME').text, '%d-%b-%Y %H:%M:%S.%f')
+        self.meta['start'] = start.strftime('%Y%m%dT%H%M%S')
+        stop = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_STOP_TIME').text, '%d-%b-%Y %H:%M:%S.%f')
+        self.meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
+
+        if self.root.find('.//WKT') is not None:
+            self.meta['projection'] = self.root.find('.//WKT').text.lstrip()
+        else:
+            self.meta['projection'] = crsConvert(4326, 'wkt')
+
+        longs = [
+            self.root.find('.//MDATTR[@name="first_far_long"]').text,
+            self.root.find('.//MDATTR[@name="first_near_long"]').text,
+            self.root.find('.//MDATTR[@name="last_far_long"]').text,
+            self.root.find('.//MDATTR[@name="last_near_long"]').text
+        ]
+        lats = [
+            self.root.find('.//MDATTR[@name="first_far_lat"]').text,
+            self.root.find('.//MDATTR[@name="first_near_lat"]').text,
+            self.root.find('.//MDATTR[@name="last_far_lat"]').text,
+            self.root.find('.//MDATTR[@name="last_near_lat"]').text
+        ]
+        # Convert to floats
+        longs = [float(lon) for lon in longs]
+        lats = [float(lat) for lat in lats]
+        self.meta['corners'] = {'xmin': min(longs), 'xmax': max(longs), 'ymin': min(lats), 'ymax': max(lats)}
+
+        return
+
+
 class CEOS_ERS(ID):
     """
     Handler class for ERS data in CEOS format
