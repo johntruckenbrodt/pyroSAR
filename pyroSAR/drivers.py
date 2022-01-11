@@ -1972,7 +1972,8 @@ class Archive(object):
                                  Column('vv', Integer),
                                  Column('hv', Integer),
                                  Column('vh', Integer),
-                                 Column('bbox', Geometry(geometry_type='POLYGON', management=True, srid=4326)))
+                                 Column('bbox', Geometry(geometry_type='POLYGON', management=True, srid=4326)),
+                                 Column('geometry', Geometry(geometry_type='POLYGON', management=True, srid=4326)))
         
         # add custom fields
         if self.custom_fields is not None:
@@ -2089,13 +2090,13 @@ class Archive(object):
         insertion = self.Data()
         colnames = self.get_colnames()
         for attribute in colnames:
-            if attribute == 'bbox':
-                geom = id.bbox()
+            if attribute in ['bbox', 'geometry']:
+                geom = getattr(scene, 'attribute')
                 geom.reproject(4326)
                 geom = geom.convert2wkt(set3D=False)[0]
                 geom = 'SRID=4326;' + str(geom)
                 # set attributes of the Data object according to input
-                setattr(insertion, 'bbox', geom)
+                setattr(insertion, attribute, geom)
             elif attribute in ['hh', 'vv', 'hv', 'vh']:
                 setattr(insertion, attribute, int(attribute in pols))
             else:
@@ -2509,7 +2510,7 @@ class Archive(object):
             log.info('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
     
     def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None,
-               recursive=False, polarizations=None, **args):
+               recursive=False, polarizations=None, use_geometry=False, **args):
         """
         select scenes from the database
 
@@ -2528,6 +2529,8 @@ class Archive(object):
             (only if `processdir` is not None) should also the subdirectories of the `processdir` be scanned?
         polarizations: list
             a list of polarization strings, e.g. ['HH', 'VV']
+        use_geometry: bool
+            use the map_overlay as footprint instead of the bounding box
         **args:
             any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
 
@@ -2578,14 +2581,20 @@ class Archive(object):
             if isinstance(vectorobject, Vector):
                 vectorobject.reproject(4326)
                 site_geom = vectorobject.convert2wkt(set3D=False)[0]
+
+                if not use_geometry:
+                    vector_id = 'bbox'
+                else:
+                    log.info('Using precise footprints for selection.')
+                    vector_id = 'geometry'
+
                 # postgres has a different way to store geometries
                 if self.driver == 'postgresql':
-                    arg_format.append("st_intersects(bbox, 'SRID=4326; {}')".format(
-                        site_geom
-                    ))
+                    arg_format.append(F"st_intersects({vector_id}, 'SRID=4326; {site_geom}')")
                 else:
-                    arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
+                    arg_format.append(F"st_intersects(GeomFromText(?, 4326), {vector_id}) = 1")
                     vals.append(site_geom)
+
             else:
                 log.info('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
         
