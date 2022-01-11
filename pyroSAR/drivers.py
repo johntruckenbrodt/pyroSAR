@@ -2091,7 +2091,7 @@ class Archive(object):
         colnames = self.get_colnames()
         for attribute in colnames:
             if attribute in ['bbox', 'geometry']:
-                geom = getattr(scene, 'attribute')
+                geom = getattr(scene, attribute)
                 geom.reproject(4326)
                 geom = geom.convert2wkt(set3D=False)[0]
                 geom = 'SRID=4326;' + str(geom)
