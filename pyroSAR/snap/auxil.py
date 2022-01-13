@@ -103,6 +103,9 @@ def parse_node(name, use_existing=True):
         
         out, err = run(cmd=cmd, void=False)
         
+        if re.search('Unknown operator', out + err):
+            raise RuntimeError("unknown operator '{}'".format(operator))
+        
         graph = re.search('<graph id.*', out, flags=re.DOTALL).group()
         graph = re.sub(r'>\${.*', '/>', graph)  # remove placeholder values like ${value}
         graph = re.sub(r'<\.\.\./>.*', '', graph)  # remove <.../> placeholders
@@ -910,12 +913,12 @@ class Workflow(object):
             node.id = '{0} ({1})'.format(node.operator, ncopies + 1)
         else:
             node.id = node.operator
-
+        
         if isinstance(before, Node):
             before = before.id
         if isinstance(after, Node):
             after = after.id
-
+        
         if before is None and after is None and len(self) > 0:
             before = self[len(self) - 1].id
         if before and not after:
