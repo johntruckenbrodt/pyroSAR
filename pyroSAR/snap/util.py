@@ -589,7 +589,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             if item in tc_options:
                 key = 'save{}{}'.format(item[0].upper(), item[1:])
                 tc.parameters[key] = True
-                tc_selection.append(item)
+                if item == 'DEM':
+                    tc_selection.append('elevation')
+                else:
+                    tc_selection.append(item)
             elif item == 'scatteringArea':
                 if not terrainFlattening:
                     raise RuntimeError('scatteringArea can only be created if terrain flattening is performed')
