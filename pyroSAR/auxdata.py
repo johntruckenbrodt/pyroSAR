@@ -34,7 +34,8 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
+def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None,
+                 product='dem', nodata=None, hide_nodata=False):
     """
     obtain all relevant DEM tiles for selected geometries
 
@@ -188,7 +189,9 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             password=password,
                             vrt=vrt,
                             buffer=buffer,
-                            product=product)
+                            product=product,
+                            nodata=nodata,
+                            hide_nodata=hide_nodata)
 
 
 def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
