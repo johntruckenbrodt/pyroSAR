@@ -1,7 +1,7 @@
 ###############################################################################
 # tools for handling auxiliary data in software pyroSAR
 
-# Copyright (c) 2019-2021, the pyroSAR Developers.
+# Copyright (c) 2019-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -334,7 +334,7 @@ class DEMHandler:
         return ext
     
     @staticmethod
-    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None):
+    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None, hide_nodata=False):
         if vsi is not None:
             locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in tiles])]
         else:
@@ -346,7 +346,8 @@ class DEMHandler:
         opts = {'outputBounds': (extent['xmin'], extent['ymin'],
                                  extent['xmax'], extent['ymax']),
                 'srcNodata': nodata, 'targetAlignedPixels': True,
-                'xRes': xres, 'yRes': yres}
+                'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata
+                }
         gdalbuildvrt(src=locals, dst=vrtfile,
                      options=opts)
     
