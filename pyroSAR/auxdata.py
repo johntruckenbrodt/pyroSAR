@@ -486,7 +486,7 @@ class DEMHandler:
                        }
         }
     
-    def load(self, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
+    def load(self, demType, vrt=None, buffer=None, username=None, password=None, product='dem', nodata=None):
         """
         obtain DEM tiles for the given geometries
         
@@ -550,6 +550,9 @@ class DEMHandler:
               * 'hem': Height Error Map
               * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
               * 'wam': Water Indication Mask
+        nodata: int or float or None
+            the no data value to write in the VRT if it will be written.
+            If `None`, the value of the source products is passed on.
 
         Returns
         -------
@@ -588,10 +591,9 @@ class DEMHandler:
             for item in locals:
                 getasse30_hdr(item)
         
-        if product == 'dem':
-            nodata = self.config[demType]['nodata']
-        else:
-            nodata = 0
+        if nodata is None:
+            if product == 'dem':
+                nodata = self.config[demType]['nodata']
         
         if vrt is not None:
             self.__buildvrt(tiles=locals, vrtfile=vrt,
