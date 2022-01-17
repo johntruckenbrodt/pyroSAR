@@ -1311,6 +1311,15 @@ class Par_BandMath(Par):
         var = self.__element.find('.//variables')
         for item in var:
             var.remove(item)
+    
+    def add_equation(self):
+        eqs = self.__element.find('.//targetBands')
+        eqlist = eqs.findall('.//targetBand')
+        eq1 = eqlist[0]
+        eq2 = copy.deepcopy(eq1)
+        for item in eq2:
+            item.text = None
+        eqs.insert(len(eqlist), eq2)
 
 
 def value2str(value):
