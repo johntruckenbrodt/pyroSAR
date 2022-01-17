@@ -486,7 +486,8 @@ class DEMHandler:
                        }
         }
     
-    def load(self, demType, vrt=None, buffer=None, username=None, password=None, product='dem', nodata=None):
+    def load(self, demType, vrt=None, buffer=None, username=None, password=None,
+             product='dem', nodata=None, hide_nodata=False):
         """
         obtain DEM tiles for the given geometries
         
@@ -600,7 +601,7 @@ class DEMHandler:
                             pattern=self.config[demType]['pattern'][product],
                             vsi=self.config[demType]['vsi'],
                             extent=self.__commonextent(buffer),
-                            nodata=nodata)
+                            nodata=nodata, hide_nodata=hide_nodata)
             return None
         return locals
     
