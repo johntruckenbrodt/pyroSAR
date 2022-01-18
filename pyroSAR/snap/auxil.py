@@ -1,7 +1,7 @@
 ###############################################################################
 # pyroSAR SNAP API tools
 
-# Copyright (c) 2017-2021, the pyroSAR Developers.
+# Copyright (c) 2017-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -442,9 +442,13 @@ def writer(xmlfile, outdir, basename_extensions=None):
             if dem_name in dem_nodata_lookup.keys():
                 dem_nodata = dem_nodata_lookup[dem_name]
     
-    outname_base = os.path.join(outdir, os.path.basename(src))
-    os.makedirs(src, exist_ok=True)
-    if src_format == 'ENVI':
+    if src_format == 'BEAM-DIMAP':
+        src = src.replace('.dim', '.data')
+    
+    src_base = os.path.splitext(os.path.basename(src))[0]
+    outname_base = os.path.join(outdir, src_base)
+    
+    if src_format in ['ENVI', 'BEAM-DIMAP']:
         log.info('converting to GeoTIFF')
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
@@ -484,7 +488,7 @@ def writer(xmlfile, outdir, basename_extensions=None):
             translateoptions['noData'] = nodata
             gdal_translate(item, name_new, translateoptions)
     else:
-        raise RuntimeError('The output file format must be ENVI.')
+        raise RuntimeError('The output file format must be ENVI or BEAM-DIMAP.')
     ###########################################################################
     # write the Sentinel-1 manifest.safe file as addition to the actual product
     readers = workflow['operator=Read']
