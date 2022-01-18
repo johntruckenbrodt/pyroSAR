@@ -716,9 +716,6 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
             except RuntimeError:
                 log.info('scene was attempted to be processed before, exiting')
                 return
-        else:
-            scene.scene = os.path.join(tmpdir, os.path.basename(scene.file))
-            os.makedirs(scene.scene)
     
     path_log = os.path.join(tmpdir, 'logfiles')
     if not os.path.isdir(path_log):
