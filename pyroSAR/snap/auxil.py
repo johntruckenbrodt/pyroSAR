@@ -474,6 +474,8 @@ def writer(xmlfile, outdir, basename_extensions=None):
                     base = re.sub('scatteringArea_[HV]{2}', 'scatteringArea', base)
                 if re.search('gammaSigmaRatio', base):
                     base = re.sub('gammaSigmaRatio_[HV]{2}', 'gammaSigmaRatio', base)
+                if re.search('NE[BGS]Z', base):
+                    base = re.sub('(NE[BGS]Z)_([HV]{2})', r'\g<2>_\g<1>', base)
                 name_new = outname_base.replace(suffix, '{0}.tif'.format(base))
             if re.search('elevation', item):
                 nodata = dem_nodata
