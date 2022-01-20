@@ -40,6 +40,12 @@ SNAP Processing
     :undoc-members:
     :show-inheritance:
 
+    .. autosummary::
+        :nosignatures:
+
+        geocode
+        noise_power
+
 Workflow Parsing and Execution
 ------------------------------
 
@@ -60,6 +66,19 @@ Workflow Parsing and Execution
         Workflow
         Node
         Par
+
+General Utilities
+-----------------
+
+.. automodule:: pyroSAR.snap.auxil
+    :members: erode_edges
+    :undoc-members:
+    :show-inheritance:
+
+    .. autosummary::
+        :nosignatures:
+
+        erode_edges
 
 GAMMA Processing
 ================

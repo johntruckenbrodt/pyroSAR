@@ -26,6 +26,9 @@ from pyroSAR.ancillary import windows_fileprefix
 from spatialist.auxil import gdal_translate
 from spatialist.ancillary import finder, run
 
+from osgeo import gdal
+from osgeo.gdalconst import GA_Update
+
 import logging
 
 log = logging.getLogger(__name__)
@@ -1350,3 +1353,39 @@ def value2str(value):
     else:
         strval = str(value)
     return strval
+
+
+def erode_edges(infile):
+    """
+    Erode noisy edge pixels in SNAP-processed images.
+    It was discovered that images contain border pixel artifacts after `Terrain-Correction`.
+    Likely this is coming from treating the value 0 as regular value instead of no data during resampling.
+    This function erodes these edge pixels using scipy.ndimage.binary_erosion.
+    scipy is not a base dependency of pyroSAR and has to be installed separately.
+    
+    .. figure:: figures/snap_erode_edges.png
+        :align: center
+        
+        VV gamma0 RTC backscatter image visualizing the noisy border (left) and the cleaned result (right).
+        The area covers approx. 2.3 * 2.3 km². Pixel spacing is 20 m.
+    
+    Parameters
+    ----------
+    infile: str
+        a single-layer file to modify in-place. 0 is assumed as no data value.
+
+    Returns
+    -------
+
+    """
+    from scipy.ndimage import binary_erosion
+    ras = gdal.Open(infile, GA_Update)
+    band = ras.GetRasterBand(1)
+    array = band.ReadAsArray()
+    mask = array != 0
+    mask2 = binary_erosion(mask)
+    array[mask2 == 0] = 0
+    band.WriteArray(array)
+    band.FlushCache()
+    band = None
+    ras = None
