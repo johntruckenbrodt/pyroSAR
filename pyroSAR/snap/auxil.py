@@ -407,18 +407,21 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
                 shutil.rmtree(tmpdir, onerror=windows_fileprefix)
 
 
-def writer(xmlfile, outdir, basename_extensions=None):
+def writer(xmlfile, outdir, basename_extensions=None, clean_edges=False):
     """
     SNAP product writing utility
     
     Parameters
     ----------
     xmlfile: str
-        the name of the workflow XML file
+        the name of the workflow XML file.
     outdir: str
-        the directory into which to write the final files
+        the directory into which to write the final files.
     basename_extensions: list of str or None
-        names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
+        names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``.
+    clean_edges: bool
+        erode noisy image edges? See :func:`pyroSAR.snap.auxil.erode_edges`.
+        Does not apply to layover-shadow mask.
 
     Returns
     -------
@@ -457,7 +460,8 @@ def writer(xmlfile, outdir, basename_extensions=None):
                             'format': 'GTiff'}
         for item in finder(src, ['*.img'], recursive=False):
             pattern = '(?P<refarea>(?:Sig|Gam)ma0)_(?P<pol>[HV]{2})'
-            match = re.search(pattern, item)
+            basename = os.path.basename(item)
+            match = re.search(pattern, basename)
             if match:
                 refarea, pol = match.groups()
                 correction = 'elp'
@@ -473,7 +477,7 @@ def writer(xmlfile, outdir, basename_extensions=None):
                     suffix_new += '_db'
                 name_new = outname_base.replace(suffix, '{0}_{1}.tif'.format(pol, suffix_new))
             else:
-                base = os.path.splitext(os.path.basename(item))[0] \
+                base = os.path.splitext(basename)[0] \
                     .replace('elevation', 'DEM')
                 if re.search('layover_shadow_mask', base):
                     base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
@@ -484,11 +488,13 @@ def writer(xmlfile, outdir, basename_extensions=None):
                 if re.search('NE[BGS]Z', base):
                     base = re.sub('(NE[BGS]Z)_([HV]{2})', r'\g<2>_\g<1>', base)
                 name_new = outname_base.replace(suffix, '{0}.tif'.format(base))
-            if re.search('elevation', item):
+            if re.search('elevation', basename):
                 nodata = dem_nodata
             else:
                 nodata = 0
             translateoptions['noData'] = nodata
+            if clean_edges and not 'layover_shadow_mask' in basename:
+                erode_edges(item)
             gdal_translate(item, name_new, translateoptions)
     else:
         raise RuntimeError('The output file format must be ENVI or BEAM-DIMAP.')

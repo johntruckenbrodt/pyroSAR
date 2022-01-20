@@ -71,7 +71,7 @@ General Utilities
 -----------------
 
 .. automodule:: pyroSAR.snap.auxil
-    :members: erode_edges
+    :members: erode_edges, writer
     :undoc-members:
     :show-inheritance:
 
@@ -79,6 +79,7 @@ General Utilities
         :nosignatures:
 
         erode_edges
+        writer
 
 GAMMA Processing
 ================
