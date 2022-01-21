@@ -34,7 +34,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             gpt_exceptions=None, gpt_args=None, returnWF=False, nodataValueAtSea=True,
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
-            speckleFilter=False, refarea='gamma0'):
+            speckleFilter=False, refarea='gamma0', clean_edges=False):
     """
     general function for geocoding of SAR backscatter images with SNAP.
     
@@ -169,6 +169,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - 'BICUBIC_INTERPOLATION'
     imgResamplingMethod: str
         The resampling method for geocoding the SAR image; the options are identical to demResamplingMethod.
+    alignToStandardGrid: bool
+        Align all processed images to a common grid?
+    standardGridOriginX: int or float
+        The x origin value for grid alignment
+    standardGridOriginY: int or float
+        The y origin value for grid alignment
     speckleFilter: str
         One of the following:
         
@@ -181,12 +187,9 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - 'Lee Sigma'
     refarea: str or list
         'sigma0', 'gamma0' or a list of both
-    alignToStandardGrid: bool
-        Align all processed images to a common grid?
-    standardGridOriginX: int or float
-        The x origin value for grid alignment
-    standardGridOriginY: int or float
-        The y origin value for grid alignment
+    clean_edges: bool
+        erode noisy image edges? See :func:`pyroSAR.snap.auxil.erode_edges`.
+        Does not apply to layover-shadow mask.
     
     Returns
     -------
@@ -217,6 +220,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     :class:`spatialist.vector.Vector`,
     :func:`spatialist.auxil.crsConvert()`
     """
+    if clean_edges:
+        try:
+            import scipy
+        except ImportError:
+            raise RuntimeError('please install scipy to clean edges')
+    
     if isinstance(infile, ID):
         id = infile
         ids = [id]
@@ -745,7 +754,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             gpt(wf_name, groups=groups, cleanup=cleanup, tmpdir=outname,
                 gpt_exceptions=gpt_exceptions, gpt_args=gpt_args,
                 removeS1BorderNoiseMethod=removeS1BorderNoiseMethod)
-            writer(xmlfile=wf_name, outdir=outdir, basename_extensions=basename_extensions)
+            writer(xmlfile=wf_name, outdir=outdir, basename_extensions=basename_extensions,
+                   clean_edges=clean_edges)
         except Exception as e:
             log.info(str(e))
             with open(wf_name.replace('_proc.xml', '_error.log'), 'w') as logfile:
@@ -760,7 +770,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
 
 
 def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=None, test=False, cleanup=True,
-                alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0):
+                alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0, clean_edges=False):
     """
     Generate noise power images for each polarization, calibrated to either beta, sigma or gamma nought.
     The written GeoTIFF files will carry the suffix NEBZ, NESZ or NEGZ respectively.
@@ -793,6 +803,9 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
         The x origin value for grid alignment
     standardGridOriginY: int or float
         The y origin value for grid alignment
+    clean_edges: bool
+        erode noisy image edges? See :func:`pyroSAR.snap.auxil.erode_edges`.
+        Does not apply to layover-shadow mask.
 
     Returns
     -------
@@ -928,7 +941,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
     
     if not test:
         gpt(xmlfile=wf_name, tmpdir=tmpdir)
-        writer(xmlfile=wf_name, outdir=outdir)
+        writer(xmlfile=wf_name, outdir=outdir, clean_edges=clean_edges)
         if cleanup:
             if os.path.isdir(procdir):
                 shutil.rmtree(procdir, onerror=windows_fileprefix)
