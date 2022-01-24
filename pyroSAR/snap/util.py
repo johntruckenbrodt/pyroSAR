@@ -770,6 +770,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
 
 
 def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=None, test=False, cleanup=True,
+                demName='SRTM 1Sec HGT', externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
                 alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0, clean_edges=False):
     """
     Generate noise power images for each polarization, calibrated to either beta, sigma or gamma nought.
@@ -797,6 +798,27 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
     cleanup: bool
         Should all files written to the temporary directory during function execution be deleted after processing?
         Default is True.
+    demName: str
+        The name of the auto-download DEM. Default is 'SRTM 1Sec HGT'. Is ignored when `externalDEMFile` is not None.
+        Supported options:
+        
+         - ACE2_5Min
+         - ACE30
+         - ASTER 1sec GDEM
+         - CDEM
+         - Copernicus 30m Global DEM
+         - Copernicus 90m Global DEM
+         - GETASSE30
+         - SRTM 1Sec Grid
+         - SRTM 1Sec HGT
+         - SRTM 3Sec
+    externalDEMFile: str or None, optional
+        The absolute path to an external DEM file. Default is None. Overrides `demName`.
+    externalDEMNoDataValue: int, float or None, optional
+        The no data value of the external DEM. If not specified (default) the function will try to read it from the
+        specified external DEM.
+    externalDEMApplyEGM: bool, optional
+        Apply Earth Gravitational Model to external DEM? Default is True.
     alignToStandardGrid: bool
         Align all processed images to a common grid?
     standardGridOriginX: int or float
@@ -885,8 +907,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
     tc = parse_node('Terrain-Correction')
     wf.insert_node(tc, before=last.id)
     last = tc
-    #######################
-    tc.parameters['demName'] = 'SRTM 1Sec HGT'
+    
     tc.parameters['demResamplingMethod'] = 'BILINEAR_INTERPOLATION'
     tc.parameters['imgResamplingMethod'] = 'BILINEAR_INTERPOLATION'
     tc.parameters['alignToStandardGrid'] = alignToStandardGrid
@@ -921,7 +942,35 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
         t_srs = 'EPSG:{}'.format(t_srs)
     
     tc.parameters['mapProjection'] = t_srs
-    last = tc
+    
+    # select DEM type
+    dempar = {'externalDEMFile': externalDEMFile,
+              'externalDEMApplyEGM': externalDEMApplyEGM}
+    if externalDEMFile is not None:
+        if os.path.isfile(externalDEMFile):
+            if externalDEMNoDataValue is None:
+                with Raster(externalDEMFile) as dem:
+                    dempar['externalDEMNoDataValue'] = dem.nodata
+                if dempar['externalDEMNoDataValue'] is None:
+                    raise RuntimeError('Cannot read NoData value from DEM file. '
+                                       'Please specify externalDEMNoDataValue')
+            else:
+                dempar['externalDEMNoDataValue'] = externalDEMNoDataValue
+            dempar['reGridMethod'] = False
+        else:
+            raise RuntimeError('specified externalDEMFile does not exist')
+        dempar['demName'] = 'External DEM'
+    else:
+        dempar['demName'] = demName
+        dempar['externalDEMFile'] = None
+        dempar['externalDEMNoDataValue'] = 0
+    
+    for key, value in dempar.items():
+        wf.set_par(key, value)
+    
+    # download the EGM lookup table if necessary
+    if dempar['externalDEMApplyEGM']:
+        get_egm_lookup(geoid='EGM96', software='SNAP')
     ############################################
     
     suffix = wf.suffix()
