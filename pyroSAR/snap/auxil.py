@@ -1366,7 +1366,7 @@ def erode_edges(infile):
     Erode noisy edge pixels in SNAP-processed images.
     It was discovered that images contain border pixel artifacts after `Terrain-Correction`.
     Likely this is coming from treating the value 0 as regular value instead of no data during resampling.
-    This function erodes these edge pixels using scipy.ndimage.binary_erosion.
+    This function erodes these edge pixels using :func:`scipy.ndimage.binary_erosion`.
     scipy is not a base dependency of pyroSAR and has to be installed separately.
     
     .. figure:: figures/snap_erode_edges.png
