@@ -196,7 +196,9 @@ class OSV(object):
                                       year=date_search.year,
                                       month=date_search.month,
                                       day=date_search.day)
-            result = requests.get(url_sub, timeout=self.timeout).text
+            response = requests.get(url_sub, timeout=self.timeout)
+            response.raise_for_status()
+            result = response.text
             files_sub = list(set(re.findall(self.pattern, result)))
             if len(files_sub) == 0:
                 break
@@ -236,7 +238,9 @@ class OSV(object):
                                           year=date_search.year,
                                           month=date_search.month)
                 log.info(url_sub)
-                result = requests.get(url_sub, timeout=self.timeout).text
+                response = requests.get(url_sub, timeout=self.timeout)
+                response.raise_for_status()
+                result = response.text
                 files_sub = list(set(re.findall(self.pattern, result)))
                 if len(files_sub) == 0:
                     break
@@ -590,7 +594,9 @@ class OSV(object):
             progress = pb.ProgressBar(max_value=len(downloads))
         i = 0
         for remote, local, basename, auth in downloads:
-            infile = requests.get(remote, auth=auth, timeout=self.timeout)
+            response = requests.get(remote, auth=auth, timeout=self.timeout)
+            response.raise_for_status()
+            infile = response.content
 
             # use a tempfile to allow atomic writes in the case of
             # parallel executions dependent on the same orbit files
@@ -598,7 +604,7 @@ class OSV(object):
             os.close(fd)
             try:
                 if remote.endswith('.zip'):
-                    with zf.ZipFile(file=BytesIO(infile.content)) as tmp:
+                    with zf.ZipFile(file=BytesIO(infile)) as tmp:
                         members = tmp.namelist()
                         target = [x for x in members if re.search(basename, x)][0]
                         with zf.ZipFile(tmp_path, 'w') as outfile:
@@ -610,13 +616,12 @@ class OSV(object):
                                     compression=zf.ZIP_DEFLATED) \
                             as outfile:
                         outfile.writestr(zinfo_or_arcname=basename,
-                                         data=infile.content)
+                                         data=infile)
                 os.rename(tmp_path, local)
             except Exception as e:
                 os.unlink(tmp_path)
                 raise
 
-            infile.close()
             if pbar:
                 i += 1
                 progress.update(i)

@@ -37,7 +37,8 @@ can be downloaded by time span to a central directory. This is the most basic ap
 
     with OSV(osvdir) as osv:
         files = osv.catch(sensor='S1A', osvtype='POE',
-                          start='20170101T000000', stop='20180101T000000')
+                          start='20170101T000000', stop='20180101T000000',
+                          url_option=1)
         osv.retrieve(files)
 
 Two sub-directories `POEORB` and `RESORB` will be created in `osvdir` containing the downloaded files. `POEORB` will

@@ -1,7 +1,7 @@
 ###############################################################################
 # pyroSAR SNAP API tools
 
-# Copyright (c) 2017-2021, the pyroSAR Developers.
+# Copyright (c) 2017-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -25,6 +25,9 @@ from pyroSAR.ancillary import windows_fileprefix
 
 from spatialist.auxil import gdal_translate
 from spatialist.ancillary import finder, run
+
+from osgeo import gdal
+from osgeo.gdalconst import GA_Update
 
 import logging
 
@@ -102,6 +105,9 @@ def parse_node(name, use_existing=True):
         cmd = [gpt, operator, '-h']
         
         out, err = run(cmd=cmd, void=False)
+        
+        if re.search('Unknown operator', out + err):
+            raise RuntimeError("unknown operator '{}'".format(operator))
         
         graph = re.search('<graph id.*', out, flags=re.DOTALL).group()
         graph = re.sub(r'>\${.*', '/>', graph)  # remove placeholder values like ${value}
@@ -401,18 +407,21 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
                 shutil.rmtree(tmpdir, onerror=windows_fileprefix)
 
 
-def writer(xmlfile, outdir, basename_extensions=None):
+def writer(xmlfile, outdir, basename_extensions=None, clean_edges=False):
     """
     SNAP product writing utility
     
     Parameters
     ----------
     xmlfile: str
-        the name of the workflow XML file
+        the name of the workflow XML file.
     outdir: str
-        the directory into which to write the final files
+        the directory into which to write the final files.
     basename_extensions: list of str or None
-        names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
+        names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``.
+    clean_edges: bool
+        erode noisy image edges? See :func:`pyroSAR.snap.auxil.erode_edges`.
+        Does not apply to layover-shadow mask.
 
     Returns
     -------
@@ -439,15 +448,20 @@ def writer(xmlfile, outdir, basename_extensions=None):
             if dem_name in dem_nodata_lookup.keys():
                 dem_nodata = dem_nodata_lookup[dem_name]
     
-    outname_base = os.path.join(outdir, os.path.basename(src))
-    os.makedirs(src, exist_ok=True)
-    if src_format == 'ENVI':
+    if src_format == 'BEAM-DIMAP':
+        src = src.replace('.dim', '.data')
+    
+    src_base = os.path.splitext(os.path.basename(src))[0]
+    outname_base = os.path.join(outdir, src_base)
+    
+    if src_format in ['ENVI', 'BEAM-DIMAP']:
         log.info('converting to GeoTIFF')
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
         for item in finder(src, ['*.img'], recursive=False):
             pattern = '(?P<refarea>(?:Sig|Gam)ma0)_(?P<pol>[HV]{2})'
-            match = re.search(pattern, item)
+            basename = os.path.basename(item)
+            match = re.search(pattern, basename)
             if match:
                 refarea, pol = match.groups()
                 correction = 'elp'
@@ -463,7 +477,7 @@ def writer(xmlfile, outdir, basename_extensions=None):
                     suffix_new += '_db'
                 name_new = outname_base.replace(suffix, '{0}_{1}.tif'.format(pol, suffix_new))
             else:
-                base = os.path.splitext(os.path.basename(item))[0] \
+                base = os.path.splitext(basename)[0] \
                     .replace('elevation', 'DEM')
                 if re.search('layover_shadow_mask', base):
                     base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
@@ -471,15 +485,19 @@ def writer(xmlfile, outdir, basename_extensions=None):
                     base = re.sub('scatteringArea_[HV]{2}', 'scatteringArea', base)
                 if re.search('gammaSigmaRatio', base):
                     base = re.sub('gammaSigmaRatio_[HV]{2}', 'gammaSigmaRatio', base)
+                if re.search('NE[BGS]Z', base):
+                    base = re.sub('(NE[BGS]Z)_([HV]{2})', r'\g<2>_\g<1>', base)
                 name_new = outname_base.replace(suffix, '{0}.tif'.format(base))
-            if re.search('elevation', item):
+            if re.search('elevation', basename):
                 nodata = dem_nodata
             else:
                 nodata = 0
             translateoptions['noData'] = nodata
+            if clean_edges and not 'layover_shadow_mask' in basename:
+                erode_edges(item)
             gdal_translate(item, name_new, translateoptions)
     else:
-        raise RuntimeError('The output file format must be ENVI.')
+        raise RuntimeError('The output file format must be ENVI or BEAM-DIMAP.')
     ###########################################################################
     # write the Sentinel-1 manifest.safe file as addition to the actual product
     readers = workflow['operator=Read']
@@ -890,11 +908,11 @@ class Workflow(object):
         ----------
         node: Node
             the node to be inserted
-        before: str or list
-            the ID(s) of the node(s) before the newly inserted node; a list of node IDs is intended for nodes that
-            require multiple sources, e.g. sliceAssembly
-        after: str
-            the ID of the node after the newly inserted node
+        before: Node, str or list
+            a Node object; the ID(s) of the node(s) before the newly inserted node; a list of node IDs is intended for
+            nodes that require multiple sources, e.g. sliceAssembly
+        after: Node, str
+            a Node object; the ID of the node after the newly inserted node
         resetSuccessorSource: bool
             reset the source of the successor node to the ID of the newly inserted node?
         void: bool
@@ -910,6 +928,11 @@ class Workflow(object):
             node.id = '{0} ({1})'.format(node.operator, ncopies + 1)
         else:
             node.id = node.operator
+        
+        if isinstance(before, Node):
+            before = before.id
+        if isinstance(after, Node):
+            after = after.id
         
         if before is None and after is None and len(self) > 0:
             before = self[len(self) - 1].id
@@ -1303,6 +1326,15 @@ class Par_BandMath(Par):
         var = self.__element.find('.//variables')
         for item in var:
             var.remove(item)
+    
+    def add_equation(self):
+        eqs = self.__element.find('.//targetBands')
+        eqlist = eqs.findall('.//targetBand')
+        eq1 = eqlist[0]
+        eq2 = copy.deepcopy(eq1)
+        for item in eq2:
+            item.text = None
+        eqs.insert(len(eqlist), eq2)
 
 
 def value2str(value):
@@ -1327,3 +1359,39 @@ def value2str(value):
     else:
         strval = str(value)
     return strval
+
+
+def erode_edges(infile):
+    """
+    Erode noisy edge pixels in SNAP-processed images.
+    It was discovered that images contain border pixel artifacts after `Terrain-Correction`.
+    Likely this is coming from treating the value 0 as regular value instead of no data during resampling.
+    This function erodes these edge pixels using scipy.ndimage.binary_erosion.
+    scipy is not a base dependency of pyroSAR and has to be installed separately.
+    
+    .. figure:: figures/snap_erode_edges.png
+        :align: center
+        
+        VV gamma0 RTC backscatter image visualizing the noisy border (left) and the cleaned result (right).
+        The area covers approx. 2.3 * 2.3 km². Pixel spacing is 20 m.
+    
+    Parameters
+    ----------
+    infile: str
+        a single-layer file to modify in-place. 0 is assumed as no data value.
+
+    Returns
+    -------
+
+    """
+    from scipy.ndimage import binary_erosion
+    ras = gdal.Open(infile, GA_Update)
+    band = ras.GetRasterBand(1)
+    array = band.ReadAsArray()
+    mask = array != 0
+    mask2 = binary_erosion(mask)
+    array[mask2 == 0] = 0
+    band.WriteArray(array)
+    band.FlushCache()
+    band = None
+    ras = None

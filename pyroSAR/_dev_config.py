@@ -13,7 +13,6 @@
 # to the terms contained in the LICENSE.txt file.
 ###############################################################################
 import os
-import sys
 import json
 
 import configparser as ConfigParser

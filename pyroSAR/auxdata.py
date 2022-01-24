@@ -56,21 +56,33 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         - 'Copernicus 10m EEA DEM' (Copernicus 10 m DEM available over EEA-39 countries)
 
           * registration: https://spacedata.copernicus.eu/web/cscda/data-access/registration
-          * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2020_1
+          * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1
           * height reference: EGM2008
 
         - 'Copernicus 30m Global DEM'
-     
+          
           * info: https://copernicus-dem-30m.s3.amazonaws.com/readme.html
           * url: https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/
           * height reference: EGM2008
 
+        - 'Copernicus 30m Global DEM II'
+        
+          * registration: https://spacedata.copernicus.eu/web/cscda/data-access/registration
+          * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-30-DGED/2021_1
+          * height reference: EGM2008
+        
         - 'Copernicus 90m Global DEM'
      
           * info: https://copernicus-dem-90m.s3.amazonaws.com/readme.html
           * url: https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com/
           * height reference: EGM2008
-          
+        
+        - 'Copernicus 90m Global DEM II'
+        
+          * registration: https://spacedata.copernicus.eu/web/cscda/data-access/registration
+          * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-90-DGED/2021_1
+          * height reference: EGM2008
+        
         - 'GETASSE30'
         
           * info: https://seadas.gsfc.nasa.gov/help-8.1.0/desktop/GETASSE30ElevationModel.html
@@ -106,13 +118,13 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         The following options are available for the respective DEM types:
         
         - 'AW3D30'
-         
+        
           * 'dem': the actual Digital Elevation Model
           * 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
             low correlation mask, Sea mask, Information of elevation dataset used
             for the void-filling processing)
-          * 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
-
+          * 'stk': number of DSM-scene files which were used to produce the 5 m resolution DSM
+        
         - 'Copernicus 10m EEA DEM'
         
           * 'dem': the actual Digital Elevation Model
@@ -120,21 +132,45 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * 'flm': filling mask
           * 'hem': height error mask
           * 'wbm': water body mask
-         
+        
+        - 'Copernicus 30m Global DEM'
+        
+          * 'dem': the actual Digital Elevation Model
+        
+        - 'Copernicus 30m Global DEM II'
+        
+          * 'dem': the actual Digital Elevation Model
+          * 'edm': editing mask
+          * 'flm': filling mask
+          * 'hem': height error mask
+          * 'wbm': water body mask
+        
+        - 'Copernicus 90m Global DEM'
+        
+          * 'dem': the actual Digital Elevation Model
+        
+        - 'Copernicus 90m Global DEM II'
+        
+          * 'dem': the actual Digital Elevation Model
+          * 'edm': editing mask
+          * 'flm': filling mask
+          * 'hem': height error mask
+          * 'wbm': water body mask
+        
         - 'GETASSE30'
         
           * 'dem': the actual Digital Elevation Model
         
         - 'SRTM 1Sec HGT'
-         
+        
           * 'dem': the actual Digital Elevation Model
-          
+        
         - 'SRTM 3Sec'
-         
+        
           * 'dem': the actual Digital Elevation Model
-          
+        
         - 'TDX90m'
-         
+        
           * 'dem': the actual Digital Elevation Model
           * 'am2': Amplitude Mosaic representing the minimum value
           * 'amp': Amplitude Mosaic representing the mean value
@@ -440,7 +476,7 @@ class DEMHandler:
                                    'msk': '*MSK.tif',
                                    'stk': '*STK.tif'}
                        },
-            'Copernicus 10m EEA DEM': {'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2020_1',
+            'Copernicus 10m EEA DEM': {'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1',
                                        'nodata': -32767.0,
                                        'vsi': '/vsitar/',
                                        'port': 990,
@@ -455,11 +491,33 @@ class DEMHandler:
                                           'vsi': None,
                                           'pattern': {'dem': '*DSM*'}
                                           },
+            'Copernicus 30m Global DEM II': {
+                'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-30-DGED/2021_1',
+                'nodata': -32767.0,
+                'vsi': '/vsitar/',
+                'port': 990,
+                'pattern': {'dem': '*DEM.tif',
+                            'edm': '*EDM.tif',
+                            'flm': '*FLM.tif',
+                            'hem': '*HEM.tif',
+                            'wbm': '*WBM.tif'}
+            },
             'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com',
                                           'nodata': None,
                                           'vsi': None,
                                           'pattern': {'dem': '*DSM*'}
                                           },
+            'Copernicus 90m Global DEM II': {
+                'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-90-DGED/2021_1',
+                'nodata': -32767.0,
+                'vsi': '/vsitar/',
+                'port': 990,
+                'pattern': {'dem': '*DEM.tif',
+                            'edm': '*EDM.tif',
+                            'flm': '*FLM.tif',
+                            'hem': '*HEM.tif',
+                            'wbm': '*WBM.tif'}
+            },
             'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
                           'nodata': None,
                           'vsi': '/vsizip/',
@@ -503,49 +561,65 @@ class DEMHandler:
         buffer: int, float, None
             a buffer in degrees to add around the individual geometries
         username: str or None
-            the download account user name
+            the download account username
         password: str or None
             the download account password
         product: str
             the sub-product to extract from the DEM product
              - 'AW3D30'
-
+             
               * 'dem': the actual Digital Elevation Model
               * 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
                 low correlation mask, Sea mask, Information of elevation dataset used
                 for the void-filling processing)
               * 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
-
+             
              - 'Copernicus 10m EEA DEM'
-            
+             
               * 'dem': the actual Digital Elevation Model
               * 'edm': Editing Mask
               * 'flm': Filling Mask
               * 'hem': Height Error Mask
               * 'wbm': Water Body Mask
-              
+             
              - 'Copernicus 30m Global DEM'
              
               * 'dem': the actual Digital Elevation Model
-
+             
+             - 'Copernicus 30m Global DEM II'
+             
+              * 'dem': the actual Digital Elevation Model
+              * 'edm': Editing Mask
+              * 'flm': Filling Mask
+              * 'hem': Height Error Mask
+              * 'wbm': Water Body Mask
+             
              - 'Copernicus 90m Global DEM'
              
               * 'dem': the actual Digital Elevation Model
-              
+             
+             - 'Copernicus 90m Global DEM II'
+             
+              * 'dem': the actual Digital Elevation Model
+              * 'edm': Editing Mask
+              * 'flm': Filling Mask
+              * 'hem': Height Error Mask
+              * 'wbm': Water Body Mask
+             
              - 'GETASSE30'
-            
+             
               * 'dem': the actual Digital Elevation Model
-          
+             
              - 'SRTM 1Sec HGT'
-
+             
               * 'dem': the actual Digital Elevation Model
-
+             
              - 'SRTM 3Sec'
-
+             
               * 'dem': the actual Digital Elevation Model
-
+             
              - 'TDX90m'
-
+             
               * 'dem': the actual Digital Elevation Model
               * 'am2': Amplitude Mosaic representing the minimum value
               * 'amp': Amplitude Mosaic representing the mean value
@@ -582,7 +656,8 @@ class DEMHandler:
             remotes.extend(self.remote_ids(corners, demType=demType,
                                            username=username, password=password))
         
-        if demType in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM']:
+        if demType in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM',
+                       'Copernicus 30m Global DEM II', 'Copernicus 90m Global DEM II']:
             port = 0
             if 'port' in self.config[demType].keys():
                 port = self.config[demType]['port']
@@ -699,7 +774,9 @@ class DEMHandler:
                         int((float(extent['xmax']) + 180) // 5) + 2)
             remotes = ['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in lon for y in lat]
         
-        elif demType == 'Copernicus 10m EEA DEM':
+        elif demType in ['Copernicus 10m EEA DEM',
+                         'Copernicus 30m Global DEM II',
+                         'Copernicus 90m Global DEM II']:
             lat, lon = intrange(extent, step=1)
             indices = [''.join(index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
@@ -840,6 +917,7 @@ def get_egm_lookup(geoid, software):
             remote = 'https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
             log.info('{} <<-- {}'.format(local, remote))
             r = requests.get(remote)
+            r.raise_for_status()
             with open(local, 'wb') as out:
                 out.write(r.content)
     
@@ -850,13 +928,13 @@ def get_egm_lookup(geoid, software):
         
         proj_lib = os.environ.get('PROJ_LIB')
         if proj_lib is not None:
-            if not os.access(proj_lib, os.W_OK):
-                raise OSError("cannot write to 'PROJ_LIB' path: {}".format(proj_lib))
-            
             gtx_local = os.path.join(proj_lib, os.path.basename(gtx_remote))
             if not os.path.isfile(gtx_local):
+                if not os.access(proj_lib, os.W_OK):
+                    raise OSError("cannot write to 'PROJ_LIB' path: {}".format(proj_lib))
                 log.info('{} <<-- {}'.format(gtx_local, gtx_remote))
                 r = requests.get(gtx_remote)
+                r.raise_for_status()
                 with open(gtx_local, 'wb') as out:
                     out.write(r.content)
         else:

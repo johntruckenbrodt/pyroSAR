@@ -1,5 +1,4 @@
 progressbar2
-pathos>=0.2
 numpy
 spatialist>=0.8
 pyyaml
