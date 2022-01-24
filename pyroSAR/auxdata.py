@@ -1,7 +1,7 @@
 ###############################################################################
 # tools for handling auxiliary data in software pyroSAR
 
-# Copyright (c) 2019-2021, the pyroSAR Developers.
+# Copyright (c) 2019-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -24,7 +24,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlparse
 
 from pyroSAR.examine import ExamineSnap
-from spatialist import Raster
+from spatialist.raster import Raster, Dtype
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
@@ -34,7 +34,8 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
+def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None,
+                 product='dem', nodata=None, hide_nodata=False):
     """
     obtain all relevant DEM tiles for selected geometries
 
@@ -224,11 +225,13 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             password=password,
                             vrt=vrt,
                             buffer=buffer,
-                            product=product)
+                            product=product,
+                            nodata=nodata,
+                            hide_nodata=hide_nodata)
 
 
 def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
-               geoid_convert=False, geoid='EGM96', outputBounds=None):
+               geoid_convert=False, geoid='EGM96', outputBounds=None, dtype=None):
     """
     create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
     
@@ -256,6 +259,9 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
          - 'EGM2008'
     outputBounds: list or None
         output bounds as [xmin, ymin, xmax, ymax] in target SRS
+    dtype: str or None
+        override the data type of the written file; Default None: use same type as source data.
+        Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
     
     Returns
     -------
@@ -276,6 +282,9 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
                      'resampleAlg': resampling_method}
+    
+    if dtype is not None:
+        gdalwarp_args['outputType'] = Dtype(dtype).gdalint
     
     if outputBounds is not None:
         gdalwarp_args['outputBounds'] = outputBounds
@@ -364,7 +373,7 @@ class DEMHandler:
         return ext
     
     @staticmethod
-    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None):
+    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None, hide_nodata=False):
         if vsi is not None:
             locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in tiles])]
         else:
@@ -376,7 +385,8 @@ class DEMHandler:
         opts = {'outputBounds': (extent['xmin'], extent['ymin'],
                                  extent['xmax'], extent['ymax']),
                 'srcNodata': nodata, 'targetAlignedPixels': True,
-                'xRes': xres, 'yRes': yres}
+                'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata
+                }
         gdalbuildvrt(src=locals, dst=vrtfile,
                      options=opts)
     
@@ -537,7 +547,8 @@ class DEMHandler:
                        }
         }
     
-    def load(self, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
+    def load(self, demType, vrt=None, buffer=None, username=None, password=None,
+             product='dem', nodata=None, hide_nodata=False):
         """
         obtain DEM tiles for the given geometries
         
@@ -617,6 +628,9 @@ class DEMHandler:
               * 'hem': Height Error Map
               * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
               * 'wam': Water Indication Mask
+        nodata: int or float or None
+            the no data value to write in the VRT if it will be written.
+            If `None`, the value of the source products is passed on.
 
         Returns
         -------
@@ -656,17 +670,16 @@ class DEMHandler:
             for item in locals:
                 getasse30_hdr(item)
         
-        if product == 'dem':
-            nodata = self.config[demType]['nodata']
-        else:
-            nodata = 0
+        if nodata is None:
+            if product == 'dem':
+                nodata = self.config[demType]['nodata']
         
         if vrt is not None:
             self.__buildvrt(tiles=locals, vrtfile=vrt,
                             pattern=self.config[demType]['pattern'][product],
                             vsi=self.config[demType]['vsi'],
                             extent=self.__commonextent(buffer),
-                            nodata=nodata)
+                            nodata=nodata, hide_nodata=hide_nodata)
             return None
         return locals
     
