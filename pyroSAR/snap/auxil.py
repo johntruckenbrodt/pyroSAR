@@ -496,7 +496,7 @@ def writer(xmlfile, outdir, basename_extensions=None,
                 nodata = 0
             translateoptions['noData'] = nodata
             if clean_edges and not 'layover_shadow_mask' in basename:
-                erode_edges(item, pixels=clean_edges_npixels)
+                erode_edges(item, only_boundary=True, pixels=clean_edges_npixels)
             gdal_translate(item, name_new, translateoptions)
     else:
         raise RuntimeError('The output file format must be ENVI or BEAM-DIMAP.')
