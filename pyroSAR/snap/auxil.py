@@ -23,6 +23,7 @@ from pyroSAR import identify
 from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import windows_fileprefix
 
+from spatialist import Raster, vectorize, rasterize, boundary
 from spatialist.auxil import gdal_translate
 from spatialist.ancillary import finder, run
 
@@ -1361,7 +1362,7 @@ def value2str(value):
     return strval
 
 
-def erode_edges(infile):
+def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
     """
     Erode noisy edge pixels in SNAP-processed images.
     It was discovered that images contain border pixel artifacts after `Terrain-Correction`.
@@ -1373,24 +1374,51 @@ def erode_edges(infile):
         :align: center
         
         VV gamma0 RTC backscatter image visualizing the noisy border (left) and the cleaned result (right).
-        The area covers approx. 2.3 * 2.3 km². Pixel spacing is 20 m.
+        The area covers approx. 2.3 * 2.3 km². Pixel spacing is 20 m. connectedness 4, 1 pixel.
     
     Parameters
     ----------
     infile: str
         a single-layer file to modify in-place. 0 is assumed as no data value.
-
+    only_boundary: bool
+        only erode edges at the image boundary (or also at data gaps caused by e.g. masking during Terrain-Flattening)?
+    connectedness: int
+        the number of pixel neighbors considered for the erosion. Either 4 or 8, translating to a
+        :func:`scipy.ndimage.generate_binary_structure` `connectivity` of 1 or 2, respectively.
+    pixels: int
+        the number of pixels to erode from the edges. Directly translates to `iterations` of
+        :func:`scipy.ndimage.iterate_structure`.
+    
     Returns
     -------
 
     """
-    from scipy.ndimage import binary_erosion
+    from scipy.ndimage import binary_erosion, generate_binary_structure, iterate_structure
+    
+    if connectedness == 4:
+        connectivity = 1
+    elif connectedness == 8:
+        connectivity = 2
+    else:
+        raise ValueError('connectedness must be either 4 or 8')
+
+    structure = generate_binary_structure(rank=2, connectivity=connectivity)
+    if pixels > 1:
+        structure = iterate_structure(structure=structure, iterations=pixels)
+    
+    with Raster(infile) as ref:
+        array = ref.array()
+        mask = array != 0
+        if only_boundary:
+            with vectorize(target=mask, reference=ref) as vec:
+                with boundary(vec) as bounds:
+                    with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
+                        mask = new.array()
+        mask2 = binary_erosion(input=mask, structure=structure)
+        array[mask2 == 0] = 0
+    
     ras = gdal.Open(infile, GA_Update)
     band = ras.GetRasterBand(1)
-    array = band.ReadAsArray()
-    mask = array != 0
-    mask2 = binary_erosion(mask)
-    array[mask2 == 0] = 0
     band.WriteArray(array)
     band.FlushCache()
     band = None
