@@ -408,7 +408,8 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
                 shutil.rmtree(tmpdir, onerror=windows_fileprefix)
 
 
-def writer(xmlfile, outdir, basename_extensions=None, clean_edges=False):
+def writer(xmlfile, outdir, basename_extensions=None,
+           clean_edges=False, clean_edges_npixels=1):
     """
     SNAP product writing utility
     
@@ -495,7 +496,7 @@ def writer(xmlfile, outdir, basename_extensions=None, clean_edges=False):
                 nodata = 0
             translateoptions['noData'] = nodata
             if clean_edges and not 'layover_shadow_mask' in basename:
-                erode_edges(item)
+                erode_edges(item, pixels=clean_edges_npixels)
             gdal_translate(item, name_new, translateoptions)
     else:
         raise RuntimeError('The output file format must be ENVI or BEAM-DIMAP.')
