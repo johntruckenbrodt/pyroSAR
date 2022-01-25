@@ -34,7 +34,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             gpt_exceptions=None, gpt_args=None, returnWF=False, nodataValueAtSea=True,
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
-            speckleFilter=False, refarea='gamma0', clean_edges=False):
+            speckleFilter=False, refarea='gamma0', clean_edges=False, clean_edges_npixels=1):
     """
     general function for geocoding of SAR backscatter images with SNAP.
     
@@ -190,6 +190,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     clean_edges: bool
         erode noisy image edges? See :func:`pyroSAR.snap.auxil.erode_edges`.
         Does not apply to layover-shadow mask.
+    clean_edges_npixels: int
+        the number of pixels to erode.
     
     Returns
     -------
@@ -755,7 +757,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
                 gpt_exceptions=gpt_exceptions, gpt_args=gpt_args,
                 removeS1BorderNoiseMethod=removeS1BorderNoiseMethod)
             writer(xmlfile=wf_name, outdir=outdir, basename_extensions=basename_extensions,
-                   clean_edges=clean_edges)
+                   clean_edges=clean_edges, clean_edges_npixels=clean_edges_npixels)
         except Exception as e:
             log.info(str(e))
             with open(wf_name.replace('_proc.xml', '_error.log'), 'w') as logfile:
