@@ -592,6 +592,8 @@ class OSV(object):
         log.info('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
         if pbar:
             progress = pb.ProgressBar(max_value=len(downloads))
+        else:
+            progress = None
         i = 0
         for remote, local, basename, auth in downloads:
             response = requests.get(remote, auth=auth, timeout=self.timeout)

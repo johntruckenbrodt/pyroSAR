@@ -429,7 +429,7 @@ class ID(object):
             except ValueError:
                 pass
             
-            if re.search('(?:LAT|LONG)', entry[0]):
+            if re.search('LAT|LONG', entry[0]):
                 entry[1] /= 1000000.
             meta[entry[0]] = entry[1]
         return meta
