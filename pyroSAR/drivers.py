@@ -60,6 +60,7 @@ from sqlalchemy.sql import select, func
 from sqlalchemy.engine.url import URL
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy_utils import database_exists, create_database, drop_database
+
 from geoalchemy2 import Geometry
 import socket
 import time
@@ -1891,7 +1892,7 @@ class Archive(object):
     """
     
     def __init__(self, dbfile, custom_fields=None, postgres=False, user='postgres',
-                 password='1234', host='localhost', port=5432, cleanup=True):
+                 password='1234', host='localhost', port=5432, cleanup=True, add_geometry=False):
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
@@ -1972,8 +1973,10 @@ class Archive(object):
                                  Column('vv', Integer),
                                  Column('hv', Integer),
                                  Column('vh', Integer),
-                                 Column('bbox', Geometry(geometry_type='POLYGON', management=True, srid=4326)),
-                                 Column('geometry', Geometry(geometry_type='POLYGON', management=True, srid=4326)))
+                                 Column('bbox', Geometry(geometry_type='POLYGON', management=True, srid=4326)))
+
+        if add_geometry:
+            self.data_schema.append_column(Column('geometry', Geometry(geometry_type='POLYGON', management=True, srid=4326)))
         
         # add custom fields
         if self.custom_fields is not None:
@@ -2009,6 +2012,28 @@ class Archive(object):
             log.info('checking for missing scenes')
             self.cleanup()
             sys.stdout.flush()
+
+    def update_geometry_field(self):
+        """
+        Add the geometry as column to an existing database, fill missing values
+        """
+
+        # note: alter table to make geometry column, then sth like this: (NOT YET CHECKED CODE!!)
+        if 'geometry' not in self.get_colnames():
+            '''ALTER TABLE data ADD COLUMN geometry ;'''
+            # Column('geometry', Geometry(geometry_type='POLYGON', management=True, srid=4326))
+
+        session = self.Session()
+        to_update = session.query(self.Data).filter(self.Data.__table__.c['geometry'].is_(None)).all()
+        for entry in to_update:
+            geom = getattr(identify(entry.outname_base), 'geometry')()
+            geom.reproject(4326)
+            geom = geom.convert2wkt(set3D=False)[0]
+            geom = 'SRID=4326;' + str(geom)
+            setattr(entry, 'geometry', geom)
+        session.commit()
+        session.close()
+        pass
     
     def add_tables(self, tables):
         """
@@ -2063,7 +2088,7 @@ class Archive(object):
                 except sqlite3.OperationalError:
                     continue
         elif platform.system() == 'Darwin':
-            for option in ['mod_spatialite.so']:  # , 'mod_spatialite.dylib']:
+            for option in ['mod_spatialite.so', 'mod_spatialite.7.dylib']:  # , 'mod_spatialite.dylib']:
                 try:
                     dbapi_conn.load_extension(option)
                 except sqlite3.OperationalError:
@@ -2786,6 +2811,7 @@ class Archive(object):
             log.info('table {} dropped from database.'.format(table))
         else:
             raise ValueError("table {} is not registered in the database!".format(table))
+        self.meta = MetaData(self.engine)
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
     

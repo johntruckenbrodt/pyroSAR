@@ -182,6 +182,8 @@ def test_archive(tmpdir, testdata):
     
     db.add_tables(mytable)
     assert 'mytable' in db.get_tablenames()
+    db.drop_table('mytable')
+    assert 'mytable' not in db.get_tablenames()
     with pytest.raises(TypeError):
         db.filter_scenelist([1])
     db.close()
