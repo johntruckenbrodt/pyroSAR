@@ -130,7 +130,7 @@ def identify_many(scenes, pbar=False, sortkey=None):
 
     Parameters
     ----------
-    scenes: list
+    scenes: list[str]
         the file names of the scenes to be identified
     pbar: bool
         adds a progressbar if True
@@ -138,7 +138,7 @@ def identify_many(scenes, pbar=False, sortkey=None):
         sort the handler object list by an attribute
     Returns
     -------
-    list
+    list[ID]
         a list of pyroSAR metadata handlers
     
     Examples
@@ -369,7 +369,7 @@ class ID(object):
              also match folders (or just files)?
         Returns
         -------
-        list
+        list[str]
             the matched file names
         
         See Also
@@ -2533,7 +2533,7 @@ class Archive(object):
 
         Returns
         -------
-        list
+        list[str]
             the file names pointing to the selected scenes
 
         """

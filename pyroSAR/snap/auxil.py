@@ -318,7 +318,7 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
         the name of the workflow XML file
     tmpdir: str
         a temporary directory for storing intermediate files
-    groups: list or None
+    groups: list[list[str]] or None
         a list of lists each containing IDs for individual nodes
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
@@ -676,7 +676,7 @@ def groupbyWorkers(xmlfile, n=2):
 
     Returns
     -------
-    list
+    list[list[str]]
         a list of lists each containing the IDs of all nodes belonging to the groups including Read and Write nodes;
         this list can e.g. be passed to function :func:`split` to split the workflow into new sub-workflow files based
         on the newly created groups or directly to function :func:`gpt`, which will call :func:`split` internally.
@@ -983,7 +983,7 @@ class Workflow(object):
         
         Returns
         -------
-        list
+        list[Node]
             the list of :class:`Node` objects in the workflow
         """
         return [Node(x) for x in self.tree.findall('node')]
