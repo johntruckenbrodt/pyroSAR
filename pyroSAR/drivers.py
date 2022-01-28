@@ -52,7 +52,7 @@ from .xml_util import getNamespaces
 from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder
 
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, update
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
@@ -1934,7 +1934,9 @@ class Archive(object):
                 conn.close()
             except exc.OperationalError:
                 raise RuntimeError('could not load spatialite extension')
-        
+
+        #print(sql_inspect(self.engine).has_table('data'))
+
         # if database is new, (create postgres-db and) enable spatial extension
         if not database_exists(self.engine.url):
             if self.driver == 'postgresql':
@@ -1952,7 +1954,7 @@ class Archive(object):
         self.Session = sessionmaker(bind=self.engine)
         self.meta = MetaData(self.engine)
         self.custom_fields = custom_fields
-        
+
         # create tables as schema
         self.data_schema = Table('data', self.meta,
                                  Column('sensor', String),
@@ -1975,9 +1977,11 @@ class Archive(object):
                                  Column('vh', Integer),
                                  Column('bbox', Geometry(geometry_type='POLYGON', management=True, srid=4326)))
 
-        if add_geometry:
-            self.data_schema.append_column(Column('geometry', Geometry(geometry_type='POLYGON', management=True, srid=4326)))
-        
+        if add_geometry and not sql_inspect(self.engine).has_table('data') or 'geometry' in self.get_colnames():
+            # add geometry to schema if new database is created, or database had it enabled once
+            self.data_schema.append_column(Column('geometry',
+                                                  Geometry(geometry_type='POLYGON', management=True, srid=4326)))
+
         # add custom fields
         if self.custom_fields is not None:
             for key, val in self.custom_fields.items():
@@ -1997,6 +2001,17 @@ class Archive(object):
         if not sql_inspect(self.engine).has_table('data'):
             log.debug("creating DB table 'data'")
             self.data_schema.create(self.engine)
+
+        columns_data = sql_inspect(self.engine).get_columns('data')
+        # for col in columns_data:
+        #     print(col['name'])
+
+        # elif sql_inspect(self.engine).has_table('data') and add_geometry and 'geometry' not in self.get_colnames('data'):
+        #         print(self.get_colnames('data'))
+        #         # log.info
+        #         print("add_geometry has been enabled after database is already created, "
+        #               "if you want to update table 'data' to include this column, "
+        #               "run Archive.update_geometry_field()!")
         if not sql_inspect(self.engine).has_table('duplicates'):
             log.debug("creating DB table 'duplicates'")
             self.duplicates_schema.create(self.engine)
@@ -2017,23 +2032,22 @@ class Archive(object):
         """
         Add the geometry as column to an existing database, fill missing values
         """
-
-        # note: alter table to make geometry column, then sth like this: (NOT YET CHECKED CODE!!)
         if 'geometry' not in self.get_colnames():
-            '''ALTER TABLE data ADD COLUMN geometry ;'''
-            # Column('geometry', Geometry(geometry_type='POLYGON', management=True, srid=4326))
+            self.conn.execute(f"SELECT AddGeometryColumn('data', 'geometry', 4326, 'POLYGON')")
+        self.Session = sessionmaker(bind=self.engine)
+        self.meta = MetaData(self.engine)
+        self.Base = automap_base(metadata=self.meta)
+        self.Base.prepare(self.engine, reflect=True)
+        self.Data = self.Base.classes.data
 
-        session = self.Session()
-        to_update = session.query(self.Data).filter(self.Data.__table__.c['geometry'].is_(None)).all()
-        for entry in to_update:
-            geom = getattr(identify(entry.outname_base), 'geometry')()
-            geom.reproject(4326)
-            geom = geom.convert2wkt(set3D=False)[0]
-            geom = 'SRID=4326;' + str(geom)
-            setattr(entry, 'geometry', geom)
-        session.commit()
-        session.close()
-        pass
+        temp_data = self.Session().query(self.Data.scene, self.Data.outname_base).filter(self.Data.geometry.is_(None))
+        to_insert = []
+        for entry in temp_data:
+            delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == entry[0])
+            self.conn.execute(delete_statement)
+        self.insert(to_insert)
+
+
     
     def add_tables(self, tables):
         """
@@ -2394,8 +2408,8 @@ class Archive(object):
             the column names of the chosen table
         """
         # get all columns of one table, but shows geometry columns not correctly
-        table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
-        col_names = table_info.c.keys()
+        dicts = sql_inspect(self.engine).get_columns(table)
+        col_names = [i['name'] for i in dicts]
         
         return sorted([self.encode(x) for x in col_names])
     
