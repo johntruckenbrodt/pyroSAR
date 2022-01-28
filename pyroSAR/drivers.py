@@ -1977,7 +1977,9 @@ class Archive(object):
                                  Column('vh', Integer),
                                  Column('bbox', Geometry(geometry_type='POLYGON', management=True, srid=4326)))
 
-        if (add_geometry and not sql_inspect(self.engine).has_table('data')) or 'geometry' in self.get_colnames():
+        colnames = self.get_colnames() if sql_inspect(self.engine).has_table('data') else []
+
+        if (add_geometry and not sql_inspect(self.engine).has_table('data')) or 'geometry' in colnames:
             # add geometry to schema if new database is created, or database had it enabled once
             self.data_schema.append_column(Column('geometry',
                                                   Geometry(geometry_type='POLYGON', management=True, srid=4326)))
