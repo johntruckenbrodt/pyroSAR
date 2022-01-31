@@ -231,7 +231,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
 
 def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
-               geoid_convert=False, geoid='EGM96', outputBounds=None, dtype=None):
+               geoid_convert=False, geoid='EGM96', outputBounds=None, dtype=None, pbar=False):
     """
     create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
     
@@ -262,6 +262,8 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
     dtype: str or None
         override the data type of the written file; Default None: use same type as source data.
         Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
+    pbar: bool
+        add a progressbar?
     
     Returns
     -------
@@ -324,7 +326,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
         if crs != 'EPSG:4326':
             message += ' and reprojecting to {}'.format(crs)
         log.info(message)
-        gdalwarp(src, dst, gdalwarp_args)
+        gdalwarp(src, dst, gdalwarp_args, pbar)
     except Exception:
         if os.path.isfile(dst):
             os.remove(dst)
