@@ -481,8 +481,6 @@ def writer(xmlfile, outdir, basename_extensions=None,
             else:
                 base = os.path.splitext(basename)[0] \
                     .replace('elevation', 'DEM')
-                if re.search('layover_shadow_mask', base):
-                    base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
                 if re.search('scatteringArea', base):
                     base = re.sub('scatteringArea_[HV]{2}', 'scatteringArea', base)
                 if re.search('gammaSigmaRatio', base):
@@ -492,6 +490,8 @@ def writer(xmlfile, outdir, basename_extensions=None,
                 name_new = outname_base.replace(suffix, '{0}.tif'.format(base))
             if re.search('elevation', basename):
                 nodata = dem_nodata
+            elif re.search('layoverShadowMask', basename):
+                nodata = 255
             else:
                 nodata = 0
             translateoptions['noData'] = nodata
