@@ -28,6 +28,7 @@ from spatialist.raster import Raster, Dtype
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
+from osgeo import gdal
 
 import logging
 
@@ -41,7 +42,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
     Parameters
     ----------
-    geometries: list
+    geometries: list[spatialist.vector.Vector]
         a list of :class:`spatialist.vector.Vector` geometries to obtain DEM data for;
         CRS must be WGS84 LatLon (EPSG 4326)
     demType: str
@@ -230,7 +231,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             hide_nodata=hide_nodata)
 
 
-def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
+def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', threads=2,
                geoid_convert=False, geoid='EGM96', outputBounds=None, dtype=None, pbar=False):
     """
     create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
@@ -250,6 +251,8 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
     resampling_method: str
         the gdalwarp resampling method; See `here <https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r>`_
         for options.
+    threads: int
+        the number of threads to use. Will modify the `GDAL_NUM_THREADS` configuration value and reset it once done.
     geoid_convert: bool
         convert geoid heights?
     geoid: str
@@ -279,7 +282,18 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
     else:
         epsg_out = crsConvert(t_srs, 'epsg')
     
-    gdalwarp_args = {'format': 'GTiff', 'multithread': True,
+    threads_before = gdal.GetConfigOption('GDAL_NUM_THREADS')
+    if not isinstance(threads, int):
+        raise TypeError("'threads' must be of type int")
+    if threads == 1:
+        multithread = False
+    elif threads > 1:
+        multithread = True
+        gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
+    else:
+        raise ValueError("'threads' must be >= 1")
+    
+    gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
@@ -325,12 +339,15 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
         crs = gdalwarp_args['dstSRS']
         if crs != 'EPSG:4326':
             message += ' and reprojecting to {}'.format(crs)
+        message += ': {}'.format(dst)
         log.info(message)
         gdalwarp(src, dst, gdalwarp_args, pbar)
     except Exception:
         if os.path.isfile(dst):
             os.remove(dst)
         raise
+    finally:
+        gdal.SetConfigOption('GDAL_NUM_THREADS', threads_before)
 
 
 class DEMHandler:
