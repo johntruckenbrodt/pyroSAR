@@ -2030,7 +2030,6 @@ class Archive(object):
             to_insert = []
             # save in new list
             for entry in temp_data:
-                print(entry)
                 to_insert.append(entry[0])
             # remove old table
             self.drop_table('data')
