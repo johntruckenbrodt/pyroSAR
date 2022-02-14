@@ -1935,8 +1935,6 @@ class Archive(object):
             except exc.OperationalError:
                 raise RuntimeError('could not load spatialite extension')
 
-        # print(sql_inspect(self.engine).has_table('data'))
-
         # if database is new, (create postgres-db and) enable spatial extension
         if not database_exists(self.engine.url):
             if self.driver == 'postgresql':
@@ -2025,22 +2023,64 @@ class Archive(object):
 
     def update_geometry_field(self):
         """
-        Add the geometry as column to an existing database, then re-ingests all scenes without geometry
+        Add the geometry as column to an existing database, then re-ingests all scenes with added geometry column
         """
         if 'geometry' not in self.get_colnames():
-            self.conn.execute(f"SELECT AddGeometryColumn('data', 'geometry', 4326, 'POLYGON')")
-        self.Session = sessionmaker(bind=self.engine)
-        self.meta = MetaData(self.engine)
-        self.Base = automap_base(metadata=self.meta)
-        self.Base.prepare(self.engine, reflect=True)
-        self.Data = self.Base.classes.data
+            # get all scenes from data table
+            temp_data = self.Session().query(self.Data.scene)
+            to_insert = []
+            # save in new list
+            for entry in temp_data:
+                print(entry)
+                to_insert.append(entry[0])
+            # remove old table
+            self.drop_table('data')
 
-        temp_data = self.Session().query(self.Data.scene, self.Data.outname_base).filter(self.Data.geometry.is_(None))
-        to_insert = []
-        for entry in temp_data:
-            delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == entry[0])
-            self.conn.execute(delete_statement)
-        self.insert(to_insert)
+            # define new table
+            temp_table_schema = Table('data', self.meta,
+                                      Column('sensor', String),
+                                      Column('orbit', String),
+                                      Column('orbitNumber_abs', Integer),
+                                      Column('orbitNumber_rel', Integer),
+                                      Column('cycleNumber', Integer),
+                                      Column('frameNumber', Integer),
+                                      Column('acquisition_mode', String),
+                                      Column('start', String),
+                                      Column('stop', String),
+                                      Column('product', String),
+                                      Column('samples', Integer),
+                                      Column('lines', Integer),
+                                      Column('outname_base', String, primary_key=True),
+                                      Column('scene', String),
+                                      Column('hh', Integer),
+                                      Column('vv', Integer),
+                                      Column('hv', Integer),
+                                      Column('vh', Integer),
+                                      Column('bbox', Geometry(geometry_type='POLYGON', management=True, srid=4326)),
+                                      Column('geometry', Geometry(geometry_type='POLYGON', management=True, srid=4326)))
+
+            # create table
+            log.debug("creating DB table 'data' with geometry field")
+            temp_table_schema.create(self.engine)
+
+            # update base
+            self.Base = automap_base(metadata=self.meta)
+            self.Base.prepare(self.engine, reflect=True)
+            self.Data = self.Base.classes.data
+            # insert previous data in new table
+            self.insert(to_insert)
+
+
+    def get_class_by_tablename(self, tablename):
+        """Return class reference mapped to table.
+        adapted from https://stackoverflow.com/questions/11668355/sqlalchemy-get-model-from-table-name-this-may-imply-appending-some-function-to
+
+        :param tablename: String with name of table.
+        :return: Class reference or None.
+        """
+        for c in self.Base.classes:
+            if hasattr(c, '__table__') and str(c.__table__) == tablename:
+                return c
 
     def add_tables(self, tables):
         """
@@ -2103,7 +2143,7 @@ class Archive(object):
         else:
             dbapi_conn.load_extension('mod_spatialite')
 
-    def __prepare_insertion(self, scene):
+    def __prepare_insertion(self, scene, table='data'):
         """
         read scene metadata and parse a string for inserting it into the database
 
@@ -2119,14 +2159,15 @@ class Archive(object):
         id = scene if isinstance(scene, ID) else identify(scene)
         pols = [x.lower() for x in id.polarizations]
         # insertion as an object of Class Data (reflected in the init())
-        insertion = self.Data()
-        colnames = self.get_colnames()
+        # insertion = self.Data()
+        insertion = self.get_class_by_tablename(table)()
+        colnames = self.get_colnames(table)
         for attribute in colnames:
             if attribute in ['bbox', 'geometry']:
                 geom = getattr(scene, attribute)()
                 geom.reproject(4326)
                 geom = geom.convert2wkt(set3D=False)[0]
-                geom = 'SRID=4326;' + str(geom)
+                geom = 'SRID=4326; ' + str(geom)
                 # set attributes of the Data object according to input
                 setattr(insertion, attribute, geom)
             elif attribute in ['hh', 'vv', 'hv', 'vh']:
@@ -2161,7 +2202,7 @@ class Archive(object):
         files = [self.encode(x[0]) for x in scenes]
         return [x for x in files if not os.path.isfile(x)]
 
-    def insert(self, scene_in, pbar=False, test=False):
+    def insert(self, scene_in, table='data', pbar=False, test=False):
         """
         Insert one or many scenes into the database
 
@@ -2169,6 +2210,8 @@ class Archive(object):
         ----------
         scene_in: str or ID or list
             a SAR scene or a list of scenes to be inserted
+        table: str
+            which table to insert to
         pbar: bool
             show a progress bar?
         test: bool
@@ -2183,7 +2226,7 @@ class Archive(object):
                                'or a list containing several of either')
 
         log.info('filtering scenes by name')
-        scenes = self.filter_scenelist(scene_in)
+        scenes = self.filter_scenelist(scene_in, table)
         if len(scenes) == 0:
             log.info('...nothing to be done')
             return
@@ -2210,8 +2253,8 @@ class Archive(object):
         session = self.Session()
         for i, id in enumerate(scenes):
             basename = id.outname_base()
-            if not self.is_registered(id) and basename not in basenames:
-                insertion = self.__prepare_insertion(id)
+            if not self.is_registered(id, table) and basename not in basenames:
+                insertion = self.__prepare_insertion(id, table)
                 insertions.append(insertion)
                 counter_regulars += 1
                 log.debug('regular:   {}'.format(id.scene))
@@ -2246,7 +2289,7 @@ class Archive(object):
         message = '{0} duplicate{1} registered'
         log.info(message.format(counter_duplicates, '' if counter_duplicates == 1 else 's'))
 
-    def is_registered(self, scene):
+    def is_registered(self, scene, table='data'):
         """
         Simple check if a scene is already registered in the database.
 
@@ -2254,7 +2297,8 @@ class Archive(object):
         ----------
         scene: str or ID
             the SAR scene
-
+        table:
+            which table to search in (must contain outname_base column with scene id)
         Returns
         -------
         bool
@@ -2262,8 +2306,9 @@ class Archive(object):
         """
         id = scene if isinstance(scene, ID) else identify(scene)
         # ORM query, where scene equals id.scene, return first
-        exists_data = self.Session().query(self.Data.outname_base).filter(
-            self.Data.outname_base == id.outname_base()).first()
+        table = self.get_class_by_tablename(table)
+        exists_data = self.Session().query(table.outname_base).filter(
+            table.outname_base == id.outname_base()).first()
         exists_duplicates = self.Session().query(self.Duplicates.outname_base).filter(
             self.Duplicates.outname_base == id.outname_base()).first()
         in_data = False
@@ -2363,7 +2408,7 @@ class Archive(object):
             subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
                              db_connection, table])
 
-    def filter_scenelist(self, scenelist):
+    def filter_scenelist(self, scenelist, table='data'):
         """
         Filter a list of scenes by file names already registered in the database.
 
@@ -2371,6 +2416,8 @@ class Archive(object):
         ----------
         scenelist: :obj:`list` of :obj:`str` or :obj:`pyroSAR.drivers.ID`
             the scenes to be filtered
+        table: str
+            which table to search in
 
         Returns
         -------
@@ -2383,7 +2430,8 @@ class Archive(object):
                 raise TypeError("items in scenelist must be of type 'str' or 'pyroSAR.ID'")
 
         # ORM query, get all scenes locations
-        scenes_data = self.Session().query(self.Data.scene)
+        table = self.get_class_by_tablename(table)
+        scenes_data = self.Session().query(table.scene)
         registered = [os.path.basename(self.encode(x[0])) for x in scenes_data]
         scenes_duplicates = self.Session().query(self.Duplicates.scene)
         duplicates = [os.path.basename(self.encode(x[0])) for x in scenes_duplicates]
@@ -2431,7 +2479,9 @@ class Archive(object):
                       'virts_geometry_columns', 'virts_geometry_columns_auth', 'virts_geometry_columns_field_infos',
                       'virts_geometry_columns_statistics', 'data_licenses', 'KNN']
         # get tablenames from metadata
-        tables = sorted([self.encode(x) for x in self.meta.tables.keys()])
+
+        insp = sql_inspect(self.engine)
+        tables = sorted([self.encode(x) for x in insp.get_table_names()])
         if return_all:
             return tables
         else:

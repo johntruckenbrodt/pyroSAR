@@ -196,9 +196,9 @@ def test_archive_geometry(tmpdir, testdata):
     db.close()
     db = pyroSAR.Archive(dbfile, add_geometry=True)
     db.update_geometry_field()
+    db.insert(testdata['s1_2'])
     db.close()
     os.remove(dbfile)
-
     dbfile = os.path.join(str(tmpdir), 'scenes_geo.db')
     db_geo = pyroSAR.Archive(dbfile, add_geometry=True)
     db_geo.insert(testdata['s1'])
@@ -207,6 +207,7 @@ def test_archive_geometry(tmpdir, testdata):
     db_geo.insert(testdata['s1_2'])
     db_geo.close()
     os.remove(dbfile)
+
 
 def test_archive2(tmpdir, testdata):
     dbfile = os.path.join(str(tmpdir), 'scenes.db')
