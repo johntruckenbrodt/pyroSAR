@@ -2069,16 +2069,21 @@ class Archive(object):
             # insert previous data in new table
             self.insert(to_insert)
 
-
-    def get_class_by_tablename(self, tablename):
+    def get_class_by_tablename(self, table):
         """Return class reference mapped to table.
-        adapted from https://stackoverflow.com/questions/11668355/sqlalchemy-get-model-from-table-name-this-may-imply-appending-some-function-to
+        adapted from OrangeTux's comment on
+        https://stackoverflow.com/questions/11668355/sqlalchemy-get-model-from-table-name-this-may-imply-appending-some-function-to
 
-        :param tablename: String with name of table.
-        :return: Class reference or None.
+        Parameters
+        ----------
+        table: str
+            String with name of table.
+        Returns
+        -------
+        Class reference or None.
         """
         for c in self.Base.classes:
-            if hasattr(c, '__table__') and str(c.__table__) == tablename:
+            if hasattr(c, '__table__') and str(c.__table__) == table:
                 return c
 
     def add_tables(self, tables):
@@ -2150,6 +2155,8 @@ class Archive(object):
         ----------
         scene: str or ID
             a SAR scene
+        table: str
+            which table to prepare insert obj for?
 
         Returns
         -------
@@ -2185,19 +2192,20 @@ class Archive(object):
     
     def __select_missing(self, table):
         """
-
+        Parameters
+        -------
+        table: str
+            which table to search missing scenes in, must contain scene column
         Returns
         -------
         list
             the names of all scenes, which are no longer stored in their registered location
         """
-        if table == 'data':
-            # using ORM query to get all scenes locations
-            scenes = self.Session().query(self.Data.scene)
-        elif table == 'duplicates':
-            scenes = self.Session().query(self.Duplicates.scene)
-        else:
-            raise ValueError("parameter 'table' must either be 'data' or 'duplicates'")
+        table_obj = self.get_class_by_tablename(table)
+        if table_obj is None:
+            log.info(f'Table {table} is not registered in the database')
+            return []
+        scenes = self.Session().query(table_obj.scene)
         files = [self.encode(x[0]) for x in scenes]
         return [x for x in files if not os.path.isfile(x)]
 
@@ -2216,8 +2224,6 @@ class Archive(object):
         test: bool
             should the insertion only be tested or directly be committed to the database?
         """
-        length = len(scene_in) if isinstance(scene_in, list) else 1
-        
         if isinstance(scene_in, (ID, str)):
             scene_in = [scene_in]
         if not isinstance(scene_in, list):
@@ -2341,15 +2347,19 @@ class Archive(object):
             in_dup = len(exists_duplicates) != 0
         return in_dup
     
-    def cleanup(self):
+    def cleanup(self, table='data'):
         """
         Remove all scenes from the database, which are no longer stored in their registered location
 
+        Parameters
+        ----------
+        table: str
+            tablename, table must contain scene column
         Returns
         -------
 
         """
-        missing = self.__select_missing('data')
+        missing = self.__select_missing(table)
         for scene in missing:
             log.info('Removing missing scene from database tables: {}'.format(scene))
             self.drop_element(scene, with_duplicates=True)
@@ -2442,12 +2452,16 @@ class Archive(object):
         """
         Return the names of all columns of a table.
 
+        Parameters
+        ----------
+        table: str
+            tablename
+
         Returns
         -------
         list
             the column names of the chosen table
         """
-        # get all columns of one table, but shows geometry columns not correctly
         dicts = sql_inspect(self.engine).get_columns(table)
         col_names = [i['name'] for i in dicts]
 
@@ -2478,7 +2492,6 @@ class Archive(object):
                       'virts_geometry_columns', 'virts_geometry_columns_auth', 'virts_geometry_columns_field_infos',
                       'virts_geometry_columns_statistics', 'data_licenses', 'KNN']
         # get tablenames from metadata
-
         insp = sql_inspect(self.engine)
         tables = sorted([self.encode(x) for x in insp.get_table_names()])
         if return_all:
@@ -2490,17 +2503,22 @@ class Archive(object):
                     ret.append(i)
             return ret
     
-    def get_unique_directories(self):
+    def get_unique_directories(self, table='data'):
         """
         Get a list of directories containing registered scenes
 
+        Parameters
+        ----------
+        table: str
+            tablename, table must contain scene column
         Returns
         -------
         list
             the directory names
         """
         # ORM query, get all directories
-        scenes = self.Session().query(self.Data.scene)
+        table = self.get_class_by_tablename(table)
+        scenes = self.Session().query(table.scene)
         registered = [os.path.dirname(self.encode(x[0])) for x in scenes]
         return list(set(registered))
     
