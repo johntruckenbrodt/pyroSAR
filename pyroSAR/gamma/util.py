@@ -1,7 +1,7 @@
 ###############################################################################
 # universal core routines for processing SAR images with GAMMA
 
-# Copyright (c) 2014-2021, the pyroSAR Developers.
+# Copyright (c) 2014-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -431,18 +431,19 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         return sorted(fnames)
 
 
-def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpath=None, outdir=None, shellscript=None):
+def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20, logpath=None, outdir=None, shellscript=None):
     """
     correct GAMMA parameter files with orbit state vector information from dedicated OSV files;
-    OSV files are downloaded automatically to either the defined `osvdir` or a sub-directory `osv` of the scene directory
+    OSV files are downloaded automatically to either the defined `osvdir` or relative to the
+    user's home directory: `~/.snap/auxdata/Orbits/Sentinel-1`.
     
     Parameters
     ----------
     id: ~pyroSAR.drivers.ID
         the scene to be corrected
     directory: str or None
-        a directory to be scanned for files associated with the scene.
-        If None, the scene is expected to be an unpacked directory in which the files are searched.
+        a directory to be scanned for files associated with the scene, e.g. an SLC in GAMMA format.
+        If the OSV file is packed in a zip file it will be unpacked to a subdirectory `osv`.
     osvdir: str
         the directory of OSV files; subdirectories POEORB and RESORB are created automatically
     osvType: {'POE', 'RES'}
@@ -502,8 +503,7 @@ def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpa
     except URLError:
         log.warning('..no internet access')
     
-    target = directory if directory is not None else id.scene
-    parfiles = finder(target, ['*.par'])
+    parfiles = finder(directory, ['*.par'])
     parfiles = [x for x in parfiles if ISPPar(x).filetype == 'isp']
     # read parameter file entries into object
     with ISPPar(parfiles[0]) as par:
@@ -517,7 +517,7 @@ def correctOSV(id, directory=None, osvdir=None, osvType='POE', timeout=20, logpa
         raise RuntimeError('no Orbit State Vector file found')
     
     if osvfile.endswith('.zip'):
-        osvdir = os.path.join(id.scene, 'osv')
+        osvdir = os.path.join(directory, 'osv')
         with zf.ZipFile(osvfile) as zip:
             zip.extractall(path=osvdir)
         osvfile = os.path.join(osvdir, os.path.basename(osvfile).replace('.zip', ''))
@@ -716,9 +716,6 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
             except RuntimeError:
                 log.info('scene was attempted to be processed before, exiting')
                 return
-        else:
-            scene.scene = os.path.join(tmpdir, os.path.basename(scene.file))
-            os.makedirs(scene.scene)
     
     path_log = os.path.join(tmpdir, 'logfiles')
     if not os.path.isdir(path_log):
@@ -811,7 +808,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     
     if refine_lut:
         n.appreciate(['pix_area_sigma0'])
-
+    
     reference_par = ISPPar(reference + '.par')
     ######################################################################
     # DEM product generation #############################################
