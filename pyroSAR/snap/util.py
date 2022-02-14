@@ -838,6 +838,8 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
     if refarea not in ['beta0', 'sigma0', 'gamma0']:
         raise ValueError('refarea not supported')
     
+    id = identify(infile)
+    
     os.makedirs(outdir, exist_ok=True)
     if tmpdir is not None:
         os.makedirs(tmpdir, exist_ok=True)
@@ -860,31 +862,22 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
     
     tnr = parse_node('ThermalNoiseRemoval')
     wf.insert_node(tnr, before=cal.id)
+    last = tnr
     
-    deb1 = parse_node('TOPSAR-Deburst')
-    wf.insert_node(deb1, before=tnr.id)
-    
-    deb2 = parse_node('TOPSAR-Deburst')
-    wf.insert_node(deb2, before=cal.id, resetSuccessorSource=False)
-    
-    math = parse_node('BandMaths')
-    wf.insert_node(math, before=[deb1.id, deb2.id])
-    math.parameters.clear_variables()
-    
-    for i, pol in enumerate(polarizations):
-        if i > 0:
-            math.parameters.add_equation()
-        exp = math.parameters['targetBands'][i]
-        exp['name'] = 'NE{0}Z_{1}'.format(inband[0], pol)
-        exp['type'] = 'float32'
-        exp['expression'] = '$2.{0}_{1} - $1.{0}_{1}'.format(inband, pol)
-        exp['noDataValue'] = 0.0
-    
-    last = math
+    if id.product == 'SLC':
+        deb = parse_node('TOPSAR-Deburst')
+        wf.insert_node(deb, before=tnr.id)
+        last = deb
+    ############################################
+    select = parse_node('BandSelect')
+    wf.insert_node(select, before=last.id)
+    measure = 'NE{}Z'.format(refarea.capitalize()[0])
+    bands = ['{}_{}'.format(measure, pol) for pol in polarizations]
+    select.parameters['sourceBands'] = bands
+    last = select
     ############################################
     # Multilook node configuration
     
-    id = identify(infile)
     try:
         image_geometry = id.meta['image_geometry']
         incidence = id.meta['incidence']
