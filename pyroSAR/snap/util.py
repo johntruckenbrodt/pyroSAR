@@ -774,7 +774,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
 def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=None, test=False, cleanup=True,
                 demName='SRTM 1Sec HGT', externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
                 alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0, groupsize=1,
-                clean_edges=False):
+                clean_edges=False, clean_edges_npixels=1):
     """
     Generate noise power images for each polarization, calibrated to either beta, sigma or gamma nought.
     The written GeoTIFF files will carry the suffix NEBZ, NESZ or NEGZ respectively.
@@ -833,7 +833,9 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
     clean_edges: bool
         erode noisy image edges? See :func:`pyroSAR.snap.auxil.erode_edges`.
         Does not apply to layover-shadow mask.
-
+    clean_edges_npixels: int
+        the number of pixels to erode.
+    
     Returns
     -------
 
@@ -989,7 +991,8 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
     if not test:
         groups = groupbyWorkers(wf_name, groupsize)
         gpt(xmlfile=wf_name, tmpdir=tmpdir, groups=groups)
-        writer(xmlfile=wf_name, outdir=outdir, clean_edges=clean_edges)
+        writer(xmlfile=wf_name, outdir=outdir, clean_edges=clean_edges,
+               clean_edges_npixels=clean_edges_npixels)
         if cleanup:
             if os.path.isdir(procdir):
                 shutil.rmtree(procdir, onerror=windows_fileprefix)
