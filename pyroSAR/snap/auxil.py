@@ -665,14 +665,14 @@ def split(xmlfile, groups, outdir=None):
 
 def groupbyWorkers(xmlfile, n=2):
     """
-    split SNAP workflow into groups containing a maximum defined number of operators
+    split a SNAP workflow into groups containing a maximum defined number of operators.
     
     Parameters
     ----------
     xmlfile: str
         the SNAP xml workflow
     n: int
-        the maximum number of worker nodes in each group; Read and Write are excluded
+        the maximum number of worker nodes in each group; Read, Write and BandSelect are excluded.
 
     Returns
     -------
@@ -687,6 +687,25 @@ def groupbyWorkers(xmlfile, n=2):
     writers_id = [x.id for x in workflow['operator=Write']]
     selects_id = [x.id for x in workflow['operator=BandSelect']]
     workers_groups = [workers_id[i:i + n] for i in range(0, len(workers_id), n)]
+    
+    # in S1TBX 8.0.6 problems were found when executing ThermalNoiseRemoval by itself (after e.g. Calibration).
+    # When executed together with other nodes this worked so the node is re-grouped into the group of the source node.
+    i = 0
+    while i < len(workers_groups):
+        if workers_groups[i][0].startswith('ThermalNoiseRemoval'):
+            # get the group ID of the source node
+            source = workflow[workers_groups[i][0]].source
+            source_group_id = [source in x for x in workers_groups].index(True)
+            # move the node to the source group
+            workers_groups[source_group_id].append(workers_groups[i][0])
+            del workers_groups[i][0]
+        # delete the group if it is empty
+        if len(workers_groups[i]) == 0:
+            del workers_groups[i]
+        else:
+            i += 1
+    
+    # append the BandSelect nodes to the group of their source nodes
     for item in selects_id:
         source = workflow[item].source
         for group in workers_groups:
@@ -702,9 +721,11 @@ def groupbyWorkers(xmlfile, n=2):
                 source = [source]
             for item in source:
                 if item in readers_id:
+                    # append all Read nodes that are the worker's direct sources
                     newgroup.insert(newgroup.index(worker), item)
             for writer in writers_id:
                 if workflow[writer].source == worker:
+                    # append all Write nodes that directly have the worker as source
                     newgroup.append(writer)
         nodes_groups.append(newgroup)
     return nodes_groups
@@ -1402,7 +1423,7 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
         connectivity = 2
     else:
         raise ValueError('connectedness must be either 4 or 8')
-
+    
     structure = generate_binary_structure(rank=2, connectivity=connectivity)
     if pixels > 1:
         structure = iterate_structure(structure=structure, iterations=pixels)
