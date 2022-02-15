@@ -2608,7 +2608,7 @@ class Archive(object):
             log.info('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
     
     def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None,
-               recursive=False, polarizations=None, use_geometry=False, **args):
+               recursive=False, polarizations=None, use_geometry=False, table='data', **args):
         """
         select scenes from the database
 
@@ -2638,8 +2638,8 @@ class Archive(object):
             the file names pointing to the selected scenes
 
         """
-        arg_valid = [x for x in args.keys() if x in self.get_colnames()]
-        arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
+        arg_valid = [x for x in args.keys() if x in self.get_colnames(table)]
+        arg_invalid = [x for x in args.keys() if x not in self.get_colnames(table)]
         if len(arg_invalid) > 0:
             log.info('the following arguments will be ignored as they are not registered in the data base: {}'.format(
                 ', '.join(arg_invalid)))
@@ -2696,7 +2696,7 @@ class Archive(object):
             else:
                 log.info('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
         
-        query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
+        query = '''SELECT scene, outname_base FROM {} WHERE '''.format(table) + '''{}'''.format(' AND '.join(arg_format))
         # the query gets assembled stepwise here
         for val in vals:
             query = query.replace('?', ''' '{0}' ''', 1).format(val)
