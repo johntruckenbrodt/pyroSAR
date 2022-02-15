@@ -123,6 +123,9 @@ class ExamineSnap(object):
         else:
             executables = [self.path] + options
         
+        if len(executables) == 0:
+            log.debug("could not detect any potential 'snap' executables")
+        
         # for each possible SNAP executable, check whether additional files and directories exist relative to it
         # to confirm whether it actually is a ESA SNAP installation or something else like e.g. the Ubuntu App Manager
         for path in executables:
@@ -133,11 +136,13 @@ class ExamineSnap(object):
             # check whether a directory etc exists relative to the SNAP executable
             etc = os.path.join(os.path.dirname(os.path.dirname(path)), 'etc')
             if not os.path.isdir(etc):
+                log.debug("could not find the 'etc' directory")
                 continue
             
             # check the content of the etc directory
             auxdata = os.listdir(etc)
             if 'snap.auxdata.properties' not in auxdata:
+                log.debug("could not find the 'snap.auxdata.properties' file")
                 continue
             else:
                 auxdata_properties = os.path.join(etc, 'snap.auxdata.properties')
@@ -145,6 +150,7 @@ class ExamineSnap(object):
             # identify the gpt executable
             gpt_candidates = finder(os.path.dirname(path), ['gpt', 'gpt.exe'])
             if len(gpt_candidates) == 0:
+                log.debug("could not find the 'gpt' executable")
                 continue
             else:
                 gpt = gpt_candidates[0]
