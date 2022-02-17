@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2021, the pyroSAR Developers.
+# Copyright (c) 2016-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -40,6 +40,8 @@ import xml.etree.ElementTree as ET
 import zipfile as zf
 from datetime import datetime, timedelta
 from time import strptime, strftime
+from statistics import median
+from itertools import groupby
 
 import progressbar as pb
 from osgeo import gdal, osr, ogr
@@ -1690,17 +1692,26 @@ class SAFE(ID):
         meta['totalSlices'] = int(tree.find('.//s1sarl1:totalSlices', namespaces).text)
         
         annotations = self.findfiles(self.pattern_ds)
-        with self.getFileObj(annotations[0]) as ann_xml:
-            ann_tree = ET.fromstring(ann_xml.read())
+        key = lambda x: re.search('-[vh]{2}-', x).group()
+        groups = groupby(sorted(annotations, key=key), key=key)
+        annotations = [list(value) for key, value in groups][0]
+        ann_trees = []
+        for ann in annotations:
+            with self.getFileObj(ann) as ann_xml:
+                ann_trees.append(ET.fromstring(ann_xml.read()))
         
-        meta['spacing'] = tuple([float(ann_tree.find('.//{}PixelSpacing'.format(dim)).text)
-                                 for dim in ['range', 'azimuth']])
-        meta['samples'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfSamples').text)
-        meta['lines'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfLines').text)
-        heading = float(ann_tree.find('.//platformHeading').text)
+        sp_rg = [float(x.find('.//rangePixelSpacing').text) for x in ann_trees]
+        sp_az = [float(x.find('.//azimuthPixelSpacing').text) for x in ann_trees]
+        meta['spacing'] = (median(sp_rg), median(sp_az))
+        samples = [x.find('.//imageAnnotation/imageInformation/numberOfSamples').text for x in ann_trees]
+        meta['samples'] = sum([int(x) for x in samples])
+        lines = [x.find('.//imageAnnotation/imageInformation/numberOfLines').text for x in ann_trees]
+        meta['lines'] = sum([int(x) for x in lines])
+        heading = median(float(x.find('.//platformHeading').text) for x in ann_trees)
         meta['heading'] = heading if heading > 0 else heading + 360
-        meta['incidence'] = float(ann_tree.find('.//incidenceAngleMidSwath').text)
-        meta['image_geometry'] = ann_tree.find('.//projection').text.replace(' ', '_').upper()
+        incidence = [float(x.find('.//incidenceAngleMidSwath').text) for x in ann_trees]
+        meta['incidence'] = median(incidence)
+        meta['image_geometry'] = ann_trees[0].find('.//projection').text.replace(' ', '_').upper()
         
         return meta
     
