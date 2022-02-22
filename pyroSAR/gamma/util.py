@@ -1092,10 +1092,9 @@ def multilook(infile, outfile, spacing, exist_ok=False, logpath=None, outdir=Non
     else:
         raise TypeError("'infile' must be str or list")
     
-    rlks, azlks = multilook_factors(sp_rg=range_pixel_spacing,
-                                    sp_az=azimuth_pixel_spacing,
-                                    tr_rg=spacing,
-                                    tr_az=spacing,
+    rlks, azlks = multilook_factors(source_rg=range_pixel_spacing,
+                                    source_az=azimuth_pixel_spacing,
+                                    target=spacing,
                                     geometry=image_geometry,
                                     incidence=incidence_angle)
     

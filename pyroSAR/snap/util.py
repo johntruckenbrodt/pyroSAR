@@ -434,10 +434,9 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
     except KeyError:
         raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
     
-    rlks, azlks = multilook_factors(sp_rg=id.spacing[0],
-                                    sp_az=id.spacing[1],
-                                    tr_rg=spacing,
-                                    tr_az=spacing,
+    rlks, azlks = multilook_factors(source_rg=id.spacing[0],
+                                    source_az=id.spacing[1],
+                                    target=spacing,
                                     geometry=image_geometry,
                                     incidence=incidence)
     
@@ -889,10 +888,9 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
     except KeyError:
         raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
     
-    rlks, azlks = multilook_factors(sp_rg=id.spacing[0],
-                                    sp_az=id.spacing[1],
-                                    tr_rg=spacing,
-                                    tr_az=spacing,
+    rlks, azlks = multilook_factors(source_rg=id.spacing[0],
+                                    source_az=id.spacing[1],
+                                    target=spacing,
                                     geometry=image_geometry,
                                     incidence=incidence)
     
