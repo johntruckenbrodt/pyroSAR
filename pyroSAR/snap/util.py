@@ -26,7 +26,7 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
+def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR',
             removeS1ThermalNoise=True, offset=None, allow_RES_OSV=False, demName='SRTM 1Sec HGT',
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
@@ -68,7 +68,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
-    tr: int or float, optional
+    spacing: int or float, optional
         The target pixel spacing in meters. Default is 20
     polarizations: list or str
         The polarizations to be processed; can be a string for a single polarization, e.g. 'VV', or a list of several
@@ -436,8 +436,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     
     rlks, azlks = multilook_factors(sp_rg=id.spacing[0],
                                     sp_az=id.spacing[1],
-                                    tr_rg=tr,
-                                    tr_az=tr,
+                                    tr_rg=spacing,
+                                    tr_az=spacing,
                                     geometry=image_geometry,
                                     incidence=incidence)
     
@@ -537,7 +537,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     last = tc
     #######################
     # specify spatial resolution and coordinate reference system of the output dataset
-    tc.parameters['pixelSpacingInMeter'] = tr
+    tc.parameters['pixelSpacingInMeter'] = spacing
     
     try:
         # try to convert the CRS into EPSG code (for readability in the workflow XML)
