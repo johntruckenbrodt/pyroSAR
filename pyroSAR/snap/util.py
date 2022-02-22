@@ -34,7 +34,8 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
             gpt_exceptions=None, gpt_args=None, returnWF=False, nodataValueAtSea=True,
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
-            speckleFilter=False, refarea='gamma0', clean_edges=False, clean_edges_npixels=1):
+            speckleFilter=False, refarea='gamma0', clean_edges=False, clean_edges_npixels=1,
+            rlks=None, azlks=None):
     """
     general function for geocoding of SAR backscatter images with SNAP.
     
@@ -192,6 +193,11 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         Does not apply to layover-shadow mask.
     clean_edges_npixels: int
         the number of pixels to erode.
+    rlks: int or None
+        the number of range looks. If not None, overrides the computation done by function
+        :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
+    azlks: int or None
+        the number of azimuth looks. Like `rlks`.
     
     Returns
     -------
@@ -434,11 +440,14 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
     except KeyError:
         raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
     
-    rlks, azlks = multilook_factors(source_rg=id.spacing[0],
-                                    source_az=id.spacing[1],
-                                    target=spacing,
-                                    geometry=image_geometry,
-                                    incidence=incidence)
+    if rlks is None and azlks is None:
+        rlks, azlks = multilook_factors(source_rg=id.spacing[0],
+                                        source_az=id.spacing[1],
+                                        target=spacing,
+                                        geometry=image_geometry,
+                                        incidence=incidence)
+    if [rlks, azlks].count(None) > 0:
+        raise RuntimeError("'rlks' and 'azlks' must either both be integers or None")
     
     if azlks > 1 or rlks > 1:
         workflow.insert_node(parse_node('Multilook'), before=last.id)
