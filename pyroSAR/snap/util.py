@@ -779,7 +779,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         return wf_name
 
 
-def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=None, test=False, cleanup=True,
+def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0', tmpdir=None, test=False, cleanup=True,
                 demName='SRTM 1Sec HGT', externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
                 alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0, groupsize=1,
                 clean_edges=False, clean_edges_npixels=1, rlks=None, azlks=None):
@@ -1005,7 +1005,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
     
     if not test:
         groups = groupbyWorkers(wf_name, groupsize)
-        gpt(xmlfile=wf_name, tmpdir=tmpdir, groups=groups)
+        gpt(xmlfile=wf_name, tmpdir=procdir, groups=groups)
         writer(xmlfile=wf_name, outdir=outdir, clean_edges=clean_edges,
                clean_edges_npixels=clean_edges_npixels)
         if cleanup:
