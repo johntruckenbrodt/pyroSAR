@@ -111,6 +111,14 @@ def multilook_factors(source_rg, source_az, target, geometry, incidence):
     -------
     tuple[int]
         the multi-looking factors as (range looks, azimuth looks)
+    
+    Examples
+    --------
+    >>> from pyroSAR.ancillary import multilook_factors
+    >>> rlks, azlks = multilook_factors(source_rg=2, source_az=13, target=10,
+    >>>                                 geometry='SLANT_RANGE', incidence=39)
+    >>> print(rlks, azlks)
+    4 1
     """
     azlks = int(round(float(target) / source_az))
     azlks = azlks if azlks > 0 else 1
