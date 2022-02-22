@@ -1656,6 +1656,84 @@ class SAFE(ID):
             with self.getFileObj(png_name) as png_in:
                 out.writestr('quick-look.png', data=png_in.getvalue())
     
+    @property
+    def resolution(self):
+        """
+        Get the resolution of the Sentinel-1 product. For SLCs the slant range resolution of the
+        center sub-swath at mid-swath is computed from the metadata.
+        
+        References:
+            * https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/resolutions/level-1-single-look-complex
+            * https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/resolutions/level-1-ground-range-detected
+        
+        Returns
+        -------
+        tuple[float]
+            the resolution as (range, azimuth)
+        """
+        if 'resolution' in self.meta.keys():
+            return self.meta['resolution']
+        annotations = self.findfiles(self.pattern_ds)
+        key = lambda x: re.search('-[vh]{2}-', x).group()
+        groups = groupby(sorted(annotations, key=key), key=key)
+        annotations = [list(value) for key, value in groups][0]
+        c = 299792458.0  # speed of light
+        # see Sentinel-1 product definition for Hamming window coefficients
+        # and Impulse Response Width (IRW) broadening factors:
+        coefficients = [0.52, 0.6, 0.61, 0.62, 0.63, 0.65, 0.70, 0.72, 0.73, 0.75]
+        b_factors = [1.54, 1.32, 1.3, 1.28, 1.27, 1.24, 1.18, 1.16, 1.15, 1.13]
+        if self.product == 'SLC':
+            resolutions_rg = []
+            resolutions_az = []
+            for ann in annotations:
+                with self.getFileObj(ann) as ann_xml:
+                    tree = ET.fromstring(ann_xml.read())
+                # computation of slant range resolution
+                rg_proc = tree.find('.//swathProcParams/rangeProcessing')
+                wrg = float(rg_proc.find('windowCoefficient').text)
+                brg = float(rg_proc.find('processingBandwidth').text)
+                kbrg = b_factors[coefficients.index(wrg)]
+                resolutions_rg.append(0.886 * c / (2 * brg) * kbrg)
+                
+                # computation of azimuth resolution; yet to be checked for correctness
+                # az_proc = tree.find('.//swathProcParams/azimuthProcessing')
+                # waz = float(az_proc.find('windowCoefficient').text)
+                # baz = float(az_proc.find('processingBandwidth').text)
+                # kbaz = b_factors[coefficients.index(waz)]
+                # velocities = tree.findall('.//orbit/velocity')
+                # ids = ['x', 'y', 'z']
+                # xyz = [tuple(float(a.find(b).text) for b in ids) for a in velocities]
+                # velocities = [math.sqrt(sum([b ** 2 for b in a])) for a in xyz]
+                # vsat = mean(velocities)  # around 7590
+                # resolutions_az.append(0.886 * vsat / baz * kbaz)
+                if self.acquisition_mode == 'IW':
+                    resolutions_az.append(22.)
+                elif self.acquisition_mode == 'EW':
+                    resolutions_az.append(43.)
+                else:
+                    RuntimeError("acquisition mode '{}' not supported".format(self.acquisition_mode))
+            resolution_rg = median(resolutions_rg)
+            resolution_az = median(resolutions_az)
+        elif self.product == 'GRD':
+            match = re.match(re.compile(self.pattern), os.path.basename(self.file))
+            resolution_class = match.group('resolution')
+            resolution_rg = resolution_az = None
+            if resolution_class == 'F':
+                resolution_rg = 9
+                resolution_az = 9
+            elif resolution_class == 'H':
+                resolution_rg = {'SM': 23, 'IW': 20, 'EW': 50}[self.acquisition_mode]
+                resolution_az = {'SM': 23, 'IW': 22, 'EW': 50}[self.acquisition_mode]
+            elif resolution_class == 'M':
+                resolution_rg = {'SM': 84, 'IW': 88, 'EW': 93, 'WV': 52}[self.acquisition_mode]
+                resolution_az = {'SM': 84, 'IW': 87, 'EW': 87, 'WV': 51}[self.acquisition_mode]
+            else:
+                RuntimeError("unknown resolution class: {}".format(resolution_class))
+        else:
+            raise RuntimeError("unsupported product: {}".format(self.product))
+        self.meta['resolution'] = float(resolution_rg), float(resolution_az)
+        return float(resolution_rg), float(resolution_az)
+    
     def scanMetadata(self):
         with self.getFileObj(self.findfiles('manifest.safe')[0]) as input:
             manifest = input.getvalue()
