@@ -232,7 +232,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             hide_nodata=hide_nodata)
 
 
-def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', threads=2,
+def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', threads=None,
                geoid_convert=False, geoid='EGM96', outputBounds=None, dtype=None, pbar=False):
     """
     create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
@@ -252,8 +252,13 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
     resampling_method: str
         the gdalwarp resampling method; See `here <https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r>`_
         for options.
-    threads: int
-        the number of threads to use. Will modify the `GDAL_NUM_THREADS` configuration value and reset it once done.
+    threads: int, str or None
+        the number of threads to use. Possible values:
+        
+         - Default `None`: use the value of `GDAL_NUM_THREADS` without modification.
+         - integer value: temporarily modify `GDAL_NUM_THREADS` and reset it once done.
+         - `ALL_CPUS`: special string to use all cores/CPUs of the computer; will also temporarily
+           modify `GDAL_NUM_THREADS`.
     geoid_convert: bool
         convert geoid heights?
     geoid: str
@@ -283,16 +288,31 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
     else:
         epsg_out = crsConvert(t_srs, 'epsg')
     
-    threads_before = gdal.GetConfigOption('GDAL_NUM_THREADS')
-    if not isinstance(threads, int):
-        raise TypeError("'threads' must be of type int")
-    if threads == 1:
-        multithread = False
-    elif threads > 1:
+    threads_system = gdal.GetConfigOption('GDAL_NUM_THREADS')
+    if threads is None:
+        threads = threads_system
+        try:
+            threads = int(threads)
+        except (ValueError, TypeError):
+            pass
+    if isinstance(threads, str):
+        if threads != 'ALL_CPUS':
+            raise ValueError("unsupported value for 'threads': '{}'".format(threads))
+        else:
+            multithread = True
+            gdal.SetConfigOption('GDAL_NUM_THREADS', threads)
+    elif isinstance(threads, int):
+        if threads == 1:
+            multithread = False
+        elif threads > 1:
+            multithread = True
+            gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
+        else:
+            raise ValueError("if 'threads' is of type int, it must be >= 1")
+    elif threads is None:
         multithread = True
-        gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
     else:
-        raise ValueError("'threads' must be >= 1")
+        raise TypeError("'threads' must be of type int, str or None. Is: {}".format(type(threads)))
     
     gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
                      'srcNodata': nodata, 'dstNodata': nodata,
@@ -348,7 +368,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
             os.remove(dst)
         raise
     finally:
-        gdal.SetConfigOption('GDAL_NUM_THREADS', threads_before)
+        gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
 
 
 class DEMHandler:
