@@ -1040,7 +1040,8 @@ def ovs(parfile, spacing):
     return ovs_lat, ovs_lon
 
 
-def multilook(infile, outfile, spacing, rlks=None, azlks=None, exist_ok=False, logpath=None, outdir=None, shellscript=None):
+def multilook(infile, outfile, spacing, rlks=None, azlks=None,
+              exist_ok=False, logpath=None, outdir=None, shellscript=None):
     """
     Multilooking of SLC and MLI images.
 
@@ -1102,7 +1103,7 @@ def multilook(infile, outfile, spacing, rlks=None, azlks=None, exist_ok=False, l
         image_format = par[0].image_format
     else:
         raise TypeError("'infile' must be str or list")
-
+    
     if rlks is None and azlks is None:
         rlks, azlks = multilook_factors(source_rg=range_pixel_spacing,
                                         source_az=azimuth_pixel_spacing,
@@ -1393,10 +1394,13 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, ou
         if do_execute(gc_map_args, out_id, exist_ok):
             diff.gc_map_grd(**gc_map_args)
     else:
-        gc_map_args.update({'MLI_par': image + '.par',
-                            'OFF_par': '-'})
+        gc_map_args.update({'MLI_par': image + '.par'})
         if do_execute(gc_map_args, out_id, exist_ok):
-            diff.gc_map(**gc_map_args)
+            if 'gc_map2' in dir(diff):
+                del gc_map_args['ls_mode']
+                diff.gc_map2(**gc_map_args)
+            else:
+                diff.gc_map(**gc_map_args)
     
     # create ENVI header files for all created images
     for item in ['dem_seg_geo', 'sim_sar_geo', 'u_geo', 'v_geo',
