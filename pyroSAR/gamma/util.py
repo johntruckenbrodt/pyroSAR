@@ -536,7 +536,7 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20, logpath=No
 def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=1,
             nodata=(0, -99), osvdir=None, allow_RES_OSV=False,
             cleanup=True, export_extra=None, basename_extensions=None,
-            removeS1BorderNoiseMethod='gamma', refine_lut=False):
+            removeS1BorderNoiseMethod='gamma', refine_lut=False, rlks=None, azlks=None):
     """
     general function for radiometric terrain correction (RTC) and geocoding of SAR backscatter images with GAMMA.
     Applies the RTC method by :cite:t:`Small2011` to retrieve gamma nought RTC backscatter.
@@ -605,6 +605,11 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
          - None: do not remove border noise
     refine_lut: bool
         should the LUT for geocoding be refined using pixel area normalization?
+    rlks: int or None
+        the number of range looks. If not None, overrides the computation done by function
+        :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
+    azlks: int or None
+        the number of azimuth looks. Like `rlks`.
     
     Returns
     -------
@@ -786,7 +791,8 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         for group in groups:
             out = group[0].replace('IW1', 'IW_') + '_mli'
             infile = group[0] if len(group) == 1 else group
-            multilook(infile=infile, outfile=out, spacing=spacing, exist_ok=exist_ok,
+            multilook(infile=infile, outfile=out, spacing=spacing,
+                      rlks=rlks, azlks=azlks, exist_ok=exist_ok,
                       logpath=path_log, outdir=tmpdir, shellscript=shellscript)
             images.append(out)
     products = list(images)
