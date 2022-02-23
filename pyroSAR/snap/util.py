@@ -26,7 +26,7 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
+def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR',
             removeS1ThermalNoise=True, offset=None, allow_RES_OSV=False, demName='SRTM 1Sec HGT',
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
@@ -34,7 +34,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             gpt_exceptions=None, gpt_args=None, returnWF=False, nodataValueAtSea=True,
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
-            speckleFilter=False, refarea='gamma0', clean_edges=False, clean_edges_npixels=1):
+            speckleFilter=False, refarea='gamma0', clean_edges=False, clean_edges_npixels=1,
+            rlks=None, azlks=None):
     """
     general function for geocoding of SAR backscatter images with SNAP.
     
@@ -68,7 +69,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
-    tr: int or float, optional
+    spacing: int or float, optional
         The target pixel spacing in meters. Default is 20
     polarizations: list or str
         The polarizations to be processed; can be a string for a single polarization, e.g. 'VV', or a list of several
@@ -192,6 +193,11 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         Does not apply to layover-shadow mask.
     clean_edges_npixels: int
         the number of pixels to erode.
+    rlks: int or None
+        the number of range looks. If not None, overrides the computation done by function
+        :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
+    azlks: int or None
+        the number of azimuth looks. Like `rlks`.
     
     Returns
     -------
@@ -434,12 +440,14 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     except KeyError:
         raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
     
-    rlks, azlks = multilook_factors(sp_rg=id.spacing[0],
-                                    sp_az=id.spacing[1],
-                                    tr_rg=tr,
-                                    tr_az=tr,
-                                    geometry=image_geometry,
-                                    incidence=incidence)
+    if rlks is None and azlks is None:
+        rlks, azlks = multilook_factors(source_rg=id.spacing[0],
+                                        source_az=id.spacing[1],
+                                        target=spacing,
+                                        geometry=image_geometry,
+                                        incidence=incidence)
+    if [rlks, azlks].count(None) > 0:
+        raise RuntimeError("'rlks' and 'azlks' must either both be integers or None")
     
     if azlks > 1 or rlks > 1:
         workflow.insert_node(parse_node('Multilook'), before=last.id)
@@ -537,7 +545,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     last = tc
     #######################
     # specify spatial resolution and coordinate reference system of the output dataset
-    tc.parameters['pixelSpacingInMeter'] = tr
+    tc.parameters['pixelSpacingInMeter'] = spacing
     
     try:
         # try to convert the CRS into EPSG code (for readability in the workflow XML)
@@ -771,10 +779,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         return wf_name
 
 
-def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=None, test=False, cleanup=True,
+def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0', tmpdir=None, test=False, cleanup=True,
                 demName='SRTM 1Sec HGT', externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
                 alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0, groupsize=1,
-                clean_edges=False, clean_edges_npixels=1):
+                clean_edges=False, clean_edges_npixels=1, rlks=None, azlks=None):
     """
     Generate noise power images for each polarization, calibrated to either beta, sigma or gamma nought.
     The written GeoTIFF files will carry the suffix NEBZ, NESZ or NEGZ respectively.
@@ -835,6 +843,11 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
         Does not apply to layover-shadow mask.
     clean_edges_npixels: int
         the number of pixels to erode.
+    rlks: int or None
+        the number of range looks. If not None, overrides the computation done by function
+        :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
+    azlks: int or None
+        the number of azimuth looks. Like `rlks`.
     
     Returns
     -------
@@ -889,12 +902,14 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
     except KeyError:
         raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
     
-    rlks, azlks = multilook_factors(sp_rg=id.spacing[0],
-                                    sp_az=id.spacing[1],
-                                    tr_rg=spacing,
-                                    tr_az=spacing,
-                                    geometry=image_geometry,
-                                    incidence=incidence)
+    if rlks is None and azlks is None:
+        rlks, azlks = multilook_factors(source_rg=id.spacing[0],
+                                        source_az=id.spacing[1],
+                                        target=spacing,
+                                        geometry=image_geometry,
+                                        incidence=incidence)
+    if [rlks, azlks].count(None) > 0:
+        raise RuntimeError("'rlks' and 'azlks' must either both be integers or None")
     
     if azlks > 1 or rlks > 1:
         wf.insert_node(parse_node('Multilook'), before=last.id)
@@ -990,7 +1005,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea, tmpdir=N
     
     if not test:
         groups = groupbyWorkers(wf_name, groupsize)
-        gpt(xmlfile=wf_name, tmpdir=tmpdir, groups=groups)
+        gpt(xmlfile=wf_name, tmpdir=procdir, groups=groups)
         writer(xmlfile=wf_name, outdir=outdir, clean_edges=clean_edges,
                clean_edges_npixels=clean_edges_npixels)
         if cleanup:

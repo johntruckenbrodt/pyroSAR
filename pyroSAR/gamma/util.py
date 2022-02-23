@@ -536,7 +536,7 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20, logpath=No
 def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=1,
             nodata=(0, -99), osvdir=None, allow_RES_OSV=False,
             cleanup=True, export_extra=None, basename_extensions=None,
-            removeS1BorderNoiseMethod='gamma', refine_lut=False):
+            removeS1BorderNoiseMethod='gamma', refine_lut=False, rlks=None, azlks=None):
     """
     general function for radiometric terrain correction (RTC) and geocoding of SAR backscatter images with GAMMA.
     Applies the RTC method by :cite:t:`Small2011` to retrieve gamma nought RTC backscatter.
@@ -605,6 +605,11 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
          - None: do not remove border noise
     refine_lut: bool
         should the LUT for geocoding be refined using pixel area normalization?
+    rlks: int or None
+        the number of range looks. If not None, overrides the computation done by function
+        :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
+    azlks: int or None
+        the number of azimuth looks. Like `rlks`.
     
     Returns
     -------
@@ -786,7 +791,8 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         for group in groups:
             out = group[0].replace('IW1', 'IW_') + '_mli'
             infile = group[0] if len(group) == 1 else group
-            multilook(infile=infile, outfile=out, spacing=spacing, exist_ok=exist_ok,
+            multilook(infile=infile, outfile=out, spacing=spacing,
+                      rlks=rlks, azlks=azlks, exist_ok=exist_ok,
                       logpath=path_log, outdir=tmpdir, shellscript=shellscript)
             images.append(out)
     products = list(images)
@@ -1034,7 +1040,8 @@ def ovs(parfile, spacing):
     return ovs_lat, ovs_lon
 
 
-def multilook(infile, outfile, spacing, exist_ok=False, logpath=None, outdir=None, shellscript=None):
+def multilook(infile, outfile, spacing, rlks=None, azlks=None,
+              exist_ok=False, logpath=None, outdir=None, shellscript=None):
     """
     Multilooking of SLC and MLI images.
 
@@ -1058,6 +1065,11 @@ def multilook(infile, outfile, spacing, exist_ok=False, logpath=None, outdir=Non
         the name of the output GAMMA MLI file
     spacing: int
         the target pixel spacing in ground range
+    rlks: int or None
+        the number of range looks. If not None, overrides the computation done by function
+        :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
+    azlks: int or None
+        the number of azimuth looks. Like `rlks`.
     exist_ok: bool
         allow existing output files and do not create new ones?
     logpath: str or None
@@ -1092,12 +1104,14 @@ def multilook(infile, outfile, spacing, exist_ok=False, logpath=None, outdir=Non
     else:
         raise TypeError("'infile' must be str or list")
     
-    rlks, azlks = multilook_factors(sp_rg=range_pixel_spacing,
-                                    sp_az=azimuth_pixel_spacing,
-                                    tr_rg=spacing,
-                                    tr_az=spacing,
-                                    geometry=image_geometry,
-                                    incidence=incidence_angle)
+    if rlks is None and azlks is None:
+        rlks, azlks = multilook_factors(source_rg=range_pixel_spacing,
+                                        source_az=azimuth_pixel_spacing,
+                                        target=spacing,
+                                        geometry=image_geometry,
+                                        incidence=incidence_angle)
+    if [rlks, azlks].count(None) > 0:
+        raise RuntimeError("'rlks' and 'azlks' must either both be integers or None")
     
     pars = {'rlks': rlks,
             'azlks': azlks,
@@ -1380,10 +1394,13 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, ou
         if do_execute(gc_map_args, out_id, exist_ok):
             diff.gc_map_grd(**gc_map_args)
     else:
-        gc_map_args.update({'MLI_par': image + '.par',
-                            'OFF_par': '-'})
+        gc_map_args.update({'MLI_par': image + '.par'})
         if do_execute(gc_map_args, out_id, exist_ok):
-            diff.gc_map(**gc_map_args)
+            if 'gc_map2' in dir(diff):
+                del gc_map_args['ls_mode']
+                diff.gc_map2(**gc_map_args)
+            else:
+                diff.gc_map(**gc_map_args)
     
     # create ENVI header files for all created images
     for item in ['dem_seg_geo', 'sim_sar_geo', 'u_geo', 'v_geo',
