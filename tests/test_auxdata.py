@@ -65,3 +65,16 @@ def test_dem_create(tmpdir):
     out = os.path.join(str(tmpdir), 'srtm.tif')
     dem_create(src=vrt, dst=out, t_srs=32632, tr=(90, 90))
     assert os.path.isfile(out)
+
+
+def test_remote_ids():
+    ext = {'xmin': 11, 'xmax': 12,
+           'ymin': 51, 'ymax': 51.5}
+    with bbox(ext, 4326) as box:
+        with DEMHandler([box]) as dem:
+            ref1 = range(51, 52), range(11, 12)
+            ref5 = range(50, 55, 5), range(10, 15, 5)
+            ref15 = range(45, 60, 15), range(0, 15, 15)
+            assert dem.intrange(box.extent, 1) == ref1
+            assert dem.intrange(box.extent, 5) == ref5
+            assert dem.intrange(box.extent, 15) == ref15
