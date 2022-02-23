@@ -1034,7 +1034,7 @@ def ovs(parfile, spacing):
     return ovs_lat, ovs_lon
 
 
-def multilook(infile, outfile, spacing, exist_ok=False, logpath=None, outdir=None, shellscript=None):
+def multilook(infile, outfile, spacing, rlks=None, azlks=None, exist_ok=False, logpath=None, outdir=None, shellscript=None):
     """
     Multilooking of SLC and MLI images.
 
@@ -1058,6 +1058,11 @@ def multilook(infile, outfile, spacing, exist_ok=False, logpath=None, outdir=Non
         the name of the output GAMMA MLI file
     spacing: int
         the target pixel spacing in ground range
+    rlks: int or None
+        the number of range looks. If not None, overrides the computation done by function
+        :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
+    azlks: int or None
+        the number of azimuth looks. Like `rlks`.
     exist_ok: bool
         allow existing output files and do not create new ones?
     logpath: str or None
@@ -1091,12 +1096,15 @@ def multilook(infile, outfile, spacing, exist_ok=False, logpath=None, outdir=Non
         image_format = par[0].image_format
     else:
         raise TypeError("'infile' must be str or list")
-    
-    rlks, azlks = multilook_factors(source_rg=range_pixel_spacing,
-                                    source_az=azimuth_pixel_spacing,
-                                    target=spacing,
-                                    geometry=image_geometry,
-                                    incidence=incidence_angle)
+
+    if rlks is None and azlks is None:
+        rlks, azlks = multilook_factors(source_rg=range_pixel_spacing,
+                                        source_az=azimuth_pixel_spacing,
+                                        target=spacing,
+                                        geometry=image_geometry,
+                                        incidence=incidence_angle)
+    if [rlks, azlks].count(None) > 0:
+        raise RuntimeError("'rlks' and 'azlks' must either both be integers or None")
     
     pars = {'rlks': rlks,
             'azlks': azlks,
