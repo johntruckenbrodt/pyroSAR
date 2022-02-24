@@ -1728,7 +1728,7 @@ class SAFE(ID):
                 resolution_rg = {'SM': 84, 'IW': 88, 'EW': 93, 'WV': 52}[self.acquisition_mode]
                 resolution_az = {'SM': 84, 'IW': 87, 'EW': 87, 'WV': 51}[self.acquisition_mode]
             else:
-                RuntimeError("unknown resolution class: {}".format(resolution_class))
+                raise RuntimeError("unknown resolution class: {}".format(resolution_class))
         else:
             raise RuntimeError("unsupported product: {}".format(self.product))
         self.meta['resolution'] = float(resolution_rg), float(resolution_az)
