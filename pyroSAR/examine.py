@@ -353,6 +353,13 @@ class ExamineSnap(object):
             except sp.CalledProcessError:
                 pass
         
+        # If it still was not found, SNAP might have been installed in the current conda environment
+        if not os.path.isfile(fname):
+            conda_env_path = os.environ['CONDA_PREFIX']
+            fname = os.path.join(conda_env_path, 'snap', '.snap', 'system', 'var', 'log', 'messages.log')
+            if not os.path.isfile(fname):
+                raise RuntimeError("cannot find 'messages.log' to read SNAP module versions from.")
+        
         with open(fname, 'r') as m:
             content = m.read()
         match = re.search(pattern, content)
