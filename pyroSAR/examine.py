@@ -345,20 +345,22 @@ class ExamineSnap(object):
         
         fname = os.path.join(path, 'var', 'log', 'messages.log')
         
-        if not os.path.isfile(fname):
-            try:
-                # This will start SNAP and immediately stop it because of the invalid argument.
-                # Currently this seems to be the only way to create the messages.log file if it does not exist.
-                sp.check_call([self.path, '--nosplash', '--dummytest', '--console', 'suppress'])
-            except sp.CalledProcessError:
-                pass
+        conda_env_path = os.environ['CONDA_PREFIX']
+        fname_conda = os.path.join(conda_env_path, 'snap', '.snap', 'system', 'var', 'log', 'messages.log')
         
-        # If it still was not found, SNAP might have been installed in the current conda environment
-        if not os.path.isfile(fname):
-            conda_env_path = os.environ['CONDA_PREFIX']
-            fname = os.path.join(conda_env_path, 'snap', '.snap', 'system', 'var', 'log', 'messages.log')
+        if os.path.isfile(fname_conda) and not os.path.isfile(fname):
+            fname = fname_conda
+        else:
             if not os.path.isfile(fname):
-                raise RuntimeError("cannot find 'messages.log' to read SNAP module versions from.")
+                try:
+                    # This will start SNAP and immediately stop it because of the invalid argument.
+                    # Currently this seems to be the only way to create the messages.log file if it does not exist.
+                    sp.check_call([self.path, '--nosplash', '--dummytest', '--console', 'suppress'])
+                except sp.CalledProcessError:
+                    pass
+        
+        if not os.path.isfile(fname):
+            raise RuntimeError("cannot find 'messages.log' to read SNAP module versions from.")
         
         with open(fname, 'r') as m:
             content = m.read()
