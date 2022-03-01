@@ -292,7 +292,7 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
     
     Parameters
     ----------
-    cmd: list
+    cmd: list[str]
         the command line arguments
     outdir: str
         the directory to execute the command in

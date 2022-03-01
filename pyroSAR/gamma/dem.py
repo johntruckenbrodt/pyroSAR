@@ -419,7 +419,7 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
 
     Parameters
     ----------
-    demlist: list
+    demlist: list[str]
         a list of DEM names to be mosaiced
     outname: str
         the name of the final mosaic file

@@ -1,7 +1,7 @@
 ###############################################################################
 # tools for handling auxiliary data in software pyroSAR
 
-# Copyright (c) 2019-2021, the pyroSAR Developers.
+# Copyright (c) 2019-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -19,28 +19,31 @@ import ssl
 import ftplib
 import requests
 import zipfile as zf
+from math import ceil, floor
 from urllib.request import urlopen
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 
 from pyroSAR.examine import ExamineSnap
-from spatialist import Raster
+from spatialist.raster import Raster, Dtype
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
+from osgeo import gdal
 
 import logging
 
 log = logging.getLogger(__name__)
 
 
-def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
+def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None,
+                 product='dem', nodata=None, hide_nodata=False):
     """
     obtain all relevant DEM tiles for selected geometries
 
     Parameters
     ----------
-    geometries: list
+    geometries: list[spatialist.vector.Vector]
         a list of :class:`spatialist.vector.Vector` geometries to obtain DEM data for;
         CRS must be WGS84 LatLon (EPSG 4326)
     demType: str
@@ -224,11 +227,13 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             password=password,
                             vrt=vrt,
                             buffer=buffer,
-                            product=product)
+                            product=product,
+                            nodata=nodata,
+                            hide_nodata=hide_nodata)
 
 
-def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
-               geoid_convert=False, geoid='EGM96', outputBounds=None):
+def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', threads=None,
+               geoid_convert=False, geoid='EGM96', outputBounds=None, dtype=None, pbar=False):
     """
     create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
     
@@ -247,6 +252,13 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
     resampling_method: str
         the gdalwarp resampling method; See `here <https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r>`_
         for options.
+    threads: int, str or None
+        the number of threads to use. Possible values:
+        
+         - Default `None`: use the value of `GDAL_NUM_THREADS` without modification.
+         - integer value: temporarily modify `GDAL_NUM_THREADS` and reset it once done.
+         - `ALL_CPUS`: special string to use all cores/CPUs of the computer; will also temporarily
+           modify `GDAL_NUM_THREADS`.
     geoid_convert: bool
         convert geoid heights?
     geoid: str
@@ -256,6 +268,11 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
          - 'EGM2008'
     outputBounds: list or None
         output bounds as [xmin, ymin, xmax, ymax] in target SRS
+    dtype: str or None
+        override the data type of the written file; Default None: use same type as source data.
+        Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
+    pbar: bool
+        add a progressbar?
     
     Returns
     -------
@@ -271,11 +288,40 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
     else:
         epsg_out = crsConvert(t_srs, 'epsg')
     
-    gdalwarp_args = {'format': 'GTiff', 'multithread': True,
+    threads_system = gdal.GetConfigOption('GDAL_NUM_THREADS')
+    if threads is None:
+        threads = threads_system
+        try:
+            threads = int(threads)
+        except (ValueError, TypeError):
+            pass
+    if isinstance(threads, str):
+        if threads != 'ALL_CPUS':
+            raise ValueError("unsupported value for 'threads': '{}'".format(threads))
+        else:
+            multithread = True
+            gdal.SetConfigOption('GDAL_NUM_THREADS', threads)
+    elif isinstance(threads, int):
+        if threads == 1:
+            multithread = False
+        elif threads > 1:
+            multithread = True
+            gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
+        else:
+            raise ValueError("if 'threads' is of type int, it must be >= 1")
+    elif threads is None:
+        multithread = True
+    else:
+        raise TypeError("'threads' must be of type int, str or None. Is: {}".format(type(threads)))
+    
+    gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
                      'resampleAlg': resampling_method}
+    
+    if dtype is not None:
+        gdalwarp_args['outputType'] = Dtype(dtype).gdalint
     
     if outputBounds is not None:
         gdalwarp_args['outputBounds'] = outputBounds
@@ -314,12 +360,15 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
         crs = gdalwarp_args['dstSRS']
         if crs != 'EPSG:4326':
             message += ' and reprojecting to {}'.format(crs)
+        message += ': {}'.format(dst)
         log.info(message)
-        gdalwarp(src, dst, gdalwarp_args)
+        gdalwarp(src, dst, gdalwarp_args, pbar)
     except Exception:
         if os.path.isfile(dst):
             os.remove(dst)
         raise
+    finally:
+        gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
 
 
 class DEMHandler:
@@ -364,7 +413,7 @@ class DEMHandler:
         return ext
     
     @staticmethod
-    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None):
+    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None, hide_nodata=False):
         if vsi is not None:
             locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in tiles])]
         else:
@@ -376,7 +425,8 @@ class DEMHandler:
         opts = {'outputBounds': (extent['xmin'], extent['ymin'],
                                  extent['xmax'], extent['ymax']),
                 'srcNodata': nodata, 'targetAlignedPixels': True,
-                'xRes': xres, 'yRes': yres}
+                'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata
+                }
         gdalbuildvrt(src=locals, dst=vrtfile,
                      options=opts)
     
@@ -394,6 +444,31 @@ class DEMHandler:
                         ext_new[key] = geo.extent[key]
         ext_new = self.__applybuffer(ext_new, buffer)
         return ext_new
+    
+    @staticmethod
+    def intrange(extent, step):
+        """
+        generate sequence of integer coordinates marking the tie points of the individual DEM tiles
+        
+        Parameters
+        ----------
+        extent: dict
+            a dictionary with keys `xmin`, `xmax`, `ymin` and `ymax` with coordinates in EPSG:4326.
+        step: int
+            the sequence steps
+
+        Returns
+        -------
+        tuple[range]
+            the integer sequences as (latitude, longitude)
+        """
+        lat = range(floor(float(extent['ymin']) / step) * step,
+                    ceil(float(extent['ymax']) / step) * step,
+                    step)
+        lon = range(floor(float(extent['xmin']) / step) * step,
+                    ceil(float(extent['xmax']) / step) * step,
+                    step)
+        return lat, lon
     
     @staticmethod
     def __retrieve(url, filenames, outdir):
@@ -537,7 +612,8 @@ class DEMHandler:
                        }
         }
     
-    def load(self, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
+    def load(self, demType, vrt=None, buffer=None, username=None, password=None,
+             product='dem', nodata=None, hide_nodata=False):
         """
         obtain DEM tiles for the given geometries
         
@@ -617,6 +693,9 @@ class DEMHandler:
               * 'hem': Height Error Map
               * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
               * 'wam': Water Indication Mask
+        nodata: int or float or None
+            the no data value to write in the VRT if it will be written.
+            If `None`, the value of the source products is passed on.
 
         Returns
         -------
@@ -656,17 +735,16 @@ class DEMHandler:
             for item in locals:
                 getasse30_hdr(item)
         
-        if product == 'dem':
-            nodata = self.config[demType]['nodata']
-        else:
-            nodata = 0
+        if nodata is None:
+            if product == 'dem':
+                nodata = self.config[demType]['nodata']
         
         if vrt is not None:
             self.__buildvrt(tiles=locals, vrtfile=vrt,
                             pattern=self.config[demType]['pattern'][product],
                             vsi=self.config[demType]['vsi'],
                             extent=self.__commonextent(buffer),
-                            nodata=nodata)
+                            nodata=nodata, hide_nodata=hide_nodata)
             return None
         return locals
     
@@ -691,16 +769,6 @@ class DEMHandler:
             the sorted names of the remote files
         """
         
-        # generate sequence of integer coordinates marking the tie points of the individual tiles
-        def intrange(extent, step):
-            lat = range(int(float(extent['ymin']) // step) * step,
-                        (int(float(extent['ymax']) // step) + 1) * step,
-                        step)
-            lon = range(int(float(extent['xmin']) // step) * step,
-                        (int(float(extent['xmax']) // step) + 1) * step,
-                        step)
-            return lat, lon
-        
         def index(x=None, y=None, nx=3, ny=3, reverse=False):
             if reverse:
                 pattern = '{c:0{n}d}{id}'
@@ -717,7 +785,7 @@ class DEMHandler:
             return yf, xf
         
         def cop_dem_remotes(extent, arcsecs):
-            lat, lon = intrange(extent, step=1)
+            lat, lon = self.intrange(extent, step=1)
             indices = [index(x, y, nx=3, ny=2)
                        for x in lon for y in lat]
             base = 'Copernicus_DSM_COG_{res}_{0}_00_{1}_00_DEM'
@@ -726,17 +794,17 @@ class DEMHandler:
             return remotes
         
         if demType == 'SRTM 1Sec HGT':
-            lat, lon = intrange(extent, step=1)
+            lat, lon = self.intrange(extent, step=1)
             remotes = ['{0}{1}.SRTMGL1.hgt.zip'.format(*index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
         
         elif demType == 'GETASSE30':
-            lat, lon = intrange(extent, step=15)
+            lat, lon = self.intrange(extent, step=15)
             remotes = ['{0}{1}.zip'.format(*index(x, y, nx=3, ny=2, reverse=True))
                        for x in lon for y in lat]
         
         elif demType == 'TDX90m':
-            lat, lon = intrange(extent, step=1)
+            lat, lon = self.intrange(extent, step=1)
             remotes = []
             for x in lon:
                 xr = abs(x) // 10 * 10
@@ -747,7 +815,7 @@ class DEMHandler:
         
         elif demType == 'AW3D30':
             remotes = []
-            lat, lon = intrange(extent, step=1)
+            lat, lon = self.intrange(extent, step=1)
             for x in lon:
                 for y in lat:
                     remotes.append(
@@ -764,7 +832,7 @@ class DEMHandler:
         elif demType in ['Copernicus 10m EEA DEM',
                          'Copernicus 30m Global DEM II',
                          'Copernicus 90m Global DEM II']:
-            lat, lon = intrange(extent, step=1)
+            lat, lon = self.intrange(extent, step=1)
             indices = [''.join(index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
             

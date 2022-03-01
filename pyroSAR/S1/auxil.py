@@ -401,7 +401,7 @@ class OSV(object):
 
         Returns
         -------
-        list
+        list[dict]
             the product dictionary of the remote OSV files, with href
         """
         
@@ -592,6 +592,8 @@ class OSV(object):
         log.info('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
         if pbar:
             progress = pb.ProgressBar(max_value=len(downloads))
+        else:
+            progress = None
         i = 0
         for remote, local, basename, auth in downloads:
             response = requests.get(remote, auth=auth, timeout=self.timeout)
@@ -635,14 +637,14 @@ class OSV(object):
 
         Parameters
         ----------
-        files: list
+        files: list[str]
             some OSV files
         datetype: {'publish', 'start', 'stop'}
             one of three possible date types contained in the OSV filename
 
         Returns
         -------
-        list
+        list[str]
             the input OSV files sorted by the defined date
         """
         return sorted(files, key=lambda x: self.date(x, datetype))
