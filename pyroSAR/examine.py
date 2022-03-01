@@ -343,7 +343,11 @@ class ExamineSnap(object):
         else:
             raise RuntimeError('operating system not supported')
         
-        fname = os.path.join(path, 'var', 'log', 'messages.log')
+        conda_env_path = os.environ.get('CONDA_PREFIX')
+        if conda_env_path is not None and conda_env_path in self.gpt:
+            fname = os.path.join(conda_env_path, 'snap', '.snap', 'system', 'var', 'log', 'messages.log')
+        else:
+            fname = os.path.join(path, 'var', 'log', 'messages.log')
         
         if not os.path.isfile(fname):
             try:
@@ -352,6 +356,9 @@ class ExamineSnap(object):
                 sp.check_call([self.path, '--nosplash', '--dummytest', '--console', 'suppress'])
             except sp.CalledProcessError:
                 pass
+        
+        if not os.path.isfile(fname):
+            raise RuntimeError("cannot find 'messages.log' to read SNAP module versions from.")
         
         with open(fname, 'r') as m:
             content = m.read()
