@@ -120,7 +120,7 @@ def identify(scene):
     for handler in ID.__subclasses__():
         try:
             return handler(scene)
-        except (RuntimeError, KeyError):
+        except (RuntimeError, KeyError, AttributeError):
             pass
     raise RuntimeError('data format not supported')
 
@@ -380,8 +380,12 @@ class ID(object):
         """
         foldermode = 1 if include_folders else 0
         
-        files = finder(target=self.scene, matchlist=[pattern],
+        try:
+            files = finder(target=self.scene, matchlist=[pattern],
                        foldermode=foldermode, regex=True)
+        except RuntimeError:
+            # Return the scene if only a file and not zip
+            return self.scene
         
         if os.path.isdir(self.scene) \
                 and re.search(pattern, os.path.basename(self.scene)) \
@@ -400,7 +404,10 @@ class ID(object):
             the metadata attributes
         """
         files = self.findfiles(r'(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)')
-        
+        # If only one file return the file in array
+        if type(files==str):
+            files = [files]
+
         if len(files) == 1:
             prefix = {'zip': '/vsizip/', 'tar': '/vsitar/', None: ''}[self.compression]
             header = files[0]
@@ -1435,16 +1442,15 @@ class ESA(ID):
                        r'(?P<relative_orbit>[0-9]{5})_' \
                        r'(?P<absolute_orbit>[0-9]{5})_' \
                        r'(?P<counter>[0-9]{4,})\.' \
-                       r'(?P<satellite_ID>[EN][12])' \
-                       r'(?P<extension>(?:\.zip|\.tar\.gz|))$'
-        
+                       r'(?P<satellite_ID>[EN][12])'
         self.pattern_pid = r'(?P<sat_id>(?:SAR|ASA))_' \
                            r'(?P<image_mode>(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_)))_' \
                            r'(?P<processing_level>[012B][CP])'
         
         self.scene = os.path.realpath(scene)
         
-        self.examine()
+        # Only a file to examine
+        self.file = self.scene
         
         match = re.match(re.compile(self.pattern), os.path.basename(self.file))
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
@@ -1453,10 +1459,15 @@ class ESA(ID):
             raise RuntimeError('product level 0 not supported (yet)')
         
         self.meta = self.scanMetadata()
+
+        corners = self.getCorners()
+        self.meta['coordinates'] = [tuple([corners['xmin'], corners['xmax']]),tuple([corners['ymin'], corners['ymax']])]
         self.meta['acquisition_mode'] = match2.group('image_mode')
         self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
         self.meta['frameNumber'] = int(match.group('counter'))
-        
+
+        self.meta['projection'] = crsConvert(4326, 'wkt') # Just a guess to make it work, double check
+
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
     
