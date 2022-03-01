@@ -1659,7 +1659,8 @@ class SAFE(ID):
     @property
     def resolution(self):
         """
-        Get the mid-swath resolution of the Sentinel-1 product.
+        Get the mid-swath resolution of the Sentinel-1 product. For GRD products the resolution is expressed in
+        ground range and in slant range otherwise.
         
         References:
             * https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/resolutions/level-1-single-look-complex
@@ -1668,7 +1669,7 @@ class SAFE(ID):
         Returns
         -------
         tuple[float]
-            the resolution as (slant range, azimuth)
+            the resolution as (range, azimuth)
         """
         if 'resolution' in self.meta.keys():
             return self.meta['resolution']
@@ -1713,6 +1714,9 @@ class SAFE(ID):
             resolutions_az.append(0.886 * vsat / baz * kbaz * laz)
         resolution_rg = median(resolutions_rg)
         resolution_az = median(resolutions_az)
+        
+        if self.meta['image_geometry'] == 'GROUND_RANGE':
+            resolution_rg /= math.sin(math.radians(self.meta['incidence']))
         
         self.meta['resolution'] = resolution_rg, resolution_az
         return self.meta['resolution']
