@@ -96,7 +96,7 @@ class OSV(object):
     `requests timeouts <https://requests.readthedocs.io/en/master/user/advanced/#timeouts>`_
     """
     
-    def __init__(self, osvdir=None, timeout=20):
+    def __init__(self, osvdir=None, timeout=30):
         self.timeout = timeout
         if osvdir is None:
             try:
