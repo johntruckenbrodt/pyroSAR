@@ -424,6 +424,8 @@ def writer(xmlfile, outdir, basename_extensions=None,
     clean_edges: bool
         erode noisy image edges? See :func:`pyroSAR.snap.auxil.erode_edges`.
         Does not apply to layover-shadow mask.
+    clean_edges_npixels: int
+        the number of pixels to erode.
 
     Returns
     -------
