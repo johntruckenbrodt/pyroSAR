@@ -1332,6 +1332,14 @@ class Par(object):
 
 
 class Par_BandMath(Par):
+    """
+    class for handling BandMaths node parameters
+
+    Parameters
+    ----------
+    element: ~xml.etree.ElementTree.Element
+        the node parameter XML element
+    """
     def __init__(self, element):
         self.__element = element
         super(Par_BandMath, self).__init__(element)
@@ -1346,11 +1354,25 @@ class Par_BandMath(Par):
             raise ValueError("can only get items 'variables' and 'targetBands'")
     
     def clear_variables(self):
+        """
+        remove all `variables` elements from the node
+        
+        Returns
+        -------
+
+        """
         var = self.__element.find('.//variables')
         for item in var:
             var.remove(item)
     
     def add_equation(self):
+        """
+        add an equation element to the node
+        
+        Returns
+        -------
+
+        """
         eqs = self.__element.find('.//targetBands')
         eqlist = eqs.findall('.//targetBand')
         eq1 = eqlist[0]

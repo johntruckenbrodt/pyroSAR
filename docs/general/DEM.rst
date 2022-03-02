@@ -78,6 +78,8 @@ It offers the same parameters as these two functions and a user can additionally
 conversion is done in GDAL or in GAMMA via parameter `geoid_mode`. The output is a file in GAMMA format, which can
 directly be used for processing by e.g. function :func:`pyroSAR.gamma.geocode`.
 
+.. _extrapolation of water masks:
+
 Extrapolation of Water Masks
 ============================
 
