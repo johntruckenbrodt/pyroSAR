@@ -1698,9 +1698,10 @@ class SAFE(ID):
         for i, par in enumerate(proc_pars):
             # computation of slant range resolution
             rg_proc = par.find('rangeProcessing')
-            lrg = int(rg_proc.find('numberOfLooks').text)
             wrg = float(rg_proc.find('windowCoefficient').text)
             brg = float(rg_proc.find('processingBandwidth').text)
+            lbrg = float(rg_proc.find('lookBandwidth').text)
+            lrg = brg / lbrg
             kbrg = b_factors[coefficients.index(wrg)]
             resolutions_rg.append(0.886 * c / (2 * brg) * kbrg * lrg)
             
