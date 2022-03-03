@@ -2088,8 +2088,8 @@ class Archive(object):
                              'database': dbfile}
         
         # create engine, containing URL and driver
-        log.debug('starting DB engine for {}'.format(URL(**self.url_dict)))
-        self.url = URL(**self.url_dict)
+        log.debug('starting DB engine for {}'.format(URL.create(**self.url_dict)))
+        self.url = URL.create(**self.url_dict)
         self.engine = create_engine(self.url, echo=False)
         
         # call to ____load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
