@@ -459,7 +459,8 @@ def writer(xmlfile, outdir, basename_extensions=None,
     outname_base = os.path.join(outdir, src_base)
     
     if src_format in ['ENVI', 'BEAM-DIMAP']:
-        log.info('converting to GeoTIFF')
+        message = '{}converting to GeoTIFF'
+        log.info(message.format('cleaning image edges and ' if clean_edges else ''))
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
         for item in finder(src, ['*.img'], recursive=False):
