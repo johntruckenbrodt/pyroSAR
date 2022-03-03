@@ -682,3 +682,65 @@ general
 general
 -------
 - bug fixes
+
+0.16.0 | 2022-03-03
+===================
+
+Drivers
+-------
+- :class:`pyroSAR.drivers.BEAM_DIMAP`: new driver supporting SNAP's BEAM-DIMAP format
+- :class:`pyroSAR.drivers.SAFE`:
+
+  + corrected SLC metadata (was read from first sub-swath, now from center sub-swath or as sum of all sub-swaths):
+    center: spacing, heading, incidence; sum: samples, lines
+  + new property :attr:`pyroSAR.drivers.SAFE.resolution`
+
+Auxiliary Data Handling
+-----------------------
+- create water body mask mosaics from ancillary DEM products;
+  see section :ref:`extrapolation of water masks`. Affects the following:
+
+  + function :func:`pyroSAR.auxdata.dem_autoload`: new arguments `nodata` and `hide_nodata`
+
+- function :func:`pyroSAR.auxdata.dem_create`:
+
+  + new arguments `pbar` and `threads`
+
+SNAP API
+--------
+- new method :meth:`pyroSAR.snap.auxil.Par_BandMath.add_equation`
+- new function :func:`pyroSAR.snap.util.noise_power`
+- new function :func:`pyroSAR.snap.auxil.erode_edges`
+- function :func:`pyroSAR.snap.auxil.writer`:
+
+  + new arguments `clean_edges` and `clean_edges_npixels`
+    (to make use of function :func:`~pyroSAR.snap.auxil.erode_edges`)
+  + enabled conversion of BEAM-DIMAP files
+
+- function :func:`pyroSAR.snap.util.geocode`:
+
+  + new arguments `clean_edges` and `clean_edges_npixels` (see function :func:`~pyroSAR.snap.auxil.writer`)
+  + renamed argument `tr` to `spacing`
+  + new arguments `rlks` and `azlks` to manually set the number of looks
+
+GAMMA API
+---------
+- function :func:`pyroSAR.gamma.geocode`:
+
+  + new arguments `rlks` and `azlks`
+
+- function :func:`pyroSAR.gamma.multilook`:
+
+  + new arguments `rlks` and `azlks`
+
+general
+-------
+- correction of multi-look factor computation. Before: approximate target pixel spacing but never exceed it.
+  Now: first best approximate the azimuth spacing as close as possible (even if this means exceeding the target spacing)
+  and then choose the range looks to approximate a square pixel as close as possible. API changes:
+
+  + function :func:`pyroSAR.ancillary.multilook_factors`:
+
+    * renamed argument `sp_rg` to `source_rg`
+    * renamed argument `sp_az` to `source_az`
+    * replaced arguments `tr_rg` and `tr_az` with unified `target`
