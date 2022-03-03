@@ -853,6 +853,12 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     -------
 
     """
+    if clean_edges:
+        try:
+            import scipy
+        except ImportError:
+            raise RuntimeError('please install scipy to clean edges')
+    
     if refarea not in ['beta0', 'sigma0', 'gamma0']:
         raise ValueError('refarea not supported')
     
