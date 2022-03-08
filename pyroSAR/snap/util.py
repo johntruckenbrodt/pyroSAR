@@ -16,7 +16,7 @@ import shutil
 from ..drivers import identify, identify_many, ID
 from ..ancillary import multilook_factors
 from ..auxdata import get_egm_lookup
-from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, windows_fileprefix
+from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, windows_fileprefix, tc_parametrize
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 from spatialist.ancillary import dissolve
@@ -925,73 +925,15 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
         ml.parameters['sourceBands'] = None
         last = ml
     ############################################
-    tc = parse_node('Terrain-Correction')
-    wf.insert_node(tc, before=last.id)
+    tc = tc_parametrize(workflow=wf, before=last.id,
+                        spacing=spacing, t_srs=t_srs, demName=demName,
+                        externalDEMFile=externalDEMFile,
+                        externalDEMNoDataValue=externalDEMNoDataValue,
+                        externalDEMApplyEGM=externalDEMApplyEGM,
+                        alignToStandardGrid=alignToStandardGrid,
+                        standardGridOriginX=standardGridOriginX,
+                        standardGridOriginY=standardGridOriginY)
     last = tc
-    
-    tc.parameters['demResamplingMethod'] = 'BILINEAR_INTERPOLATION'
-    tc.parameters['imgResamplingMethod'] = 'BILINEAR_INTERPOLATION'
-    tc.parameters['alignToStandardGrid'] = alignToStandardGrid
-    tc.parameters['standardGridOriginX'] = standardGridOriginX
-    tc.parameters['standardGridOriginY'] = standardGridOriginY
-    
-    # specify spatial resolution and coordinate reference system of the output dataset
-    tc.parameters['pixelSpacingInMeter'] = spacing
-    
-    try:
-        # try to convert the CRS into EPSG code (for readability in the workflow XML)
-        t_srs = crsConvert(t_srs, 'epsg')
-    except TypeError:
-        raise RuntimeError("format of parameter 't_srs' not recognized")
-    except RuntimeError:
-        # this error can occur when the CRS does not have a corresponding EPSG code
-        # in this case the original CRS representation is written to the workflow
-        pass
-    
-    # the EPSG code 4326 is not supported by SNAP and thus the WKT string has to be defined;
-    # in all other cases defining EPSG:{code} will do
-    if t_srs == 4326:
-        t_srs = 'GEOGCS["WGS84(DD)",' \
-                'DATUM["WGS84",' \
-                'SPHEROID["WGS84", 6378137.0, 298.257223563]],' \
-                'PRIMEM["Greenwich", 0.0],' \
-                'UNIT["degree", 0.017453292519943295],' \
-                'AXIS["Geodetic longitude", EAST],' \
-                'AXIS["Geodetic latitude", NORTH]]'
-    
-    if isinstance(t_srs, int):
-        t_srs = 'EPSG:{}'.format(t_srs)
-    
-    tc.parameters['mapProjection'] = t_srs
-    
-    # select DEM type
-    dempar = {'externalDEMFile': externalDEMFile,
-              'externalDEMApplyEGM': externalDEMApplyEGM}
-    if externalDEMFile is not None:
-        if os.path.isfile(externalDEMFile):
-            if externalDEMNoDataValue is None:
-                with Raster(externalDEMFile) as dem:
-                    dempar['externalDEMNoDataValue'] = dem.nodata
-                if dempar['externalDEMNoDataValue'] is None:
-                    raise RuntimeError('Cannot read NoData value from DEM file. '
-                                       'Please specify externalDEMNoDataValue')
-            else:
-                dempar['externalDEMNoDataValue'] = externalDEMNoDataValue
-            dempar['reGridMethod'] = False
-        else:
-            raise RuntimeError('specified externalDEMFile does not exist')
-        dempar['demName'] = 'External DEM'
-    else:
-        dempar['demName'] = demName
-        dempar['externalDEMFile'] = None
-        dempar['externalDEMNoDataValue'] = 0
-    
-    for key, value in dempar.items():
-        wf.set_par(key, value)
-    
-    # download the EGM lookup table if necessary
-    if dempar['externalDEMApplyEGM']:
-        get_egm_lookup(geoid='EGM96', software='SNAP')
     ############################################
     
     suffix = wf.suffix()
