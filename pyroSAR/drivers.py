@@ -1788,12 +1788,14 @@ class SAFE(ID):
             
             # computation of azimuth resolution; yet to be checked for correctness
             az_proc = par.find('azimuthProcessing')
-            laz = int(az_proc.find('numberOfLooks').text)
             waz = float(az_proc.find('windowCoefficient').text)
             baz = float(az_proc.find('processingBandwidth').text)
+            lbaz = float(az_proc.find('lookBandwidth').text)
+            laz = baz / lbaz
             kbaz = b_factors[coefficients.index(waz)]
             vsat = sp_az[i] / ti_az[i]
             resolutions_az.append(0.886 * vsat / baz * kbaz * laz)
+        
         resolution_rg = median(resolutions_rg)
         resolution_az = median(resolutions_az)
         
