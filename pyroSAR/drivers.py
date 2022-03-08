@@ -1737,15 +1737,15 @@ class SAFE(ID):
             with self.getFileObj(png_name) as png_in:
                 out.writestr('quick-look.png', data=png_in.getvalue())
     
-    @property
     def resolution(self):
         """
-        Get the mid-swath resolution of the Sentinel-1 product. For GRD products the resolution is expressed in
+        Compute the mid-swath resolution of the Sentinel-1 product. For GRD products the resolution is expressed in
         ground range and in slant range otherwise.
         
         References:
             * https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/resolutions/level-1-single-look-complex
             * https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/resolutions/level-1-ground-range-detected
+            * https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/document-library/-/asset_publisher/1dO7RF5fJMbd/content/sentinel-1-product-definition
         
         Returns
         -------
