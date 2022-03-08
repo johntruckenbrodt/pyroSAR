@@ -22,9 +22,10 @@ import xml.etree.ElementTree as ET
 from pyroSAR import identify
 from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import windows_fileprefix
+from pyroSAR.auxdata import get_egm_lookup
 
 from spatialist import Raster, vectorize, rasterize, boundary
-from spatialist.auxil import gdal_translate
+from spatialist.auxil import gdal_translate, crsConvert
 from spatialist.ancillary import finder, run
 
 from osgeo import gdal
@@ -1343,6 +1344,7 @@ class Par_BandMath(Par):
     element: ~xml.etree.ElementTree.Element
         the node parameter XML element
     """
+    
     def __init__(self, element):
         self.__element = element
         super(Par_BandMath, self).__init__(element)
@@ -1470,3 +1472,75 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
     band.FlushCache()
     band = None
     ras = None
+
+
+def tc_parametrize(workflow, before, spacing, t_srs, demName='SRTM 1Sec HGT',
+                   externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
+                   alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0):
+    tc = parse_node('Terrain-Correction')
+    workflow.insert_node(tc, before=before)
+    
+    tc.parameters['demResamplingMethod'] = 'BILINEAR_INTERPOLATION'
+    tc.parameters['imgResamplingMethod'] = 'BILINEAR_INTERPOLATION'
+    tc.parameters['alignToStandardGrid'] = alignToStandardGrid
+    tc.parameters['standardGridOriginX'] = standardGridOriginX
+    tc.parameters['standardGridOriginY'] = standardGridOriginY
+    
+    # specify spatial resolution and coordinate reference system of the output dataset
+    tc.parameters['pixelSpacingInMeter'] = spacing
+    
+    try:
+        # try to convert the CRS into EPSG code (for readability in the workflow XML)
+        t_srs = crsConvert(t_srs, 'epsg')
+    except TypeError:
+        raise RuntimeError("format of parameter 't_srs' not recognized")
+    except RuntimeError:
+        # this error can occur when the CRS does not have a corresponding EPSG code
+        # in this case the original CRS representation is written to the workflow
+        pass
+    
+    # the EPSG code 4326 is not supported by SNAP and thus the WKT string has to be defined;
+    # in all other cases defining EPSG:{code} will do
+    if t_srs == 4326:
+        t_srs = 'GEOGCS["WGS84(DD)",' \
+                'DATUM["WGS84",' \
+                'SPHEROID["WGS84", 6378137.0, 298.257223563]],' \
+                'PRIMEM["Greenwich", 0.0],' \
+                'UNIT["degree", 0.017453292519943295],' \
+                'AXIS["Geodetic longitude", EAST],' \
+                'AXIS["Geodetic latitude", NORTH]]'
+    
+    if isinstance(t_srs, int):
+        t_srs = 'EPSG:{}'.format(t_srs)
+    
+    tc.parameters['mapProjection'] = t_srs
+    
+    # select DEM type
+    dempar = {'externalDEMFile': externalDEMFile,
+              'externalDEMApplyEGM': externalDEMApplyEGM}
+    if externalDEMFile is not None:
+        if os.path.isfile(externalDEMFile):
+            if externalDEMNoDataValue is None:
+                with Raster(externalDEMFile) as dem:
+                    dempar['externalDEMNoDataValue'] = dem.nodata
+                if dempar['externalDEMNoDataValue'] is None:
+                    raise RuntimeError('Cannot read NoData value from DEM file. '
+                                       'Please specify externalDEMNoDataValue')
+            else:
+                dempar['externalDEMNoDataValue'] = externalDEMNoDataValue
+            dempar['reGridMethod'] = False
+        else:
+            raise RuntimeError('specified externalDEMFile does not exist')
+        dempar['demName'] = 'External DEM'
+    else:
+        dempar['demName'] = demName
+        dempar['externalDEMFile'] = None
+        dempar['externalDEMNoDataValue'] = 0
+    
+    for key, value in dempar.items():
+        workflow.set_par(key, value)
+    
+    # download the EGM lookup table if necessary
+    if dempar['externalDEMApplyEGM']:
+        get_egm_lookup(geoid='EGM96', software='SNAP')
+    return tc
