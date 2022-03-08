@@ -12,6 +12,7 @@ Drivers
         :nosignatures:
 
         ID
+        BEAM_DIMAP
         CEOS_PSR
         CEOS_ERS
         EORC_PSR

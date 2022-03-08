@@ -952,10 +952,10 @@ def get_egm_lookup(geoid, software):
         - SNAP: default directory: ``~/.snap/auxdata/dem/egm96``; URL:
         
           * https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip
-        - PROJ: requires ``PROJ_LIB`` environment variable to be set as download directory; URLs:
+        - PROJ: requires the ``PROJ_LIB`` environment variable to be set as download directory; URLs:
         
-          * https://download.osgeo.org/proj/vdatum/egm96_15/egm96_15.gtx
-          * https://download.osgeo.org/proj/vdatum/egm08_25/egm08_25.gtx
+          * https://cdn.proj.org/us_nga_egm96_15.tif
+          * https://cdn.proj.org/us_nga_egm08_25.tif
 
     Returns
     -------
