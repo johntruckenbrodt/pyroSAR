@@ -770,7 +770,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
                 alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0, groupsize=1,
                 clean_edges=False, clean_edges_npixels=1, rlks=None, azlks=None):
     """
-    Generate noise power images for each polarization, calibrated to either beta, sigma or gamma nought.
+    Generate Sentinel-1 noise power images for each polarization, calibrated to either beta, sigma or gamma nought.
     The written GeoTIFF files will carry the suffix NEBZ, NESZ or NEGZ respectively.
 
     Parameters
@@ -850,6 +850,9 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     
     id = identify(infile)
     
+    if id.sensor not in ['S1A', 'S1B']:
+        raise RuntimeError('this function is for Sentinel-1 only')
+    
     os.makedirs(outdir, exist_ok=True)
     if tmpdir is not None:
         os.makedirs(tmpdir, exist_ok=True)
@@ -859,9 +862,12 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     read = parse_node('Read')
     read.parameters['file'] = infile
     wf.insert_node(read)
-    
+    ############################################
+    orb = orb_parametrize(scene=id, workflow=wf, before=read.id,
+                          formatName='SENTINEL-1', allow_RES_OSV=True)
+    ############################################
     cal = parse_node('Calibration')
-    wf.insert_node(cal, before=read.id)
+    wf.insert_node(cal, before=orb.id)
     cal.parameters['selectedPolarisations'] = polarizations
     cal.parameters['outputBetaBand'] = False
     cal.parameters['outputSigmaBand'] = False
@@ -873,7 +879,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     tnr = parse_node('ThermalNoiseRemoval')
     wf.insert_node(tnr, before=cal.id)
     last = tnr
-    
+    ############################################
     if id.product == 'SLC':
         deb = parse_node('TOPSAR-Deburst')
         wf.insert_node(deb, before=tnr.id)
