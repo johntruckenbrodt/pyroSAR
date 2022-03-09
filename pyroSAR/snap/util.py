@@ -16,7 +16,7 @@ import shutil
 from ..drivers import identify, identify_many, ID
 from ..ancillary import multilook_factors
 from ..auxdata import get_egm_lookup
-from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, windows_fileprefix
+from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, windows_fileprefix, orb_parametrize
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 from spatialist.ancillary import dissolve
@@ -365,22 +365,8 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = deb
     ############################################
     # Apply-Orbit-File node configuration
-    orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
-                    'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
-    orbitType = orbit_lookup[formatName]
-    if formatName == 'ENVISAT' and id.acquisition_mode == 'WSM':
-        orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
-    
-    if formatName == 'SENTINEL-1':
-        match = id.getOSV(osvType='POE', returnMatch=True)
-        if match is None and allow_RES_OSV:
-            id.getOSV(osvType='RES')
-            orbitType = 'Sentinel Restituted (Auto Download)'
-    
-    orb = parse_node('Apply-Orbit-File')
-    workflow.insert_node(orb, before=last.id)
-    orb.parameters['orbitType'] = orbitType
-    orb.parameters['continueOnFail'] = False
+    orb = orb_parametrize(scene=id, workflow=workflow, before=last.id,
+                          formatName=formatName, allow_RES_OSV=allow_RES_OSV)
     last = orb
     ############################################
     # Subset node configuration

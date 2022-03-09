@@ -1470,3 +1470,47 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
     band.FlushCache()
     band = None
     ras = None
+
+
+def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, continueOnFail=False):
+    """
+    convenience function for parametrizing an `Apply-Orbit-File` node and inserting it into a workflow.
+    Required Sentinel-1 orbit files are directly downloaded.
+    
+    Parameters
+    ----------
+    scene: pyroSAR.drivers.ID
+        The SAR scene to be processed
+    workflow: Workflow
+        the SNAP workflow object
+    before: str
+        the ID of the node after which the `Apply-Orbit-File` node will be inserted
+    formatName: str
+        the scene's data format
+    allow_RES_OSV: bool
+        (only applies to Sentinel-1) Also allow the less accurate RES orbit files to be used?
+    continueOnFail: bool
+        continue SNAP processing if orbit correction fails?
+        
+    Returns
+    -------
+    Node
+        the node object
+    """
+    orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
+                    'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
+    orbitType = orbit_lookup[formatName]
+    if formatName == 'ENVISAT' and scene.acquisition_mode == 'WSM':
+        orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
+    
+    if formatName == 'SENTINEL-1':
+        match = scene.getOSV(osvType='POE', returnMatch=True)
+        if match is None and allow_RES_OSV:
+            scene.getOSV(osvType='RES')
+            orbitType = 'Sentinel Restituted (Auto Download)'
+    
+    orb = parse_node('Apply-Orbit-File')
+    workflow.insert_node(orb, before=before)
+    orb.parameters['orbitType'] = orbitType
+    orb.parameters['continueOnFail'] = continueOnFail
+    return orb
