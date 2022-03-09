@@ -1521,6 +1521,53 @@ def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, con
 def tc_parametrize(workflow, before, spacing, t_srs, demName='SRTM 1Sec HGT',
                    externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
                    alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0):
+    """
+    convenience function for parametrizing an `Terrain-Correction` node and inserting it into a workflow.
+    
+    Parameters
+    ----------
+    workflow: Workflow
+        the SNAP workflow object
+    before: str
+        the ID of the node after which the `Apply-Orbit-File` node will be inserted
+    spacing: int or float
+        The target pixel spacing in meters.
+    t_srs: int, str or osr.SpatialReference
+        A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
+        See function :func:`spatialist.auxil.crsConvert()` for details.
+    demName: str
+        The name of the auto-download DEM. Default is 'SRTM 1Sec HGT'. Is ignored when `externalDEMFile` is not None.
+        Supported options:
+        
+         - ACE2_5Min
+         - ACE30
+         - ASTER 1sec GDEM
+         - CDEM
+         - Copernicus 30m Global DEM
+         - Copernicus 90m Global DEM
+         - GETASSE30
+         - SRTM 1Sec Grid
+         - SRTM 1Sec HGT
+         - SRTM 3Sec
+    externalDEMFile: str or None, optional
+        The absolute path to an external DEM file. Default is None. Overrides `demName`.
+    externalDEMNoDataValue: int, float or None, optional
+        The no data value of the external DEM. If not specified (default) the function will try to read it from the
+        specified external DEM.
+    externalDEMApplyEGM: bool, optional
+        Apply Earth Gravitational Model to external DEM? Default is True.
+    alignToStandardGrid: bool
+        Align all processed images to a common grid?
+    standardGridOriginX: int or float
+        The x origin value for grid alignment
+    standardGridOriginY: int or float
+        The y origin value for grid alignment
+
+    Returns
+    -------
+    Node
+        the node object
+    """
     tc = parse_node('Terrain-Correction')
     workflow.insert_node(tc, before=before)
     
