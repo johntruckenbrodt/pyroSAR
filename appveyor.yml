@@ -23,9 +23,9 @@ install:
   - rmdir C:\cygwin /s /q
 
   # install PostGIS
-  - appveyor DownloadFile  https://winnie.postgis.net/download/windows/appveyor/postgis-pg96-binaries-3.0w64gcc48.zip
-  - 7z x .\postgis-pg96-binaries-3.0w64gcc48.zip
-  - xcopy /e /y /q .\postgis-pg96-binaries-3.0.0alpha4devw64gcc48 C:\Progra~1\PostgreSQL\9.6
+  - appveyor DownloadFile  https://download.osgeo.org/postgis/windows/pg96/postgis-bundle-pg96-3.2.0x64.zip
+  - 7z x .\postgis-bundle-pg96-3.2.0x64.zip
+  - xcopy /e /y /q .\postgis-bundle-pg96-3.2.0x64 C:\Progra~1\PostgreSQL\9.6
 
   # activate conda
   - call %CONDA_INSTALL_LOCN%\Scripts\activate.bat
