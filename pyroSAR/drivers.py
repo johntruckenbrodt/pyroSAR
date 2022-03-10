@@ -1486,8 +1486,10 @@ class ESA(ID):
             meta['polarizations'] = ['VV']
         
         meta['orbit'] = meta['SPH_PASS'][0]
-        meta['start'] = meta['MPH_SENSING_START']
-        meta['stop'] = meta['MPH_SENSING_STOP']
+        meta['start'] = meta['SPH_FIRST_LINE_TIME']
+        meta['stop'] = meta['SPH_LAST_LINE_TIME']
+        meta['sensing_start'] = meta['MPH_SENSING_START']
+        meta['sensing_stop'] = meta['MPH_SENSING_STOP']
         meta['spacing'] = (meta['SPH_RANGE_SPACING'], meta['SPH_AZIMUTH_SPACING'])
         meta['looks'] = (meta['SPH_RANGE_LOOKS'], meta['SPH_AZIMUTH_LOOKS'])
         
