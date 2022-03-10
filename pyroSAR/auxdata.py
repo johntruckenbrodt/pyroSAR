@@ -255,8 +255,10 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
     threads: int, str or None
         the number of threads to use. Possible values:
         
-         - Default `None`: use the value of `GDAL_NUM_THREADS` without modification.
+         - Default `None`: use the value of `GDAL_NUM_THREADS` without modification. If `GDAL_NUM_THREADS` is None,
+           multi-threading is still turned on and two threads are used, one for I/O and one for computation.
          - integer value: temporarily modify `GDAL_NUM_THREADS` and reset it once done.
+           If 1, multithreading is turned off.
          - `ALL_CPUS`: special string to use all cores/CPUs of the computer; will also temporarily
            modify `GDAL_NUM_THREADS`.
     geoid_convert: bool
@@ -340,9 +342,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
             # the following line is a temporary workaround until compound EPSG codes can
             # directly be used for vertical CRS transformations
             # see https://github.com/OSGeo/gdal/pull/4639
-            gdalwarp_args['srcSRS'] = crsConvert(gdalwarp_args['srcSRS'], 'proj4') \
-                .replace('us_nga_egm96_15.tif', 'egm96_15.gtx') \
-                .replace('us_nga_egm08_25.tif', 'egm08_25.gtx')
+            gdalwarp_args['srcSRS'] = crsConvert(gdalwarp_args['srcSRS'], 'proj4')
         else:
             raise RuntimeError('geoid model not yet supported')
         try:
@@ -952,10 +952,10 @@ def get_egm_lookup(geoid, software):
         - SNAP: default directory: ``~/.snap/auxdata/dem/egm96``; URL:
         
           * https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip
-        - PROJ: requires ``PROJ_LIB`` environment variable to be set as download directory; URLs:
+        - PROJ: requires the ``PROJ_LIB`` environment variable to be set as download directory; URLs:
         
-          * https://download.osgeo.org/proj/vdatum/egm96_15/egm96_15.gtx
-          * https://download.osgeo.org/proj/vdatum/egm08_25/egm08_25.gtx
+          * https://cdn.proj.org/us_nga_egm96_15.tif
+          * https://cdn.proj.org/us_nga_egm08_25.tif
 
     Returns
     -------
@@ -977,9 +977,9 @@ def get_egm_lookup(geoid, software):
                 out.write(r.content)
     
     elif software == 'PROJ':
-        gtx_lookup = {'EGM96': 'egm96_15/egm96_15.gtx',
-                      'EGM2008': 'egm08_25/egm08_25.gtx'}
-        gtx_remote = 'https://download.osgeo.org/proj/vdatum/' + gtx_lookup[geoid]
+        gtx_lookup = {'EGM96': 'us_nga_egm96_15.tif',
+                      'EGM2008': 'us_nga_egm08_25.tif'}
+        gtx_remote = 'https://cdn.proj.org/' + gtx_lookup[geoid]
         
         proj_lib = os.environ.get('PROJ_LIB')
         if proj_lib is not None:

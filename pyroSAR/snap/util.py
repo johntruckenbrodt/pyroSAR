@@ -16,7 +16,7 @@ import shutil
 from ..drivers import identify, identify_many, ID
 from ..ancillary import multilook_factors
 from ..auxdata import get_egm_lookup
-from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, windows_fileprefix
+from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, windows_fileprefix, orb_parametrize
 
 from spatialist import crsConvert, Vector, Raster, bbox, intersect
 from spatialist.ancillary import dissolve
@@ -365,22 +365,8 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = deb
     ############################################
     # Apply-Orbit-File node configuration
-    orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
-                    'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
-    orbitType = orbit_lookup[formatName]
-    if formatName == 'ENVISAT' and id.acquisition_mode == 'WSM':
-        orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
-    
-    if formatName == 'SENTINEL-1':
-        match = id.getOSV(osvType='POE', returnMatch=True)
-        if match is None and allow_RES_OSV:
-            id.getOSV(osvType='RES')
-            orbitType = 'Sentinel Restituted (Auto Download)'
-    
-    orb = parse_node('Apply-Orbit-File')
-    workflow.insert_node(orb, before=last.id)
-    orb.parameters['orbitType'] = orbitType
-    orb.parameters['continueOnFail'] = False
+    orb = orb_parametrize(scene=id, workflow=workflow, before=last.id,
+                          formatName=formatName, allow_RES_OSV=allow_RES_OSV)
     last = orb
     ############################################
     # Subset node configuration
@@ -784,7 +770,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
                 alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0, groupsize=1,
                 clean_edges=False, clean_edges_npixels=1, rlks=None, azlks=None):
     """
-    Generate noise power images for each polarization, calibrated to either beta, sigma or gamma nought.
+    Generate Sentinel-1 noise power images for each polarization, calibrated to either beta, sigma or gamma nought.
     The written GeoTIFF files will carry the suffix NEBZ, NESZ or NEGZ respectively.
 
     Parameters
@@ -853,10 +839,19 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     -------
 
     """
+    if clean_edges:
+        try:
+            import scipy
+        except ImportError:
+            raise RuntimeError('please install scipy to clean edges')
+    
     if refarea not in ['beta0', 'sigma0', 'gamma0']:
         raise ValueError('refarea not supported')
     
     id = identify(infile)
+    
+    if id.sensor not in ['S1A', 'S1B']:
+        raise RuntimeError('this function is for Sentinel-1 only')
     
     os.makedirs(outdir, exist_ok=True)
     if tmpdir is not None:
@@ -867,9 +862,12 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     read = parse_node('Read')
     read.parameters['file'] = infile
     wf.insert_node(read)
-    
+    ############################################
+    orb = orb_parametrize(scene=id, workflow=wf, before=read.id,
+                          formatName='SENTINEL-1', allow_RES_OSV=True)
+    ############################################
     cal = parse_node('Calibration')
-    wf.insert_node(cal, before=read.id)
+    wf.insert_node(cal, before=orb.id)
     cal.parameters['selectedPolarisations'] = polarizations
     cal.parameters['outputBetaBand'] = False
     cal.parameters['outputSigmaBand'] = False
@@ -881,7 +879,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     tnr = parse_node('ThermalNoiseRemoval')
     wf.insert_node(tnr, before=cal.id)
     last = tnr
-    
+    ############################################
     if id.product == 'SLC':
         deb = parse_node('TOPSAR-Deburst')
         wf.insert_node(deb, before=tnr.id)

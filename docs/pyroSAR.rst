@@ -12,6 +12,7 @@ Drivers
         :nosignatures:
 
         ID
+        BEAM_DIMAP
         CEOS_PSR
         CEOS_ERS
         EORC_PSR
@@ -50,7 +51,7 @@ Workflow Parsing and Execution
 ------------------------------
 
 .. automodule:: pyroSAR.snap.auxil
-    :members: gpt, execute, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par
+    :members: gpt, execute, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par, Par_BandMath
     :undoc-members:
     :show-inheritance:
 
@@ -66,6 +67,7 @@ Workflow Parsing and Execution
         Workflow
         Node
         Par
+        Par_BandMath
 
 General Utilities
 -----------------

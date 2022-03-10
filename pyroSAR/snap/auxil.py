@@ -424,6 +424,8 @@ def writer(xmlfile, outdir, basename_extensions=None,
     clean_edges: bool
         erode noisy image edges? See :func:`pyroSAR.snap.auxil.erode_edges`.
         Does not apply to layover-shadow mask.
+    clean_edges_npixels: int
+        the number of pixels to erode.
 
     Returns
     -------
@@ -457,7 +459,8 @@ def writer(xmlfile, outdir, basename_extensions=None,
     outname_base = os.path.join(outdir, src_base)
     
     if src_format in ['ENVI', 'BEAM-DIMAP']:
-        log.info('converting to GeoTIFF')
+        message = '{}converting to GeoTIFF'
+        log.info(message.format('cleaning image edges and ' if clean_edges else ''))
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
         for item in finder(src, ['*.img'], recursive=False):
@@ -1332,6 +1335,14 @@ class Par(object):
 
 
 class Par_BandMath(Par):
+    """
+    class for handling BandMaths node parameters
+
+    Parameters
+    ----------
+    element: ~xml.etree.ElementTree.Element
+        the node parameter XML element
+    """
     def __init__(self, element):
         self.__element = element
         super(Par_BandMath, self).__init__(element)
@@ -1346,11 +1357,25 @@ class Par_BandMath(Par):
             raise ValueError("can only get items 'variables' and 'targetBands'")
     
     def clear_variables(self):
+        """
+        remove all `variables` elements from the node
+        
+        Returns
+        -------
+
+        """
         var = self.__element.find('.//variables')
         for item in var:
             var.remove(item)
     
     def add_equation(self):
+        """
+        add an equation element to the node
+        
+        Returns
+        -------
+
+        """
         eqs = self.__element.find('.//targetBands')
         eqlist = eqs.findall('.//targetBand')
         eq1 = eqlist[0]
@@ -1445,3 +1470,47 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
     band.FlushCache()
     band = None
     ras = None
+
+
+def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, continueOnFail=False):
+    """
+    convenience function for parametrizing an `Apply-Orbit-File` node and inserting it into a workflow.
+    Required Sentinel-1 orbit files are directly downloaded.
+    
+    Parameters
+    ----------
+    scene: pyroSAR.drivers.ID
+        The SAR scene to be processed
+    workflow: Workflow
+        the SNAP workflow object
+    before: str
+        the ID of the node after which the `Apply-Orbit-File` node will be inserted
+    formatName: str
+        the scene's data format
+    allow_RES_OSV: bool
+        (only applies to Sentinel-1) Also allow the less accurate RES orbit files to be used?
+    continueOnFail: bool
+        continue SNAP processing if orbit correction fails?
+        
+    Returns
+    -------
+    Node
+        the node object
+    """
+    orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
+                    'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
+    orbitType = orbit_lookup[formatName]
+    if formatName == 'ENVISAT' and scene.acquisition_mode == 'WSM':
+        orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
+    
+    if formatName == 'SENTINEL-1':
+        match = scene.getOSV(osvType='POE', returnMatch=True)
+        if match is None and allow_RES_OSV:
+            scene.getOSV(osvType='RES')
+            orbitType = 'Sentinel Restituted (Auto Download)'
+    
+    orb = parse_node('Apply-Orbit-File')
+    workflow.insert_node(orb, before=before)
+    orb.parameters['orbitType'] = orbitType
+    orb.parameters['continueOnFail'] = continueOnFail
+    return orb

@@ -48,12 +48,12 @@ autosummary_generate = []
 version_spatialist = get_version('spatialist')
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
-                       'requests': ('https://requests.readthedocs.io/en/latest/', None),
-                       'scipy': ('https://docs.scipy.org/doc/scipy/reference', None),
+                       'requests': ('https://docs.python-requests.org/en/latest', None),
+                       'scipy': ('https://docs.scipy.org/doc/scipy', None),
                        'spatialist': ('https://spatialist.readthedocs.io/en/v{}'
                                       .format(version_spatialist), None),
-                       'sqlalchemy': ('https://docs.sqlalchemy.org/en/latest/', None),
-                       'sqlalchemy-utils': ('https://sqlalchemy-utils.readthedocs.io/en/latest/', None)
+                       'sqlalchemy': ('https://docs.sqlalchemy.org/en/latest', None),
+                       'sqlalchemy-utils': ('https://sqlalchemy-utils.readthedocs.io/en/latest', None)
                        }
 
 napoleon_google_docstring = False
