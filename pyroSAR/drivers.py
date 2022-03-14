@@ -1547,7 +1547,7 @@ class ESA(ID):
         self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
         self.meta['frameNumber'] = int(match.group('counter'))
 
-        self.meta['projection'] = crsConvert(4326, 'wkt') # Just a guess to make it work, double check
+        self.meta['projection'] = crsConvert(4326, 'wkt') # TODO Just a guess to make it work, double check
 
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
@@ -1577,6 +1577,8 @@ class ESA(ID):
         meta['orbitNumber_abs'] = meta['MPH_ABS_ORBIT']
         meta['orbitNumber_rel'] = meta['MPH_REL_ORBIT']
         meta['cycleNumber'] = meta['MPH_CYCLE']
+        meta['image_geometry'] = 'GROUND_RANGE' # TODO Completly wrong, just to see where it fails
+        meta['incidence'] = 39 # TODO Completly wrong, just to see where it fails
         return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
