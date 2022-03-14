@@ -744,3 +744,21 @@ general
     * renamed argument `sp_rg` to `source_rg`
     * renamed argument `sp_az` to `source_az`
     * replaced arguments `tr_rg` and `tr_az` with unified `target`
+
+0.16.1 | 2022-03-07
+===================
+
+Auxiliary Data Handling
+-----------------------
+- function :func:`pyroSAR.auxdata.get_egm_lookup`:
+
+  + changed URL for PROJ geoid models, which results in better performance for
+    function :func:`pyroSAR.auxdata.dem_create`
+    (See `pyroSAR#200 <https://github.com/johntruckenbrodt/pyroSAR/issues/200>`_).
+
+0.16.2 | 2022-03-14
+===================
+
+SNAP API
+--------
+- function :func:`pyroSAR.snap.util.noise_power`: added missing orbit state vector refinement
