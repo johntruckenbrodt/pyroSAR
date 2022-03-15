@@ -1577,7 +1577,7 @@ class ESA(ID):
         meta['orbitNumber_abs'] = meta['MPH_ABS_ORBIT']
         meta['orbitNumber_rel'] = meta['MPH_REL_ORBIT']
         meta['cycleNumber'] = meta['MPH_CYCLE']
-        meta['image_geometry'] = 'GROUND_RANGE' # TODO Completly wrong, just to see where it fails
+        meta['image_geometry'] = 'SLANT_RANGE' # TODO Completly wrong, just to see where it fails
         meta['incidence'] = 39 # TODO Completly wrong, just to see where it fails
         return meta
     
