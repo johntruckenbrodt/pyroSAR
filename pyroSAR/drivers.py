@@ -1577,7 +1577,13 @@ class ESA(ID):
         meta['orbitNumber_abs'] = meta['MPH_ABS_ORBIT']
         meta['orbitNumber_rel'] = meta['MPH_REL_ORBIT']
         meta['cycleNumber'] = meta['MPH_CYCLE']
-        meta['image_geometry'] = 'SLANT_RANGE' # TODO Completly wrong, just to see where it fails
+        if self.meta['acquisition_mode'] == 'IMS' or self.meta['acquisition_mode'] == 'APS':
+            meta['image_geometry'] = 'SLANT_RANGE' 
+        elif self.meta['acquisition_mode'] == 'IMP' or self.meta['acquisition_mode'] == 'APP':
+            meta['image_geometry'] = 'GROUND_RANGE'
+        else:
+            raise RuntimeError("unsupported adquisition mode: {}".format(self.meta['acquisition_mode']))
+
         meta['incidence'] = 39 # TODO Completly wrong, just to see where it fails
         return meta
     
