@@ -1548,6 +1548,12 @@ class ESA(ID):
         self.meta['frameNumber'] = int(match.group('counter'))
 
         self.meta['projection'] = crsConvert(4326, 'wkt') # TODO Just a guess to make it work, double check
+        if self.meta['acquisition_mode'] == 'IMS' or self.meta['acquisition_mode'] == 'APS':
+            meta['image_geometry'] = 'SLANT_RANGE' 
+        elif self.meta['acquisition_mode'] == 'IMP' or self.meta['acquisition_mode'] == 'APP':
+            meta['image_geometry'] = 'GROUND_RANGE'
+        else:
+            raise RuntimeError("unsupported adquisition mode: {}".format(self.meta['acquisition_mode']))
 
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
@@ -1577,12 +1583,6 @@ class ESA(ID):
         meta['orbitNumber_abs'] = meta['MPH_ABS_ORBIT']
         meta['orbitNumber_rel'] = meta['MPH_REL_ORBIT']
         meta['cycleNumber'] = meta['MPH_CYCLE']
-        if self.meta['acquisition_mode'] == 'IMS' or self.meta['acquisition_mode'] == 'APS':
-            meta['image_geometry'] = 'SLANT_RANGE' 
-        elif self.meta['acquisition_mode'] == 'IMP' or self.meta['acquisition_mode'] == 'APP':
-            meta['image_geometry'] = 'GROUND_RANGE'
-        else:
-            raise RuntimeError("unsupported adquisition mode: {}".format(self.meta['acquisition_mode']))
 
         meta['incidence'] = 39 # TODO Completly wrong, just to see where it fails
         return meta
