@@ -1549,9 +1549,9 @@ class ESA(ID):
 
         self.meta['projection'] = crsConvert(4326, 'wkt') # TODO Just a guess to make it work, double check
         if self.meta['acquisition_mode'] == 'IMS' or self.meta['acquisition_mode'] == 'APS':
-            meta['image_geometry'] = 'SLANT_RANGE' 
+            self.meta['image_geometry'] = 'SLANT_RANGE' 
         elif self.meta['acquisition_mode'] == 'IMP' or self.meta['acquisition_mode'] == 'APP':
-            meta['image_geometry'] = 'GROUND_RANGE'
+            self.meta['image_geometry'] = 'GROUND_RANGE'
         else:
             raise RuntimeError("unsupported adquisition mode: {}".format(self.meta['acquisition_mode']))
 
