@@ -354,9 +354,8 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
         read = workflow['Read']
         scene = identify(read.parameters['file'])
     
-    tmp_base = os.path.basename(tmpdir)
-    tmpdir_bnr = os.path.join(tmpdir, tmp_base + '_bnr')
-    tmpdir_sub = os.path.join(tmpdir, tmp_base + '_sub')
+    tmpdir_bnr = os.path.join(tmpdir, 'bnr')
+    tmpdir_sub = os.path.join(tmpdir, 'sub')
     
     if 'Remove-GRD-Border-Noise' in workflow.ids \
             and removeS1BorderNoiseMethod == 'pyroSAR' \
