@@ -1462,7 +1462,7 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
             ref.write(outname=infile_base + '_mask_original.tif', array=mask, dtype='Byte')
         if only_boundary:
             with vectorize(target=mask, reference=ref) as vec:
-                with boundary(vec) as bounds:
+                with boundary(vec, expression="value=1") as bounds:
                     with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
                         mask = new.array()
                         if write_intermediates:
