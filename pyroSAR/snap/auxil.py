@@ -497,7 +497,7 @@ def writer(xmlfile, outdir, basename_extensions=None,
             else:
                 nodata = 0
             translateoptions['noData'] = nodata
-            if clean_edges and not 'layover_shadow_mask' in basename:
+            if clean_edges and 'layoverShadowMask' not in basename:
                 erode_edges(item, only_boundary=True, pixels=clean_edges_npixels)
             gdal_translate(item, name_new, translateoptions)
     else:
