@@ -1,4 +1,5 @@
 import pyroSAR
+
 import pytest
 import platform
 import tarfile as tf
@@ -193,7 +194,7 @@ def test_archive2(tmpdir, testdata):
         assert db.size == (1, 0)
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
-    
+
     os.remove(dbfile)
     assert not os.path.isfile(dbfile)
     assert Vector(shp).nfeatures == 1
@@ -205,9 +206,14 @@ def test_archive2(tmpdir, testdata):
 def test_archive_postgres(tmpdir, testdata):
     pguser = os.environ.get('PGUSER')
     pgpassword = os.environ.get('PGPASSWORD')
+    pgport = os.environ.get('PGPORT')
+    if pgport is not None:
+        pgport = int(pgport)
+    else:
+        pgport = 5432
     
     id = pyroSAR.identify(testdata['s1'])
-    db = pyroSAR.Archive('test', postgres=True, port=5432, user=pguser, password=pgpassword)
+    db = pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword)
     db.insert(testdata['s1'])
     assert all(isinstance(x, str) for x in db.get_tablenames())
     assert all(isinstance(x, str) for x in db.get_colnames())
@@ -228,14 +234,14 @@ def test_archive_postgres(tmpdir, testdata):
     with pytest.raises(TypeError):
         db.filter_scenelist([1])
     db.close()
-    with pyroSAR.Archive('test', postgres=True, port=5432, user=pguser, password=pgpassword) as db:
+    with pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword) as db:
         assert db.size == (1, 0)
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
         pyroSAR.drop_archive(db)
     assert Vector(shp).nfeatures == 1
     
-    with pyroSAR.Archive('test', postgres=True, port=5432, user=pguser, password=pgpassword) as db:
+    with pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword) as db:
         with pytest.raises(OSError):
             db.import_outdated(testdata['archive_old'])
         pyroSAR.drop_archive(db)

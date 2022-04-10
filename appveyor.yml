@@ -9,6 +9,8 @@ environment:
       SNAP_INSTALL: C:\projects\snap
       PGUSER: postgres
       PGPASSWORD: Password12!
+      SNAP_VERSION: 8
+      SNAP_INSTALLER: esa-snap_sentinel_windows-x64_%SNAP_VERSION%_0.exe
 
 platform:
   - x64
@@ -21,9 +23,9 @@ install:
   - rmdir C:\cygwin /s /q
 
   # install PostGIS
-  - appveyor DownloadFile  https://winnie.postgis.net/download/windows/appveyor/postgis-pg96-binaries-3.0w64gcc48.zip
-  - 7z x .\postgis-pg96-binaries-3.0w64gcc48.zip
-  - xcopy /e /y /q .\postgis-pg96-binaries-3.0.0alpha4devw64gcc48 C:\Progra~1\PostgreSQL\9.6
+  - appveyor DownloadFile  https://download.osgeo.org/postgis/windows/pg96/postgis-bundle-pg96-3.2.0x64.zip
+  - 7z x .\postgis-bundle-pg96-3.2.0x64.zip
+  - xcopy /e /y /q .\postgis-bundle-pg96-3.2.0x64 C:\Progra~1\PostgreSQL\9.6
 
   # activate conda
   - call %CONDA_INSTALL_LOCN%\Scripts\activate.bat
@@ -46,8 +48,8 @@ install:
   - conda config --add channels conda-forge
 
   # install ESA SNAP
-  - appveyor DownloadFile https://step.esa.int/downloads/8.0/installers/esa-snap_sentinel_windows-x64_8_0.exe
-  - esa-snap_sentinel_windows-x64_8_0.exe -q -dir %SNAP_INSTALL%
+  - appveyor DownloadFile https://step.esa.int/downloads/%SNAP_VERSION%.0/installers/%SNAP_INSTALLER%
+  - start %SNAP_INSTALLER% -q -dir %SNAP_INSTALL%
 
   - set PATH=%PATH%;%SNAP_INSTALL%\bin
 
@@ -62,4 +64,4 @@ install:
 build: false
 
 test_script:
-  - coverage run --source pyroSAR/ -m pytest
+  - coverage run -m pytest

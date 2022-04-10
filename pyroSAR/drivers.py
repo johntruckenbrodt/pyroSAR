@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2021, the pyroSAR Developers.
+# Copyright (c) 2016-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -20,6 +20,7 @@ images from different SAR sensors.
 """
 
 import sys
+import gc
 
 from builtins import str
 from io import BytesIO
@@ -39,9 +40,11 @@ import xml.etree.ElementTree as ET
 import zipfile as zf
 from datetime import datetime, timedelta
 from time import strptime, strftime
+from statistics import median
+from itertools import groupby
 
 import progressbar as pb
-from osgeo import gdal, osr
+from osgeo import gdal, osr, ogr
 from osgeo.gdalconst import GA_ReadOnly
 
 from . import S1
@@ -52,6 +55,7 @@ from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder
 
 from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
+from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import select, func
@@ -128,7 +132,7 @@ def identify_many(scenes, pbar=False, sortkey=None):
 
     Parameters
     ----------
-    scenes: list
+    scenes: list[str]
         the file names of the scenes to be identified
     pbar: bool
         adds a progressbar if True
@@ -136,7 +140,7 @@ def identify_many(scenes, pbar=False, sortkey=None):
         sort the handler object list by an attribute
     Returns
     -------
-    list
+    list[ID]
         a list of pyroSAR metadata handlers
     
     Examples
@@ -225,7 +229,7 @@ class ID(object):
     
     def bbox(self, outname=None, driver=None, overwrite=True):
         """
-        get the bounding box of a scene either as a vector object or written to a shapefile
+        get the bounding box of a scene either as a vector object or written to a file
 
         Parameters
         ----------
@@ -247,6 +251,46 @@ class ID(object):
         else:
             bbox(self.getCorners(), self.projection, outname=outname, driver=driver,
                  overwrite=overwrite)
+    
+    def geometry(self, outname=None, driver=None, overwrite=True):
+        """
+        get the footprint geometry of a scene either as a vector object or written to a file
+
+        Parameters
+        ----------
+        outname: str
+            the name of the shapefile to be written
+        driver: str
+            the output file format; needs to be defined if the format cannot
+            be auto-detected from the filename extension
+        overwrite: bool
+            overwrite an existing shapefile?
+
+        Returns
+        -------
+        ~spatialist.vector.Vector or None
+            the vector object if `outname` is None, None otherwise
+        """
+        srs = crsConvert(self.projection, 'osr')
+        ring = ogr.Geometry(ogr.wkbLinearRing)
+        for coordinate in self.meta['coordinates']:
+            ring.AddPoint(*coordinate)
+        ring.CloseRings()
+        
+        geom = ogr.Geometry(ogr.wkbPolygon)
+        geom.AddGeometry(ring)
+        
+        geom.FlattenTo2D()
+        
+        bbox = Vector(driver='Memory')
+        bbox.addlayer('geometry', srs, geom.GetGeometryType())
+        bbox.addfield('area', ogr.OFTReal)
+        bbox.addfeature(geom, fields={'area': geom.Area()})
+        geom = None
+        if outname is None:
+            return bbox
+        else:
+            bbox.write(outfile=outname, driver=driver, overwrite=overwrite)
     
     @property
     def compression(self):
@@ -327,7 +371,7 @@ class ID(object):
              also match folders (or just files)?
         Returns
         -------
-        list
+        list[str]
             the matched file names
         
         See Also
@@ -387,7 +431,7 @@ class ID(object):
             except ValueError:
                 pass
             
-            if re.search('(?:LAT|LONG)', entry[0]):
+            if re.search('LAT|LONG', entry[0]):
                 entry[1] /= 1000000.
             meta[entry[0]] = entry[1]
         return meta
@@ -692,6 +736,87 @@ class ID(object):
         self.scene = directory
         main = os.path.join(self.scene, os.path.basename(self.file))
         self.file = main if os.path.isfile(main) else self.scene
+
+
+class BEAM_DIMAP(ID):
+    """
+    Handler class for BEAM-DIMAP data
+
+    Sensors:
+        * SNAP supported sensors
+    """
+    
+    def __init__(self, scene):
+        
+        if not scene.lower().endswith('.dim'):
+            raise RuntimeError('Scene format is not BEAM-DIMAP')
+        
+        self.root = None
+        self.scene = scene
+        self.meta = dict()
+        self.scanMetadata()
+        
+        super(BEAM_DIMAP, self).__init__(self.meta)
+    
+    def getCorners(self):
+        return self.meta['corners']
+    
+    def scanMetadata(self):
+        self.root = ET.parse(self.scene).getroot()
+        
+        def get_by_name(attr):
+            return self.root.find('.//MDATTR[@name="{}"]'.format(attr)).text
+        
+        self.meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE')
+        self.meta['IPF_version'] = get_by_name('Processing_system_identifier')
+        self.meta['sensor'] = get_by_name('MISSION').replace('ENTINEL-', '')
+        self.meta['orbit'] = get_by_name('PASS')[0]
+        pols = [x.text for x in self.root.findall('.//MDATTR[@desc="Polarization"]')]
+        self.meta['polarizations'] = list(set([x for x in pols if '-' not in x]))
+        self.meta['spacing'] = (round(float(get_by_name('range_spacing')), 6),
+                                round(float(get_by_name('azimuth_spacing')), 6))
+        self.meta['samples'] = int(self.root.find('.//BAND_RASTER_WIDTH').text)
+        self.meta['lines'] = int(self.root.find('.//BAND_RASTER_HEIGHT').text)
+        self.meta['bands'] = int(self.root.find('.//NBANDS').text)
+        self.meta['orbitNumber_abs'] = int(get_by_name('ABS_ORBIT'))
+        self.meta['orbitNumber_rel'] = int(get_by_name('REL_ORBIT'))
+        self.meta['cycleNumber'] = int(get_by_name('cycleNumber'))
+        self.meta['frameNumber'] = int(get_by_name('data_take_id'))
+        self.meta['product'] = self.root.find('.//PRODUCT_TYPE').text
+        
+        # Metadata sections that need some parsing to match naming convention with SAFE format
+        start = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_START_TIME').text,
+                                  '%d-%b-%Y %H:%M:%S.%f')
+        self.meta['start'] = start.strftime('%Y%m%dT%H%M%S')
+        stop = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_STOP_TIME').text,
+                                 '%d-%b-%Y %H:%M:%S.%f')
+        self.meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
+        
+        if self.root.find('.//WKT') is not None:
+            self.meta['projection'] = self.root.find('.//WKT').text.lstrip()
+        else:
+            self.meta['projection'] = crsConvert(4326, 'wkt')
+        
+        longs = [
+            get_by_name('first_far_long'),
+            get_by_name('first_near_long'),
+            get_by_name('last_far_long'),
+            get_by_name('last_near_long')
+        ]
+        lats = [
+            get_by_name('first_far_lat'),
+            get_by_name('first_near_lat'),
+            get_by_name('last_far_lat'),
+            get_by_name('last_near_lat')
+        ]
+        # Convert to floats
+        longs = [float(lon) for lon in longs]
+        lats = [float(lat) for lat in lats]
+        self.meta['corners'] = {'xmin': min(longs), 'xmax': max(longs),
+                                'ymin': min(lats), 'ymax': max(lats)}
+    
+    def unpack(self, directory, overwrite=False, exist_ok=False):
+        raise RuntimeError('unpacking of BEAM-DIMAP products is not supported')
 
 
 class CEOS_ERS(ID):
@@ -1532,7 +1657,7 @@ class SAFE(ID):
         lon = [x[0] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=20, url_option=1):
+    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=300, url_option=1):
         """
         download Orbit State Vector files for the scene
 
@@ -1612,6 +1737,84 @@ class SAFE(ID):
             with self.getFileObj(png_name) as png_in:
                 out.writestr('quick-look.png', data=png_in.getvalue())
     
+    @property
+    def resolution(self):
+        """
+        Get the resolution of the Sentinel-1 product. For SLCs the slant range resolution of the
+        center sub-swath at mid-swath is computed from the metadata.
+        
+        References:
+            * https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/resolutions/level-1-single-look-complex
+            * https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/resolutions/level-1-ground-range-detected
+        
+        Returns
+        -------
+        tuple[float]
+            the resolution as (range, azimuth)
+        """
+        if 'resolution' in self.meta.keys():
+            return self.meta['resolution']
+        annotations = self.findfiles(self.pattern_ds)
+        key = lambda x: re.search('-[vh]{2}-', x).group()
+        groups = groupby(sorted(annotations, key=key), key=key)
+        annotations = [list(value) for key, value in groups][0]
+        c = 299792458.0  # speed of light
+        # see Sentinel-1 product definition for Hamming window coefficients
+        # and Impulse Response Width (IRW) broadening factors:
+        coefficients = [0.52, 0.6, 0.61, 0.62, 0.63, 0.65, 0.70, 0.72, 0.73, 0.75]
+        b_factors = [1.54, 1.32, 1.3, 1.28, 1.27, 1.24, 1.18, 1.16, 1.15, 1.13]
+        if self.product == 'SLC':
+            resolutions_rg = []
+            resolutions_az = []
+            for ann in annotations:
+                with self.getFileObj(ann) as ann_xml:
+                    tree = ET.fromstring(ann_xml.read())
+                # computation of slant range resolution
+                rg_proc = tree.find('.//swathProcParams/rangeProcessing')
+                wrg = float(rg_proc.find('windowCoefficient').text)
+                brg = float(rg_proc.find('processingBandwidth').text)
+                kbrg = b_factors[coefficients.index(wrg)]
+                resolutions_rg.append(0.886 * c / (2 * brg) * kbrg)
+                
+                # computation of azimuth resolution; yet to be checked for correctness
+                # az_proc = tree.find('.//swathProcParams/azimuthProcessing')
+                # waz = float(az_proc.find('windowCoefficient').text)
+                # baz = float(az_proc.find('processingBandwidth').text)
+                # kbaz = b_factors[coefficients.index(waz)]
+                # velocities = tree.findall('.//orbit/velocity')
+                # ids = ['x', 'y', 'z']
+                # xyz = [tuple(float(a.find(b).text) for b in ids) for a in velocities]
+                # velocities = [math.sqrt(sum([b ** 2 for b in a])) for a in xyz]
+                # vsat = mean(velocities)  # around 7590
+                # resolutions_az.append(0.886 * vsat / baz * kbaz)
+                if self.acquisition_mode == 'IW':
+                    resolutions_az.append(22.)
+                elif self.acquisition_mode == 'EW':
+                    resolutions_az.append(43.)
+                else:
+                    RuntimeError("acquisition mode '{}' not supported".format(self.acquisition_mode))
+            resolution_rg = median(resolutions_rg)
+            resolution_az = median(resolutions_az)
+        elif self.product == 'GRD':
+            match = re.match(re.compile(self.pattern), os.path.basename(self.file))
+            resolution_class = match.group('resolution')
+            resolution_rg = resolution_az = None
+            if resolution_class == 'F':
+                resolution_rg = 9
+                resolution_az = 9
+            elif resolution_class == 'H':
+                resolution_rg = {'SM': 23, 'IW': 20, 'EW': 50}[self.acquisition_mode]
+                resolution_az = {'SM': 23, 'IW': 22, 'EW': 50}[self.acquisition_mode]
+            elif resolution_class == 'M':
+                resolution_rg = {'SM': 84, 'IW': 88, 'EW': 93, 'WV': 52}[self.acquisition_mode]
+                resolution_az = {'SM': 84, 'IW': 87, 'EW': 87, 'WV': 51}[self.acquisition_mode]
+            else:
+                raise RuntimeError("unknown resolution class: {}".format(resolution_class))
+        else:
+            raise RuntimeError("unsupported product: {}".format(self.product))
+        self.meta['resolution'] = float(resolution_rg), float(resolution_az)
+        return float(resolution_rg), float(resolution_az)
+    
     def scanMetadata(self):
         with self.getFileObj(self.findfiles('manifest.safe')[0]) as input:
             manifest = input.getvalue()
@@ -1648,17 +1851,26 @@ class SAFE(ID):
         meta['totalSlices'] = int(tree.find('.//s1sarl1:totalSlices', namespaces).text)
         
         annotations = self.findfiles(self.pattern_ds)
-        with self.getFileObj(annotations[0]) as ann_xml:
-            ann_tree = ET.fromstring(ann_xml.read())
+        key = lambda x: re.search('-[vh]{2}-', x).group()
+        groups = groupby(sorted(annotations, key=key), key=key)
+        annotations = [list(value) for key, value in groups][0]
+        ann_trees = []
+        for ann in annotations:
+            with self.getFileObj(ann) as ann_xml:
+                ann_trees.append(ET.fromstring(ann_xml.read()))
         
-        meta['spacing'] = tuple([float(ann_tree.find('.//{}PixelSpacing'.format(dim)).text)
-                                 for dim in ['range', 'azimuth']])
-        meta['samples'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfSamples').text)
-        meta['lines'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfLines').text)
-        heading = float(ann_tree.find('.//platformHeading').text)
+        sp_rg = [float(x.find('.//rangePixelSpacing').text) for x in ann_trees]
+        sp_az = [float(x.find('.//azimuthPixelSpacing').text) for x in ann_trees]
+        meta['spacing'] = (median(sp_rg), median(sp_az))
+        samples = [x.find('.//imageAnnotation/imageInformation/numberOfSamples').text for x in ann_trees]
+        meta['samples'] = sum([int(x) for x in samples])
+        lines = [x.find('.//imageAnnotation/imageInformation/numberOfLines').text for x in ann_trees]
+        meta['lines'] = sum([int(x) for x in lines])
+        heading = median(float(x.find('.//platformHeading').text) for x in ann_trees)
         meta['heading'] = heading if heading > 0 else heading + 360
-        meta['incidence'] = float(ann_tree.find('.//incidenceAngleMidSwath').text)
-        meta['image_geometry'] = ann_tree.find('.//projection').text.replace(' ', '_').upper()
+        incidence = [float(x.find('.//incidenceAngleMidSwath').text) for x in ann_trees]
+        meta['incidence'] = median(incidence)
+        meta['image_geometry'] = ann_trees[0].find('.//projection').text.replace(' ', '_').upper()
         
         return meta
     
@@ -1876,8 +2088,8 @@ class Archive(object):
                              'database': dbfile}
         
         # create engine, containing URL and driver
-        log.debug('starting DB engine for {}'.format(URL(**self.url_dict)))
-        self.url = URL(**self.url_dict)
+        log.debug('starting DB engine for {}'.format(URL.create(**self.url_dict)))
+        self.url = URL.create(**self.url_dict)
         self.engine = create_engine(self.url, echo=False)
         
         # call to ____load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
@@ -1948,10 +2160,10 @@ class Archive(object):
                                        Column('scene', String, primary_key=True))
         
         # create tables if not existing
-        if not self.engine.dialect.has_table(self.engine, 'data'):
+        if not sql_inspect(self.engine).has_table('data'):
             log.debug("creating DB table 'data'")
             self.data_schema.create(self.engine)
-        if not self.engine.dialect.has_table(self.engine, 'duplicates'):
+        if not sql_inspect(self.engine).has_table('duplicates'):
             log.debug("creating DB table 'duplicates'")
             self.duplicates_schema.create(self.engine)
         
@@ -1986,13 +2198,13 @@ class Archive(object):
         if isinstance(tables, list):
             for table in tables:
                 table.metadata = self.meta
-                if not self.engine.dialect.has_table(self.engine, str(table)):
+                if not sql_inspect(self.engine).has_table(str(table)):
                     table.create(self.engine)
                     created.append(str(table))
         else:
             table = tables
             table.metadata = self.meta
-            if not self.engine.dialect.has_table(self.engine, str(table)):
+            if not sql_inspect(self.engine).has_table(str(table)):
                 table.create(self.engine)
                 created.append(str(table))
         log.info('created table(s) {}.'.format(', '.join(created)))
@@ -2020,7 +2232,7 @@ class Archive(object):
                 except sqlite3.OperationalError:
                     continue
         elif platform.system() == 'Darwin':
-            for option in ['mod_spatialite.so']:  # , 'mod_spatialite.dylib']:
+            for option in ['mod_spatialite.so', 'mod_spatialite.7.dylib']:  # , 'mod_spatialite.dylib']:
                 try:
                     dbapi_conn.load_extension(option)
                 except sqlite3.OperationalError:
@@ -2346,13 +2558,15 @@ class Archive(object):
         list
             the table names
         """
+        #  TODO: make this dynamic
+        #  the method was intended to only return user generated tables by default, as well as data and duplicates
         all_tables = ['ElementaryGeometries', 'SpatialIndex', 'geometry_columns', 'geometry_columns_auth',
                       'geometry_columns_field_infos', 'geometry_columns_statistics', 'geometry_columns_time',
                       'spatial_ref_sys', 'spatial_ref_sys_aux', 'spatialite_history', 'sql_statements_log',
                       'sqlite_sequence', 'views_geometry_columns', 'views_geometry_columns_auth',
                       'views_geometry_columns_field_infos', 'views_geometry_columns_statistics',
                       'virts_geometry_columns', 'virts_geometry_columns_auth', 'virts_geometry_columns_field_infos',
-                      'virts_geometry_columns_statistics']
+                      'virts_geometry_columns_statistics', 'data_licenses', 'KNN']
         # get tablenames from metadata
         tables = sorted([self.encode(x) for x in self.meta.tables.keys()])
         if return_all:
@@ -2489,7 +2703,7 @@ class Archive(object):
 
         Returns
         -------
-        list
+        list[str]
             the file names pointing to the selected scenes
 
         """
@@ -2642,6 +2856,7 @@ class Archive(object):
         self.Session().close()
         self.conn.close()
         self.engine.dispose()
+        gc.collect(generation=2)  # this was added as a fix for win PermissionError when deleting sqlite.db files.
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()

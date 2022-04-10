@@ -1,7 +1,7 @@
 import sys
 import os
 import datetime
-from pkg_resources import get_distribution
+from importlib.metadata import version as get_version
 
 project = 'pyroSAR'
 authors = 'the pyroSAR Developers'
@@ -12,15 +12,12 @@ year = datetime.datetime.now().year
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath('..'))
 
-# The version info for the project you're documenting, acts as replacement for
-# |version| and |release|, also used in various other places throughout the
-# built documents.
-#
 # The full version, including alpha/beta/rc tags.
-# release = get_distribution('pyroSAR').version
+version_full = get_version(project)
 # The short X.Y version.
-# version = '.'.join(release.split('.')[:2])
-version = get_distribution(project).version
+version = '.'.join(version_full.split('.')[:2])
+# release is automatically added to the latex document title and header
+release = version
 
 autodoc_mock_imports = ['osgeo', 'sqlite3']
 
@@ -48,14 +45,15 @@ autosummary_generate = []
 
 # explicitly link to documentation of the spatialist version installed alongside pyroSAR,
 # which is defined in setup.py and requirements.txt
-version_spatialist = get_distribution('spatialist').version
+version_spatialist = get_version('spatialist')
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
-                       'requests': ('https://requests.readthedocs.io/en/latest/', None),
+                       'requests': ('https://docs.python-requests.org/en/latest', None),
+                       'scipy': ('https://docs.scipy.org/doc/scipy', None),
                        'spatialist': ('https://spatialist.readthedocs.io/en/v{}'
                                       .format(version_spatialist), None),
-                       'sqlalchemy': ('https://docs.sqlalchemy.org/en/latest/', None),
-                       'sqlalchemy-utils': ('https://sqlalchemy-utils.readthedocs.io/en/latest/', None)
+                       'sqlalchemy': ('https://docs.sqlalchemy.org/en/latest', None),
+                       'sqlalchemy-utils': ('https://sqlalchemy-utils.readthedocs.io/en/latest', None)
                        }
 
 napoleon_google_docstring = False
@@ -233,7 +231,7 @@ latex_elements = {
 latex_documents = [
     ('index',
      '{}.tex'.format(project),
-     r'{0} Documentation \\ \LARGE Version {1}'.format(project, version),
+     r'{} Documentation'.format(project),
      authors, 'manual'),
 ]
 

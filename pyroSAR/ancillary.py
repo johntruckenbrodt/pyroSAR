@@ -1,7 +1,7 @@
 ###############################################################################
 # ancillary routines for software pyroSAR
 
-# Copyright (c) 2014-2020, the pyroSAR Developers.
+# Copyright (c) 2014-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -16,11 +16,10 @@ This module gathers central functions and classes for general pyroSAR applicatio
 """
 import os
 import re
-import math
+from math import sin, radians
 import inspect
 from datetime import datetime
 from ._dev_config import product_pattern
-
 
 from spatialist.ancillary import finder
 
@@ -31,7 +30,7 @@ def groupby(images, attribute):
     
     Parameters
     ----------
-    images: list of str
+    images: list[str]
         the names of the images to be sorted
     attribute: str
         the name of the attribute used for sorting;
@@ -39,8 +38,8 @@ def groupby(images, attribute):
     
     Returns
     -------
-    list of lists
-        a list containing a list with image names ofr each group
+    list[list[str]]
+        a list of sub-lists containing the grouped images
     """
     images_sort = sorted(images, key=lambda x: re.search(product_pattern, x).group(attribute))
     out_meta = [[parse_datasetname(images_sort.pop(0))]]
@@ -62,7 +61,7 @@ def groupbyTime(images, function, time):
 
     Parameters
     ----------
-    images: list of str
+    images: list[str]
         a list of image names
     function: function
         a function to derive the time from the image names; see e.g. :func:`seconds`
@@ -71,7 +70,7 @@ def groupbyTime(images, function, time):
 
     Returns
     -------
-    list
+    list[list[str]]
         a list of sub-lists containing the grouped images
     """
     # sort images by time stamp
@@ -91,20 +90,18 @@ def groupbyTime(images, function, time):
     return [x[0] if len(x) == 1 else x for x in groups]
 
 
-def multilook_factors(sp_rg, sp_az, tr_rg, tr_az, geometry, incidence):
+def multilook_factors(source_rg, source_az, target, geometry, incidence):
     """
-    compute multilooking factors to approximate a target ground range resolution
+    compute multi-looking factors to approximate a square pixel with defined target ground range pixel spacing.
     
     Parameters
     ----------
-    sp_rg: int or float
+    source_rg: int or float
         the range pixel spacing
-    sp_az: int or float
+    source_az: int or float
         the azimuth pixel spacing
-    tr_rg: int or float
-        the range target resolution
-    tr_az: int or float
-        the azimuth target resolution
+    target: int or float
+        the target pixel spacing of an approximately square pixel
     geometry: str
         the imaging geometry; either 'SLANT_RANGE' or 'GROUND_RANGE'
     incidence: int or float
@@ -112,23 +109,27 @@ def multilook_factors(sp_rg, sp_az, tr_rg, tr_az, geometry, incidence):
 
     Returns
     -------
-    tuple
-        the multilooking factors as (rangelooks, azimuthlooks)
+    tuple[int]
+        the multi-looking factors as (range looks, azimuth looks)
+    
+    Examples
+    --------
+    >>> from pyroSAR.ancillary import multilook_factors
+    >>> rlks, azlks = multilook_factors(source_rg=2, source_az=13, target=10,
+    >>>                                 geometry='SLANT_RANGE', incidence=39)
+    >>> print(rlks, azlks)
+    4 1
     """
+    azlks = int(round(float(target) / source_az))
+    azlks = azlks if azlks > 0 else 1
     if geometry == 'SLANT_RANGE':
-        # compute the ground range resolution
-        groundRangePS = sp_rg / (math.sin(math.radians(incidence)))
-        rlks = int(math.floor(float(tr_rg) / groundRangePS))
+        rlks = float(azlks) * source_az * sin(radians(incidence)) / source_rg
     elif geometry == 'GROUND_RANGE':
-        rlks = int(math.floor(float(tr_rg) / sp_rg))
+        rlks = float(azlks) * source_az / source_rg
     else:
         raise ValueError("parameter 'geometry' must be either 'SLANT_RANGE' or 'GROUND_RANGE'")
-    # compute the azimuth looks
-    azlks = int(math.floor(float(tr_az) / sp_az))
     
-    # set the look factors to 1 if they were computed to be 0
-    rlks = rlks if rlks > 0 else 1
-    azlks = azlks if azlks > 0 else 1
+    rlks = int(round(rlks))
     return rlks, azlks
 
 

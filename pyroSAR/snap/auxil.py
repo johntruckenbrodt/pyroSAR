@@ -1,7 +1,7 @@
 ###############################################################################
 # pyroSAR SNAP API tools
 
-# Copyright (c) 2017-2021, the pyroSAR Developers.
+# Copyright (c) 2017-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -15,22 +15,23 @@ import os
 import re
 import copy
 import shutil
-import requests
 import subprocess as sp
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
-
-from osgeo import gdal
-from osgeo.gdalconst import GA_Update
 
 from pyroSAR import identify
 from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import windows_fileprefix
 
+from spatialist import Raster, vectorize, rasterize, boundary
 from spatialist.auxil import gdal_translate
 from spatialist.ancillary import finder, run
 
+from osgeo import gdal
+from osgeo.gdalconst import GA_Update
+
 import logging
+
 log = logging.getLogger(__name__)
 
 
@@ -85,18 +86,29 @@ def parse_node(name, use_existing=True):
     >>> print(tnr.parameters)
     {'selectedPolarisations': None, 'removeThermalNoise': 'true', 'reIntroduceThermalNoise': 'false'}
     """
+    snap = ExamineSnap()
+    version = snap.get_version('s1tbx')['version']
     name = name if name.endswith('.xml') else name + '.xml'
     operator = os.path.splitext(name)[0]
-    abspath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')
+    nodepath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')
+    abspath = os.path.join(nodepath, version)
     os.makedirs(abspath, exist_ok=True)
     absname = os.path.join(abspath, name)
     
+    # remove all old XML files that were not stored in a version subdirectory
+    deprecated = finder(nodepath, ['*.xml'], recursive=False)
+    for item in deprecated:
+        os.remove(item)
+    
     if not os.path.isfile(absname) or not use_existing:
-        gpt = ExamineSnap().gpt
+        gpt = snap.gpt
         
         cmd = [gpt, operator, '-h']
         
         out, err = run(cmd=cmd, void=False)
+        
+        if re.search('Unknown operator', out + err):
+            raise RuntimeError("unknown operator '{}'".format(operator))
         
         graph = re.search('<graph id.*', out, flags=re.DOTALL).group()
         graph = re.sub(r'>\${.*', '/>', graph)  # remove placeholder values like ${value}
@@ -122,14 +134,13 @@ def parse_node(name, use_existing=True):
             child.attrib['refid'] = 'Read'
             child.text = None
         if operator == 'BandMaths':
-            tree.find('.//parameters').set('class', 'com.bc.ceres.binding.dom.XppDomElement')
             tband = tree.find('.//targetBand')
             for item in ['spectralWavelength', 'spectralBandwidth',
                          'scalingOffset', 'scalingFactor',
                          'validExpression', 'spectralBandIndex']:
                 el = tband.find('.//{}'.format(item))
                 tband.remove(el)
-        
+        tree.find('.//parameters').set('class', 'com.bc.ceres.binding.dom.XppDomElement')
         node = Node(node)
         
         # read the default values from the parameter documentation
@@ -279,43 +290,39 @@ def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None):
         raise RuntimeError(submessage.format(out, err, os.path.basename(xmlfile), proc.returncode))
 
 
-def gpt(xmlfile, outdir, groups=None, cleanup=True,
+def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
         gpt_exceptions=None, gpt_args=None,
-        removeS1BorderNoiseMethod='pyroSAR', basename_extensions=None,
-        multisource=False):
+        removeS1BorderNoiseMethod='pyroSAR'):
     """
-    wrapper for ESA SNAP's Graph Processing Tool GPT.
-    Input is a readily formatted workflow XML file as
+    Wrapper for ESA SNAP's Graph Processing Tool GPT.
+    Input is a readily formatted workflow XML file as for example
     created by function :func:`~pyroSAR.snap.util.geocode`.
     Additional to calling GPT, this function will
     
     - (if processing Sentinel-1 GRD data with IPF version <2.9 and ``removeS1BorderNoiseMethod='pyroSAR'``)
-      unpack the scene and perform the custom removal (:func:`pyroSAR.S1.removeGRDBorderNoise`)
-    - split the workflow into sub-workflows as defined by `groups` (:func:`pyroSAR.snap.auxil.split`)
-    - execute the sub-workflows (:func:`pyroSAR.snap.auxil.execute`)
-    - write the final products to `outdir`
+      unpack the scene and perform the custom removal (:func:`pyroSAR.S1.removeGRDBorderNoise`).
+    - if `groups` is not None:
     
-      * encode a nodata value into the output file if the format is `GeoTiff-BigTIFF`
-      * convert output files to GeoTIFF if the output format defined in `Write` nodes of the workflow is ENVI
-    - (if processing Sentinel-1) copy the `manifest.safe` metadata file to `outdir`
+      * split the workflow into sub-workflows (:func:`pyroSAR.snap.auxil.split`)
+      * execute the sub-workflows (:func:`pyroSAR.snap.auxil.execute`)
     
-    .. warning::
-    
-        this function is intended to eventually be a universal tool for executing SNAP workflows. However, in its current state
-        it is very much customized to the workflows generated by function :func:`~pyroSAR.snap.util.geocode`.
-        Alternatively the function :func:`pyroSAR.snap.auxil.execute` can be used.
+    Note
+    ----
+    Depending on the parametrization this function might create two sub-directories in `tmpdir`,
+    carrying a suffix  \*_bnr for S1 GRD border noise removal and \*_sub for sub-workflows and their
+    intermediate outputs. Both are deleted if ``cleanup=True``. If `tmpdir` is empty afterwards, it is also deleted.
     
     Parameters
     ----------
     xmlfile: str
         the name of the workflow XML file
-    outdir: str
-        the directory into which to write the final files
-    groups: list
+    tmpdir: str
+        a temporary directory for storing intermediate files
+    groups: list[list[str]] or None
         a list of lists each containing IDs for individual nodes
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
-    gpt_exceptions: dict
+    gpt_exceptions: dict or None
         a dictionary to override the configured GPT executable for certain operators;
         each (sub-)workflow containing this operator will be executed with the define executable;
         
@@ -330,45 +337,34 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
-    basename_extensions: list of str
-        names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
     
     Returns
     -------
     
     Raises
     ------
-    RuntimeError
-    """
     
+    """
     workflow = Workflow(xmlfile)
-
-    if multisource:
+    
+    if 'ProductSet-Reader' in workflow.operators:
         read = workflow['ProductSet-Reader']
-        # scene = identify_many(read.parameters['fileList'].split(",")) # not working
-    elif not multisource:
+        scene = identify(read.parameters['fileList'].split(',')[0])
+    else:
         read = workflow['Read']
         scene = identify(read.parameters['file'])
-
-    write = workflow['Write']
-    tmpname = write.parameters['file']
-    suffix = workflow.suffix()
-    format = write.parameters['formatName']
-    dem_name = workflow.tree.find('.//demName')
-    if dem_name is not None:
-        if dem_name.text == 'External DEM':
-            dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
-        else:
-            dem_nodata = 0
+    
+    tmpdir_bnr = os.path.join(tmpdir, 'bnr')
+    tmpdir_sub = os.path.join(tmpdir, 'sub')
     
     if 'Remove-GRD-Border-Noise' in workflow.ids \
             and removeS1BorderNoiseMethod == 'pyroSAR' \
             and scene.meta['IPF_version'] < 2.9:
         if 'SliceAssembly' in workflow.operators:
             raise RuntimeError("pyroSAR's custom border noise removal is not yet implemented for multiple scene inputs")
-        xmlfile = os.path.join(tmpname,
+        os.makedirs(tmpdir_bnr, exist_ok=True)
+        xmlfile = os.path.join(tmpdir_bnr,
                                os.path.basename(xmlfile.replace('_bnr', '')))
-        os.makedirs(tmpname, exist_ok=True)
         # border noise removal is done outside of SNAP and the node is thus removed from the workflow
         del workflow['Remove-GRD-Border-Noise']
         # remove the node name from the groups
@@ -383,7 +379,7 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
         # unpack the scene if necessary and perform the custom border noise removal
         log.info('unpacking scene')
         if scene.compression is not None:
-            scene.unpack(tmpname)
+            scene.unpack(tmpdir_bnr)
         log.info('removing border noise..')
         scene.removeGRDBorderNoise(method=removeS1BorderNoiseMethod)
         # change the name of the input file to that of the unpacked archive
@@ -394,67 +390,134 @@ def gpt(xmlfile, outdir, groups=None, cleanup=True,
     log.info('executing node sequence{}..'.format('s' if groups is not None else ''))
     try:
         if groups is not None:
-            tmpdir = os.path.join(tmpname, 'tmp')
-            subs = split(xmlfile, groups, tmpdir)
+            subs = split(xmlfile=xmlfile, groups=groups, outdir=tmpdir_sub)
             for sub in subs:
                 execute(sub, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
         else:
             execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
-    except RuntimeError as e:
-        if cleanup and os.path.exists(tmpname):
-            shutil.rmtree(tmpname, onerror=windows_fileprefix)
-        raise RuntimeError(str(e) + '\nfailed: {}'.format(xmlfile))
+    except Exception:
+        log.info('failed: {}'.format(xmlfile))
+        raise
+    finally:
+        if cleanup:
+            for tmp in [tmpdir_bnr, tmpdir_sub]:
+                if os.path.isdir(tmp):
+                    shutil.rmtree(tmp, onerror=windows_fileprefix)
+            if os.path.isdir(tmpdir) and not os.listdir(tmpdir):
+                shutil.rmtree(tmpdir, onerror=windows_fileprefix)
+
+
+def writer(xmlfile, outdir, basename_extensions=None,
+           clean_edges=False, clean_edges_npixels=1):
+    """
+    SNAP product writing utility
     
-    outname = os.path.join(outdir, os.path.basename(tmpname))
+    Parameters
+    ----------
+    xmlfile: str
+        the name of the workflow XML file.
+    outdir: str
+        the directory into which to write the final files.
+    basename_extensions: list of str or None
+        names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``.
+    clean_edges: bool
+        erode noisy image edges? See :func:`pyroSAR.snap.auxil.erode_edges`.
+        Does not apply to layover-shadow mask.
+    clean_edges_npixels: int
+        the number of pixels to erode.
+
+    Returns
+    -------
+
+    """
+    workflow = Workflow(xmlfile)
+    writers = workflow['operator=Write']
+    files = list(set([x.parameters['file'] for x in writers]))
+    if len(files) > 1:
+        raise RuntimeError('Multiple output files are not yet supported.')
+    else:
+        src = files[0]
+    src_format = writers[0].parameters['formatName']
+    suffix = workflow.suffix()
+    rtc = 'Terrain-Flattening' in workflow.operators
+    dem_name = workflow.tree.find('.//demName')
+    dem_nodata = None
+    if dem_name is not None:
+        dem_name = dem_name.text
+        if dem_name == 'External DEM':
+            dem_nodata = float(workflow.tree.find('.//externalDEMNoDataValue').text)
+        else:
+            dem_nodata_lookup = {'SRTM 1Sec HGT': -32768}
+            if dem_name in dem_nodata_lookup.keys():
+                dem_nodata = dem_nodata_lookup[dem_name]
     
-    if format == 'ENVI':
-        log.info('converting to GTiff')
+    if src_format == 'BEAM-DIMAP':
+        src = src.replace('.dim', '.data')
+    
+    src_base = os.path.splitext(os.path.basename(src))[0]
+    outname_base = os.path.join(outdir, src_base)
+    
+    if src_format in ['ENVI', 'BEAM-DIMAP']:
+        message = '{}converting to GeoTIFF'
+        log.info(message.format('cleaning image edges and ' if clean_edges else ''))
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
-        for item in finder(tmpname, ['*.img'], recursive=False):
-            if re.search('ma0_[HV]{2}', item):
-                pol = re.search('[HV]{2}', item).group()
-                name_new = outname.replace(suffix, '{0}_{1}.tif'.format(pol, suffix))
-                if 'Sigma0' in item:
-                    name_new = name_new.replace('TF_', '')
+        for item in finder(src, ['*.img'], recursive=False):
+            pattern = '(?P<refarea>(?:Sig|Gam)ma0)_(?P<pol>[HV]{2})'
+            basename = os.path.basename(item)
+            match = re.search(pattern, basename)
+            if match:
+                refarea, pol = match.groups()
+                correction = 'elp'
+                if rtc:
+                    if refarea == 'Gamma0':
+                        correction = 'rtc'
+                    elif refarea == 'Sigma0':
+                        tf = workflow['Terrain-Flattening']
+                        if tf.parameters['outputSigma0']:
+                            correction = 'rtc'
+                suffix_new = '{0}-{1}'.format(refarea.lower(), correction)
+                if 'dB' in suffix:
+                    suffix_new += '_db'
+                name_new = outname_base.replace(suffix, '{0}_{1}.tif'.format(pol, suffix_new))
             else:
-                base = os.path.splitext(os.path.basename(item))[0] \
+                base = os.path.splitext(basename)[0] \
                     .replace('elevation', 'DEM')
-                if re.search('layover_shadow_mask', base):
-                    base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
                 if re.search('scatteringArea', base):
                     base = re.sub('scatteringArea_[HV]{2}', 'scatteringArea', base)
-                name_new = outname.replace(suffix, '{0}.tif'.format(base))
-            nodata = dem_nodata if re.search('elevation', item) else 0
+                if re.search('gammaSigmaRatio', base):
+                    base = re.sub('gammaSigmaRatio_[HV]{2}', 'gammaSigmaRatio', base)
+                if re.search('NE[BGS]Z', base):
+                    base = re.sub('(NE[BGS]Z)_([HV]{2})', r'\g<2>_\g<1>', base)
+                name_new = outname_base.replace(suffix, '{0}.tif'.format(base))
+            if re.search('elevation', basename):
+                nodata = dem_nodata
+            elif re.search('layoverShadowMask', basename):
+                nodata = 255
+            else:
+                nodata = 0
             translateoptions['noData'] = nodata
+            if clean_edges and 'layoverShadowMask' not in basename:
+                erode_edges(item, only_boundary=True, pixels=clean_edges_npixels)
             gdal_translate(item, name_new, translateoptions)
-    # by default the nodata value is not registered in the GTiff metadata
-    elif format == 'GeoTiff-BigTIFF':
-        ras = gdal.Open(outname + '.tif', GA_Update)
-        for i in range(1, ras.RasterCount + 1):
-            ras.GetRasterBand(i).SetNoDataValue(0)
-        ras = None
+    else:
+        raise RuntimeError('The output file format must be ENVI or BEAM-DIMAP.')
     ###########################################################################
     # write the Sentinel-1 manifest.safe file as addition to the actual product
-    if not multisource:
-        readers = workflow['operator=Read']
-        for reader in readers:
-            infile = reader.parameters['file']
-            try:
-                id = identify(infile)
-                if id.sensor in ['S1A', 'S1B']:
-                    manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
-                    basename = id.outname_base(basename_extensions)
-                    basename = '{0}_manifest.safe'.format(basename)
-                    outname_manifest = os.path.join(outdir, basename)
-                    with open(outname_manifest, 'wb') as out:
-                        out.write(manifest.read())
-            except RuntimeError:
-                continue
-    ###########################################################################
-    if cleanup and os.path.exists(tmpname):
-        shutil.rmtree(tmpname, onerror=windows_fileprefix)
-    log.info('done')
+    readers = workflow['operator=Read']
+    for reader in readers:
+        infile = reader.parameters['file']
+        try:
+            id = identify(infile)
+            if id.sensor in ['S1A', 'S1B']:
+                manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
+                basename = id.outname_base(basename_extensions)
+                basename = '{0}_manifest.safe'.format(basename)
+                outname_manifest = os.path.join(outdir, basename)
+                with open(outname_manifest, 'wb') as out:
+                    out.write(manifest.read())
+        except RuntimeError:
+            continue
 
 
 def is_consistent(workflow):
@@ -604,18 +667,18 @@ def split(xmlfile, groups, outdir=None):
 
 def groupbyWorkers(xmlfile, n=2):
     """
-    split SNAP workflow into groups containing a maximum defined number of operators
+    split a SNAP workflow into groups containing a maximum defined number of operators.
     
     Parameters
     ----------
     xmlfile: str
         the SNAP xml workflow
     n: int
-        the maximum number of worker nodes in each group; Read and Write are excluded
+        the maximum number of worker nodes in each group; Read, Write and BandSelect are excluded.
 
     Returns
     -------
-    list
+    list[list[str]]
         a list of lists each containing the IDs of all nodes belonging to the groups including Read and Write nodes;
         this list can e.g. be passed to function :func:`split` to split the workflow into new sub-workflow files based
         on the newly created groups or directly to function :func:`gpt`, which will call :func:`split` internally.
@@ -626,6 +689,25 @@ def groupbyWorkers(xmlfile, n=2):
     writers_id = [x.id for x in workflow['operator=Write']]
     selects_id = [x.id for x in workflow['operator=BandSelect']]
     workers_groups = [workers_id[i:i + n] for i in range(0, len(workers_id), n)]
+    
+    # in S1TBX 8.0.6 problems were found when executing ThermalNoiseRemoval by itself (after e.g. Calibration).
+    # When executed together with other nodes this worked so the node is re-grouped into the group of the source node.
+    i = 0
+    while i < len(workers_groups):
+        if workers_groups[i][0].startswith('ThermalNoiseRemoval'):
+            # get the group ID of the source node
+            source = workflow[workers_groups[i][0]].source
+            source_group_id = [source in x for x in workers_groups].index(True)
+            # move the node to the source group
+            workers_groups[source_group_id].append(workers_groups[i][0])
+            del workers_groups[i][0]
+        # delete the group if it is empty
+        if len(workers_groups[i]) == 0:
+            del workers_groups[i]
+        else:
+            i += 1
+    
+    # append the BandSelect nodes to the group of their source nodes
     for item in selects_id:
         source = workflow[item].source
         for group in workers_groups:
@@ -641,9 +723,11 @@ def groupbyWorkers(xmlfile, n=2):
                 source = [source]
             for item in source:
                 if item in readers_id:
+                    # append all Read nodes that are the worker's direct sources
                     newgroup.insert(newgroup.index(worker), item)
             for writer in writers_id:
                 if workflow[writer].source == worker:
+                    # append all Write nodes that directly have the worker as source
                     newgroup.append(writer)
         nodes_groups.append(newgroup)
     return nodes_groups
@@ -849,11 +933,11 @@ class Workflow(object):
         ----------
         node: Node
             the node to be inserted
-        before: str or list
-            the ID(s) of the node(s) before the newly inserted node; a list of node IDs is intended for nodes that
-            require multiple sources, e.g. sliceAssembly
-        after: str
-            the ID of the node after the newly inserted node
+        before: Node, str or list
+            a Node object; the ID(s) of the node(s) before the newly inserted node; a list of node IDs is intended for
+            nodes that require multiple sources, e.g. sliceAssembly
+        after: Node, str
+            a Node object; the ID of the node after the newly inserted node
         resetSuccessorSource: bool
             reset the source of the successor node to the ID of the newly inserted node?
         void: bool
@@ -869,6 +953,11 @@ class Workflow(object):
             node.id = '{0} ({1})'.format(node.operator, ncopies + 1)
         else:
             node.id = node.operator
+        
+        if isinstance(before, Node):
+            before = before.id
+        if isinstance(after, Node):
+            after = after.id
         
         if before is None and after is None and len(self) > 0:
             before = self[len(self) - 1].id
@@ -917,7 +1006,7 @@ class Workflow(object):
         
         Returns
         -------
-        list
+        list[Node]
             the list of :class:`Node` objects in the workflow
         """
         return [Node(x) for x in self.tree.findall('node')]
@@ -1180,6 +1269,16 @@ class Par(object):
         self.__element.remove(par)
     
     def __getitem__(self, item):
+        """
+        
+        Parameters
+        ----------
+        item
+
+        Returns
+        -------
+        str
+        """
         if item not in self.keys():
             raise KeyError('key {} does not exist'.format(item))
         return self.__element.find('.//{}'.format(item)).text
@@ -1235,6 +1334,14 @@ class Par(object):
 
 
 class Par_BandMath(Par):
+    """
+    class for handling BandMaths node parameters
+
+    Parameters
+    ----------
+    element: ~xml.etree.ElementTree.Element
+        the node parameter XML element
+    """
     def __init__(self, element):
         self.__element = element
         super(Par_BandMath, self).__init__(element)
@@ -1249,9 +1356,32 @@ class Par_BandMath(Par):
             raise ValueError("can only get items 'variables' and 'targetBands'")
     
     def clear_variables(self):
+        """
+        remove all `variables` elements from the node
+        
+        Returns
+        -------
+
+        """
         var = self.__element.find('.//variables')
         for item in var:
             var.remove(item)
+    
+    def add_equation(self):
+        """
+        add an equation element to the node
+        
+        Returns
+        -------
+
+        """
+        eqs = self.__element.find('.//targetBands')
+        eqlist = eqs.findall('.//targetBand')
+        eq1 = eqlist[0]
+        eq2 = copy.deepcopy(eq1)
+        for item in eq2:
+            item.text = None
+        eqs.insert(len(eqlist), eq2)
 
 
 def value2str(value):
@@ -1276,3 +1406,121 @@ def value2str(value):
     else:
         strval = str(value)
     return strval
+
+
+def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
+    """
+    Erode noisy edge pixels in SNAP-processed images.
+    It was discovered that images contain border pixel artifacts after `Terrain-Correction`.
+    Likely this is coming from treating the value 0 as regular value instead of no data during resampling.
+    This function erodes these edge pixels using :func:`scipy.ndimage.binary_erosion`.
+    scipy is not a base dependency of pyroSAR and has to be installed separately.
+    
+    .. figure:: figures/snap_erode_edges.png
+        :align: center
+        
+        VV gamma0 RTC backscatter image visualizing the noisy border (left) and the cleaned result (right).
+        The area covers approx. 2.3 * 2.3 km². Pixel spacing is 20 m. connectedness 4, 1 pixel.
+    
+    Parameters
+    ----------
+    infile: str
+        a single-layer file to modify in-place. 0 is assumed as no data value.
+    only_boundary: bool
+        only erode edges at the image boundary (or also at data gaps caused by e.g. masking during Terrain-Flattening)?
+    connectedness: int
+        the number of pixel neighbors considered for the erosion. Either 4 or 8, translating to a
+        :func:`scipy.ndimage.generate_binary_structure` `connectivity` of 1 or 2, respectively.
+    pixels: int
+        the number of pixels to erode from the edges. Directly translates to `iterations` of
+        :func:`scipy.ndimage.iterate_structure`.
+    
+    Returns
+    -------
+
+    """
+    from scipy.ndimage import binary_erosion, generate_binary_structure, iterate_structure
+    
+    if connectedness == 4:
+        connectivity = 1
+    elif connectedness == 8:
+        connectivity = 2
+    else:
+        raise ValueError('connectedness must be either 4 or 8')
+    
+    structure = generate_binary_structure(rank=2, connectivity=connectivity)
+    if pixels > 1:
+        structure = iterate_structure(structure=structure, iterations=pixels)
+    
+    infile_base = os.path.splitext(infile)[0]
+    write_intermediates = False  # this is intended for debugging
+    
+    with Raster(infile) as ref:
+        array = ref.array()
+        mask = array != 0
+        if write_intermediates:
+            ref.write(outname=infile_base + '_mask_original.tif', array=mask, dtype='Byte')
+        if only_boundary:
+            with vectorize(target=mask, reference=ref) as vec:
+                with boundary(vec, expression="value=1") as bounds:
+                    with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
+                        mask = new.array()
+                        if write_intermediates:
+                            vec.write(infile_base + '_vectorized.gpkg')
+                            bounds.write(infile_base + '_boundary.gpkg')
+                            new.write(outname=infile_base + '_mask_boundary.tif', dtype='Byte')
+        mask2 = binary_erosion(input=mask, structure=structure)
+        if write_intermediates:
+            ref.write(outname=infile_base + '_mask_eroded.tif', array=mask2, dtype='Byte')
+        array[mask2 == 0] = 0
+    
+    ras = gdal.Open(infile, GA_Update)
+    band = ras.GetRasterBand(1)
+    band.WriteArray(array)
+    band.FlushCache()
+    band = None
+    ras = None
+
+
+def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, continueOnFail=False):
+    """
+    convenience function for parametrizing an `Apply-Orbit-File` node and inserting it into a workflow.
+    Required Sentinel-1 orbit files are directly downloaded.
+    
+    Parameters
+    ----------
+    scene: pyroSAR.drivers.ID
+        The SAR scene to be processed
+    workflow: Workflow
+        the SNAP workflow object
+    before: str
+        the ID of the node after which the `Apply-Orbit-File` node will be inserted
+    formatName: str
+        the scene's data format
+    allow_RES_OSV: bool
+        (only applies to Sentinel-1) Also allow the less accurate RES orbit files to be used?
+    continueOnFail: bool
+        continue SNAP processing if orbit correction fails?
+        
+    Returns
+    -------
+    Node
+        the node object
+    """
+    orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
+                    'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
+    orbitType = orbit_lookup[formatName]
+    if formatName == 'ENVISAT' and scene.acquisition_mode == 'WSM':
+        orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
+    
+    if formatName == 'SENTINEL-1':
+        match = scene.getOSV(osvType='POE', returnMatch=True)
+        if match is None and allow_RES_OSV:
+            scene.getOSV(osvType='RES')
+            orbitType = 'Sentinel Restituted (Auto Download)'
+    
+    orb = parse_node('Apply-Orbit-File')
+    workflow.insert_node(orb, before=before)
+    orb.parameters['orbitType'] = orbitType
+    orb.parameters['continueOnFail'] = continueOnFail
+    return orb

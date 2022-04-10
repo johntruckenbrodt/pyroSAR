@@ -12,6 +12,7 @@ Drivers
         :nosignatures:
 
         ID
+        BEAM_DIMAP
         CEOS_PSR
         CEOS_ERS
         EORC_PSR
@@ -40,11 +41,17 @@ SNAP Processing
     :undoc-members:
     :show-inheritance:
 
+    .. autosummary::
+        :nosignatures:
+
+        geocode
+        noise_power
+
 Workflow Parsing and Execution
 ------------------------------
 
 .. automodule:: pyroSAR.snap.auxil
-    :members: gpt, execute, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par
+    :members: gpt, execute, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par, Par_BandMath
     :undoc-members:
     :show-inheritance:
 
@@ -60,6 +67,21 @@ Workflow Parsing and Execution
         Workflow
         Node
         Par
+        Par_BandMath
+
+General Utilities
+-----------------
+
+.. automodule:: pyroSAR.snap.auxil
+    :members: erode_edges, writer
+    :undoc-members:
+    :show-inheritance:
+
+    .. autosummary::
+        :nosignatures:
+
+        erode_edges
+        writer
 
 GAMMA Processing
 ================

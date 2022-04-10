@@ -1,7 +1,6 @@
 ###############################################################################
 # Examination of SAR processing software
-
-# Copyright (c) 2019-2020, the pyroSAR Developers.
+# Copyright (c) 2019-2021, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -15,10 +14,10 @@ import ast
 import json
 import os
 import shutil
-
+import platform
 import re
 import warnings
-
+import subprocess as sp
 import pkg_resources
 
 from pyroSAR._dev_config import ConfigHandler
@@ -74,6 +73,8 @@ class ExamineSnap(object):
             template = os.path.join('snap', 'data', 'snap.auxdata.properties')
             self.properties = pkg_resources.resource_filename(__name__, template)
         
+        # if the SNAP suffices attribute was not yet identified,
+        # point it to the default file delivered with pyroSAR
         if not hasattr(self, 'suffices'):
             template = os.path.join('snap', 'data', 'snap.suffices.properties')
             fname_suffices = pkg_resources.resource_filename(__name__, template)
@@ -87,6 +88,9 @@ class ExamineSnap(object):
         
         # update the config file: this scans for config changes and re-writes the config file if any are found
         self.__update_config()
+    
+    def __getattr__(self, item):
+        raise AttributeError("'ExamineSnap' object has no attribute '{}'".format(item))
     
     def __is_identified(self):
         """
@@ -119,6 +123,9 @@ class ExamineSnap(object):
         else:
             executables = [self.path] + options
         
+        if len(executables) == 0:
+            log.debug("could not detect any potential 'snap' executables")
+        
         # for each possible SNAP executable, check whether additional files and directories exist relative to it
         # to confirm whether it actually is a ESA SNAP installation or something else like e.g. the Ubuntu App Manager
         for path in executables:
@@ -129,11 +136,13 @@ class ExamineSnap(object):
             # check whether a directory etc exists relative to the SNAP executable
             etc = os.path.join(os.path.dirname(os.path.dirname(path)), 'etc')
             if not os.path.isdir(etc):
+                log.debug("could not find the 'etc' directory")
                 continue
             
             # check the content of the etc directory
             auxdata = os.listdir(etc)
             if 'snap.auxdata.properties' not in auxdata:
+                log.debug("could not find the 'snap.auxdata.properties' file")
                 continue
             else:
                 auxdata_properties = os.path.join(etc, 'snap.auxdata.properties')
@@ -141,6 +150,7 @@ class ExamineSnap(object):
             # identify the gpt executable
             gpt_candidates = finder(os.path.dirname(path), ['gpt', 'gpt.exe'])
             if len(gpt_candidates) == 0:
+                log.debug("could not find the 'gpt' executable")
                 continue
             else:
                 gpt = gpt_candidates[0]
@@ -288,6 +298,74 @@ class ExamineSnap(object):
             return self.__suffices[operator]
         else:
             return None
+    
+    def get_version(self, module):
+        """
+        Read the version and date of different SNAP modules.
+        This scans a file 'messages.log', which is re-written every time SNAP is started.
+        
+        Parameters
+        ----------
+        module: str
+            one of the following
+            
+            - core
+            - desktop
+            - rstbx
+            - s1tbx
+            - s2tbx
+            - s3tbx
+
+        Returns
+        -------
+        dict
+            a dictionary with keys 'version' and 'date'
+        """
+        # base search patterns for finding the right lines
+        patterns = {'core': r'org\.esa\.snap\.snap\.core',
+                    'desktop': r'org\.esa\.snap\.snap\.ui',
+                    'rstb': r'org\.csa\.rstb\.rstb\.kit',
+                    's1tbx': r'org\.esa\.s1tbx\.s1tbx\.kit',
+                    's2tbx': r'org\.esa\.s2tbx\.s2tbx\.kit',
+                    's3tbx': r'org\.esa\.s3tbx\.s3tbx\.kit'}
+        
+        if module in patterns.keys():
+            pattern = patterns[module]
+            pattern += r' \[(?P<version>[0-9.]+) [0-9.]+ (?P<date>[0-9]{12})'
+        else:
+            raise RuntimeError('module not supported')
+        
+        system = platform.system()
+        if system in ['Linux', 'Darwin']:
+            path = os.path.join(os.path.expanduser('~'), '.snap', 'system')
+        elif system == 'Windows':
+            path = os.path.join(os.environ['APPDATA'], 'SNAP')
+        else:
+            raise RuntimeError('operating system not supported')
+        
+        conda_env_path = os.environ.get('CONDA_PREFIX')
+        if conda_env_path is not None and conda_env_path in self.gpt:
+            fname = os.path.join(conda_env_path, 'snap', '.snap', 'system', 'var', 'log', 'messages.log')
+        else:
+            fname = os.path.join(path, 'var', 'log', 'messages.log')
+        
+        if not os.path.isfile(fname):
+            try:
+                # This will start SNAP and immediately stop it because of the invalid argument.
+                # Currently this seems to be the only way to create the messages.log file if it does not exist.
+                sp.check_call([self.path, '--nosplash', '--dummytest', '--console', 'suppress'])
+            except sp.CalledProcessError:
+                pass
+        
+        if not os.path.isfile(fname):
+            raise RuntimeError("cannot find 'messages.log' to read SNAP module versions from.")
+        
+        with open(fname, 'r') as m:
+            content = m.read()
+        match = re.search(pattern, content)
+        if match is None:
+            raise RuntimeError('cannot read version information from {}.\nPlease restart SNAP.'.format(fname))
+        return match.groupdict()
 
 
 class ExamineGamma(object):

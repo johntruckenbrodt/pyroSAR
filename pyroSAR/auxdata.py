@@ -1,7 +1,7 @@
 ###############################################################################
 # tools for handling auxiliary data in software pyroSAR
 
-# Copyright (c) 2019-2021, the pyroSAR Developers.
+# Copyright (c) 2019-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -19,28 +19,31 @@ import ssl
 import ftplib
 import requests
 import zipfile as zf
+from math import ceil, floor
 from urllib.request import urlopen
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 
 from pyroSAR.examine import ExamineSnap
-from spatialist import Raster
+from spatialist.raster import Raster, Dtype
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
+from osgeo import gdal
 
 import logging
 
 log = logging.getLogger(__name__)
 
 
-def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
+def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None,
+                 product='dem', nodata=None, hide_nodata=False):
     """
     obtain all relevant DEM tiles for selected geometries
 
     Parameters
     ----------
-    geometries: list
+    geometries: list[spatialist.vector.Vector]
         a list of :class:`spatialist.vector.Vector` geometries to obtain DEM data for;
         CRS must be WGS84 LatLon (EPSG 4326)
     demType: str
@@ -55,21 +58,33 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         - 'Copernicus 10m EEA DEM' (Copernicus 10 m DEM available over EEA-39 countries)
 
           * registration: https://spacedata.copernicus.eu/web/cscda/data-access/registration
-          * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2020_1
+          * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1
           * height reference: EGM2008
 
         - 'Copernicus 30m Global DEM'
-     
+          
           * info: https://copernicus-dem-30m.s3.amazonaws.com/readme.html
           * url: https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/
           * height reference: EGM2008
 
+        - 'Copernicus 30m Global DEM II'
+        
+          * registration: https://spacedata.copernicus.eu/web/cscda/data-access/registration
+          * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-30-DGED/2021_1
+          * height reference: EGM2008
+        
         - 'Copernicus 90m Global DEM'
      
           * info: https://copernicus-dem-90m.s3.amazonaws.com/readme.html
           * url: https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com/
           * height reference: EGM2008
-          
+        
+        - 'Copernicus 90m Global DEM II'
+        
+          * registration: https://spacedata.copernicus.eu/web/cscda/data-access/registration
+          * url: ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-90-DGED/2021_1
+          * height reference: EGM2008
+        
         - 'GETASSE30'
         
           * info: https://seadas.gsfc.nasa.gov/help-8.1.0/desktop/GETASSE30ElevationModel.html
@@ -105,13 +120,13 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         The following options are available for the respective DEM types:
         
         - 'AW3D30'
-         
+        
           * 'dem': the actual Digital Elevation Model
           * 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
             low correlation mask, Sea mask, Information of elevation dataset used
             for the void-filling processing)
-          * 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
-
+          * 'stk': number of DSM-scene files which were used to produce the 5 m resolution DSM
+        
         - 'Copernicus 10m EEA DEM'
         
           * 'dem': the actual Digital Elevation Model
@@ -119,21 +134,45 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * 'flm': filling mask
           * 'hem': height error mask
           * 'wbm': water body mask
-         
+        
+        - 'Copernicus 30m Global DEM'
+        
+          * 'dem': the actual Digital Elevation Model
+        
+        - 'Copernicus 30m Global DEM II'
+        
+          * 'dem': the actual Digital Elevation Model
+          * 'edm': editing mask
+          * 'flm': filling mask
+          * 'hem': height error mask
+          * 'wbm': water body mask
+        
+        - 'Copernicus 90m Global DEM'
+        
+          * 'dem': the actual Digital Elevation Model
+        
+        - 'Copernicus 90m Global DEM II'
+        
+          * 'dem': the actual Digital Elevation Model
+          * 'edm': editing mask
+          * 'flm': filling mask
+          * 'hem': height error mask
+          * 'wbm': water body mask
+        
         - 'GETASSE30'
         
           * 'dem': the actual Digital Elevation Model
         
         - 'SRTM 1Sec HGT'
-         
+        
           * 'dem': the actual Digital Elevation Model
-          
+        
         - 'SRTM 3Sec'
-         
+        
           * 'dem': the actual Digital Elevation Model
-          
+        
         - 'TDX90m'
-         
+        
           * 'dem': the actual Digital Elevation Model
           * 'am2': Amplitude Mosaic representing the minimum value
           * 'amp': Amplitude Mosaic representing the mean value
@@ -188,11 +227,13 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             password=password,
                             vrt=vrt,
                             buffer=buffer,
-                            product=product)
+                            product=product,
+                            nodata=nodata,
+                            hide_nodata=hide_nodata)
 
 
-def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
-               geoid_convert=False, geoid='EGM96', outputBounds=None):
+def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', threads=None,
+               geoid_convert=False, geoid='EGM96', outputBounds=None, dtype=None, pbar=False):
     """
     create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
     
@@ -211,6 +252,15 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
     resampling_method: str
         the gdalwarp resampling method; See `here <https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r>`_
         for options.
+    threads: int, str or None
+        the number of threads to use. Possible values:
+        
+         - Default `None`: use the value of `GDAL_NUM_THREADS` without modification. If `GDAL_NUM_THREADS` is None,
+           multi-threading is still turned on and two threads are used, one for I/O and one for computation.
+         - integer value: temporarily modify `GDAL_NUM_THREADS` and reset it once done.
+           If 1, multithreading is turned off.
+         - `ALL_CPUS`: special string to use all cores/CPUs of the computer; will also temporarily
+           modify `GDAL_NUM_THREADS`.
     geoid_convert: bool
         convert geoid heights?
     geoid: str
@@ -220,6 +270,11 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
          - 'EGM2008'
     outputBounds: list or None
         output bounds as [xmin, ymin, xmax, ymax] in target SRS
+    dtype: str or None
+        override the data type of the written file; Default None: use same type as source data.
+        Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
+    pbar: bool
+        add a progressbar?
     
     Returns
     -------
@@ -235,11 +290,40 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
     else:
         epsg_out = crsConvert(t_srs, 'epsg')
     
-    gdalwarp_args = {'format': 'GTiff', 'multithread': True,
+    threads_system = gdal.GetConfigOption('GDAL_NUM_THREADS')
+    if threads is None:
+        threads = threads_system
+        try:
+            threads = int(threads)
+        except (ValueError, TypeError):
+            pass
+    if isinstance(threads, str):
+        if threads != 'ALL_CPUS':
+            raise ValueError("unsupported value for 'threads': '{}'".format(threads))
+        else:
+            multithread = True
+            gdal.SetConfigOption('GDAL_NUM_THREADS', threads)
+    elif isinstance(threads, int):
+        if threads == 1:
+            multithread = False
+        elif threads > 1:
+            multithread = True
+            gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
+        else:
+            raise ValueError("if 'threads' is of type int, it must be >= 1")
+    elif threads is None:
+        multithread = True
+    else:
+        raise TypeError("'threads' must be of type int, str or None. Is: {}".format(type(threads)))
+    
+    gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
                      'resampleAlg': resampling_method}
+    
+    if dtype is not None:
+        gdalwarp_args['outputType'] = Dtype(dtype).gdalint
     
     if outputBounds is not None:
         gdalwarp_args['outputBounds'] = outputBounds
@@ -258,9 +342,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
             # the following line is a temporary workaround until compound EPSG codes can
             # directly be used for vertical CRS transformations
             # see https://github.com/OSGeo/gdal/pull/4639
-            gdalwarp_args['srcSRS'] = crsConvert(gdalwarp_args['srcSRS'], 'proj4') \
-                .replace('us_nga_egm96_15.tif', 'egm96_15.gtx') \
-                .replace('us_nga_egm08_25.tif', 'egm08_25.gtx')
+            gdalwarp_args['srcSRS'] = crsConvert(gdalwarp_args['srcSRS'], 'proj4')
         else:
             raise RuntimeError('geoid model not yet supported')
         try:
@@ -278,12 +360,15 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
         crs = gdalwarp_args['dstSRS']
         if crs != 'EPSG:4326':
             message += ' and reprojecting to {}'.format(crs)
+        message += ': {}'.format(dst)
         log.info(message)
-        gdalwarp(src, dst, gdalwarp_args)
+        gdalwarp(src, dst, gdalwarp_args, pbar)
     except Exception:
         if os.path.isfile(dst):
             os.remove(dst)
         raise
+    finally:
+        gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
 
 
 class DEMHandler:
@@ -328,7 +413,7 @@ class DEMHandler:
         return ext
     
     @staticmethod
-    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None):
+    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None, hide_nodata=False):
         if vsi is not None:
             locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in tiles])]
         else:
@@ -340,7 +425,8 @@ class DEMHandler:
         opts = {'outputBounds': (extent['xmin'], extent['ymin'],
                                  extent['xmax'], extent['ymax']),
                 'srcNodata': nodata, 'targetAlignedPixels': True,
-                'xRes': xres, 'yRes': yres}
+                'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata
+                }
         gdalbuildvrt(src=locals, dst=vrtfile,
                      options=opts)
     
@@ -358,6 +444,31 @@ class DEMHandler:
                         ext_new[key] = geo.extent[key]
         ext_new = self.__applybuffer(ext_new, buffer)
         return ext_new
+    
+    @staticmethod
+    def intrange(extent, step):
+        """
+        generate sequence of integer coordinates marking the tie points of the individual DEM tiles
+        
+        Parameters
+        ----------
+        extent: dict
+            a dictionary with keys `xmin`, `xmax`, `ymin` and `ymax` with coordinates in EPSG:4326.
+        step: int
+            the sequence steps
+
+        Returns
+        -------
+        tuple[range]
+            the integer sequences as (latitude, longitude)
+        """
+        lat = range(floor(float(extent['ymin']) / step) * step,
+                    ceil(float(extent['ymax']) / step) * step,
+                    step)
+        lon = range(floor(float(extent['xmin']) / step) * step,
+                    ceil(float(extent['xmax']) / step) * step,
+                    step)
+        return lat, lon
     
     @staticmethod
     def __retrieve(url, filenames, outdir):
@@ -430,7 +541,7 @@ class DEMHandler:
                                    'msk': '*MSK.tif',
                                    'stk': '*STK.tif'}
                        },
-            'Copernicus 10m EEA DEM': {'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2020_1',
+            'Copernicus 10m EEA DEM': {'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1',
                                        'nodata': -32767.0,
                                        'vsi': '/vsitar/',
                                        'port': 990,
@@ -445,11 +556,33 @@ class DEMHandler:
                                           'vsi': None,
                                           'pattern': {'dem': '*DSM*'}
                                           },
+            'Copernicus 30m Global DEM II': {
+                'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-30-DGED/2021_1',
+                'nodata': -32767.0,
+                'vsi': '/vsitar/',
+                'port': 990,
+                'pattern': {'dem': '*DEM.tif',
+                            'edm': '*EDM.tif',
+                            'flm': '*FLM.tif',
+                            'hem': '*HEM.tif',
+                            'wbm': '*WBM.tif'}
+            },
             'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com',
                                           'nodata': None,
                                           'vsi': None,
                                           'pattern': {'dem': '*DSM*'}
                                           },
+            'Copernicus 90m Global DEM II': {
+                'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-90-DGED/2021_1',
+                'nodata': -32767.0,
+                'vsi': '/vsitar/',
+                'port': 990,
+                'pattern': {'dem': '*DEM.tif',
+                            'edm': '*EDM.tif',
+                            'flm': '*FLM.tif',
+                            'hem': '*HEM.tif',
+                            'wbm': '*WBM.tif'}
+            },
             'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
                           'nodata': None,
                           'vsi': '/vsizip/',
@@ -479,7 +612,8 @@ class DEMHandler:
                        }
         }
     
-    def load(self, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
+    def load(self, demType, vrt=None, buffer=None, username=None, password=None,
+             product='dem', nodata=None, hide_nodata=False):
         """
         obtain DEM tiles for the given geometries
         
@@ -492,49 +626,65 @@ class DEMHandler:
         buffer: int, float, None
             a buffer in degrees to add around the individual geometries
         username: str or None
-            the download account user name
+            the download account username
         password: str or None
             the download account password
         product: str
             the sub-product to extract from the DEM product
              - 'AW3D30'
-
+             
               * 'dem': the actual Digital Elevation Model
               * 'msk': mask information for each pixel (Cloud/Snow Mask, Land water and
                 low correlation mask, Sea mask, Information of elevation dataset used
                 for the void-filling processing)
               * 'stk': number of DSM-scene files which were used to produce the 5m resolution DSM
-
+             
              - 'Copernicus 10m EEA DEM'
-            
+             
               * 'dem': the actual Digital Elevation Model
               * 'edm': Editing Mask
               * 'flm': Filling Mask
               * 'hem': Height Error Mask
               * 'wbm': Water Body Mask
-              
+             
              - 'Copernicus 30m Global DEM'
              
               * 'dem': the actual Digital Elevation Model
-
+             
+             - 'Copernicus 30m Global DEM II'
+             
+              * 'dem': the actual Digital Elevation Model
+              * 'edm': Editing Mask
+              * 'flm': Filling Mask
+              * 'hem': Height Error Mask
+              * 'wbm': Water Body Mask
+             
              - 'Copernicus 90m Global DEM'
              
               * 'dem': the actual Digital Elevation Model
-              
+             
+             - 'Copernicus 90m Global DEM II'
+             
+              * 'dem': the actual Digital Elevation Model
+              * 'edm': Editing Mask
+              * 'flm': Filling Mask
+              * 'hem': Height Error Mask
+              * 'wbm': Water Body Mask
+             
              - 'GETASSE30'
-            
+             
               * 'dem': the actual Digital Elevation Model
-          
+             
              - 'SRTM 1Sec HGT'
-
+             
               * 'dem': the actual Digital Elevation Model
-
+             
              - 'SRTM 3Sec'
-
+             
               * 'dem': the actual Digital Elevation Model
-
+             
              - 'TDX90m'
-
+             
               * 'dem': the actual Digital Elevation Model
               * 'am2': Amplitude Mosaic representing the minimum value
               * 'amp': Amplitude Mosaic representing the mean value
@@ -543,6 +693,9 @@ class DEMHandler:
               * 'hem': Height Error Map
               * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
               * 'wam': Water Indication Mask
+        nodata: int or float or None
+            the no data value to write in the VRT if it will be written.
+            If `None`, the value of the source products is passed on.
 
         Returns
         -------
@@ -568,7 +721,8 @@ class DEMHandler:
             remotes.extend(self.remote_ids(corners, demType=demType,
                                            username=username, password=password))
         
-        if demType in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM']:
+        if demType in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM',
+                       'Copernicus 30m Global DEM II', 'Copernicus 90m Global DEM II']:
             port = 0
             if 'port' in self.config[demType].keys():
                 port = self.config[demType]['port']
@@ -581,17 +735,16 @@ class DEMHandler:
             for item in locals:
                 getasse30_hdr(item)
         
-        if product == 'dem':
-            nodata = self.config[demType]['nodata']
-        else:
-            nodata = 0
+        if nodata is None:
+            if product == 'dem':
+                nodata = self.config[demType]['nodata']
         
         if vrt is not None:
             self.__buildvrt(tiles=locals, vrtfile=vrt,
                             pattern=self.config[demType]['pattern'][product],
                             vsi=self.config[demType]['vsi'],
                             extent=self.__commonextent(buffer),
-                            nodata=nodata)
+                            nodata=nodata, hide_nodata=hide_nodata)
             return None
         return locals
     
@@ -616,16 +769,6 @@ class DEMHandler:
             the sorted names of the remote files
         """
         
-        # generate sequence of integer coordinates marking the tie points of the individual tiles
-        def intrange(extent, step):
-            lat = range(int(float(extent['ymin']) // step) * step,
-                        (int(float(extent['ymax']) // step) + 1) * step,
-                        step)
-            lon = range(int(float(extent['xmin']) // step) * step,
-                        (int(float(extent['xmax']) // step) + 1) * step,
-                        step)
-            return lat, lon
-        
         def index(x=None, y=None, nx=3, ny=3, reverse=False):
             if reverse:
                 pattern = '{c:0{n}d}{id}'
@@ -642,7 +785,7 @@ class DEMHandler:
             return yf, xf
         
         def cop_dem_remotes(extent, arcsecs):
-            lat, lon = intrange(extent, step=1)
+            lat, lon = self.intrange(extent, step=1)
             indices = [index(x, y, nx=3, ny=2)
                        for x in lon for y in lat]
             base = 'Copernicus_DSM_COG_{res}_{0}_00_{1}_00_DEM'
@@ -651,17 +794,17 @@ class DEMHandler:
             return remotes
         
         if demType == 'SRTM 1Sec HGT':
-            lat, lon = intrange(extent, step=1)
+            lat, lon = self.intrange(extent, step=1)
             remotes = ['{0}{1}.SRTMGL1.hgt.zip'.format(*index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
         
         elif demType == 'GETASSE30':
-            lat, lon = intrange(extent, step=15)
+            lat, lon = self.intrange(extent, step=15)
             remotes = ['{0}{1}.zip'.format(*index(x, y, nx=3, ny=2, reverse=True))
                        for x in lon for y in lat]
         
         elif demType == 'TDX90m':
-            lat, lon = intrange(extent, step=1)
+            lat, lon = self.intrange(extent, step=1)
             remotes = []
             for x in lon:
                 xr = abs(x) // 10 * 10
@@ -672,7 +815,7 @@ class DEMHandler:
         
         elif demType == 'AW3D30':
             remotes = []
-            lat, lon = intrange(extent, step=1)
+            lat, lon = self.intrange(extent, step=1)
             for x in lon:
                 for y in lat:
                     remotes.append(
@@ -686,8 +829,10 @@ class DEMHandler:
                         int((float(extent['xmax']) + 180) // 5) + 2)
             remotes = ['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in lon for y in lat]
         
-        elif demType == 'Copernicus 10m EEA DEM':
-            lat, lon = intrange(extent, step=1)
+        elif demType in ['Copernicus 10m EEA DEM',
+                         'Copernicus 30m Global DEM II',
+                         'Copernicus 90m Global DEM II']:
+            lat, lon = self.intrange(extent, step=1)
             indices = [''.join(index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
             
@@ -807,10 +952,10 @@ def get_egm_lookup(geoid, software):
         - SNAP: default directory: ``~/.snap/auxdata/dem/egm96``; URL:
         
           * https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip
-        - PROJ: requires ``PROJ_LIB`` environment variable to be set as download directory; URLs:
+        - PROJ: requires the ``PROJ_LIB`` environment variable to be set as download directory; URLs:
         
-          * https://download.osgeo.org/proj/vdatum/egm96_15/egm96_15.gtx
-          * https://download.osgeo.org/proj/vdatum/egm08_25/egm08_25.gtx
+          * https://cdn.proj.org/us_nga_egm96_15.tif
+          * https://cdn.proj.org/us_nga_egm08_25.tif
 
     Returns
     -------
@@ -827,23 +972,24 @@ def get_egm_lookup(geoid, software):
             remote = 'https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip'
             log.info('{} <<-- {}'.format(local, remote))
             r = requests.get(remote)
+            r.raise_for_status()
             with open(local, 'wb') as out:
                 out.write(r.content)
     
     elif software == 'PROJ':
-        gtx_lookup = {'EGM96': 'egm96_15/egm96_15.gtx',
-                      'EGM2008': 'egm08_25/egm08_25.gtx'}
-        gtx_remote = 'https://download.osgeo.org/proj/vdatum/' + gtx_lookup[geoid]
+        gtx_lookup = {'EGM96': 'us_nga_egm96_15.tif',
+                      'EGM2008': 'us_nga_egm08_25.tif'}
+        gtx_remote = 'https://cdn.proj.org/' + gtx_lookup[geoid]
         
         proj_lib = os.environ.get('PROJ_LIB')
         if proj_lib is not None:
-            if not os.access(proj_lib, os.W_OK):
-                raise OSError("cannot write to 'PROJ_LIB' path: {}".format(proj_lib))
-            
             gtx_local = os.path.join(proj_lib, os.path.basename(gtx_remote))
             if not os.path.isfile(gtx_local):
+                if not os.access(proj_lib, os.W_OK):
+                    raise OSError("cannot write to 'PROJ_LIB' path: {}".format(proj_lib))
                 log.info('{} <<-- {}'.format(gtx_local, gtx_remote))
                 r = requests.get(gtx_remote)
+                r.raise_for_status()
                 with open(gtx_local, 'wb') as out:
                     out.write(r.content)
         else:
