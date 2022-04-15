@@ -314,8 +314,13 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
     else:
         raise TypeError("'threads' must be of type int, str or None. Is: {}".format(type(threads)))
     
+    if nodata is None:
+        dstNodata = -32767.0
+    else:
+        dstNodata = nodata
+    
     gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
-                     'srcNodata': nodata, 'dstNodata': nodata,
+                     'srcNodata': nodata, 'dstNodata': dstNodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
                      'resampleAlg': resampling_method}
