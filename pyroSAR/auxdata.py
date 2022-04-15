@@ -721,6 +721,9 @@ class DEMHandler:
             remotes.extend(self.remote_ids(corners, demType=demType,
                                            username=username, password=password))
         
+        if len(remotes) == 0:
+            raise RuntimeError('could not find DEM tiles for the area of interest')
+        
         if demType in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM',
                        'Copernicus 30m Global DEM II', 'Copernicus 90m Global DEM II']:
             port = 0
@@ -759,7 +762,7 @@ class DEMHandler:
         demType: str
             the type fo DEM to be used
         username: str or None
-            the download account user name
+            the download account username
         password: str or None
             the download account password
 
@@ -870,7 +873,11 @@ class DEMHandler:
                             remotes.append(target)
                             remotes_base.append(base)
             
-            ftp_search(path + '/', ids)
+            if len(ids) < len(indices):
+                log.warning('the available DEM tiles do not fully cover the area of interest')
+            
+            if len(ids) > 0:
+                ftp_search(path + '/', ids)
             ftp.quit()
         
         elif demType == 'Copernicus 30m Global DEM':
