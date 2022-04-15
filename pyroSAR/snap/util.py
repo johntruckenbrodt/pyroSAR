@@ -344,6 +344,10 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         ############################################
         # ThermalNoiseRemoval node configuration
         if id.sensor in ['S1A', 'S1B'] and removeS1ThermalNoise:
+            if id.acquisition_mode == 'SM' and id.product == 'SLC':
+                raise RuntimeError('thermal noise removal is currently not supported '
+                                   'for Sentinel-1 Stripmap SLCs.\nsee here: '
+                                   'https://forum.step.esa.int/t/stripmap-slc-error-during-thermal-noise-removal/32688')
             tn = parse_node('ThermalNoiseRemoval')
             workflow.insert_node(tn, before=last.id)
             tn.parameters['selectedPolarisations'] = polarizations
