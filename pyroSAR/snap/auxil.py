@@ -497,7 +497,7 @@ def writer(xmlfile, outdir, basename_extensions=None,
             else:
                 nodata = 0
             translateoptions['noData'] = nodata
-            if clean_edges and not 'layover_shadow_mask' in basename:
+            if clean_edges and 'layoverShadowMask' not in basename:
                 erode_edges(item, only_boundary=True, pixels=clean_edges_npixels)
             gdal_translate(item, name_new, translateoptions)
     else:
@@ -1452,15 +1452,26 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
     if pixels > 1:
         structure = iterate_structure(structure=structure, iterations=pixels)
     
+    infile_base = os.path.splitext(infile)[0]
+    write_intermediates = False  # this is intended for debugging
+    
     with Raster(infile) as ref:
         array = ref.array()
         mask = array != 0
+        if write_intermediates:
+            ref.write(outname=infile_base + '_mask_original.tif', array=mask, dtype='Byte')
         if only_boundary:
             with vectorize(target=mask, reference=ref) as vec:
-                with boundary(vec) as bounds:
+                with boundary(vec, expression="value=1") as bounds:
                     with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
                         mask = new.array()
+                        if write_intermediates:
+                            vec.write(infile_base + '_vectorized.gpkg')
+                            bounds.write(infile_base + '_boundary.gpkg')
+                            new.write(outname=infile_base + '_mask_boundary.tif', dtype='Byte')
         mask2 = binary_erosion(input=mask, structure=structure)
+        if write_intermediates:
+            ref.write(outname=infile_base + '_mask_eroded.tif', array=mask2, dtype='Byte')
         array[mask2 == 0] = 0
     
     ras = gdal.Open(infile, GA_Update)

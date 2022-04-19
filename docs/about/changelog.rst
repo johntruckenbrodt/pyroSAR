@@ -762,3 +762,13 @@ Auxiliary Data Handling
 SNAP API
 --------
 - function :func:`pyroSAR.snap.util.noise_power`: added missing orbit state vector refinement
+
+0.16.3 | 2022-03-23
+===================
+
+SNAP API
+--------
+- function :func:`pyroSAR.snap.util.noise_power`: pass argument `cleanup` to :func:`~pyroSAR.snap.auxil.gpt` call
+- function :func:`~pyroSAR.snap.auxil.gpt`: shortened names of temporary directories
+- function :func:`~pyroSAR.snap.auxil.erode_edges`: fixed bug in polygon selection
+- function :func:`~pyroSAR.snap.auxil.writer`: do not erode edges of layover-shadow mask

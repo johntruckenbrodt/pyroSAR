@@ -71,7 +71,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
     spacing: int or float, optional
         The target pixel spacing in meters. Default is 20
-    polarizations: list or str
+    polarizations: list[str] or str
         The polarizations to be processed; can be a string for a single polarization, e.g. 'VV', or a list of several
         polarizations, e.g. ['VV', 'VH']. With the special value 'all' (default) all available polarizations are
         processed.
@@ -779,7 +779,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
         The SAR scene(s) to be processed
     outdir: str
         The directory to write the final files to.
-    polarizations: list
+    polarizations: list[str]
         The polarizations to be processed, e.g. ['VV', 'VH'].
     spacing: int or float
         The target pixel spacing in meters.
@@ -1003,7 +1003,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     
     if not test:
         groups = groupbyWorkers(wf_name, groupsize)
-        gpt(xmlfile=wf_name, tmpdir=procdir, groups=groups)
+        gpt(xmlfile=wf_name, tmpdir=procdir, groups=groups, cleanup=cleanup)
         writer(xmlfile=wf_name, outdir=outdir, clean_edges=clean_edges,
                clean_edges_npixels=clean_edges_npixels)
         if cleanup:
