@@ -1452,27 +1452,35 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
     if pixels > 1:
         structure = iterate_structure(structure=structure, iterations=pixels)
     
-    infile_base = os.path.splitext(infile)[0]
+    workdir = os.path.dirname(infile)
+    fname_mask = os.path.join(workdir, 'datamask_eroded.tif')
     write_intermediates = False  # this is intended for debugging
     
-    with Raster(infile) as ref:
-        array = ref.array()
-        mask = array != 0
-        if write_intermediates:
-            ref.write(outname=infile_base + '_mask_original.tif', array=mask, dtype='Byte')
-        if only_boundary:
-            with vectorize(target=mask, reference=ref) as vec:
-                with boundary(vec, expression="value=1") as bounds:
-                    with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
-                        mask = new.array()
-                        if write_intermediates:
-                            vec.write(infile_base + '_vectorized.gpkg')
-                            bounds.write(infile_base + '_boundary.gpkg')
-                            new.write(outname=infile_base + '_mask_boundary.tif', dtype='Byte')
-        mask2 = binary_erosion(input=mask, structure=structure)
-        if write_intermediates:
-            ref.write(outname=infile_base + '_mask_eroded.tif', array=mask2, dtype='Byte')
-        array[mask2 == 0] = 0
+    if not os.path.isfile(fname_mask):
+        with Raster(infile) as ref:
+            array = ref.array()
+            mask1 = array != 0
+            if write_intermediates:
+                ref.write(fname_mask.replace('eroded', 'original'),
+                          array=mask1, dtype='Byte')
+            if only_boundary:
+                with vectorize(target=mask1, reference=ref) as vec:
+                    with boundary(vec, expression="value=1") as bounds:
+                        with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
+                            mask2 = new.array()
+                            if write_intermediates:
+                                vec.write(fname_mask.replace('eroded.tif', 'original_vectorized.gpkg'))
+                                bounds.write(fname_mask.replace('eroded.tif', 'boundary_vectorized.gpkg'))
+                                new.write(outname=fname_mask.replace('eroded', 'boundary'), dtype='Byte')
+            mask3 = binary_erosion(input=mask2, structure=structure)
+            ref.write(outname=fname_mask, array=mask3, dtype='Byte')
+    else:
+        with Raster(infile) as ref:
+            array = ref.array()
+        with Raster(fname_mask) as ras:
+            mask3 = ras.array()
+    
+    array[mask3 == 0] = 0
     
     ras = gdal.Open(infile, GA_Update)
     band = ras.GetRasterBand(1)
