@@ -1542,12 +1542,12 @@ class ESA(ID):
         self.meta = self.scanMetadata()
 
         corners = self.getCorners()
-        self.meta['coordinates'] = [tuple([corners['xmin'], corners['xmax']]),tuple([corners['ymin'], corners['ymax']])]
+        self.meta['coordinates'] = [tuple([corners['xmin'], corners['ymin']]),tuple([corners['xmin'], corners['ymax']]),
+                                    tuple([corners['xmax'], corners['ymin']]),tuple([corners['xmax'], corners['ymax']])]
         self.meta['acquisition_mode'] = match2.group('image_mode')
         self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
         self.meta['frameNumber'] = int(match.group('counter'))
 
-        self.meta['projection'] = crsConvert(4326, 'wkt') # TODO Just a guess to make it work, double check
         if self.meta['acquisition_mode'] == 'IMS' or self.meta['acquisition_mode'] == 'APS':
             self.meta['image_geometry'] = 'SLANT_RANGE' 
         elif self.meta['acquisition_mode'] == 'IMP' or self.meta['acquisition_mode'] == 'APP':
