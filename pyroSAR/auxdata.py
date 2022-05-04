@@ -20,8 +20,6 @@ import ftplib
 import requests
 import zipfile as zf
 from math import ceil, floor
-from urllib.request import urlopen
-from urllib.error import HTTPError
 from urllib.parse import urlparse
 
 from pyroSAR.examine import ExamineSnap
@@ -316,8 +314,13 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
     else:
         raise TypeError("'threads' must be of type int, str or None. Is: {}".format(type(threads)))
     
+    if nodata is None:
+        dstNodata = -32767.0
+    else:
+        dstNodata = nodata
+    
     gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
-                     'srcNodata': nodata, 'dstNodata': nodata,
+                     'srcNodata': nodata, 'dstNodata': dstNodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
                      'resampleAlg': resampling_method}
@@ -476,19 +479,17 @@ class DEMHandler:
         os.makedirs(outdir, exist_ok=True)
         locals = []
         for file in files:
-            infile = '{}/{}'.format(url, file)
-            outfile = os.path.join(outdir, os.path.basename(file))
-            if not os.path.isfile(outfile):
-                try:
-                    input = urlopen(infile)
-                    log.info('{} <<-- {}'.format(outfile, infile))
-                except HTTPError:
-                    continue
-                with open(outfile, 'wb') as output:
-                    output.write(input.read())
-                input.close()
-            if os.path.isfile(outfile):
-                locals.append(outfile)
+            remote = '{}/{}'.format(url, file)
+            local = os.path.join(outdir, os.path.basename(file))
+            if not os.path.isfile(local):
+                log.info('{} <<-- {}'.format(local, remote))
+                r = requests.get(remote)
+                r.raise_for_status()
+                with open(local, 'wb') as output:
+                    output.write(r.content)
+                r.close()
+            if os.path.isfile(local):
+                locals.append(local)
         return sorted(locals)
     
     def __retrieve_ftp(self, url, filenames, outdir, username, password, port=0):
@@ -721,6 +722,9 @@ class DEMHandler:
             remotes.extend(self.remote_ids(corners, demType=demType,
                                            username=username, password=password))
         
+        if len(remotes) == 0:
+            raise RuntimeError('could not find DEM tiles for the area of interest')
+        
         if demType in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM',
                        'Copernicus 30m Global DEM II', 'Copernicus 90m Global DEM II']:
             port = 0
@@ -759,7 +763,7 @@ class DEMHandler:
         demType: str
             the type fo DEM to be used
         username: str or None
-            the download account user name
+            the download account username
         password: str or None
             the download account password
 
@@ -870,7 +874,11 @@ class DEMHandler:
                             remotes.append(target)
                             remotes_base.append(base)
             
-            ftp_search(path + '/', ids)
+            if len(ids) < len(indices):
+                log.warning('the available DEM tiles do not fully cover the area of interest')
+            
+            if len(ids) > 0:
+                ftp_search(path + '/', ids)
             ftp.quit()
         
         elif demType == 'Copernicus 30m Global DEM':
@@ -975,6 +983,7 @@ def get_egm_lookup(geoid, software):
             r.raise_for_status()
             with open(local, 'wb') as out:
                 out.write(r.content)
+            r.close()
     
     elif software == 'PROJ':
         gtx_lookup = {'EGM96': 'us_nga_egm96_15.tif',
@@ -992,6 +1001,7 @@ def get_egm_lookup(geoid, software):
                 r.raise_for_status()
                 with open(gtx_local, 'wb') as out:
                     out.write(r.content)
+                r.close()
         else:
             raise RuntimeError("environment variable 'PROJ_LIB' not set")
     else:

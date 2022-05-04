@@ -1831,7 +1831,11 @@ class SAFE(ID):
         tree = ET.fromstring(manifest)
         
         meta = dict()
-        meta['acquisition_mode'] = tree.find('.//s1sarl1:mode', namespaces).text
+        acqmode = tree.find('.//s1sarl1:mode', namespaces).text
+        if acqmode == 'SM':
+            meta['acquisition_mode'] = tree.find('.//s1sarl1:swath', namespaces).text
+        else:
+            meta['acquisition_mode'] = acqmode
         meta['acquisition_time'] = dict(
             [(x, tree.find('.//safe:{}Time'.format(x), namespaces).text) for x in ['start', 'stop']])
         meta['start'], meta['stop'] = (self.parse_date(meta['acquisition_time'][x]) for x in ['start', 'stop'])
