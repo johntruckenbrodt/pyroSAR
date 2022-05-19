@@ -551,9 +551,9 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         a temporary directory for writing intermediate files
     outdir: str
         the directory for the final GeoTIFF output files
-    spacing: int
+    spacing: float or int
         the target pixel spacing in meters
-    scaling: {'linear', 'db'} or list
+    scaling: str or list[str]
         the value scaling of the backscatter values; either 'linear', 'db' or a list of both, i.e. ['linear', 'db']
     func_geoback: {0, 1, 2, 3, 4, 5, 6, 7}
         backward geocoding interpolation mode (see GAMMA command `geocode_back`)
@@ -575,10 +575,10 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         
             GAMMA recommendation for MLI data: "The interpolation should be performed on
             the square root of the data. A mid-order (3 to 5) B-spline interpolation is recommended."
-    nodata: tuple
+    nodata: tuple[float or int]
         the nodata values for the output files; defined as a tuple with two values, the first for linear,
         the second for logarithmic scaling
-    osvdir: str
+    osvdir: str or None
         a directory for Orbit State Vector files;
         this is currently only used by for Sentinel-1 where two subdirectories POEORB and RESORB are created;
         if set to None, a subdirectory OSV is created in the directory of the unpacked scene.
