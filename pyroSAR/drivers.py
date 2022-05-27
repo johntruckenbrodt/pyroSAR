@@ -48,7 +48,7 @@ from osgeo import gdal, osr, ogr
 from osgeo.gdalconst import GA_ReadOnly
 
 from . import S1
-from .ERS import passdb_query
+from .ERS import passdb_query, get_incidence_angles
 from .xml_util import getNamespaces
 
 from spatialist import crsConvert, sqlite3, Vector, bbox
@@ -67,7 +67,7 @@ import socket
 import time
 import platform
 import subprocess
-
+import json
 import logging
 
 log = logging.getLogger(__name__)
@@ -422,6 +422,8 @@ class ID(object):
         extension = os.path.splitext(header)[1]
         if extension in ext_lookup:
             meta['sensor'] = ext_lookup[extension]
+            info = gdal.Info(prefix + header, options=gdal.InfoOptions(allMetadata=True, format='json'))
+            meta['extra'] = info
         
         img = gdal.Open(prefix + header, GA_ReadOnly)
         gdalmeta = img.GetMetadata()
@@ -1554,7 +1556,8 @@ class ESA(ID):
             self.meta['image_geometry'] = 'GROUND_RANGE'
         else:
             raise RuntimeError("unsupported adquisition mode: {}".format(self.meta['acquisition_mode']))
-
+       
+        self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax'], self.meta['incidence'] = get_incidence_angles(self.meta['sensor'], self.meta['acquisition_mode'], self.meta['SPH_SWATH'])
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
     
@@ -1581,8 +1584,6 @@ class ESA(ID):
         meta['orbitNumber_abs'] = meta['MPH_ABS_ORBIT']
         meta['orbitNumber_rel'] = meta['MPH_REL_ORBIT']
         meta['cycleNumber'] = meta['MPH_CYCLE']
-
-        meta['incidence'] = 39 # TODO Completly wrong, just to see where it fails
         return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
