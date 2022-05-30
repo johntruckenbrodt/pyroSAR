@@ -374,6 +374,10 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
                 del groups[i][groups[i].index('Remove-GRD-Border-Noise')]
             if len(groups[i]) == 0:
                 del groups[i]
+            elif len(groups[i]) == 1 and groups[i][0] == 'Read':
+                # move Read into the next group if it is the only operator
+                del groups[i]
+                groups[i].insert(0, 'Read')
             else:
                 i += 1
         # unpack the scene if necessary and perform the custom border noise removal
