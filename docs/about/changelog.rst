@@ -772,3 +772,26 @@ SNAP API
 - function :func:`~pyroSAR.snap.auxil.gpt`: shortened names of temporary directories
 - function :func:`~pyroSAR.snap.auxil.erode_edges`: fixed bug in polygon selection
 - function :func:`~pyroSAR.snap.auxil.writer`: do not erode edges of layover-shadow mask
+
+0.17.0 | 2022-05-30
+===================
+
+SNAP API
+--------
+
+- function :func:`pyroSAR.snap.erode_edges`: reuse mask for all images
+
+GAMMA API
+---------
+
+- new function :func:`pyroSAR.gamma.dem.dem_import`
+
+- function :func:`pyroSAR.gamma.geocode`:
+
+  + new argument `update_osv`
+
+general
+-------
+
+- full support for Sentinel-1 stripmap mode; renamed `SM` naming pattern to `S1..S6` to differentiate different beams
+- bug fixes
