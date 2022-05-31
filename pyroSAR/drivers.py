@@ -48,7 +48,7 @@ from osgeo import gdal, osr, ogr
 from osgeo.gdalconst import GA_ReadOnly
 
 from . import S1
-from .ERS import passdb_query, get_incidence_angles
+from .ERS import passdb_query, get_angles_resolution
 from .xml_util import getNamespaces
 
 from spatialist import crsConvert, sqlite3, Vector, bbox
@@ -1557,7 +1557,8 @@ class ESA(ID):
         else:
             raise RuntimeError("unsupported adquisition mode: {}".format(self.meta['acquisition_mode']))
        
-        self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax'], self.meta['incidence'] = get_incidence_angles(self.meta['sensor'], self.meta['acquisition_mode'], self.meta['SPH_SWATH'])
+        self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax'], self.meta['rangeResolution'], self.meta['azimuthResolution'] = get_angles_resolution(self.meta['sensor'], self.meta['acquisition_mode'], self.meta['SPH_SWATH'], self.meta['start'])
+        self.meta['incidence'] = median([self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax']])
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
     
