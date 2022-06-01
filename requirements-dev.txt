@@ -1,6 +1,6 @@
 progressbar2
 numpy
-spatialist>=0.10.1
+spatialist>=0.11.0
 pyyaml
 requests
 psycopg2
