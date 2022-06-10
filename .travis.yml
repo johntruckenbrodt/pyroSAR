@@ -36,7 +36,7 @@ python:
 
 before_install:
   - export SNAP_INSTALLER=esa-snap_sentinel_unix_"$SNAP_VERSION"_0.sh
-  - wget -O $SNAP_INSTALLER https://step.esa.int/downloads/"$SNAP_VERSION".0/installers/"$SNAP_INSTALLER"
+  - wget -O $SNAP_INSTALLER https://download.esa.int/step/snap/"$SNAP_VERSION".0/installers/"$SNAP_INSTALLER"
   - bash $SNAP_INSTALLER -q
   - export PATH=$PATH:/opt/snap/bin
 
