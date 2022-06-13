@@ -1977,6 +1977,157 @@ class TSX(ID):
         self._unpack(outdir, offset=header, overwrite=overwrite, exist_ok=exist_ok)
 
 
+class TDM(ID):
+    """
+    Handler class for TerraSAR-X and TanDEM-X data
+    
+    Sensors:
+        * TDM1
+
+    References:
+        * TX-GS-DD-3302  TerraSAR-X Basic Product Specification Document
+        * TX-GS-DD-3303  TerraSAR-X Experimental Product Description
+        * TD-GS-PS-3028  TanDEM-X Experimental Product Description
+        * TerraSAR-X Image Product Guide (Airbus Defence and Space)
+    
+    Acquisition modes:
+        * ST:    Staring Spotlight
+        * HS:    High Resolution SpotLight
+        * HS300: High Resolution SpotLight 300 MHz
+        * SL:    SpotLight
+        * SM:    StripMap
+        * SC:    ScanSAR
+        * WS:    Wide ScanSAR
+    
+    Polarisation modes:
+        * Single (S): all acquisition modes
+        * Dual   (D): High Resolution SpotLight (HS), SpotLight (SL) and StripMap (SM)
+        * Twin   (T): StripMap (SM) (experimental)
+        * Quad   (Q): StripMap (SM) (experimental)
+    
+    Products:
+        * CoSSCs: (bi-static) SAR co-registered single look slant range complex products (CoSSCs)
+
+
+    Examples
+    ----------
+    Ingest all Tandem-X Bistatic scenes in a directory and its sub-directories into the database:
+
+    >>> from pyroSAR import Archive, identify
+    >>> from spatialist.ancillary import finder
+    >>> dbfile = '/.../scenelist.db'
+    >>> archive_tdm = '/.../TDM/'
+    >>> scenes_tdm = finder(archive_tdm, [r'^TDM1.*'], foldermode=2, regex=True, recursive=True)
+    >>> with Archive(dbfile) as archive:
+    >>>     archive.insert(scenes_tdm)
+    """
+    
+    def __init__(self, scene):
+        self.scene = os.path.realpath(scene)
+        
+        self.pattern = r'^(?P<sat>T[D]M1)_SAR__' \
+                       r'(?P<prod>COS)_' \
+                       r'(?P<var>____|MONO|BIST|ALT1|ALT2)_' \
+                       r'(?P<mode>SM|SL|HS)_' \
+                       r'(?P<pols>[SDQ])_' \
+                       r'(?:SRA|DRA)_' \
+                       r'(?P<start>[0-9]{8}T[0-9]{6})_' \
+                       r'(?P<stop>[0-9]{8}T[0-9]{6})(?:\.xml|)$'
+        
+        self.pattern_ds = r'^IMAGE_(?P<pol>HH|HV|VH|VV)_(?:SRA|FWD|AFT)_(?P<beam>[^\.]+)\.(cos|tif)$'
+        self.examine(include_folders=False)
+        
+        if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
+            raise RuntimeError('folder does not match TDM scene naming convention')
+        
+        self.meta = self.scanMetadata()
+        self.meta['projection'] = crsConvert(4326, 'wkt')
+        
+        super(TDM, self).__init__(self.meta)
+    
+    def getCorners(self):
+        geocs = self.getFileObj(self.file).getvalue()
+        tree = ET.fromstring(geocs)
+        pts = tree.findall('.//sceneCornerCoord')
+        lat = [float(x.find('lat').text) for x in pts]
+        lon = [float(x.find('lon').text) for x in pts]
+        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+    
+    
+    def scanMetadata(self):
+        annotation = self.getFileObj(self.file).getvalue()
+        namespaces = getNamespaces(annotation)
+        tree = ET.fromstring(annotation)
+        meta = dict()
+        meta['sensor'] = tree.find('.//commonAcquisitionInfo/missionID', namespaces).text.replace('-', '')
+        meta['product'] = tree.find('.//productInfo/productType', namespaces).text
+        meta['SAT1'] = tree.find('.//commonAcquisitionInfo/satelliteIDsat1', namespaces).text
+        meta['SAT2'] = tree.find('.//commonAcquisitionInfo/satelliteIDsat2', namespaces).text
+        meta['inSARmasterID'] = tree.find('.//commonAcquisitionInfo/inSARmasterID', namespaces).text
+        meta['inSARmaster'] = tree.find('.//commonAcquisitionInfo/satelliteID{}'.format(meta['inSARmasterID'].lower()), namespaces).text.replace('-', '')
+
+        meta['acquisitionItemID'] = int(tree.find('.//commonAcquisitionInfo/operationsInfo/acquisitionItemID', namespaces).text)
+        
+        meta['effectiveBaseline'] = float(tree.find('.//acquisitionGeometry/effectiveBaseline', namespaces).text)
+        meta['heightOfAmbiguity'] = float(tree.find('.//acquisitionGeometry/heightOfAmbiguity', namespaces).text)
+        meta['distanceActivePos'] = float(tree.find('.//acquisitionGeometry/distanceActivePos', namespaces).text)
+        meta['distanceTracks'] = float(tree.find('.//acquisitionGeometry/distanceTracks', namespaces).text)
+    
+        meta['cooperativeMode'] = tree.find('.//commonAcquisitionInfo/cooperativeMode', namespaces).text
+        
+        if meta['cooperativeMode'].lower() == "bistatic":
+            meta['bistatic'] = True
+        else:
+            meta['bistatic'] = False
+        
+
+        meta['orbit'] = tree.find('.//acquisitionGeometry/orbitDirection', namespaces).text[0]
+        
+        
+
+        self.primary_scene = os.path.join(self.scene, tree.findall(".//productComponents/component[@componentClass='imageData']/file/location/name", )[0].text)
+        self.secondary_scene = os.path.join(self.scene, tree.findall(".//productComponents/component[@componentClass='imageData']/file/location/name", )[1].text)
+        meta["SAT1"] = TSX(self.primary_scene).scanMetadata()
+        meta["SAT2"] = TSX(self.secondary_scene).scanMetadata()
+        
+        
+                
+        meta['start'] = self.parse_date(tree.find('.//orbitHeader/firstStateTime/firstStateTimeUTC', namespaces).text)
+        meta['stop'] = self.parse_date(tree.find('.//orbitHeader/lastStateTime/lastStateTimeUTC', namespaces).text)
+        meta['samples'] = int(tree.find('.//coregistration/coregRaster/samples', namespaces).text)
+        meta['lines'] = int(tree.find('.//coregistration/coregRaster/lines', namespaces).text)
+        rlks = float(tree.find('.//processingInfo/inSARProcessing/looks/range', namespaces).text)
+        azlks = float(tree.find('.//processingInfo/inSARProcessing/looks/azimuth', namespaces).text)
+        meta['looks'] = (rlks, azlks)
+        meta['incidence'] = float(tree.find('.//commonSceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
+        
+        
+        meta['orbit'] = meta[meta['inSARmasterID']]['orbit']
+        meta['polarizations'] = meta[meta['inSARmasterID']]['polarizations']
+        
+        meta['orbitNumber_abs'] = meta[meta['inSARmasterID']]['orbitNumber_abs']
+        meta['orbitNumber_rel'] = meta[meta['inSARmasterID']]['orbitNumber_rel']
+        meta['cycleNumber'] = meta[meta['inSARmasterID']]['cycleNumber']
+        meta['frameNumber'] = meta[meta['inSARmasterID']]['frameNumber'] 
+        
+        meta['acquisition_mode'] = meta[meta['inSARmasterID']]['acquisition_mode']
+        meta['start'] = meta[meta['inSARmasterID']]['start']
+        meta['stop'] = meta[meta['inSARmasterID']]['stop']
+        meta['spacing'] = meta[meta['inSARmasterID']]['spacing']
+        meta['samples'] = meta[meta['inSARmasterID']]['samples']
+        meta['lines'] = meta[meta['inSARmasterID']]['lines']
+        meta['looks'] = meta[meta['inSARmasterID']]['looks'] 
+        meta['incidence'] = meta[meta['inSARmasterID']]['incidence']
+        
+        return meta
+    
+    def unpack(self, directory, overwrite=False, exist_ok=False):
+        match = self.findfiles(self.pattern, True)
+        header = [x for x in match if not x.endswith('xml') and 'iif' not in x][0].replace(self.scene, '').strip('/')
+        outdir = os.path.join(directory, os.path.basename(header))
+        self._unpack(outdir, offset=header, overwrite=overwrite, exist_ok=exist_ok)
+        
+    
 class Archive(object):
     """
     Utility for storing SAR image metadata in a database
