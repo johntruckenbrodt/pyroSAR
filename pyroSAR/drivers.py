@@ -1938,6 +1938,8 @@ class TSX(ID):
         pts = tree.findall('.//gridPoint')
         lat = [float(x.find('lat').text) for x in pts]
         lon = [float(x.find('lon').text) for x in pts]
+        # shift lon with 180 in case of west direction.
+        lon = [x-360 if x > 180 else x for x in lon ]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def scanMetadata(self):
@@ -1979,25 +1981,18 @@ class TSX(ID):
 
 class TDM(ID):
     """
-    Handler class for TerraSAR-X and TanDEM-X data
+    Handler class for TerraSAR-X and TanDEM-X experimental data
     
     Sensors:
         * TDM1
 
     References:
-        * TX-GS-DD-3302  TerraSAR-X Basic Product Specification Document
-        * TX-GS-DD-3303  TerraSAR-X Experimental Product Description
         * TD-GS-PS-3028  TanDEM-X Experimental Product Description
-        * TerraSAR-X Image Product Guide (Airbus Defence and Space)
     
     Acquisition modes:
-        * ST:    Staring Spotlight
         * HS:    High Resolution SpotLight
-        * HS300: High Resolution SpotLight 300 MHz
         * SL:    SpotLight
         * SM:    StripMap
-        * SC:    ScanSAR
-        * WS:    Wide ScanSAR
     
     Polarisation modes:
         * Single (S): all acquisition modes
@@ -2051,6 +2046,8 @@ class TDM(ID):
         pts = tree.findall('.//sceneCornerCoord')
         lat = [float(x.find('lat').text) for x in pts]
         lon = [float(x.find('lon').text) for x in pts]
+        # shift lon with 180 in case of west direction.
+        lon = [x-360 if x > 180 else x for x in lon ]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     
