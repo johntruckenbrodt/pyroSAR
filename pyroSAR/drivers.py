@@ -1939,7 +1939,7 @@ class TSX(ID):
         pts = tree.findall('.//gridPoint')
         lat = [float(x.find('lat').text) for x in pts]
         lon = [float(x.find('lon').text) for x in pts]
-        # shift lon with 180 in case of west direction.
+        # shift lon in case of west direction.
         lon = [x-360 if x > 180 else x for x in lon ]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
@@ -2047,7 +2047,7 @@ class TDM(TSX):
         pts = tree.findall('.//sceneCornerCoord')
         lat = [float(x.find('lat').text) for x in pts]
         lon = [float(x.find('lon').text) for x in pts]
-        # shift lon with 180 in case of west direction.
+        # shift lon in case of west direction.
         lon = [x-360 if x > 180 else x for x in lon ]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
