@@ -1910,27 +1910,28 @@ class TSX(ID):
     """
     
     def __init__(self, scene):
-        self.scene = os.path.realpath(scene)
+        if isinstance(scene, str):
+            self.scene = os.path.realpath(scene)
         
-        self.pattern = r'^(?P<sat>T[DS]X1)_SAR__' \
-                       r'(?P<prod>SSC|MGD|GEC|EEC)_' \
-                       r'(?P<var>____|SE__|RE__|MON1|MON2|BTX1|BRX2)_' \
-                       r'(?P<mode>SM|SL|HS|HS300|ST|SC)_' \
-                       r'(?P<pols>[SDTQ])_' \
-                       r'(?:SRA|DRA)_' \
-                       r'(?P<start>[0-9]{8}T[0-9]{6})_' \
-                       r'(?P<stop>[0-9]{8}T[0-9]{6})(?:\.xml|)$'
-        
-        self.pattern_ds = r'^IMAGE_(?P<pol>HH|HV|VH|VV)_(?:SRA|FWD|AFT)_(?P<beam>[^\.]+)\.(cos|tif)$'
-        self.examine(include_folders=False)
-        
-        if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
-            raise RuntimeError('folder does not match TSX scene naming convention')
-        
-        self.meta = self.scanMetadata()
-        self.meta['projection'] = crsConvert(4326, 'wkt')
-        
-        super(TSX, self).__init__(self.meta)
+            self.pattern = r'^(?P<sat>T[DS]X1)_SAR__' \
+                        r'(?P<prod>SSC|MGD|GEC|EEC)_' \
+                        r'(?P<var>____|SE__|RE__|MON1|MON2|BTX1|BRX2)_' \
+                        r'(?P<mode>SM|SL|HS|HS300|ST|SC)_' \
+                        r'(?P<pols>[SDTQ])_' \
+                        r'(?:SRA|DRA)_' \
+                        r'(?P<start>[0-9]{8}T[0-9]{6})_' \
+                        r'(?P<stop>[0-9]{8}T[0-9]{6})(?:\.xml|)$'
+            
+            self.pattern_ds = r'^IMAGE_(?P<pol>HH|HV|VH|VV)_(?:SRA|FWD|AFT)_(?P<beam>[^\.]+)\.(cos|tif)$'
+            self.examine(include_folders=False)
+            
+            if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
+                raise RuntimeError('folder does not match TSX scene naming convention')
+            
+            self.meta = self.scanMetadata()
+            self.meta['projection'] = crsConvert(4326, 'wkt')
+            
+            super(TSX, self).__init__(self.meta)
     
     def getCorners(self):
         geocs = self.getFileObj(self.findfiles('GEOREF.xml')[0]).getvalue()
@@ -1979,7 +1980,7 @@ class TSX(ID):
         self._unpack(outdir, offset=header, overwrite=overwrite, exist_ok=exist_ok)
 
 
-class TDM(ID):
+class TDM(TSX):
     """
     Handler class for TerraSAR-X and TanDEM-X experimental data
     
@@ -2118,12 +2119,6 @@ class TDM(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False, exist_ok=False):
-        match = self.findfiles(self.pattern, True)
-        header = [x for x in match if not x.endswith('xml') and 'iif' not in x][0].replace(self.scene, '').strip('/')
-        outdir = os.path.join(directory, os.path.basename(header))
-        self._unpack(outdir, offset=header, overwrite=overwrite, exist_ok=exist_ok)
-        
     
 class Archive(object):
     """
