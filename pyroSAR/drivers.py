@@ -1931,7 +1931,7 @@ class TSX(ID):
             self.meta = self.scanMetadata()
             self.meta['projection'] = crsConvert(4326, 'wkt')
             
-            super(TSX, self).__init__(self.meta)
+        super(TSX, self).__init__(self.meta)
     
     def getCorners(self):
         geocs = self.getFileObj(self.findfiles('GEOREF.xml')[0]).getvalue()
