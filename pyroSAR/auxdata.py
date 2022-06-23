@@ -18,6 +18,7 @@ import csv
 import ssl
 import ftplib
 import requests
+import numpy as np
 import zipfile as zf
 from math import ceil, floor
 from urllib.parse import urlparse
@@ -282,6 +283,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
     with Raster(src) as ras:
         nodata = ras.nodata
         epsg_in = ras.epsg
+        dtype_src = ras.dtype
     
     if t_srs is None:
         epsg_out = epsg_in
@@ -315,12 +317,13 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
         raise TypeError("'threads' must be of type int, str or None. Is: {}".format(type(threads)))
     
     if nodata is None:
-        dstNodata = -32767.0
-    else:
-        dstNodata = nodata
+        dtype_tmp = dtype_src if dtype is None else dtype
+        # when leaving this at None GDAL will assume 0 as srcNodata
+        # having different values for srcNodata and dstNodata was found to cause trouble with VRTs.
+        nodata = np.iinfo(Dtype(dtype_tmp).numpystr).max
     
     gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
-                     'srcNodata': nodata, 'dstNodata': dstNodata,
+                     'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
                      'resampleAlg': resampling_method}
