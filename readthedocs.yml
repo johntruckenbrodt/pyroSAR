@@ -16,3 +16,7 @@ python:
 formats:
   - epub
   - pdf
+
+sphinx:
+  builder: html
+  configuration: docs/conf.py
