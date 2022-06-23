@@ -795,3 +795,13 @@ general
 
 - full support for Sentinel-1 stripmap mode; renamed `SM` naming pattern to `S1..S6` to differentiate different beams
 - bug fixes
+
+0.17.1 | 2022-06-23
+===================
+
+Auxiliary Data Handling
+-----------------------
+- function :func:`pyroSAR.auxdata.dem_create`:
+
+  + use maximum possible value of `dtype` (e.g. 255 for unit8) instead of -32767.0 if the nodata value cannot be read from the source file
+  + always use the same value for source and destination nodata
