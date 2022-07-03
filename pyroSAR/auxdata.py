@@ -18,7 +18,6 @@ import csv
 import ssl
 import ftplib
 import requests
-import numpy as np
 import zipfile as zf
 from math import ceil, floor
 from urllib.parse import urlparse
@@ -232,7 +231,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
 
 def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', threads=None,
-               geoid_convert=False, geoid='EGM96', outputBounds=None, dtype=None, pbar=False):
+               geoid_convert=False, geoid='EGM96', outputBounds=None, nodata=None,
+               dtype=None, pbar=False):
     """
     create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
     
@@ -269,6 +269,9 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
          - 'EGM2008'
     outputBounds: list or None
         output bounds as [xmin, ymin, xmax, ymax] in target SRS
+    nodata: int or float or None
+        the no data value of the source and destination files.
+        Can be used if no source nodata value can be read or to override it.
     dtype: str or None
         override the data type of the written file; Default None: use same type as source data.
         Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
@@ -281,9 +284,12 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
     """
     
     with Raster(src) as ras:
-        nodata = ras.nodata
+        if nodata is None:
+            nodata = ras.nodata
         epsg_in = ras.epsg
-        dtype_src = ras.dtype
+    
+    if nodata is None:
+        raise RuntimeError('the nodata value could not be read from the source file. Please explicitly define it.')
     
     if t_srs is None:
         epsg_out = epsg_in
@@ -315,12 +321,6 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
         multithread = True
     else:
         raise TypeError("'threads' must be of type int, str or None. Is: {}".format(type(threads)))
-    
-    if nodata is None:
-        dtype_tmp = dtype_src if dtype is None else dtype
-        # when leaving this at None GDAL will assume 0 as srcNodata
-        # having different values for srcNodata and dstNodata was found to cause trouble with VRTs.
-        nodata = np.iinfo(Dtype(dtype_tmp).numpystr).max
     
     gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
                      'srcNodata': nodata, 'dstNodata': nodata,
