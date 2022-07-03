@@ -796,7 +796,7 @@ general
 - full support for Sentinel-1 stripmap mode; renamed `SM` naming pattern to `S1..S6` to differentiate different beams
 - bug fixes
 
-0.17.1 | 2022-06-23
+0.17.2 | 2022-06-23
 ===================
 
 Auxiliary Data Handling
@@ -805,3 +805,17 @@ Auxiliary Data Handling
 
   + use maximum possible value of `dtype` (e.g. 255 for unit8) instead of -32767.0 if the nodata value cannot be read from the source file
   + always use the same value for source and destination nodata
+
+0.17.3 | 2022-07-03
+===================
+
+Auxiliary Data Handling
+-----------------------
+- function :func:`pyroSAR.auxdata.dem_create`:
+
+  + In case the nodata value could not be read from the source file, the function used to define a value itself, which is prone to errors. This value now needs to be set by a user via new argument `nodata` if it cannot be read from the source file.
+  + bug fix: no longer try to download 'Copernicus 30m Global DEM' or 'Copernicus 90m Global DEM' tiles that don't exist.
+
+- function :func:`pyroSAR.auxdata.dem_autoload`:
+
+  + new argument `dst_nodata`. This can be used to temporarily override the native nodata value for extrapolation of ocean areas (in combination with ``hide_nodata=True``).
