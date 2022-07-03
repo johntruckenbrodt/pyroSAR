@@ -18,11 +18,10 @@ import csv
 import ssl
 import ftplib
 import requests
-import numpy as np
 import zipfile as zf
 from math import ceil, floor
 from urllib.parse import urlparse
-
+from lxml import etree as ET
 from pyroSAR.examine import ExamineSnap
 from spatialist.raster import Raster, Dtype
 from spatialist.ancillary import dissolve, finder
@@ -36,7 +35,7 @@ log = logging.getLogger(__name__)
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None,
-                 product='dem', nodata=None, hide_nodata=False):
+                 product='dem', nodata=None, dst_nodata=None, hide_nodata=False):
     """
     obtain all relevant DEM tiles for selected geometries
 
@@ -181,6 +180,13 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
           * 'wam': Water Indication Mask
     
+    nodata: int or float or None
+        the no data value of the source files.
+    dst_nodata: int or float or None
+        the nodata value of the VRT file.
+    hide_nodata: bool
+        hide the VRT no data value?
+    
     Returns
     -------
     list or None
@@ -228,11 +234,13 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             buffer=buffer,
                             product=product,
                             nodata=nodata,
+                            dst_nodata=dst_nodata,
                             hide_nodata=hide_nodata)
 
 
 def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', threads=None,
-               geoid_convert=False, geoid='EGM96', outputBounds=None, dtype=None, pbar=False):
+               geoid_convert=False, geoid='EGM96', outputBounds=None, nodata=None,
+               dtype=None, pbar=False):
     """
     create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
     
@@ -269,6 +277,9 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
          - 'EGM2008'
     outputBounds: list or None
         output bounds as [xmin, ymin, xmax, ymax] in target SRS
+    nodata: int or float or None
+        the no data value of the source and destination files.
+        Can be used if no source nodata value can be read or to override it.
     dtype: str or None
         override the data type of the written file; Default None: use same type as source data.
         Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
@@ -281,9 +292,12 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
     """
     
     with Raster(src) as ras:
-        nodata = ras.nodata
+        if nodata is None:
+            nodata = ras.nodata
         epsg_in = ras.epsg
-        dtype_src = ras.dtype
+    
+    if nodata is None:
+        raise RuntimeError('the nodata value could not be read from the source file. Please explicitly define it.')
     
     if t_srs is None:
         epsg_out = epsg_in
@@ -315,12 +329,6 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
         multithread = True
     else:
         raise TypeError("'threads' must be of type int, str or None. Is: {}".format(type(threads)))
-    
-    if nodata is None:
-        dtype_tmp = dtype_src if dtype is None else dtype
-        # when leaving this at None GDAL will assume 0 as srcNodata
-        # having different values for srcNodata and dstNodata was found to cause trouble with VRTs.
-        nodata = np.iinfo(Dtype(dtype_tmp).numpystr).max
     
     gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
                      'srcNodata': nodata, 'dstNodata': nodata,
@@ -419,7 +427,7 @@ class DEMHandler:
         return ext
     
     @staticmethod
-    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None, hide_nodata=False):
+    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None, dst_nodata=None, hide_nodata=False):
         if vsi is not None:
             locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in tiles])]
         else:
@@ -433,6 +441,8 @@ class DEMHandler:
                 'srcNodata': nodata, 'targetAlignedPixels': True,
                 'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata
                 }
+        if dst_nodata is not None:
+            opts['VRTNodata'] = dst_nodata
         gdalbuildvrt(src=locals, dst=vrtfile,
                      options=opts)
     
@@ -617,7 +627,7 @@ class DEMHandler:
         }
     
     def load(self, demType, vrt=None, buffer=None, username=None, password=None,
-             product='dem', nodata=None, hide_nodata=False):
+             product='dem', nodata=None, dst_nodata=None, hide_nodata=False):
         """
         obtain DEM tiles for the given geometries
         
@@ -751,7 +761,8 @@ class DEMHandler:
                             pattern=self.config[demType]['pattern'][product],
                             vsi=self.config[demType]['vsi'],
                             extent=self.__commonextent(buffer),
-                            nodata=nodata, hide_nodata=hide_nodata)
+                            nodata=nodata, dst_nodata=dst_nodata,
+                            hide_nodata=hide_nodata)
             return None
         return locals
     
@@ -797,7 +808,15 @@ class DEMHandler:
                        for x in lon for y in lat]
             base = 'Copernicus_DSM_COG_{res}_{0}_00_{1}_00_DEM'
             skeleton = '{base}/{base}.tif'.format(base=base)
-            remotes = [skeleton.format(res=arcsecs, *item) for item in indices]
+            candidates = [skeleton.format(res=arcsecs, *item) for item in indices]
+            remotes = []
+            for candidate in candidates:
+                response = requests.get(self.config[demType]['url'],
+                                        params={'prefix': candidate})
+                xml = ET.fromstring(response.content)
+                content = xml.findall('.//Contents', namespaces=xml.nsmap)
+                if len(content) > 0:
+                    remotes.append(candidate)
             return remotes
         
         if demType == 'SRTM 1Sec HGT':
