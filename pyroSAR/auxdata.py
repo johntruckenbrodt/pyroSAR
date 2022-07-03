@@ -21,7 +21,7 @@ import requests
 import zipfile as zf
 from math import ceil, floor
 from urllib.parse import urlparse
-
+from lxml import etree as ET
 from pyroSAR.examine import ExamineSnap
 from spatialist.raster import Raster, Dtype
 from spatialist.ancillary import dissolve, finder
@@ -808,7 +808,15 @@ class DEMHandler:
                        for x in lon for y in lat]
             base = 'Copernicus_DSM_COG_{res}_{0}_00_{1}_00_DEM'
             skeleton = '{base}/{base}.tif'.format(base=base)
-            remotes = [skeleton.format(res=arcsecs, *item) for item in indices]
+            candidates = [skeleton.format(res=arcsecs, *item) for item in indices]
+            remotes = []
+            for candidate in candidates:
+                response = requests.get(self.config[demType]['url'],
+                                        params={'prefix': candidate})
+                xml = ET.fromstring(response.content)
+                content = xml.findall('.//Contents', namespaces=xml.nsmap)
+                if len(content) > 0:
+                    remotes.append(candidate)
             return remotes
         
         if demType == 'SRTM 1Sec HGT':
