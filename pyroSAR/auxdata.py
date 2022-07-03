@@ -35,7 +35,7 @@ log = logging.getLogger(__name__)
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None,
-                 product='dem', nodata=None, hide_nodata=False):
+                 product='dem', nodata=None, dst_nodata=None, hide_nodata=False):
     """
     obtain all relevant DEM tiles for selected geometries
 
@@ -180,6 +180,13 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
           * 'wam': Water Indication Mask
     
+    nodata: int or float or None
+        the no data value of the source files.
+    dst_nodata: int or float or None
+        the nodata value of the VRT file.
+    hide_nodata: bool
+        hide the VRT no data value?
+    
     Returns
     -------
     list or None
@@ -227,6 +234,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             buffer=buffer,
                             product=product,
                             nodata=nodata,
+                            dst_nodata=dst_nodata,
                             hide_nodata=hide_nodata)
 
 
@@ -419,7 +427,7 @@ class DEMHandler:
         return ext
     
     @staticmethod
-    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None, hide_nodata=False):
+    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None, dst_nodata=None, hide_nodata=False):
         if vsi is not None:
             locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in tiles])]
         else:
@@ -433,6 +441,8 @@ class DEMHandler:
                 'srcNodata': nodata, 'targetAlignedPixels': True,
                 'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata
                 }
+        if dst_nodata is not None:
+            opts['VRTNodata'] = dst_nodata
         gdalbuildvrt(src=locals, dst=vrtfile,
                      options=opts)
     
@@ -617,7 +627,7 @@ class DEMHandler:
         }
     
     def load(self, demType, vrt=None, buffer=None, username=None, password=None,
-             product='dem', nodata=None, hide_nodata=False):
+             product='dem', nodata=None, dst_nodata=None, hide_nodata=False):
         """
         obtain DEM tiles for the given geometries
         
@@ -751,7 +761,8 @@ class DEMHandler:
                             pattern=self.config[demType]['pattern'][product],
                             vsi=self.config[demType]['vsi'],
                             extent=self.__commonextent(buffer),
-                            nodata=nodata, hide_nodata=hide_nodata)
+                            nodata=nodata, dst_nodata=dst_nodata,
+                            hide_nodata=hide_nodata)
             return None
         return locals
     
