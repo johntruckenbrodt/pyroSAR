@@ -1557,7 +1557,7 @@ class ESA(ID):
         else:
             raise RuntimeError("unsupported adquisition mode: {}".format(self.meta['acquisition_mode']))
        
-        self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax'], self.meta['rangeResolution'], self.meta['azimuthResolution'] = get_angles_resolution(self.meta['sensor'], self.meta['acquisition_mode'], self.meta['SPH_SWATH'], self.meta['start'])
+        self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax'], self.meta['rangeResolution'], self.meta['azimuthResolution'], self.meta['neszNear'], self.meta['neszFar']  = get_angles_resolution(self.meta['sensor'], self.meta['acquisition_mode'], self.meta['SPH_SWATH'], self.meta['start'])
         self.meta['incidence'] = median([self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax']])
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
