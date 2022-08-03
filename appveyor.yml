@@ -48,7 +48,7 @@ install:
   - conda config --add channels conda-forge
 
   # install ESA SNAP
-  - appveyor DownloadFile https://step.esa.int/downloads/%SNAP_VERSION%.0/installers/%SNAP_INSTALLER%
+  - appveyor DownloadFile https://download.esa.int/step/snap/%SNAP_VERSION%.0/installers/%SNAP_INSTALLER%
   - start %SNAP_INSTALLER% -q -dir %SNAP_INSTALL%
 
   - set PATH=%PATH%;%SNAP_INSTALL%\bin
