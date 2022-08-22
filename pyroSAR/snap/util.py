@@ -883,6 +883,8 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     
     tnr = parse_node('ThermalNoiseRemoval')
     wf.insert_node(tnr, before=cal.id)
+    if 'outputNoise' in tnr.parameters.keys():
+        tnr.parameters['outputNoise'] = True
     last = tnr
     ############################################
     if id.product == 'SLC':
