@@ -27,6 +27,7 @@ addons:
       - libproj-dev
       - python3-dev
       - postgresql-14-postgis-3
+      - libffi-dev
 
 services:
   - postgresql
