@@ -9,8 +9,8 @@ environment:
       SNAP_INSTALL: C:\projects\snap
       PGUSER: postgres
       PGPASSWORD: Password12!
-      SNAP_VERSION: 8
-      SNAP_INSTALLER: esa-snap_sentinel_windows-x64_%SNAP_VERSION%_0.exe
+      SNAP_VERSION: 9
+      SNAP_INSTALLER: esa-snap_sentinel_windows-x64_%SNAP_VERSION%_0_0.exe
 
 platform:
   - x64
