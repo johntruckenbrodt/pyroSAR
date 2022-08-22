@@ -42,8 +42,7 @@ before_install:
 
 install:
   - mkdir ~/.cache/pip/wheels # remove warning "Url 'file:///home/travis/.cache/pip/wheels' is ignored: it is neither a file nor a directory."
-  - pip install --ignore-installed six certifi # install packages inside the venv if the system version is too old
-  - pip install --ignore-installed distutils2 # deprecated, but dedicated installation needed for cffi
+  - pip install --ignore-installed setuptools pip six certifi # install packages inside the venv if the system version is too old
   - pip install numpy
   - pip install GDAL==$(gdal-config --version) --global-option=build_ext --global-option="$(gdal-config --cflags)"
   - pip install -r requirements-dev.txt
