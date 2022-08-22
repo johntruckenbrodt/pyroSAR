@@ -883,7 +883,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
         tnr.parameters['outputNoise'] = True
     last = tnr
     ############################################
-    if id.product == 'SLC':
+    if id.product == 'SLC' and id.acquisition_mode in ['EW', 'IW']:
         deb = parse_node('TOPSAR-Deburst')
         wf.insert_node(deb, before=tnr.id)
         last = deb
