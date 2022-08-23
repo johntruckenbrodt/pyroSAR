@@ -341,6 +341,8 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         else:
             for opt in refarea:
                 cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
+        if id.sensor in ['ERS1', 'ERS2', 'ASAR']:
+            cal.parameters['createBetaBand'] = True
         last = cal
         ############################################
         # ThermalNoiseRemoval node configuration
@@ -441,7 +443,10 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         ml = workflow['Multilook']
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
-        ml.parameters['sourceBands'] = None
+        if id.sensor in ['ERS1', 'ERS2', 'ASAR']:
+            ml.parameters['sourceBands'] = bandnames['beta0'] + bandnames['sigma0']
+        else:
+            ml.parameters['sourceBands'] = None
         last = ml
     ############################################
     # Terrain-Flattening node configuration
@@ -449,10 +454,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
     if terrainFlattening:
         tf = parse_node('Terrain-Flattening')
         workflow.insert_node(tf, before=last.id)
-        if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
-            tf.parameters['sourceBands'] = 'Beta0'
-        else:
-            tf.parameters['sourceBands'] = bandnames['beta0']
+        tf.parameters['sourceBands'] = bandnames['beta0']
         if 'reGridMethod' in tf.parameters.keys():
             if externalDEMFile is None:
                 tf.parameters['reGridMethod'] = True

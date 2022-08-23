@@ -49,7 +49,7 @@ from osgeo import gdal, osr, ogr
 from osgeo.gdalconst import GA_ReadOnly
 
 from . import S1
-from .ERS import passdb_query
+from .ERS import passdb_query, get_angles_resolution
 from .xml_util import getNamespaces
 
 from spatialist import crsConvert, sqlite3, Vector, bbox
@@ -68,7 +68,7 @@ import socket
 import time
 import platform
 import subprocess
-
+import json
 import logging
 
 log = logging.getLogger(__name__)
@@ -121,7 +121,7 @@ def identify(scene):
     for handler in ID.__subclasses__():
         try:
             return handler(scene)
-        except (RuntimeError, KeyError):
+        except (RuntimeError, KeyError, AttributeError):
             pass
     raise RuntimeError('data format not supported')
 
@@ -381,8 +381,12 @@ class ID(object):
         """
         foldermode = 1 if include_folders else 0
         
-        files = finder(target=self.scene, matchlist=[pattern],
+        try:
+            files = finder(target=self.scene, matchlist=[pattern],
                        foldermode=foldermode, regex=True)
+        except RuntimeError:
+            # Return the scene if only a file and not zip
+            return self.scene
         
         if os.path.isdir(self.scene) \
                 and re.search(pattern, os.path.basename(self.scene)) \
@@ -401,7 +405,10 @@ class ID(object):
             the metadata attributes
         """
         files = self.findfiles(r'(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)')
-        
+        # If only one file return the file in array
+        if isinstance(files, str):
+            files = [files]
+
         if len(files) == 1:
             prefix = {'zip': '/vsizip/', 'tar': '/vsitar/', None: ''}[self.compression]
             header = files[0]
@@ -416,6 +423,8 @@ class ID(object):
         extension = os.path.splitext(header)[1]
         if extension in ext_lookup:
             meta['sensor'] = ext_lookup[extension]
+            info = gdal.Info(prefix + header, options=gdal.InfoOptions(allMetadata=True, format='json'))
+            meta['extra'] = info
         
         img = gdal.Open(prefix + header, GA_ReadOnly)
         gdalmeta = img.GetMetadata()
@@ -1517,16 +1526,17 @@ class ESA(ID):
                        r'(?P<relative_orbit>[0-9]{5})_' \
                        r'(?P<absolute_orbit>[0-9]{5})_' \
                        r'(?P<counter>[0-9]{4,})\.' \
-                       r'(?P<satellite_ID>[EN][12])' \
-                       r'(?P<extension>(?:\.zip|\.tar\.gz|))$'
-        
+                       r'(?P<satellite_ID>[EN][12])'
         self.pattern_pid = r'(?P<sat_id>(?:SAR|ASA))_' \
                            r'(?P<image_mode>(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_)))_' \
                            r'(?P<processing_level>[012B][CP])'
         
         self.scene = os.path.realpath(scene)
         
-        self.examine()
+        if re.search('.[EN][12]$', self.scene):
+            self.file = self.scene
+        else:
+            self.examine()
         
         match = re.match(re.compile(self.pattern), os.path.basename(self.file))
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
@@ -1535,10 +1545,23 @@ class ESA(ID):
             raise RuntimeError('product level 0 not supported (yet)')
         
         self.meta = self.scanMetadata()
+
+        corners = self.getCorners()
+        self.meta['coordinates'] = [tuple([corners['xmin'], corners['ymin']]),tuple([corners['xmin'], corners['ymax']]),
+                                    tuple([corners['xmax'], corners['ymin']]),tuple([corners['xmax'], corners['ymax']])]
         self.meta['acquisition_mode'] = match2.group('image_mode')
         self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
         self.meta['frameNumber'] = int(match.group('counter'))
-        
+
+        if self.meta['acquisition_mode'] == 'IMS' or self.meta['acquisition_mode'] == 'APS':
+            self.meta['image_geometry'] = 'SLANT_RANGE' 
+        elif self.meta['acquisition_mode'] == 'IMP' or self.meta['acquisition_mode'] == 'APP':
+            self.meta['image_geometry'] = 'GROUND_RANGE'
+        else:
+            raise RuntimeError("unsupported adquisition mode: {}".format(self.meta['acquisition_mode']))
+       
+        self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax'], self.meta['rangeResolution'], self.meta['azimuthResolution'], self.meta['neszNear'], self.meta['neszFar']  = get_angles_resolution(self.meta['sensor'], self.meta['acquisition_mode'], self.meta['SPH_SWATH'], self.meta['start'])
+        self.meta['incidence'] = median([self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax']])
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
     
