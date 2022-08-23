@@ -406,7 +406,7 @@ class ID(object):
         """
         files = self.findfiles(r'(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)')
         # If only one file return the file in array
-        if type(files==str):
+        if isinstance(files, str):
             files = [files]
 
         if len(files) == 1:
@@ -1533,8 +1533,10 @@ class ESA(ID):
         
         self.scene = os.path.realpath(scene)
         
-        # Only a file to examine
-        self.file = self.scene
+        if re.search('.[EN][12]$', self.scene):
+            self.file = self.scene
+        else:
+            self.examine()
         
         match = re.match(re.compile(self.pattern), os.path.basename(self.file))
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
