@@ -13,4 +13,5 @@ dependencies:
   - sqlalchemy-utils>=0.37
   - geoalchemy2
   - gdal>=2.4
+  - pillow
   - lxml

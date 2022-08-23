@@ -13,6 +13,7 @@ dependencies:
   - sqlalchemy-utils>=0.37
   - geoalchemy2
   - gdal>=2.4
+  - pillow
   - lxml
   - coveralls
   - coverage
@@ -21,5 +22,6 @@ dependencies:
   - sphinxcontrib-bibtex>=2.2
   - pip
   - cairosvg
+  - gdal>=2.4
   - pip:
       - sphinxcontrib-svg2pdfconverter

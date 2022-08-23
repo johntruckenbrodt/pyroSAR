@@ -32,6 +32,7 @@ setup(name='pyroSAR',
                         'SQLAlchemy>=1.4',
                         'SQLAlchemy-Utils>=0.37',
                         'GeoAlchemy2',
+                        'Pillow',
                         'lxml'],
       extras_require={
           'docs': ['sphinx', 'sphinxcontrib-bibtex',
