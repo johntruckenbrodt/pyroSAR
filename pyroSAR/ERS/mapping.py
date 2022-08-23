@@ -8,7 +8,8 @@ ANGLES_RESOLUTION = {
                 'azimuth': 21.51,
                 'nesz_near': 26.8,
                 'nesz_far': 26
-            }
+            },
+            'std_dev': 20
         },
         'IMS': {
             'IS2': {
@@ -18,7 +19,8 @@ ANGLES_RESOLUTION = {
                 'azimuth': 9.66,
                 'nesz_near': 26.8,
                 'nesz_far': 26
-            }
+            },
+            'std_dev': 20
         }
     },
     'ERS2' : {
@@ -30,7 +32,8 @@ ANGLES_RESOLUTION = {
                 'azimuth': 25.19,
                 'nesz_near': 23.1,
                 'nesz_far': 21.5
-            }
+            },
+            'std_dev': 20
         },
         'IMS': {
             'IS2': {
@@ -40,7 +43,8 @@ ANGLES_RESOLUTION = {
                 'azimuth': 9.83,
                 'nesz_near': 23.1,
                 'nesz_far': 21.5
-            }
+            },
+            'std_dev': 20
         }
     },
     'ASAR' : {
@@ -100,7 +104,8 @@ ANGLES_RESOLUTION = {
                 'azimuth': 22.14,
                 'nesz_near': 23,
                 'nesz_far': 20.4
-            }
+            },
+            'std_dev': 5
         },
         'IMS': {
             'IS1': {
@@ -158,7 +163,8 @@ ANGLES_RESOLUTION = {
                 'azimuth': 8.43,
                 'nesz_near': 23,
                 'nesz_far': 20.4
-            }
+            },
+            'std_dev': 5
         },
         'APP': {
             'IS1': {
@@ -237,7 +243,8 @@ ANGLES_RESOLUTION = {
                 'azimuth': 27.45,
                 'nesz_near': 23,
                 'nesz_far': 20.4
-            }
+            },
+            'std_dev': 10
         },
         'APS': {
             'IS1': {
@@ -295,7 +302,8 @@ ANGLES_RESOLUTION = {
                 'azimuth': 8.39,
                 'nesz_near': 23,
                 'nesz_far': 20.4
-            }
+            },
+            'std_dev': 10
         },
         'WSM': {
             'SS1': {
@@ -337,7 +345,8 @@ ANGLES_RESOLUTION = {
                 'azimuth': 'TBD',
                 'nesz_near': 28,
                 'nesz_far': 25.4
-            }   
+            },
+            'std_dev': 20   
 
         }   
     }
