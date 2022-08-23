@@ -56,8 +56,8 @@ def test_args_isp():
     assert sum(comp) == len(args_ref)
     
     assert getargs(isp.par_ASAR) == ['ASAR_ERS_file', 'K_dB', 'logpath', 'outdir', 'output_name', 'shellscript']
-    assert getargs(isp.par_EORC_PALSAR) == ['CEOS_data', 'CEOS_leader', 'SLC', 'SLC_par',
-                                            'logpath', 'outdir', 'shellscript']
+    assert getargs(isp.par_EORC_PALSAR) == ['CEOS_data', 'CEOS_leader', 'SLC', 'SLC_par', 'dtype',
+                                            'logpath', 'outdir', 'sc_dB', 'shellscript']
     assert getargs(isp.par_ESA_ERS) == ['CEOS_DAT', 'CEOS_SAR_leader', 'SLC', 'SLC_par', 'inlist',
                                         'logpath', 'outdir', 'shellscript']
     
@@ -72,8 +72,8 @@ def test_args_isp():
                                        'dtype', 'logpath', 'noise_XML', 'noise_pwr', 'outdir', 'sc_dB', 'shellscript']
     assert getargs(isp.par_TX_GRD) == ['GRD', 'GRD_par', 'GeoTIFF', 'annotation_XML', 'logpath',
                                        'outdir', 'pol', 'shellscript']
-    assert getargs(isp.par_TX_SLC) == ['COSAR', 'SLC', 'SLC_par', 'annotation_XML', 'logpath',
-                                       'outdir', 'pol', 'shellscript']
+    assert getargs(isp.par_TX_SLC) == ['COSAR', 'SLC', 'SLC_par', 'annotation_XML', 'dtype',
+                                       'logpath', 'outdir', 'pol', 'shellscript']
     assert getargs(isp.radcal_MLI) == ['CMLI', 'K_dB', 'MLI', 'MLI_par', 'OFF_par', 'ant_flag', 'antenna', 'logpath',
                                        'outdir', 'pix_area', 'refarea_flag', 'rloss_flag', 'sc_dB', 'shellscript']
     assert getargs(isp.radcal_PRI) == ['GRD', 'GRD_par', 'K_dB', 'PRI', 'PRI_par',
@@ -90,7 +90,6 @@ def test_args_isp():
     comp = [x in args for x in args_ref]
     assert sum(comp) == len(args_ref)
     
-    print(args_ref)
     args_ref = ['SLC', 'SLCR_tab', 'SLC_par', 'SLC_tab', 'azlks', 'logpath',
                 'outdir', 'rlks', 'shellscript', 'bflg']
     args = getargs(isp.SLC_mosaic_S1_TOPS)

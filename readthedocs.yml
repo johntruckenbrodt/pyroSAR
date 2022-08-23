@@ -1,13 +1,14 @@
 version: 2
 
 build:
-  image: latest
+  os: "ubuntu-20.04"
+  tools:
+    python: "mambaforge-4.10"
 
 conda:
   environment: environment-dev.yml
 
 python:
-  version: '3.8'
   install:
     - method: setuptools
       path: .
@@ -15,3 +16,7 @@ python:
 formats:
   - epub
   - pdf
+
+sphinx:
+  builder: html
+  configuration: docs/conf.py
