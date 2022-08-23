@@ -40,7 +40,7 @@ before_install:
   - export PATH=$PATH:/opt/snap/bin
 
 install:
-  - mkdir ~/.cache/pip/wheels # remove warning "Url 'file:///home/travis/.cache/pip/wheels' is ignored: it is neither a file nor a directory."
+  - mkdir -p ~/.cache/pip/wheels # remove warning "Url 'file:///home/travis/.cache/pip/wheels' is ignored: it is neither a file nor a directory."
   - pip install --ignore-installed setuptools pip six certifi # install packages inside the venv if the system version is too old
   - pip install numpy
   - pip install GDAL==$(gdal-config --version) --global-option=build_ext --global-option="$(gdal-config --cflags)"
