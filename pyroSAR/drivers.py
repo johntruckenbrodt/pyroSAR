@@ -42,6 +42,7 @@ from datetime import datetime, timedelta
 from time import strptime, strftime
 from statistics import median
 from itertools import groupby
+from PIL import Image
 
 import progressbar as pb
 from osgeo import gdal, osr, ogr
@@ -1724,7 +1725,25 @@ class SAFE(ID):
                 match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
             return match
     
-    def quicklook(self, outname, format='kmz'):
+    def quicklook(self, outname, format='kmz', na_transparent=True):
+        """
+        Write a quicklook file for the scene.
+        
+        Parameters
+        ----------
+        outname: str
+            the file to write
+        format: str
+            the quicklook format. Currently supported options:
+            
+             - kmz
+        na_transparent: bool
+            make NA values transparent?
+
+        Returns
+        -------
+
+        """
         if format != 'kmz':
             raise RuntimeError('currently only kmz is supported as format')
         kml_name = self.findfiles('map-overlay.kml')[0]
@@ -1735,7 +1754,22 @@ class SAFE(ID):
                 kml = kml.replace('Sentinel-1 Map Overlay', self.outname_base())
                 out.writestr('doc.kml', data=kml)
             with self.getFileObj(png_name) as png_in:
-                out.writestr('quick-look.png', data=png_in.getvalue())
+                if na_transparent:
+                    img = Image.open(png_in)
+                    img = img.convert('RGBA')
+                    datas = img.getdata()
+                    newData = []
+                    for item in datas:
+                        if item[0] == 0 and item[1] == 0 and item[2] == 0:
+                            newData.append((0, 0, 0, 0))
+                        else:
+                            newData.append(item)
+                    img.putdata(newData)
+                    buf = BytesIO()
+                    img.save(buf, format='png')
+                    out.writestr('quick-look.png', buf.getvalue())
+                else:
+                    out.writestr('quick-look.png', data=png_in.getvalue())
     
     def resolution(self):
         """

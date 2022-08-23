@@ -7,4 +7,5 @@ psycopg2
 SQLAlchemy>=1.4
 SQLAlchemy-Utils>=0.37
 GeoAlchemy2
+Pillow
 lxml
