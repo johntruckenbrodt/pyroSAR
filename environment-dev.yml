@@ -22,6 +22,5 @@ dependencies:
   - sphinxcontrib-bibtex>=2.2
   - pip
   - cairosvg
-  - gdal>=2.4
   - pip:
       - sphinxcontrib-svg2pdfconverter
