@@ -819,3 +819,23 @@ Auxiliary Data Handling
 - function :func:`pyroSAR.auxdata.dem_autoload`:
 
   + new argument `dst_nodata`. This can be used to temporarily override the native nodata value for extrapolation of ocean areas (in combination with ``hide_nodata=True``).
+
+0.18.0 | 2022-08-24
+===================
+
+Drivers
+-------
+- method :meth:`pyroSAR.drivers.SAFE.quicklook`: new argument `na_transparent`
+- new class :class:`~pyroSAR.drivers.TDM`
+- method :meth:`pyroSAR.drivers.TSX.getCorners`: fixed bug in longitude computation
+- class :class:`~pyroSAR.drivers.ESA`: improved support for ERS and ASAR
+
+
+GAMMA API
+---------
+- :ref:`Command API <gamma-command-api>` compatibility with GAMMA version 20220629
+
+SNAP API
+--------
+- compatibility with SNAP version 9
+- function :func:`~pyroSAR.snap.util.geocode`: improved support for ERS and ASAR
