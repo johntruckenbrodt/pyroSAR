@@ -744,3 +744,98 @@ general
     * renamed argument `sp_rg` to `source_rg`
     * renamed argument `sp_az` to `source_az`
     * replaced arguments `tr_rg` and `tr_az` with unified `target`
+
+0.16.1 | 2022-03-07
+===================
+
+Auxiliary Data Handling
+-----------------------
+- function :func:`pyroSAR.auxdata.get_egm_lookup`:
+
+  + changed URL for PROJ geoid models, which results in better performance for
+    function :func:`pyroSAR.auxdata.dem_create`
+    (See `pyroSAR#200 <https://github.com/johntruckenbrodt/pyroSAR/issues/200>`_).
+
+0.16.2 | 2022-03-14
+===================
+
+SNAP API
+--------
+- function :func:`pyroSAR.snap.util.noise_power`: added missing orbit state vector refinement
+
+0.16.3 | 2022-03-23
+===================
+
+SNAP API
+--------
+- function :func:`pyroSAR.snap.util.noise_power`: pass argument `cleanup` to :func:`~pyroSAR.snap.auxil.gpt` call
+- function :func:`~pyroSAR.snap.auxil.gpt`: shortened names of temporary directories
+- function :func:`~pyroSAR.snap.auxil.erode_edges`: fixed bug in polygon selection
+- function :func:`~pyroSAR.snap.auxil.writer`: do not erode edges of layover-shadow mask
+
+0.17.0 | 2022-05-30
+===================
+
+SNAP API
+--------
+
+- function :func:`pyroSAR.snap.erode_edges`: reuse mask for all images
+
+GAMMA API
+---------
+
+- new function :func:`pyroSAR.gamma.dem.dem_import`
+
+- function :func:`pyroSAR.gamma.geocode`:
+
+  + new argument `update_osv`
+
+general
+-------
+
+- full support for Sentinel-1 stripmap mode; renamed `SM` naming pattern to `S1..S6` to differentiate different beams
+- bug fixes
+
+0.17.2 | 2022-06-23
+===================
+
+Auxiliary Data Handling
+-----------------------
+- function :func:`pyroSAR.auxdata.dem_create`:
+
+  + use maximum possible value of `dtype` (e.g. 255 for unit8) instead of -32767.0 if the nodata value cannot be read from the source file
+  + always use the same value for source and destination nodata
+
+0.17.3 | 2022-07-03
+===================
+
+Auxiliary Data Handling
+-----------------------
+- function :func:`pyroSAR.auxdata.dem_create`:
+
+  + In case the nodata value could not be read from the source file, the function used to define a value itself, which is prone to errors. This value now needs to be set by a user via new argument `nodata` if it cannot be read from the source file.
+  + bug fix: no longer try to download 'Copernicus 30m Global DEM' or 'Copernicus 90m Global DEM' tiles that don't exist.
+
+- function :func:`pyroSAR.auxdata.dem_autoload`:
+
+  + new argument `dst_nodata`. This can be used to temporarily override the native nodata value for extrapolation of ocean areas (in combination with ``hide_nodata=True``).
+
+0.18.0 | 2022-08-24
+===================
+
+Drivers
+-------
+- method :meth:`pyroSAR.drivers.SAFE.quicklook`: new argument `na_transparent`
+- new class :class:`~pyroSAR.drivers.TDM`
+- method :meth:`pyroSAR.drivers.TSX.getCorners`: fixed bug in longitude computation
+- class :class:`~pyroSAR.drivers.ESA`: improved support for ERS and ASAR
+
+
+GAMMA API
+---------
+- :ref:`Command API <gamma-command-api>` compatibility with GAMMA version 20220629
+
+SNAP API
+--------
+- compatibility with SNAP version 9
+- function :func:`~pyroSAR.snap.util.geocode`: improved support for ERS and ASAR

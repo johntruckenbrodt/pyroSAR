@@ -30,7 +30,7 @@ def groupby(images, attribute):
     
     Parameters
     ----------
-    images: list of str
+    images: list[str]
         the names of the images to be sorted
     attribute: str
         the name of the attribute used for sorting;
@@ -38,8 +38,8 @@ def groupby(images, attribute):
     
     Returns
     -------
-    list of lists
-        a list containing a list with image names ofr each group
+    list[list[str]]
+        a list of sub-lists containing the grouped images
     """
     images_sort = sorted(images, key=lambda x: re.search(product_pattern, x).group(attribute))
     out_meta = [[parse_datasetname(images_sort.pop(0))]]
@@ -61,7 +61,7 @@ def groupbyTime(images, function, time):
 
     Parameters
     ----------
-    images: list of str
+    images: list[str]
         a list of image names
     function: function
         a function to derive the time from the image names; see e.g. :func:`seconds`
@@ -70,7 +70,7 @@ def groupbyTime(images, function, time):
 
     Returns
     -------
-    list
+    list[list[str]]
         a list of sub-lists containing the grouped images
     """
     # sort images by time stamp

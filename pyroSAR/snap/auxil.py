@@ -355,9 +355,8 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
         read = workflow['Read']
         scene = identify(read.parameters['file'])
     
-    tmp_base = os.path.basename(tmpdir)
-    tmpdir_bnr = os.path.join(tmpdir, tmp_base + '_bnr')
-    tmpdir_sub = os.path.join(tmpdir, tmp_base + '_sub')
+    tmpdir_bnr = os.path.join(tmpdir, 'bnr')
+    tmpdir_sub = os.path.join(tmpdir, 'sub')
     
     if 'Remove-GRD-Border-Noise' in workflow.ids \
             and removeS1BorderNoiseMethod == 'pyroSAR' \
@@ -376,6 +375,10 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
                 del groups[i][groups[i].index('Remove-GRD-Border-Noise')]
             if len(groups[i]) == 0:
                 del groups[i]
+            elif len(groups[i]) == 1 and groups[i][0] == 'Read':
+                # move Read into the next group if it is the only operator
+                del groups[i]
+                groups[i].insert(0, 'Read')
             else:
                 i += 1
         # unpack the scene if necessary and perform the custom border noise removal
@@ -499,7 +502,7 @@ def writer(xmlfile, outdir, basename_extensions=None,
             else:
                 nodata = 0
             translateoptions['noData'] = nodata
-            if clean_edges and not 'layover_shadow_mask' in basename:
+            if clean_edges and 'layoverShadowMask' not in basename:
                 erode_edges(item, only_boundary=True, pixels=clean_edges_npixels)
             gdal_translate(item, name_new, translateoptions)
     else:
@@ -1455,16 +1458,35 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
     if pixels > 1:
         structure = iterate_structure(structure=structure, iterations=pixels)
     
-    with Raster(infile) as ref:
-        array = ref.array()
-        mask = array != 0
-        if only_boundary:
-            with vectorize(target=mask, reference=ref) as vec:
-                with boundary(vec) as bounds:
-                    with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
-                        mask = new.array()
-        mask2 = binary_erosion(input=mask, structure=structure)
-        array[mask2 == 0] = 0
+    workdir = os.path.dirname(infile)
+    fname_mask = os.path.join(workdir, 'datamask_eroded.tif')
+    write_intermediates = False  # this is intended for debugging
+    
+    if not os.path.isfile(fname_mask):
+        with Raster(infile) as ref:
+            array = ref.array()
+            mask1 = array != 0
+            if write_intermediates:
+                ref.write(fname_mask.replace('eroded', 'original'),
+                          array=mask1, dtype='Byte')
+            if only_boundary:
+                with vectorize(target=mask1, reference=ref) as vec:
+                    with boundary(vec, expression="value=1") as bounds:
+                        with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
+                            mask2 = new.array()
+                            if write_intermediates:
+                                vec.write(fname_mask.replace('eroded.tif', 'original_vectorized.gpkg'))
+                                bounds.write(fname_mask.replace('eroded.tif', 'boundary_vectorized.gpkg'))
+                                new.write(outname=fname_mask.replace('eroded', 'boundary'), dtype='Byte')
+            mask3 = binary_erosion(input=mask2, structure=structure)
+            ref.write(outname=fname_mask, array=mask3, dtype='Byte')
+    else:
+        with Raster(infile) as ref:
+            array = ref.array()
+        with Raster(fname_mask) as ras:
+            mask3 = ras.array()
+    
+    array[mask3 == 0] = 0
     
     ras = gdal.Open(infile, GA_Update)
     band = ras.GetRasterBand(1)
