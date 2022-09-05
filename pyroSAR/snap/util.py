@@ -512,55 +512,12 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = sf
     ############################################
     # configuration of node sequence for specific geocoding approaches
-    if geocoding_type == 'Range-Doppler':
-        tc = parse_node('Terrain-Correction')
-        workflow.insert_node(tc, before=last.id)
-        tc.parameters['sourceBands'] = bands
-    elif geocoding_type == 'SAR simulation cross correlation':
-        sarsim = parse_node('SAR-Simulation')
-        workflow.insert_node(sarsim, before=last.id)
-        sarsim.parameters['sourceBands'] = bands
-        
-        workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
-        
-        tc = parse_node('SARSim-Terrain-Correction')
-        workflow.insert_node(tc, before='Cross-Correlation')
-    else:
-        raise RuntimeError('geocode_type not recognized')
-    
-    tc.parameters['alignToStandardGrid'] = alignToStandardGrid
-    tc.parameters['standardGridOriginX'] = standardGridOriginX
-    tc.parameters['standardGridOriginY'] = standardGridOriginY
+    tc = tc_parametrize(workflow=workflow, before=last.id, spacing=spacing,
+                        t_srs=t_srs, tc_method=geocoding_type, bands=bands,
+                        alignToStandardGrid=alignToStandardGrid,
+                        standardGridOriginX=standardGridOriginX,
+                        standardGridOriginY=standardGridOriginY)
     last = tc
-    #######################
-    # specify spatial resolution and coordinate reference system of the output dataset
-    tc.parameters['pixelSpacingInMeter'] = spacing
-    
-    try:
-        # try to convert the CRS into EPSG code (for readability in the workflow XML)
-        t_srs = crsConvert(t_srs, 'epsg')
-    except TypeError:
-        raise RuntimeError("format of parameter 't_srs' not recognized")
-    except RuntimeError:
-        # this error can occur when the CRS does not have a corresponding EPSG code
-        # in this case the original CRS representation is written to the workflow
-        pass
-    
-    # the EPSG code 4326 is not supported by SNAP and thus the WKT string has to be defined;
-    # in all other cases defining EPSG:{code} will do
-    if t_srs == 4326:
-        t_srs = 'GEOGCS["WGS84(DD)",' \
-                'DATUM["WGS84",' \
-                'SPHEROID["WGS84", 6378137.0, 298.257223563]],' \
-                'PRIMEM["Greenwich", 0.0],' \
-                'UNIT["degree", 0.017453292519943295],' \
-                'AXIS["Geodetic longitude", EAST],' \
-                'AXIS["Geodetic latitude", NORTH]]'
-    
-    if isinstance(t_srs, int):
-        t_srs = 'EPSG:{}'.format(t_srs)
-    
-    tc.parameters['mapProjection'] = t_srs
     ############################################
     # (optionally) add node for conversion from linear to db scaling
     if scaling not in ['dB', 'db', 'linear']:
