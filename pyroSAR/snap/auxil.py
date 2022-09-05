@@ -1540,18 +1540,26 @@ def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, con
     return orb
 
 
-def tc_parametrize(workflow, before, spacing, t_srs, demName='SRTM 1Sec HGT',
-                   externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
+def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
+                   bands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
+                   externalDEMNoDataValue=None, externalDEMApplyEGM=True,
                    alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0):
     """
-    convenience function for parametrizing an `Terrain-Correction` node and inserting it into a workflow.
+    convenience function for parametrizing a terrain correction node and inserting it into a workflow.
     
     Parameters
     ----------
     workflow: Workflow
         the SNAP workflow object
     before: str
-        the ID of the node after which the `Apply-Orbit-File` node will be inserted
+        the ID of the node after which the terrain correction node will be inserted
+    tc_method: str
+        the terrain correction method. Supported options:
+        
+         - Range-Doppler (SNAP node `Terrain-Correction`)
+         - SAR simulation cross correlation (SNAP nodes `SAR-Simulation` and `SARSim-Terrain-Correction`)
+    bands: list[str] or None
+        the image band names to geocode; default None: geocode all incoming bands.
     spacing: int or float
         The target pixel spacing in meters.
     t_srs: int, str or osr.SpatialReference
@@ -1588,10 +1596,21 @@ def tc_parametrize(workflow, before, spacing, t_srs, demName='SRTM 1Sec HGT',
     Returns
     -------
     Node
-        the node object
+        the terrain correction node object
     """
-    tc = parse_node('Terrain-Correction')
-    workflow.insert_node(tc, before=before)
+    if tc_method == 'Range-Doppler':
+        tc = parse_node('Terrain-Correction')
+        workflow.insert_node(tc, before=before)
+        tc.parameters['sourceBands'] = bands
+    elif tc_method == 'SAR simulation cross correlation':
+        sarsim = parse_node('SAR-Simulation')
+        workflow.insert_node(sarsim, before=before)
+        sarsim.parameters['sourceBands'] = bands
+        workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
+        tc = parse_node('SARSim-Terrain-Correction')
+        workflow.insert_node(tc, before='Cross-Correlation')
+    else:
+        raise RuntimeError('tc_method not recognized')
     
     tc.parameters['demResamplingMethod'] = 'BILINEAR_INTERPOLATION'
     tc.parameters['imgResamplingMethod'] = 'BILINEAR_INTERPOLATION'
