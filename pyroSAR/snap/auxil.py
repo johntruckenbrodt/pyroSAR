@@ -1619,7 +1619,8 @@ def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=
 def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
                    bands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
                    externalDEMNoDataValue=None, externalDEMApplyEGM=True,
-                   alignToStandardGrid=True, standardGridOriginX=0, standardGridOriginY=0):
+                   alignToStandardGrid=True, standardGridOriginX=0, standardGridOriginY=0,
+                   nodataValueAtSea=False):
     """
     convenience function for parametrizing a terrain correction node and inserting it into a workflow.
     
@@ -1668,6 +1669,8 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         The x origin value for grid alignment
     standardGridOriginY: int or float
         The y origin value for grid alignment
+    nodataValueAtSea:bool
+        mask values over sea?
 
     Returns
     -------
@@ -1722,6 +1725,8 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         t_srs = 'EPSG:{}'.format(t_srs)
     
     tc.parameters['mapProjection'] = t_srs
+
+    tc.parameters['nodataValueAtSea'] = nodataValueAtSea
     
     # select DEM type
     dempar = {'externalDEMFile': externalDEMFile,
