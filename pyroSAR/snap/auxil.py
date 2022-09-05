@@ -1619,7 +1619,7 @@ def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=
 def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
                    bands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
                    externalDEMNoDataValue=None, externalDEMApplyEGM=True,
-                   alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0):
+                   alignToStandardGrid=True, standardGridOriginX=0, standardGridOriginY=0):
     """
     convenience function for parametrizing a terrain correction node and inserting it into a workflow.
     
