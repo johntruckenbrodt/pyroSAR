@@ -17,9 +17,10 @@ import shutil
 from ..drivers import identify, identify_many, ID
 from ..ancillary import multilook_factors
 from ..auxdata import get_egm_lookup
-from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, windows_fileprefix, orb_parametrize, tc_parametrize
+from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, \
+    windows_fileprefix, orb_parametrize, tc_parametrize, sub_parametrize
 
-from spatialist import crsConvert, Vector, Raster, bbox, intersect
+from spatialist import Raster
 from spatialist.ancillary import dissolve
 
 import logging
@@ -368,59 +369,13 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = deb
     ############################################
     # Apply-Orbit-File node configuration
-    orb = orb_parametrize(scene=id, workflow=workflow, before=last.id,
-                          formatName=formatName, allow_RES_OSV=allow_RES_OSV)
-    last = orb
+    last = orb_parametrize(scene=id, workflow=workflow, before=last.id,
+                           formatName=formatName, allow_RES_OSV=allow_RES_OSV)
     ############################################
     # Subset node configuration
-    #######################
-    # (optionally) add subset node and add bounding box coordinates of defined shapefile
-    if shapefile:
-        if isinstance(shapefile, dict):
-            ext = shapefile
-        else:
-            if isinstance(shapefile, Vector):
-                shp = shapefile.clone()
-            elif isinstance(shapefile, str):
-                shp = Vector(shapefile)
-            else:
-                raise TypeError("argument 'shapefile' must be either a dictionary, a Vector object or a string.")
-            # reproject the geometry to WGS 84 latlon
-            shp.reproject(4326)
-            ext = shp.extent
-            shp.close()
-        # add an extra buffer of 0.01 degrees
-        buffer = 0.01
-        ext['xmin'] -= buffer
-        ext['ymin'] -= buffer
-        ext['xmax'] += buffer
-        ext['ymax'] += buffer
-        with bbox(ext, 4326) as bounds:
-            inter = intersect(id.bbox(), bounds)
-            if not inter:
-                raise RuntimeError('no bounding box intersection between shapefile and scene')
-            inter.close()
-            wkt = bounds.convert2wkt()[0]
-        
-        subset = parse_node('Subset')
-        workflow.insert_node(subset, before=last.id)
-        subset.parameters['region'] = [0, 0, id.samples, id.lines]
-        subset.parameters['geoRegion'] = wkt
-        subset.parameters['copyMetadata'] = True
-        last = subset
-    #######################
-    # (optionally) configure Subset node for pixel offsets
-    if offset and not shapefile:
-        subset = parse_node('Subset')
-        workflow.insert_node(subset, before=last.id)
-        
-        # left, right, top and bottom offset in pixels
-        l, r, t, b = offset
-        
-        subset_values = [l, t, id.samples - l - r, id.lines - t - b]
-        subset.parameters['region'] = subset_values
-        subset.parameters['geoRegion'] = ''
-        last = subset
+    if shapefile is not None or offset is not None:
+        last = sub_parametrize(scene=id, workflow=workflow, before=last.id,
+                               geometry=shapefile, offset=offset, buffer=0.01)
     ############################################
     # Multilook node configuration
     try:

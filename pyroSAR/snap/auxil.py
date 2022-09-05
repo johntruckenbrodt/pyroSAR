@@ -24,7 +24,7 @@ from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import windows_fileprefix
 from pyroSAR.auxdata import get_egm_lookup
 
-from spatialist import Raster, vectorize, rasterize, boundary
+from spatialist import Vector, Raster, vectorize, rasterize, boundary, intersect, bbox
 from spatialist.auxil import gdal_translate, crsConvert
 from spatialist.ancillary import finder, run
 
@@ -1519,7 +1519,7 @@ def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, con
     Returns
     -------
     Node
-        the node object
+        the Apply-Orbit-File node object
     """
     orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
                     'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
@@ -1538,6 +1538,82 @@ def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, con
     orb.parameters['orbitType'] = orbitType
     orb.parameters['continueOnFail'] = continueOnFail
     return orb
+
+
+def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=0.01):
+    """
+    convenience function for parametrizing an `Subset` node and inserting it into a workflow.
+    
+    Parameters
+    ----------
+    scene: pyroSAR.drivers.ID
+        The SAR scene to be processed
+    workflow: Workflow
+        the SNAP workflow object
+    before: str
+        the ID of the node after which the `Apply-Orbit-File` node will be inserted
+    geometry: dict or spatialist.vector.Vector or str or None
+        A vector geometry for geographic subsetting:
+        
+         - :class:`~spatialist.vector.Vector`: a vector object in arbitrary CRS
+         - :class:`str`: a name of a fiel that can be read with :class:`~spatialist.vector.Vector`
+         - :class:`dict`: a dictionary with keys `xmin`, `xmax`, `ymin`, `ymax` in LatLon coordinates
+    offset: tuple or None
+        a tuple with pixel coordinates as (left, right, top, bottom)
+    buffer: int or float
+        an additional buffer in degrees to add around the `geometry`
+
+    Returns
+    -------
+    Node
+        the Subset node object
+    """
+    if geometry:
+        if isinstance(geometry, dict):
+            ext = geometry
+        else:
+            if isinstance(geometry, Vector):
+                shp = geometry.clone()
+            elif isinstance(geometry, str):
+                shp = Vector(geometry)
+            else:
+                raise TypeError("argument 'geometry' must be either a dictionary, a Vector object or a filename.")
+            # reproject the geometry to WGS 84 latlon
+            shp.reproject(4326)
+            ext = shp.extent
+            shp.close()
+        # add an extra buffer
+        ext['xmin'] -= buffer
+        ext['ymin'] -= buffer
+        ext['xmax'] += buffer
+        ext['ymax'] += buffer
+        with bbox(ext, 4326) as bounds:
+            inter = intersect(scene.bbox(), bounds)
+            if not inter:
+                raise RuntimeError('no bounding box intersection between shapefile and scene')
+            inter.close()
+            wkt = bounds.convert2wkt()[0]
+        
+        subset = parse_node('Subset')
+        workflow.insert_node(subset, before=before)
+        subset.parameters['region'] = [0, 0, scene.samples, scene.lines]
+        subset.parameters['geoRegion'] = wkt
+        subset.parameters['copyMetadata'] = True
+    #######################
+    # (optionally) configure Subset node for pixel offsets
+    elif offset and not geometry:
+        subset = parse_node('Subset')
+        workflow.insert_node(subset, before=before)
+        
+        # left, right, top and bottom offset in pixels
+        l, r, t, b = offset
+        
+        subset_values = [l, t, scene.samples - l - r, scene.lines - t - b]
+        subset.parameters['region'] = subset_values
+        subset.parameters['geoRegion'] = ''
+    else:
+        raise RuntimeError("one of 'geometry' and 'offset' must be set")
+    return subset
 
 
 def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
