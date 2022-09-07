@@ -1556,7 +1556,7 @@ def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=
         A vector geometry for geographic subsetting:
         
          - :class:`~spatialist.vector.Vector`: a vector object in arbitrary CRS
-         - :class:`str`: a name of a fiel that can be read with :class:`~spatialist.vector.Vector`
+         - :class:`str`: a name of a file that can be read with :class:`~spatialist.vector.Vector` in arbitrary CRS
          - :class:`dict`: a dictionary with keys `xmin`, `xmax`, `ymin`, `ymax` in LatLon coordinates
     offset: tuple or None
         a tuple with pixel coordinates as (left, right, top, bottom)
@@ -1620,7 +1620,7 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
                    bands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
                    externalDEMNoDataValue=None, externalDEMApplyEGM=True,
                    alignToStandardGrid=True, standardGridOriginX=0, standardGridOriginY=0,
-                   nodataValueAtSea=False):
+                   nodataValueAtSea=False, export_extra=None):
     """
     convenience function for parametrizing a terrain correction node and inserting it into a workflow.
     
@@ -1671,6 +1671,14 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         The y origin value for grid alignment
     nodataValueAtSea:bool
         mask values over sea?
+    export_extra: list[str] or None
+        a list of ancillary layers to write. Supported options:
+        
+         - DEM
+         - incidenceAngleFromEllipsoid
+         - layoverShadowMask
+         - localIncidenceAngle
+         - projectedLocalIncidenceAngle
 
     Returns
     -------
@@ -1725,8 +1733,20 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         t_srs = 'EPSG:{}'.format(t_srs)
     
     tc.parameters['mapProjection'] = t_srs
-
+    
     tc.parameters['nodataValueAtSea'] = nodataValueAtSea
+    
+    export_extra_options = \
+        ['DEM',
+         'incidenceAngleFromEllipsoid',
+         'layoverShadowMask',
+         'localIncidenceAngle',
+         'projectedLocalIncidenceAngle']
+    if export_extra is not None:
+        for item in export_extra:
+            if item in export_extra_options:
+                key = f'save{item[0].upper()}{item[1:]}'
+                tc.parameters[key] = True
     
     # select DEM type
     dempar = {'externalDEMFile': externalDEMFile,
