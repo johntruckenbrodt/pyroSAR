@@ -15,10 +15,10 @@ import os
 import re
 import shutil
 from ..drivers import identify, identify_many, ID
-from ..ancillary import multilook_factors
 from ..auxdata import get_egm_lookup
 from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, \
-    windows_fileprefix, orb_parametrize, tc_parametrize, sub_parametrize
+    windows_fileprefix, orb_parametrize, tc_parametrize, sub_parametrize, \
+    mli_parametrize
 
 from spatialist import Raster
 from spatialist.ancillary import dissolve
@@ -378,30 +378,13 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
                                geometry=shapefile, offset=offset, buffer=0.01)
     ############################################
     # Multilook node configuration
-    try:
-        image_geometry = id.meta['image_geometry']
-        incidence = id.meta['incidence']
-    except KeyError:
-        raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
-    
-    if rlks is None and azlks is None:
-        rlks, azlks = multilook_factors(source_rg=id.spacing[0],
-                                        source_az=id.spacing[1],
-                                        target=spacing,
-                                        geometry=image_geometry,
-                                        incidence=incidence)
-    if [rlks, azlks].count(None) > 0:
-        raise RuntimeError("'rlks' and 'azlks' must either both be integers or None")
-    
-    if azlks > 1 or rlks > 1:
-        workflow.insert_node(parse_node('Multilook'), before=last.id)
-        ml = workflow['Multilook']
-        ml.parameters['nAzLooks'] = azlks
-        ml.parameters['nRgLooks'] = rlks
-        if id.sensor in ['ERS1', 'ERS2', 'ASAR']:
-            ml.parameters['sourceBands'] = bandnames['beta0'] + bandnames['sigma0']
-        else:
-            ml.parameters['sourceBands'] = None
+    if id.sensor in ['ERS1', 'ERS2', 'ASAR']:
+        bands = bandnames['beta0'] + bandnames['sigma0']
+    else:
+        bands = None
+    ml = mli_parametrize(scene=id, workflow=workflow, before=last.id,
+                         spacing=spacing, rlks=rlks, azlks=azlks, bands=bands)
+    if ml is not None:
         last = ml
     ############################################
     # Terrain-Flattening node configuration
@@ -810,28 +793,9 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     last = select
     ############################################
     # Multilook node configuration
-    
-    try:
-        image_geometry = id.meta['image_geometry']
-        incidence = id.meta['incidence']
-    except KeyError:
-        raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
-    
-    if rlks is None and azlks is None:
-        rlks, azlks = multilook_factors(source_rg=id.spacing[0],
-                                        source_az=id.spacing[1],
-                                        target=spacing,
-                                        geometry=image_geometry,
-                                        incidence=incidence)
-    if [rlks, azlks].count(None) > 0:
-        raise RuntimeError("'rlks' and 'azlks' must either both be integers or None")
-    
-    if azlks > 1 or rlks > 1:
-        wf.insert_node(parse_node('Multilook'), before=last.id)
-        ml = wf['Multilook']
-        ml.parameters['nAzLooks'] = azlks
-        ml.parameters['nRgLooks'] = rlks
-        ml.parameters['sourceBands'] = None
+    ml = mli_parametrize(scene=id, workflow=wf, before=last.id,
+                         spacing=spacing, rlks=rlks, azlks=azlks)
+    if ml is not None:
         last = ml
     ############################################
     tc = tc_parametrize(workflow=wf, before=last.id,

@@ -21,7 +21,7 @@ import xml.etree.ElementTree as ET
 
 from pyroSAR import identify
 from pyroSAR.examine import ExamineSnap
-from pyroSAR.ancillary import windows_fileprefix
+from pyroSAR.ancillary import windows_fileprefix, multilook_factors
 from pyroSAR.auxdata import get_egm_lookup
 
 from spatialist import Vector, Raster, vectorize, rasterize, boundary, intersect, bbox
@@ -1494,6 +1494,63 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
     band.FlushCache()
     band = None
     ras = None
+
+
+def mli_parametrize(scene, workflow, before, spacing=None, rlks=None, azlks=None, bands=None):
+    """
+    Convenience function for parametrizing a `Multilook` node.
+    
+    Parameters
+    ----------
+    scene: pyroSAR.drivers.ID
+        The SAR scene to be processed
+    workflow: Workflow
+        the SNAP workflow object
+    before: str
+        the ID of the node after which the `Multilook` node will be inserted
+    spacing: int or float or None
+        the target pixel spacing for automatic determination of looks using function
+        :func:`~pyroSAR.ancillary.multilook_factors`. Overrides arguments `rlks` and `azlks`.
+    rlks: int or None
+        the number of range looks
+    azlks: int or None
+        the number of azimuth looks
+    bands: list[str] or None
+        an optional list of bands names
+
+    Returns
+    -------
+    Node or None
+        either a `Node` object if multilooking is necessary (either `rlks` or `azlks` are greater than 1) or None.
+    
+    See Also
+    --------
+    pyroSAR.ancillary.multilook_factors
+    """
+    try:
+        image_geometry = scene.meta['image_geometry']
+        incidence = scene.meta['incidence']
+    except KeyError:
+        raise RuntimeError('This function does not yet support sensor {}'.format(scene.sensor))
+    
+    if rlks is None and azlks is None:
+        if spacing is None:
+            raise RuntimeError("either 'spacing' or 'rlks' and 'azlks' must set to numeric values")
+        rlks, azlks = multilook_factors(source_rg=scene.spacing[0],
+                                        source_az=scene.spacing[1],
+                                        target=spacing,
+                                        geometry=image_geometry,
+                                        incidence=incidence)
+    if [rlks, azlks].count(None) > 0:
+        raise RuntimeError("'rlks' and 'azlks' must either both be integers or None")
+    
+    if azlks > 1 or rlks > 1:
+        workflow.insert_node(parse_node('Multilook'), before=before)
+        ml = workflow['Multilook']
+        ml.parameters['nAzLooks'] = azlks
+        ml.parameters['nRgLooks'] = rlks
+        ml.parameters['sourceBands'] = bands
+        return ml
 
 
 def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, continueOnFail=False):
