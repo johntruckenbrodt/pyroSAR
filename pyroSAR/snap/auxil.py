@@ -1510,7 +1510,7 @@ def mli_parametrize(scene, workflow, before, spacing=None, rlks=None, azlks=None
         the ID of the node after which the `Multilook` node will be inserted
     spacing: int or float or None
         the target pixel spacing for automatic determination of looks using function
-        :func:`~pyroSAR.ancillary.multilook_factors`. Overrides arguments `rlks` and `azlks`.
+        :func:`~pyroSAR.ancillary.multilook_factors`. Overridden by arguments `rlks` and `azlks` if they are not None.
     rlks: int or None
         the number of range looks
     azlks: int or None
@@ -1676,7 +1676,7 @@ def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=
 def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
                    bands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
                    externalDEMNoDataValue=None, externalDEMApplyEGM=True,
-                   alignToStandardGrid=True, standardGridOriginX=0, standardGridOriginY=0,
+                   alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
                    nodataValueAtSea=False, export_extra=None):
     """
     convenience function for parametrizing a terrain correction node and inserting it into a workflow.
