@@ -1676,7 +1676,8 @@ def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=
 def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
                    bands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
                    externalDEMNoDataValue=None, externalDEMApplyEGM=True,
-                   alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
+                   alignToStandardGrid=False, standardGridAreaOrPoint='point',
+                   standardGridOriginX=0, standardGridOriginY=0,
                    nodataValueAtSea=False, export_extra=None):
     """
     convenience function for parametrizing a terrain correction node and inserting it into a workflow.
@@ -1722,6 +1723,8 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         Apply Earth Gravitational Model to external DEM? Default is True.
     alignToStandardGrid: bool
         Align all processed images to a common grid?
+    standardGridAreaOrPoint: str
+        treat alignment coordinate as pixel center ('point', SNAP default) or upper left ('area').
     standardGridOriginX: int or float
         The x origin value for grid alignment
     standardGridOriginY: int or float
@@ -1758,6 +1761,10 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
     
     tc.parameters['demResamplingMethod'] = 'BILINEAR_INTERPOLATION'
     tc.parameters['imgResamplingMethod'] = 'BILINEAR_INTERPOLATION'
+    
+    if standardGridAreaOrPoint == 'area':
+        standardGridOriginX -= spacing / 2
+        standardGridOriginY += spacing / 2
     tc.parameters['alignToStandardGrid'] = alignToStandardGrid
     tc.parameters['standardGridOriginX'] = standardGridOriginX
     tc.parameters['standardGridOriginY'] = standardGridOriginY
