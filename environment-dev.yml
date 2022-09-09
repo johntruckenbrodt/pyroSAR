@@ -5,13 +5,16 @@ channels:
 dependencies:
   - progressbar2
   - numpy
-  - spatialist>=0.10.1
+  - spatialist>=0.11.0
   - pyyaml
   - requests
   - psycopg2
   - sqlalchemy>=1.4
   - sqlalchemy-utils>=0.37
   - geoalchemy2
+  - gdal>=2.4
+  - pillow
+  - lxml
   - coveralls
   - coverage
   - pytest
@@ -19,6 +22,5 @@ dependencies:
   - sphinxcontrib-bibtex>=2.2
   - pip
   - cairosvg
-  - gdal>=2.4
   - pip:
       - sphinxcontrib-svg2pdfconverter

@@ -12,6 +12,7 @@
 # to the terms contained in the LICENSE.txt file.
 ###############################################################################
 import os
+import re
 import shutil
 from ..drivers import identify, identify_many, ID
 from ..ancillary import multilook_factors
@@ -289,7 +290,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
             swaths = ['IW1', 'IW2', 'IW3']
         elif id.acquisition_mode == 'EW':
             swaths = ['EW1', 'EW2', 'EW3', 'EW4', 'EW5']
-        elif id.acquisition_mode == 'SM':
+        elif re.search('S[1-6]', id.acquisition_mode):
             pass
         else:
             raise RuntimeError('acquisition mode {} not supported'.format(id.acquisition_mode))
@@ -340,6 +341,8 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         else:
             for opt in refarea:
                 cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
+        if id.sensor in ['ERS1', 'ERS2', 'ASAR']:
+            cal.parameters['createBetaBand'] = True
         last = cal
         ############################################
         # ThermalNoiseRemoval node configuration
@@ -440,7 +443,10 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         ml = workflow['Multilook']
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
-        ml.parameters['sourceBands'] = None
+        if id.sensor in ['ERS1', 'ERS2', 'ASAR']:
+            ml.parameters['sourceBands'] = bandnames['beta0'] + bandnames['sigma0']
+        else:
+            ml.parameters['sourceBands'] = None
         last = ml
     ############################################
     # Terrain-Flattening node configuration
@@ -448,10 +454,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
     if terrainFlattening:
         tf = parse_node('Terrain-Flattening')
         workflow.insert_node(tf, before=last.id)
-        if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
-            tf.parameters['sourceBands'] = 'Beta0'
-        else:
-            tf.parameters['sourceBands'] = bandnames['beta0']
+        tf.parameters['sourceBands'] = bandnames['beta0']
         if 'reGridMethod' in tf.parameters.keys():
             if externalDEMFile is None:
                 tf.parameters['reGridMethod'] = True
@@ -878,9 +881,11 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     
     tnr = parse_node('ThermalNoiseRemoval')
     wf.insert_node(tnr, before=cal.id)
+    if 'outputNoise' in tnr.parameters.keys():
+        tnr.parameters['outputNoise'] = True
     last = tnr
     ############################################
-    if id.product == 'SLC':
+    if id.product == 'SLC' and id.acquisition_mode in ['EW', 'IW']:
         deb = parse_node('TOPSAR-Deburst')
         wf.insert_node(deb, before=tnr.id)
         last = deb

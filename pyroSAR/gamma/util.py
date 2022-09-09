@@ -534,7 +534,7 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20, logpath=No
 
 
 def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=1,
-            nodata=(0, -99), osvdir=None, allow_RES_OSV=False,
+            nodata=(0, -99), update_osv=True, osvdir=None, allow_RES_OSV=False,
             cleanup=True, export_extra=None, basename_extensions=None,
             removeS1BorderNoiseMethod='gamma', refine_lut=False, rlks=None, azlks=None):
     """
@@ -551,9 +551,9 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         a temporary directory for writing intermediate files
     outdir: str
         the directory for the final GeoTIFF output files
-    spacing: int
+    spacing: float or int
         the target pixel spacing in meters
-    scaling: {'linear', 'db'} or list
+    scaling: str or list[str]
         the value scaling of the backscatter values; either 'linear', 'db' or a list of both, i.e. ['linear', 'db']
     func_geoback: {0, 1, 2, 3, 4, 5, 6, 7}
         backward geocoding interpolation mode (see GAMMA command `geocode_back`)
@@ -575,10 +575,12 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         
             GAMMA recommendation for MLI data: "The interpolation should be performed on
             the square root of the data. A mid-order (3 to 5) B-spline interpolation is recommended."
-    nodata: tuple
+    nodata: tuple[float or int]
         the nodata values for the output files; defined as a tuple with two values, the first for linear,
         the second for logarithmic scaling
-    osvdir: str
+    update_osv: bool
+        update the orbit state vectors?
+    osvdir: str or None
         a directory for Orbit State Vector files;
         this is currently only used by for Sentinel-1 where two subdirectories POEORB and RESORB are created;
         if set to None, a subdirectory OSV is created in the directory of the unpacked scene.
@@ -740,19 +742,21 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
                               S1_bnr=gamma_bnr, exist_ok=exist_ok, return_fnames=True)
         images.extend(files)
     
-    for scene in scenes:
-        if scene.sensor in ['S1A', 'S1B']:
-            log.info('updating orbit state vectors')
-            if allow_RES_OSV:
-                osvtype = ['POE', 'RES']
-            else:
-                osvtype = 'POE'
-            try:
-                correctOSV(id=scene, directory=tmpdir, osvdir=osvdir, osvType=osvtype,
-                           logpath=path_log, outdir=tmpdir, shellscript=shellscript)
-            except RuntimeError:
-                log.warning('orbit state vector correction failed for scene {}'.format(scene.scene))
-                return
+    if update_osv:
+        for scene in scenes:
+            if scene.sensor in ['S1A', 'S1B']:
+                log.info('updating orbit state vectors')
+                if allow_RES_OSV:
+                    osvtype = ['POE', 'RES']
+                else:
+                    osvtype = 'POE'
+                try:
+                    correctOSV(id=scene, directory=tmpdir, osvdir=osvdir, osvType=osvtype,
+                               logpath=path_log, outdir=tmpdir, shellscript=shellscript)
+                except RuntimeError:
+                    msg = 'orbit state vector correction failed for scene {}'
+                    log.warning(msg.format(scene.scene))
+                    return
     
     log.info('calibrating')
     images_cal = []

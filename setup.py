@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup, find_namespace_packages
 import os
 
 # Create .pyrosar in HOME - Directory
@@ -11,7 +11,7 @@ with open(os.path.join(directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(name='pyroSAR',
-      packages=find_packages(),
+      packages=find_namespace_packages(),
       include_package_data=True,
       python_requires='>=3',
       setup_requires=['setuptools_scm'],
@@ -25,13 +25,15 @@ setup(name='pyroSAR',
       ],
       install_requires=['progressbar2',
                         'numpy',
-                        'spatialist>=0.10.1',
+                        'spatialist>=0.11.0',
                         'pyyaml',
                         'requests',
                         'psycopg2',
                         'SQLAlchemy>=1.4',
                         'SQLAlchemy-Utils>=0.37',
-                        'GeoAlchemy2'],
+                        'GeoAlchemy2',
+                        'Pillow',
+                        'lxml'],
       extras_require={
           'docs': ['sphinx', 'sphinxcontrib-bibtex',
                    'cairosvg', 'sphinxcontrib-svg2pdfconverter'],

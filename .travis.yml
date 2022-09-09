@@ -1,4 +1,4 @@
-dist: focal
+dist: jammy
 language: python
 sudo: required
 cache:
@@ -11,12 +11,11 @@ env:
     - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
     - TESTDATA_DIR=$HOME/testdata
     - PGUSER=travis
-    - PGPORT=5433
     - PGPASSWORD=Password12!
-    - SNAP_VERSION=8
+    - SNAP_VERSION=9
 
 addons:
-  postgresql: '12'
+  postgresql: '14'
   apt:
     sources:
       - sourceline: 'ppa:ubuntugis/ppa'
@@ -26,7 +25,7 @@ addons:
       - libsqlite3-mod-spatialite
       - libproj-dev
       - python3-dev
-      - postgresql-12-postgis-3
+      - postgresql-14-postgis-3
 
 services:
   - postgresql
@@ -35,13 +34,14 @@ python:
   - '3.7'
 
 before_install:
-  - export SNAP_INSTALLER=esa-snap_sentinel_unix_"$SNAP_VERSION"_0.sh
-  - wget -O $SNAP_INSTALLER https://step.esa.int/downloads/"$SNAP_VERSION".0/installers/"$SNAP_INSTALLER"
+  - export SNAP_INSTALLER=esa-snap_sentinel_unix_"$SNAP_VERSION"_0_0.sh
+  - wget -O $SNAP_INSTALLER https://download.esa.int/step/snap/"$SNAP_VERSION".0/installers/"$SNAP_INSTALLER"
   - bash $SNAP_INSTALLER -q
   - export PATH=$PATH:/opt/snap/bin
 
 install:
-  - pip install --ignore-installed six certifi # install packages inside the venv if the system version is too old
+  - mkdir -p ~/.cache/pip/wheels # remove warning "Url 'file:///home/travis/.cache/pip/wheels' is ignored: it is neither a file nor a directory."
+  - pip install --ignore-installed setuptools pip six certifi # install packages inside the venv if the system version is too old
   - pip install numpy
   - pip install GDAL==$(gdal-config --version) --global-option=build_ext --global-option="$(gdal-config --cflags)"
   - pip install -r requirements-dev.txt

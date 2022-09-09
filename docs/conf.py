@@ -48,7 +48,7 @@ autosummary_generate = []
 version_spatialist = get_version('spatialist')
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
-                       'requests': ('https://docs.python-requests.org/en/latest', None),
+                       'requests': ('https://requests.readthedocs.io/en/latest', None),
                        'scipy': ('https://docs.scipy.org/doc/scipy', None),
                        'spatialist': ('https://spatialist.readthedocs.io/en/v{}'
                                       .format(version_spatialist), None),

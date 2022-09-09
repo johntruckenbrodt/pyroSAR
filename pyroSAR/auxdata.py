@@ -20,10 +20,8 @@ import ftplib
 import requests
 import zipfile as zf
 from math import ceil, floor
-from urllib.request import urlopen
-from urllib.error import HTTPError
 from urllib.parse import urlparse
-
+from lxml import etree as ET
 from pyroSAR.examine import ExamineSnap
 from spatialist.raster import Raster, Dtype
 from spatialist.ancillary import dissolve, finder
@@ -37,7 +35,7 @@ log = logging.getLogger(__name__)
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None,
-                 product='dem', nodata=None, hide_nodata=False):
+                 product='dem', nodata=None, dst_nodata=None, hide_nodata=False):
     """
     obtain all relevant DEM tiles for selected geometries
 
@@ -182,6 +180,13 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
           * 'wam': Water Indication Mask
     
+    nodata: int or float or None
+        the no data value of the source files.
+    dst_nodata: int or float or None
+        the nodata value of the VRT file.
+    hide_nodata: bool
+        hide the VRT no data value?
+    
     Returns
     -------
     list or None
@@ -229,11 +234,13 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             buffer=buffer,
                             product=product,
                             nodata=nodata,
+                            dst_nodata=dst_nodata,
                             hide_nodata=hide_nodata)
 
 
 def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', threads=None,
-               geoid_convert=False, geoid='EGM96', outputBounds=None, dtype=None, pbar=False):
+               geoid_convert=False, geoid='EGM96', outputBounds=None, nodata=None,
+               dtype=None, pbar=False):
     """
     create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
     
@@ -270,6 +277,9 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
          - 'EGM2008'
     outputBounds: list or None
         output bounds as [xmin, ymin, xmax, ymax] in target SRS
+    nodata: int or float or None
+        the no data value of the source and destination files.
+        Can be used if no source nodata value can be read or to override it.
     dtype: str or None
         override the data type of the written file; Default None: use same type as source data.
         Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
@@ -282,8 +292,12 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
     """
     
     with Raster(src) as ras:
-        nodata = ras.nodata
+        if nodata is None:
+            nodata = ras.nodata
         epsg_in = ras.epsg
+    
+    if nodata is None:
+        raise RuntimeError('the nodata value could not be read from the source file. Please explicitly define it.')
     
     if t_srs is None:
         epsg_out = epsg_in
@@ -413,7 +427,7 @@ class DEMHandler:
         return ext
     
     @staticmethod
-    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None, hide_nodata=False):
+    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None, dst_nodata=None, hide_nodata=False):
         if vsi is not None:
             locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in tiles])]
         else:
@@ -427,6 +441,8 @@ class DEMHandler:
                 'srcNodata': nodata, 'targetAlignedPixels': True,
                 'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata
                 }
+        if dst_nodata is not None:
+            opts['VRTNodata'] = dst_nodata
         gdalbuildvrt(src=locals, dst=vrtfile,
                      options=opts)
     
@@ -476,19 +492,17 @@ class DEMHandler:
         os.makedirs(outdir, exist_ok=True)
         locals = []
         for file in files:
-            infile = '{}/{}'.format(url, file)
-            outfile = os.path.join(outdir, os.path.basename(file))
-            if not os.path.isfile(outfile):
-                try:
-                    input = urlopen(infile)
-                    log.info('{} <<-- {}'.format(outfile, infile))
-                except HTTPError:
-                    continue
-                with open(outfile, 'wb') as output:
-                    output.write(input.read())
-                input.close()
-            if os.path.isfile(outfile):
-                locals.append(outfile)
+            remote = '{}/{}'.format(url, file)
+            local = os.path.join(outdir, os.path.basename(file))
+            if not os.path.isfile(local):
+                log.info('{} <<-- {}'.format(local, remote))
+                r = requests.get(remote)
+                r.raise_for_status()
+                with open(local, 'wb') as output:
+                    output.write(r.content)
+                r.close()
+            if os.path.isfile(local):
+                locals.append(local)
         return sorted(locals)
     
     def __retrieve_ftp(self, url, filenames, outdir, username, password, port=0):
@@ -613,7 +627,7 @@ class DEMHandler:
         }
     
     def load(self, demType, vrt=None, buffer=None, username=None, password=None,
-             product='dem', nodata=None, hide_nodata=False):
+             product='dem', nodata=None, dst_nodata=None, hide_nodata=False):
         """
         obtain DEM tiles for the given geometries
         
@@ -721,6 +735,9 @@ class DEMHandler:
             remotes.extend(self.remote_ids(corners, demType=demType,
                                            username=username, password=password))
         
+        if len(remotes) == 0:
+            raise RuntimeError('could not find DEM tiles for the area of interest')
+        
         if demType in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM',
                        'Copernicus 30m Global DEM II', 'Copernicus 90m Global DEM II']:
             port = 0
@@ -744,7 +761,8 @@ class DEMHandler:
                             pattern=self.config[demType]['pattern'][product],
                             vsi=self.config[demType]['vsi'],
                             extent=self.__commonextent(buffer),
-                            nodata=nodata, hide_nodata=hide_nodata)
+                            nodata=nodata, dst_nodata=dst_nodata,
+                            hide_nodata=hide_nodata)
             return None
         return locals
     
@@ -759,7 +777,7 @@ class DEMHandler:
         demType: str
             the type fo DEM to be used
         username: str or None
-            the download account user name
+            the download account username
         password: str or None
             the download account password
 
@@ -790,7 +808,15 @@ class DEMHandler:
                        for x in lon for y in lat]
             base = 'Copernicus_DSM_COG_{res}_{0}_00_{1}_00_DEM'
             skeleton = '{base}/{base}.tif'.format(base=base)
-            remotes = [skeleton.format(res=arcsecs, *item) for item in indices]
+            candidates = [skeleton.format(res=arcsecs, *item) for item in indices]
+            remotes = []
+            for candidate in candidates:
+                response = requests.get(self.config[demType]['url'],
+                                        params={'prefix': candidate})
+                xml = ET.fromstring(response.content)
+                content = xml.findall('.//Contents', namespaces=xml.nsmap)
+                if len(content) > 0:
+                    remotes.append(candidate)
             return remotes
         
         if demType == 'SRTM 1Sec HGT':
@@ -870,7 +896,11 @@ class DEMHandler:
                             remotes.append(target)
                             remotes_base.append(base)
             
-            ftp_search(path + '/', ids)
+            if len(ids) < len(indices):
+                log.warning('the available DEM tiles do not fully cover the area of interest')
+            
+            if len(ids) > 0:
+                ftp_search(path + '/', ids)
             ftp.quit()
         
         elif demType == 'Copernicus 30m Global DEM':
@@ -975,6 +1005,7 @@ def get_egm_lookup(geoid, software):
             r.raise_for_status()
             with open(local, 'wb') as out:
                 out.write(r.content)
+            r.close()
     
     elif software == 'PROJ':
         gtx_lookup = {'EGM96': 'us_nga_egm96_15.tif',
@@ -992,6 +1023,7 @@ def get_egm_lookup(geoid, software):
                 r.raise_for_status()
                 with open(gtx_local, 'wb') as out:
                     out.write(r.content)
+                r.close()
         else:
             raise RuntimeError("environment variable 'PROJ_LIB' not set")
     else:
