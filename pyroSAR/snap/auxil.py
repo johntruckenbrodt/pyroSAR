@@ -1678,7 +1678,9 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
                    externalDEMNoDataValue=None, externalDEMApplyEGM=True,
                    alignToStandardGrid=False, standardGridAreaOrPoint='point',
                    standardGridOriginX=0, standardGridOriginY=0,
-                   nodataValueAtSea=False, export_extra=None):
+                   nodataValueAtSea=False, export_extra=None,
+                   demResamplingMethod='BILINEAR_INTERPOLATION',
+                   imgResamplingMethod='BILINEAR_INTERPOLATION'):
     """
     convenience function for parametrizing a terrain correction node and inserting it into a workflow.
     
@@ -1739,6 +1741,10 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
          - layoverShadowMask
          - localIncidenceAngle
          - projectedLocalIncidenceAngle
+    demResamplingMethod: str
+        the DEM resampling method
+    imgResamplingMethod: str
+        the image resampling method
 
     Returns
     -------
@@ -1759,8 +1765,8 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
     else:
         raise RuntimeError('tc_method not recognized')
     
-    tc.parameters['demResamplingMethod'] = 'BILINEAR_INTERPOLATION'
-    tc.parameters['imgResamplingMethod'] = 'BILINEAR_INTERPOLATION'
+    tc.parameters['demResamplingMethod'] = demResamplingMethod
+    tc.parameters['imgResamplingMethod'] = imgResamplingMethod
     
     if standardGridAreaOrPoint == 'area':
         standardGridOriginX -= spacing / 2
