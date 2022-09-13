@@ -35,7 +35,7 @@ log = logging.getLogger(__name__)
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None,
-                 product='dem', nodata=None, dst_nodata=None, hide_nodata=False):
+                 product='dem', nodata=None, dst_nodata=None, hide_nodata=False, crop=True):
     """
     obtain all relevant DEM tiles for selected geometries
 
@@ -186,6 +186,9 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         the nodata value of the VRT file.
     hide_nodata: bool
         hide the VRT no data value?
+    crop: bool
+        crop to the provided geometries (or return the full extent of the DEM tiles)?
+        Argument `buffer` is ignored if set to `False`.
     
     Returns
     -------
@@ -235,7 +238,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             product=product,
                             nodata=nodata,
                             dst_nodata=dst_nodata,
-                            hide_nodata=hide_nodata)
+                            hide_nodata=hide_nodata,
+                            crop=crop)
 
 
 def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', threads=None,
@@ -428,7 +432,8 @@ class DEMHandler:
         return ext
     
     @staticmethod
-    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None, dst_nodata=None, hide_nodata=False):
+    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None,
+                   dst_nodata=None, hide_nodata=False, crop=True):
         if vsi is not None:
             locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in tiles])]
         else:
@@ -437,13 +442,13 @@ class DEMHandler:
             if nodata is None:
                 nodata = ras.nodata
             xres, yres = ras.res
-        opts = {'outputBounds': (extent['xmin'], extent['ymin'],
-                                 extent['xmax'], extent['ymax']),
-                'srcNodata': nodata, 'targetAlignedPixels': True,
-                'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata
-                }
+        opts = {'srcNodata': nodata, 'targetAlignedPixels': True,
+                'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata}
         if dst_nodata is not None:
             opts['VRTNodata'] = dst_nodata
+        if crop:
+            opts['outputBounds'] = (extent['xmin'], extent['ymin'],
+                                    extent['xmax'], extent['ymax'])
         gdalbuildvrt(src=locals, dst=vrtfile,
                      options=opts)
     
@@ -634,7 +639,8 @@ class DEMHandler:
         }
     
     def load(self, demType, vrt=None, buffer=None, username=None, password=None,
-             product='dem', nodata=None, dst_nodata=None, hide_nodata=False):
+             product='dem', nodata=None, dst_nodata=None, hide_nodata=False,
+             crop=True):
         """
         obtain DEM tiles for the given geometries
         
@@ -715,8 +721,15 @@ class DEMHandler:
               * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
               * 'wam': Water Indication Mask
         nodata: int or float or None
-            the no data value to write in the VRT if it will be written.
-            If `None`, the value of the source products is passed on.
+            overrides the nodata values of the source files.
+            If `None`, the value of the source products is read passed on.
+        dst_nodata: int or float or None
+            the VRT nodata value.
+        hide_nodata: bool
+            hide the nodata value in the VRT?
+        crop: bool
+            crop to the provided geometries (or return the full extent of the DEM tiles)?
+            Argument `buffer` is ignored if set to `False`.
 
         Returns
         -------
@@ -769,9 +782,9 @@ class DEMHandler:
                             vsi=self.config[demType]['vsi'],
                             extent=self.__commonextent(buffer),
                             nodata=nodata, dst_nodata=dst_nodata,
-                            hide_nodata=hide_nodata)
-            return None
-        return locals
+                            hide_nodata=hide_nodata, crop=crop)
+        else:
+            return locals
     
     def remote_ids(self, extent, demType, username=None, password=None):
         """
