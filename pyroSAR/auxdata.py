@@ -277,9 +277,10 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
          - 'EGM2008'
     outputBounds: list or None
         output bounds as [xmin, ymin, xmax, ymax] in target SRS
-    nodata: int or float or None
+    nodata: int or float or str or None
         the no data value of the source and destination files.
         Can be used if no source nodata value can be read or to override it.
+        A special string 'None' can be used to skip reading the value from the source file.
     dtype: str or None
         override the data type of the written file; Default None: use same type as source data.
         Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
