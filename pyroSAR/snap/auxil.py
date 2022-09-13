@@ -456,9 +456,6 @@ def writer(xmlfile, outdir, basename_extensions=None,
             if dem_name in dem_nodata_lookup.keys():
                 dem_nodata = dem_nodata_lookup[dem_name]
     
-    if src_format == 'BEAM-DIMAP':
-        src = src.replace('.dim', '.data')
-    
     src_base = os.path.splitext(os.path.basename(src))[0]
     outname_base = os.path.join(outdir, src_base)
     
@@ -467,6 +464,11 @@ def writer(xmlfile, outdir, basename_extensions=None,
         log.info(message.format('cleaning image edges and ' if clean_edges else ''))
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
+        
+        erode_edges(src=src, only_boundary=True, pixels=clean_edges_npixels)
+        
+        if src_format == 'BEAM-DIMAP':
+            src = src.replace('.dim', '.data')
         for item in finder(src, ['*.img'], recursive=False):
             pattern = '(?P<refarea>(?:Sig|Gam)ma0)_(?P<pol>[HV]{2})'
             basename = os.path.basename(item)
@@ -502,8 +504,6 @@ def writer(xmlfile, outdir, basename_extensions=None,
             else:
                 nodata = 0
             translateoptions['noData'] = nodata
-            if clean_edges and 'layoverShadowMask' not in basename:
-                erode_edges(item, only_boundary=True, pixels=clean_edges_npixels)
             gdal_translate(item, name_new, translateoptions)
     else:
         raise RuntimeError('The output file format must be ENVI or BEAM-DIMAP.')
@@ -1414,7 +1414,7 @@ def value2str(value):
     return strval
 
 
-def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
+def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
     """
     Erode noisy edge pixels in SNAP-processed images.
     It was discovered that images contain border pixel artifacts after `Terrain-Correction`.
@@ -1430,8 +1430,9 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
     
     Parameters
     ----------
-    infile: str
-        a single-layer file to modify in-place. 0 is assumed as no data value.
+    src: str
+        a processed SAR image in BEAM-DIMAP format (*.dim) or a directory with *.img files (ENVI format).
+        0 is assumed as no data value.
     only_boundary: bool
         only erode edges at the image boundary (or also at data gaps caused by e.g. masking during Terrain-Flattening)?
     connectedness: int
@@ -1445,6 +1446,24 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
     -------
 
     """
+    images = None
+    if src.endswith('.dim'):
+        workdir = src.replace('.dim', '.data')
+    elif src.endswith('.img'):
+        images = [src]
+        workdir = None
+    elif os.path.isdir(src):
+        workdir = src
+    else:
+        raise RuntimeError("'src' must be either a file in BEAM-DIMAP format (extension '.dim'), "
+                           "an ENVI file with extension *.img, or a directory.")
+    
+    if images is None:
+        images = [x for x in finder(workdir, ['*.img'], recursive=False)
+                  if 'layoverShadowMask' not in x]
+    if len(images) == 0:
+        raise RuntimeError("could not find any files with extension '.img'")
+    
     from scipy.ndimage import binary_erosion, generate_binary_structure, iterate_structure
     
     if connectedness == 4:
@@ -1458,42 +1477,55 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
     if pixels > 1:
         structure = iterate_structure(structure=structure, iterations=pixels)
     
-    workdir = os.path.dirname(infile)
-    fname_mask = os.path.join(workdir, 'datamask_eroded.tif')
+    if workdir is not None:
+        fname_mask = os.path.join(workdir, 'datamask_eroded.tif')
+    else:
+        fname_mask = os.path.join(os.path.dirname(src), 'datamask_eroded.tif')
     write_intermediates = False  # this is intended for debugging
     
-    if not os.path.isfile(fname_mask):
-        with Raster(infile) as ref:
-            array = ref.array()
-            mask1 = array != 0
-            if write_intermediates:
-                ref.write(fname_mask.replace('eroded', 'original'),
-                          array=mask1, dtype='Byte')
-            if only_boundary:
-                with vectorize(target=mask1, reference=ref) as vec:
-                    with boundary(vec, expression="value=1") as bounds:
-                        with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
-                            mask2 = new.array()
-                            if write_intermediates:
-                                vec.write(fname_mask.replace('eroded.tif', 'original_vectorized.gpkg'))
-                                bounds.write(fname_mask.replace('eroded.tif', 'boundary_vectorized.gpkg'))
-                                new.write(outname=fname_mask.replace('eroded', 'boundary'), dtype='Byte')
-            mask3 = binary_erosion(input=mask2, structure=structure)
-            ref.write(outname=fname_mask, array=mask3, dtype='Byte')
-    else:
-        with Raster(infile) as ref:
-            array = ref.array()
-        with Raster(fname_mask) as ras:
-            mask3 = ras.array()
+    def erosion(src, dst, structure, only_boundary, write_intermediates=False):
+        if not os.path.isfile(dst):
+            with Raster(src) as ref:
+                array = ref.array()
+                mask = array != 0
+                if write_intermediates:
+                    ref.write(dst.replace('eroded', 'original'),
+                              array=mask, dtype='Byte')
+                if only_boundary:
+                    with vectorize(target=mask, reference=ref) as vec:
+                        with boundary(vec, expression="value=1") as bounds:
+                            with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
+                                mask = new.array()
+                                if write_intermediates:
+                                    vec.write(dst.replace('eroded.tif', 'original_vectorized.gpkg'))
+                                    bounds.write(dst.replace('eroded.tif', 'boundary_vectorized.gpkg'))
+                                    new.write(outname=dst.replace('eroded', 'boundary'), dtype='Byte')
+                mask = binary_erosion(input=mask, structure=structure)
+                ref.write(outname=dst, array=mask, dtype='Byte')
+        else:
+            with Raster(dst) as ras:
+                mask = ras.array()
+        array[mask == 0] = 0
+        return array, mask
     
-    array[mask3 == 0] = 0
-    
-    ras = gdal.Open(infile, GA_Update)
-    band = ras.GetRasterBand(1)
-    band.WriteArray(array)
-    band.FlushCache()
-    band = None
-    ras = None
+    mask = None
+    for img in images:
+        print(img)
+        if mask is None:
+            array, mask = erosion(src=img, dst=fname_mask,
+                                  structure=structure, only_boundary=only_boundary,
+                                  write_intermediates=write_intermediates)
+        else:
+            with Raster(img) as ras:
+                array = ras.array()
+            array[mask == 0] = 0
+        
+        ras = gdal.Open(img, GA_Update)
+        band = ras.GetRasterBand(1)
+        band.WriteArray(array)
+        band.FlushCache()
+        band = None
+        ras = None
 
 
 def mli_parametrize(scene, workflow, before, spacing=None, rlks=None, azlks=None, bands=None):
