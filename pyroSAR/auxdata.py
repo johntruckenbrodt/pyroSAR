@@ -871,15 +871,19 @@ class DEMHandler:
             ftp.login(username, password)
             ftp.cwd(path)
             
-            obj = io.BytesIO()
-            ftp.retrbinary('RETR mapping.csv', obj.write)
-            obj = obj.getvalue().decode('utf-8').splitlines()
+            outdir = os.path.join(self.auxdatapath, 'dem', demType)
+            os.makedirs(outdir, exist_ok=True)
+            mapping = os.path.join(outdir, 'mapping.csv')
+            if not os.path.isfile(mapping):
+                with open(mapping, 'wb') as myfile:
+                    ftp.retrbinary('RETR mapping.csv', myfile.write)
             
             ids = []
-            stream = csv.reader(obj, delimiter=';')
-            for row in stream:
-                if row[1] + row[2] in indices:
-                    ids.append(row[0])
+            with open(mapping) as obj:
+                stream = csv.reader(obj, delimiter=';')
+                for row in stream:
+                    if row[1] + row[2] in indices:
+                        ids.append(row[0])
             
             remotes = []
             remotes_base = []
