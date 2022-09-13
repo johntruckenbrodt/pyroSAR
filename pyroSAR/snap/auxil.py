@@ -1510,7 +1510,6 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
     
     mask = None
     for img in images:
-        print(img)
         if mask is None:
             array, mask = erosion(src=img, dst=fname_mask,
                                   structure=structure, only_boundary=only_boundary,
