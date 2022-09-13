@@ -110,7 +110,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
     buffer: int, float, None
         a buffer in degrees to add around the individual geometries
     username: str or None
-        (optional) the user name for services requiring registration
+        (optional) the username for services requiring registration
     password: str or None
         (optional) the password for the registration account
     product: str
@@ -492,16 +492,19 @@ class DEMHandler:
         files = list(set(filenames))
         os.makedirs(outdir, exist_ok=True)
         locals = []
-        for file in files:
+        n = len(files)
+        for i, file in enumerate(files):
             remote = '{}/{}'.format(url, file)
             local = os.path.join(outdir, os.path.basename(file))
             if not os.path.isfile(local):
-                log.info('{} <<-- {}'.format(local, remote))
+                log.info('[{}/{}] {} <<-- {}'.format(i + 1, n, local, remote))
                 r = requests.get(remote)
                 r.raise_for_status()
                 with open(local, 'wb') as output:
                     output.write(r.content)
                 r.close()
+            else:
+                log.info('[{}/{}] found local file: {}'.format(i + 1, n, local))
             if os.path.isfile(local):
                 locals.append(local)
         return sorted(locals)
@@ -529,7 +532,8 @@ class DEMHandler:
         if parsed.path != '':
             ftp.cwd(parsed.path)
         locals = []
-        for product_remote in files:
+        n = len(files)
+        for i, product_remote in enumerate(files):
             product_local = os.path.join(outdir, os.path.basename(product_remote))
             if not os.path.isfile(product_local):
                 try:
@@ -538,9 +542,11 @@ class DEMHandler:
                     continue
                 address = '{}://{}/{}{}'.format(parsed.scheme, parsed.netloc,
                                                 parsed.path + '/' if parsed.path != '' else '', product_remote)
-                log.info('{} <<-- {}'.format(product_local, address))
+                log.info('[{}/{}] {} <<-- {}'.format(i + 1, n, product_local, address))
                 with open(product_local, 'wb') as myfile:
                     ftp.retrbinary('RETR {}'.format(product_remote), myfile.write)
+            else:
+                log.info('[{}/{}] found local file: {}'.format(i + 1, n, product_local))
             if os.path.isfile(product_local):
                 locals.append(product_local)
         ftp.close()
