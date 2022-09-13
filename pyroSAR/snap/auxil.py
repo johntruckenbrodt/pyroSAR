@@ -1478,9 +1478,9 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
         structure = iterate_structure(structure=structure, iterations=pixels)
     
     if workdir is not None:
-        fname_mask = os.path.join(workdir, 'datamask_eroded.tif')
+        fname_mask = os.path.join(workdir, 'datamask.tif')
     else:
-        fname_mask = os.path.join(os.path.dirname(src), 'datamask_eroded.tif')
+        fname_mask = os.path.join(os.path.dirname(src), 'datamask.tif')
     write_intermediates = False  # this is intended for debugging
     
     def erosion(src, dst, structure, only_boundary, write_intermediates=False):
@@ -1489,7 +1489,7 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
                 array = ref.array()
                 mask = array != 0
                 if write_intermediates:
-                    ref.write(dst.replace('eroded', 'original'),
+                    ref.write(dst.replace('.tif', '_init.tif'),
                               array=mask, dtype='Byte')
                 if only_boundary:
                     with vectorize(target=mask, reference=ref) as vec:
@@ -1497,9 +1497,9 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
                             with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
                                 mask = new.array()
                                 if write_intermediates:
-                                    vec.write(dst.replace('eroded.tif', 'original_vectorized.gpkg'))
-                                    bounds.write(dst.replace('eroded.tif', 'boundary_vectorized.gpkg'))
-                                    new.write(outname=dst.replace('eroded', 'boundary'), dtype='Byte')
+                                    vec.write(dst.replace('.tif', '_init_vectorized.gpkg'))
+                                    bounds.write(dst.replace('.tif', '_boundary_vectorized.gpkg'))
+                                    new.write(outname=dst.replace('.tif', '_boundary.tif'), dtype='Byte')
                 mask = binary_erosion(input=mask, structure=structure)
                 ref.write(outname=dst, array=mask, dtype='Byte')
         else:
