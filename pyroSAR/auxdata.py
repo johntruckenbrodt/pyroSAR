@@ -501,14 +501,16 @@ class DEMHandler:
             remote = '{}/{}'.format(url, file)
             local = os.path.join(outdir, os.path.basename(file))
             if not os.path.isfile(local):
-                log.info('[{}/{}] {} <<-- {}'.format(i + 1, n, local, remote))
+                msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local, r=remote))
                 r = requests.get(remote)
                 r.raise_for_status()
                 with open(local, 'wb') as output:
                     output.write(r.content)
                 r.close()
             else:
-                log.info('[{}/{}] found local file: {}'.format(i + 1, n, local))
+                msg = '[{i: >{w}}/{n}] found local file: {l}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local))
             if os.path.isfile(local):
                 locals.append(local)
         return sorted(locals)
@@ -546,11 +548,13 @@ class DEMHandler:
                     continue
                 address = '{}://{}/{}{}'.format(parsed.scheme, parsed.netloc,
                                                 parsed.path + '/' if parsed.path != '' else '', product_remote)
-                log.info('[{}/{}] {} <<-- {}'.format(i + 1, n, product_local, address))
+                msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=product_local, r=address))
                 with open(product_local, 'wb') as myfile:
                     ftp.retrbinary('RETR {}'.format(product_remote), myfile.write)
             else:
-                log.info('[{}/{}] found local file: {}'.format(i + 1, n, product_local))
+                msg = '[{i: >{w}}/{n}] found local file: {l}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=product_local))
             if os.path.isfile(product_local):
                 locals.append(product_local)
         ftp.close()
