@@ -11,7 +11,6 @@
 # copied, modified, propagated, or distributed except according
 # to the terms contained in the LICENSE.txt file.
 ###############################################################################
-import io
 import os
 import re
 import csv
@@ -882,50 +881,67 @@ class DEMHandler:
             indices = [''.join(index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
             
-            ftp = ImplicitFTP_TLS()
-            parsed = urlparse(self.config[demType]['url'])
-            host = parsed.netloc
-            path = parsed.path
-            ftp.connect(host=host, port=self.config[demType]['port'])
-            ftp.login(username, password)
-            ftp.cwd(path)
-            
             outdir = os.path.join(self.auxdatapath, 'dem', demType)
-            os.makedirs(outdir, exist_ok=True)
             mapping = os.path.join(outdir, 'mapping.csv')
-            if not os.path.isfile(mapping):
-                with open(mapping, 'wb') as myfile:
-                    ftp.retrbinary('RETR mapping.csv', myfile.write)
+            mapping2 = os.path.join(outdir, 'mapping_append.csv')
             
-            ids = []
-            with open(mapping) as obj:
+            def ftp_search(ftp, target):
+                out = []
+                if target.endswith('/'):
+                    print(target)
+                    content = ftp.nlst(target)
+                    for item in content:
+                        out.extend(ftp_search(ftp, target + item))
+                else:
+                    if target.endswith('DEM.tar'):
+                        out.append(target.encode('latin-1').decode('utf-8'))
+                return out
+            
+            def ftp_connect(host, path, username, password, port=990):
+                ftp = ImplicitFTP_TLS()
+                ftp.connect(host=host, port=port)
+                ftp.login(username, password)
+                ftp.cwd(path)
+                return ftp
+            
+            if not os.path.isfile(mapping2):
+                parsed = urlparse(self.config[demType]['url'])
+                host = parsed.netloc
+                path = parsed.path
+                ftp = None
+                os.makedirs(outdir, exist_ok=True)
+                if not os.path.isfile(mapping):
+                    print('downloading mapping.csv')
+                    ftp = ftp_connect(host, path, username, password,
+                                      port=self.config[demType]['port'])
+                    with open(mapping, 'wb') as myfile:
+                        ftp.retrbinary('RETR mapping.csv', myfile.write)
+                print('searching FTP server')
+                if ftp is None:
+                    ftp = ftp_connect(host, path, username, password,
+                                      port=self.config[demType]['port'])
+                files = ftp_search(ftp, path + '/')
+                files_base = [os.path.basename(x) for x in files]
+                if ftp is not None:
+                    ftp.quit()
+                print('matching found files with mapping.csv')
+                with open(mapping) as obj:
+                    reader = csv.reader(obj, delimiter=';')
+                    with open(mapping2, 'w', newline='') as out:
+                        writer = csv.writer(out, delimiter=';')
+                        writer.writerow(next(reader))  # write header
+                        for row in reader:
+                            index = files_base.index(row[0])
+                            row.append(files[index])
+                            del files_base[index]
+                            del files[index]
+                            writer.writerow(row)
+            remotes = []
+            with open(mapping2) as obj:
                 stream = csv.reader(obj, delimiter=';')
                 for row in stream:
                     if row[1] + row[2] in indices:
-                        ids.append(row[0])
-            
-            remotes = []
-            remotes_base = []
-            
-            def ftp_search(target, files):
-                pattern = '|'.join(files)
-                if target.endswith('/'):
-                    content = ftp.nlst(target)
-                    for item in content:
-                        ftp_search(target + '/' + item, files)
-                else:
-                    if target.endswith('.tar') and re.search(pattern, target):
-                        base = os.path.basename(target)
-                        if base not in remotes_base:
-                            remotes.append(target)
-                            remotes_base.append(base)
-            
-            if len(ids) < len(indices):
-                log.warning('the available DEM tiles do not fully cover the area of interest')
-            
-            if len(ids) > 0:
-                ftp_search(path + '/', ids)
-            ftp.quit()
+                        remotes.append(row[-1])
         
         elif demType == 'Copernicus 30m Global DEM':
             remotes = cop_dem_remotes(extent, arcsecs=10)
