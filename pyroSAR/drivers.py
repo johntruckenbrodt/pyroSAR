@@ -1553,7 +1553,7 @@ class ESA(ID):
         self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
         self.meta['frameNumber'] = int(match.group('counter'))
 
-        if self.meta['acquisition_mode'] == 'IMS' or self.meta['acquisition_mode'] == 'APS':
+        if self.meta['acquisition_mode'] == 'IMS' or self.meta['acquisition_mode'] == 'APS' or self.meta['acquisition_mode'] == 'WSM':
             self.meta['image_geometry'] = 'SLANT_RANGE' 
         elif self.meta['acquisition_mode'] == 'IMP' or self.meta['acquisition_mode'] == 'APP':
             self.meta['image_geometry'] = 'GROUND_RANGE'
