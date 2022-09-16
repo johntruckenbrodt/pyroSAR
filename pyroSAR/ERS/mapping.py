@@ -306,45 +306,13 @@ ANGLES_RESOLUTION = {
             'std_dev': 10
         },
         'WSM': {
-            'SS1': {
-                'near': 'TBD',
-                'far': 'TBD',
-                'range': 'TBD',
-                'azimuth': 'TBD',
-                'nesz_near': 21.8,
-                'nesz_far': 19.9
-            },
-            'SS2': {
-                'near': 'TBD',
-                'far': 'TBD',
-                'range': 'TBD',
-                'azimuth': 'TBD',
-                'nesz_near': 25.4,
-                'nesz_far': 21.4
-            },
-            'SS3': {
-                'near': 'TBD',
-                'far': 'TBD',
-                'range': 'TBD',
-                'azimuth': 'TBD',
-                'nesz_near': 24.1,
-                'nesz_far': 21.8
-            },
-            'SS4': {
-                'near': 'TBD',
-                'far': 'TBD',
-                'range': 'TBD',
-                'azimuth': 'TBD',
-                'nesz_near': 25.6,
-                'nesz_far': 22.8
-            },
-            'SS5': {
-                'near': 'TBD',
-                'far': 'TBD',
-                'range': 'TBD',
-                'azimuth': 'TBD',
-                'nesz_near': 28,
-                'nesz_far': 25.4
+            'WS': { 
+                'near': 14.21,
+                'far': 42.63,
+                'range': 150,
+                'azimuth': 150,
+                'nesz_near': 19.5,
+                'nesz_far': 23.5
             },
             'std_dev': 20   
 
