@@ -1198,9 +1198,9 @@ class Node(object):
         """
         params = self.element.find('.//parameters')
         if self.operator == 'BandMaths':
-            return Par_BandMath(params)
+            return Par_BandMath(operator=self.operator, element=params)
         else:
-            return Par(params)
+            return Par(operator=self.operator, element=params)
     
     @property
     def source(self):
@@ -1262,11 +1262,14 @@ class Par(object):
     
     Parameters
     ----------
+    operator: str
+        the name of the SNAP Node operator
     element: ~xml.etree.ElementTree.Element
         the node parameter XML element
     """
     
-    def __init__(self, element):
+    def __init__(self, operator, element):
+        self.operator = operator
         self.__element = element
     
     def __delitem__(self, key):
@@ -1290,7 +1293,7 @@ class Par(object):
     
     def __setitem__(self, key, value):
         if key not in self.keys():
-            raise KeyError('key {} does not exist'.format(key))
+            raise KeyError("unknown key for node '{}': '{}'".format(self.operator, key))
         strval = value2str(value)
         self.__element.find('.//{}'.format(key)).text = strval
     
@@ -1348,15 +1351,16 @@ class Par_BandMath(Par):
         the node parameter XML element
     """
     
-    def __init__(self, element):
+    def __init__(self, operator, element):
+        self.operator = operator
         self.__element = element
-        super(Par_BandMath, self).__init__(element)
+        super(Par_BandMath, self).__init__(operator, element)
     
     def __getitem__(self, item):
         if item in ['variables', 'targetBands']:
             out = []
             for x in self.__element.findall('.//{}'.format(item[:-1])):
-                out.append(Par(x))
+                out.append(Par(self.operator, x))
             return out
         else:
             raise ValueError("can only get items 'variables' and 'targetBands'")
