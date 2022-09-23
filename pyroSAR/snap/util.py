@@ -374,8 +374,9 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
     ############################################
     # Subset node configuration
     if shapefile is not None or offset is not None:
-        last = sub_parametrize(scene=id, workflow=workflow, before=last.id,
-                               geometry=shapefile, offset=offset, buffer=0.01)
+        sub = sub_parametrize(scene=id, geometry=shapefile, offset=offset, buffer=0.01)
+        workflow.insert_node(sub, before=last.id)
+        last = sub
     ############################################
     # Multilook node configuration
     if id.sensor in ['ERS1', 'ERS2', 'ASAR']:

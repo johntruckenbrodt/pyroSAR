@@ -1632,7 +1632,7 @@ def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, con
     return orb
 
 
-def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=0.01):
+def sub_parametrize(scene, geometry=None, offset=None, buffer=0.01, copyMetadata=True, **kwargs):
     """
     convenience function for parametrizing an `Subset` node and inserting it into a workflow.
     
@@ -1640,12 +1640,8 @@ def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=
     ----------
     scene: pyroSAR.drivers.ID
         The SAR scene to be processed
-    workflow: Workflow
-        the SNAP workflow object
-    before: str
-        the ID of the node after which the `Apply-Orbit-File` node will be inserted
     geometry: dict or spatialist.vector.Vector or str or None
-        A vector geometry for geographic subsetting:
+        A vector geometry for geographic subsetting (node parameter geoRegion):
         
          - :class:`~spatialist.vector.Vector`: a vector object in arbitrary CRS
          - :class:`str`: a name of a file that can be read with :class:`~spatialist.vector.Vector` in arbitrary CRS
@@ -1654,12 +1650,24 @@ def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=
         a tuple with pixel coordinates as (left, right, top, bottom)
     buffer: int or float
         an additional buffer in degrees to add around the `geometry`
+    copyMetadata: bool
+        copy the metadata of the source product?
+    kwargs
+        further keyword arguments for node parametrization. Known options:
+        
+         - fullSwath
+         - referenceBand
+         - sourceBands
+         - subSamplingX
+         - subSamplingY
+         - tiePointGrids
 
     Returns
     -------
     Node
         the Subset node object
     """
+    subset = parse_node('Subset')
     if geometry:
         if isinstance(geometry, dict):
             ext = geometry
@@ -1685,18 +1693,11 @@ def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=
                 raise RuntimeError('no bounding box intersection between shapefile and scene')
             inter.close()
             wkt = bounds.convert2wkt()[0]
-        
-        subset = parse_node('Subset')
-        workflow.insert_node(subset, before=before)
         subset.parameters['region'] = [0, 0, scene.samples, scene.lines]
         subset.parameters['geoRegion'] = wkt
-        subset.parameters['copyMetadata'] = True
     #######################
     # (optionally) configure Subset node for pixel offsets
     elif offset and not geometry:
-        subset = parse_node('Subset')
-        workflow.insert_node(subset, before=before)
-        
         # left, right, top and bottom offset in pixels
         l, r, t, b = offset
         
@@ -1705,6 +1706,10 @@ def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=
         subset.parameters['geoRegion'] = ''
     else:
         raise RuntimeError("one of 'geometry' and 'offset' must be set")
+    
+    subset.parameters['copyMetadata'] = copyMetadata
+    for key, val in kwargs.items():
+        subset.parameters[key] = val
     return subset
 
 
