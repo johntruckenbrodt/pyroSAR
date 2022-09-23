@@ -1588,7 +1588,7 @@ def mli_parametrize(scene, workflow, before, spacing=None, rlks=None, azlks=None
         return ml
 
 
-def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, continueOnFail=False):
+def orb_parametrize(scene, formatName, allow_RES_OSV=True, continueOnFail=False):
     """
     convenience function for parametrizing an `Apply-Orbit-File` node and inserting it into a workflow.
     Required Sentinel-1 orbit files are directly downloaded.
@@ -1626,7 +1626,6 @@ def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, con
             orbitType = 'Sentinel Restituted (Auto Download)'
     
     orb = parse_node('Apply-Orbit-File')
-    workflow.insert_node(orb, before=before)
     orb.parameters['orbitType'] = orbitType
     orb.parameters['continueOnFail'] = continueOnFail
     return orb

@@ -369,8 +369,9 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = deb
     ############################################
     # Apply-Orbit-File node configuration
-    last = orb_parametrize(scene=id, workflow=workflow, before=last.id,
-                           formatName=formatName, allow_RES_OSV=allow_RES_OSV)
+    orb = orb_parametrize(scene=id, formatName=formatName, allow_RES_OSV=allow_RES_OSV)
+    workflow.insert_node(orb, before=last.id)
+    last = orb
     ############################################
     # Subset node configuration
     if shapefile is not None or offset is not None:
