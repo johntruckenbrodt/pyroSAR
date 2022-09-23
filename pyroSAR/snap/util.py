@@ -384,9 +384,9 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         bands = bandnames['beta0'] + bandnames['sigma0']
     else:
         bands = None
-    ml = mli_parametrize(scene=id, workflow=workflow, before=last.id,
-                         spacing=spacing, rlks=rlks, azlks=azlks, bands=bands)
+    ml = mli_parametrize(scene=id, spacing=spacing, rlks=rlks, azlks=azlks, bands=bands)
     if ml is not None:
+        workflow.insert_node(ml, before=last.id)
         last = ml
     ############################################
     # Terrain-Flattening node configuration
@@ -795,9 +795,9 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     last = select
     ############################################
     # Multilook node configuration
-    ml = mli_parametrize(scene=id, workflow=wf, before=last.id,
-                         spacing=spacing, rlks=rlks, azlks=azlks)
+    ml = mli_parametrize(scene=id, spacing=spacing, rlks=rlks, azlks=azlks)
     if ml is not None:
+        wf.insert_node(ml, before=last.id)
         last = ml
     ############################################
     tc = tc_parametrize(workflow=wf, before=last.id,

@@ -1531,7 +1531,7 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
         ras = None
 
 
-def mli_parametrize(scene, workflow, before, spacing=None, rlks=None, azlks=None, bands=None):
+def mli_parametrize(scene, spacing=None, rlks=None, azlks=None, bands=None):
     """
     Convenience function for parametrizing a `Multilook` node.
     
@@ -1539,10 +1539,6 @@ def mli_parametrize(scene, workflow, before, spacing=None, rlks=None, azlks=None
     ----------
     scene: pyroSAR.drivers.ID
         The SAR scene to be processed
-    workflow: Workflow
-        the SNAP workflow object
-    before: str
-        the ID of the node after which the `Multilook` node will be inserted
     spacing: int or float or None
         the target pixel spacing for automatic determination of looks using function
         :func:`~pyroSAR.ancillary.multilook_factors`. Overridden by arguments `rlks` and `azlks` if they are not None.
@@ -1580,8 +1576,7 @@ def mli_parametrize(scene, workflow, before, spacing=None, rlks=None, azlks=None
         raise RuntimeError("'rlks' and 'azlks' must either both be integers or None")
     
     if azlks > 1 or rlks > 1:
-        workflow.insert_node(parse_node('Multilook'), before=before)
-        ml = workflow['Multilook']
+        ml = parse_node('Multilook')
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
         ml.parameters['sourceBands'] = bands
