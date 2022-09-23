@@ -1531,7 +1531,7 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
         ras = None
 
 
-def mli_parametrize(scene, spacing=None, rlks=None, azlks=None, bands=None):
+def mli_parametrize(scene, spacing=None, rlks=None, azlks=None, **kwargs):
     """
     Convenience function for parametrizing a `Multilook` node.
     
@@ -1548,7 +1548,13 @@ def mli_parametrize(scene, spacing=None, rlks=None, azlks=None, bands=None):
         the number of azimuth looks
     bands: list[str] or None
         an optional list of bands names
-
+    kwargs
+        further keyword arguments for node parametrization. Known options:
+        
+         - grSquarePixel
+         - outputIntensity
+         - sourceBands
+    
     Returns
     -------
     Node or None
@@ -1579,7 +1585,8 @@ def mli_parametrize(scene, spacing=None, rlks=None, azlks=None, bands=None):
         ml = parse_node('Multilook')
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
-        ml.parameters['sourceBands'] = bands
+        for key, val in kwargs.items():
+            ml.parameters[key] = val
         return ml
 
 
