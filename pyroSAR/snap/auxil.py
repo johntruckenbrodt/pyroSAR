@@ -1973,7 +1973,8 @@ def dem_parametrize(workflow=None, node=None, demName='SRTM 1Sec HGT', externalD
             workflow.set_par(key, value)
     elif node is not None:
         for key, value in dempar.items():
-            node.parameters[key] = value
+            if key in node.parameters.keys():
+                node.parameters[key] = value
     else:
         raise RuntimeError("either 'workflow' or 'node must be defined'")
     
