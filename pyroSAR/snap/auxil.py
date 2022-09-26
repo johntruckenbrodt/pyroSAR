@@ -1725,7 +1725,8 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
                    standardGridOriginX=0, standardGridOriginY=0,
                    nodataValueAtSea=False, export_extra=None,
                    demResamplingMethod='BILINEAR_INTERPOLATION',
-                   imgResamplingMethod='BILINEAR_INTERPOLATION'):
+                   imgResamplingMethod='BILINEAR_INTERPOLATION',
+                   **kwargs):
     """
     convenience function for parametrizing a terrain correction node and inserting it into a workflow.
     
@@ -1790,7 +1791,19 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         the DEM resampling method
     imgResamplingMethod: str
         the image resampling method
-
+    kwargs
+        further keyword arguments for node parametrization. Known options:
+        
+         - outputComplex
+         - applyRadiometricNormalization
+         - saveSigmaNought
+         - saveGammaNought
+         - saveBetaNought
+         - incidenceAngleForSigma0
+         - incidenceAngleForGamma0
+         - auxFile
+         - externalAuxFile
+    
     Returns
     -------
     Node
@@ -1891,4 +1904,6 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
     # download the EGM lookup table if necessary
     if dempar['externalDEMApplyEGM']:
         get_egm_lookup(geoid='EGM96', software='SNAP')
+    for key, val in kwargs.items():
+        tc.parameters[key] = val
     return tc
