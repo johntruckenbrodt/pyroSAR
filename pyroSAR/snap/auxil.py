@@ -931,13 +931,13 @@ class Workflow(object):
     
     def insert_node(self, node, before=None, after=None, resetSuccessorSource=True, void=True):
         """
-        insert a node into the workflow including setting its source to its predecessor
-        and setting its ID as source of the successor.
+        insert one or multiple node(s) into the workflow including setting the source to the predecessor
+        and setting the ID as source of the successor.
         
         Parameters
         ----------
-        node: Node
-            the node to be inserted
+        node: Node or list[Node]
+            the node(s) to be inserted
         before: Node, str or list
             a Node object; the ID(s) of the node(s) before the newly inserted node; a list of node IDs is intended for
             nodes that require multiple sources, e.g. sliceAssembly
@@ -950,59 +950,66 @@ class Workflow(object):
 
         Returns
         -------
-        Node or None
-            the new node or None, depending on arguement `void`
+        Node or list[Node] or None
+            the new node, a list of nodes, or None, depending on the `node` input and argument `void`
         """
-        ncopies = [x.operator for x in self.nodes()].count(node.operator)
-        if ncopies > 0:
-            node.id = '{0} ({1})'.format(node.operator, ncopies + 1)
+        if isinstance(node, list):
+            self.insert_node(node=node[0], before=before, after=after,
+                             resetSuccessorSource=resetSuccessorSource, void=True)
+            for i, item in enumerate(node[1:]):
+                self.insert_node(node=item, before=node[i].id,
+                                 resetSuccessorSource=resetSuccessorSource, void=True)
         else:
-            node.id = node.operator
-        
-        if isinstance(before, Node):
-            before = before.id
-        if isinstance(after, Node):
-            after = after.id
-        
-        if before is None and after is None and len(self) > 0:
-            before = self[len(self) - 1].id
-        if before and not after:
-            if isinstance(before, list):
-                indices = [self.index(self[x]) for x in before]
-                predecessor = self[before[indices.index(max(indices))]]
+            ncopies = [x.operator for x in self.nodes()].count(node.operator)
+            if ncopies > 0:
+                node.id = '{0} ({1})'.format(node.operator, ncopies + 1)
             else:
-                predecessor = self[before]
-            log.debug('inserting node {} after {}'.format(node.id, predecessor.id))
-            position = self.index(predecessor) + 1
-            self.tree.insert(position, node.element)
-            newnode = Node(self.tree[position])
-            ####################################################
-            # set the source product for the new node
-            if newnode.operator != 'Read':
-                newnode.source = before
-            ####################################################
-            # set the source product for the node after the new node
-            if resetSuccessorSource:
-                self.__reset_successor_source(newnode.id)
-        ########################################################
-        elif after and not before:
-            successor = self[after]
-            log.debug('inserting node {} before {}'.format(node.id, successor.id))
-            position = self.index(successor)
-            self.tree.insert(position, node.element)
-            newnode = Node(self.tree[position])
-            ####################################################
-            # set the source product for the new node
-            if newnode.operator != 'Read':
-                source = successor.source
-                newnode.source = source
-            ####################################################
-            # set the source product for the node after the new node
-            if resetSuccessorSource:
-                self[after].source = newnode.id
-        else:
-            log.debug('inserting node {}'.format(node.id))
-            self.tree.insert(len(self.tree) - 1, node.element)
+                node.id = node.operator
+            
+            if isinstance(before, Node):
+                before = before.id
+            if isinstance(after, Node):
+                after = after.id
+            
+            if before is None and after is None and len(self) > 0:
+                before = self[len(self) - 1].id
+            if before and not after:
+                if isinstance(before, list):
+                    indices = [self.index(self[x]) for x in before]
+                    predecessor = self[before[indices.index(max(indices))]]
+                else:
+                    predecessor = self[before]
+                log.debug('inserting node {} after {}'.format(node.id, predecessor.id))
+                position = self.index(predecessor) + 1
+                self.tree.insert(position, node.element)
+                newnode = Node(self.tree[position])
+                ####################################################
+                # set the source product for the new node
+                if newnode.operator != 'Read':
+                    newnode.source = before
+                ####################################################
+                # set the source product for the node after the new node
+                if resetSuccessorSource:
+                    self.__reset_successor_source(newnode.id)
+            ########################################################
+            elif after and not before:
+                successor = self[after]
+                log.debug('inserting node {} before {}'.format(node.id, successor.id))
+                position = self.index(successor)
+                self.tree.insert(position, node.element)
+                newnode = Node(self.tree[position])
+                ####################################################
+                # set the source product for the new node
+                if newnode.operator != 'Read':
+                    source = successor.source
+                    newnode.source = source
+                ####################################################
+                # set the source product for the node after the new node
+                if resetSuccessorSource:
+                    self[after].source = newnode.id
+            else:
+                log.debug('inserting node {}'.format(node.id))
+                self.tree.insert(len(self.tree) - 1, node.element)
         if not void:
             return node
     
