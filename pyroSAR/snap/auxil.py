@@ -1740,7 +1740,8 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         the terrain correction method. Supported options:
         
          - Range-Doppler (SNAP node `Terrain-Correction`)
-         - SAR simulation cross correlation (SNAP nodes `SAR-Simulation` and `SARSim-Terrain-Correction`)
+         - SAR simulation cross correlation
+         (SNAP nodes `SAR-Simulation`->`Cross-Correlation`->`SARSim-Terrain-Correction`)
     sourceBands: list[str] or None
         the image band names to geocode; default None: geocode all incoming bands.
     spacing: int or float
@@ -1784,7 +1785,7 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         
          - DEM
          - latLon
-         - incidenceAngleFromEllipsoid
+         - incidenceAngleFromEllipsoid (Range-Doppler only)
          - layoverShadowMask
          - localIncidenceAngle
          - projectedLocalIncidenceAngle
@@ -1805,6 +1806,8 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
          - incidenceAngleForGamma0
          - auxFile
          - externalAuxFile
+         - openShiftsFile (SAR simulation cross correlation only)
+         - openResidualsFile (SAR simulation cross correlation only)
     
     Returns
     -------
@@ -1815,17 +1818,20 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         tc = parse_node('Terrain-Correction')
         workflow.insert_node(tc, before=before)
         tc.parameters['sourceBands'] = sourceBands
+        tc.parameters['demResamplingMethod'] = demResamplingMethod
+        tc.parameters['nodataValueAtSea'] = nodataValueAtSea
+        sarsim = None
     elif tc_method == 'SAR simulation cross correlation':
         sarsim = parse_node('SAR-Simulation')
         workflow.insert_node(sarsim, before=before)
         sarsim.parameters['sourceBands'] = sourceBands
+        sarsim.parameters['demResamplingMethod'] = demResamplingMethod
         workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
         tc = parse_node('SARSim-Terrain-Correction')
         workflow.insert_node(tc, before='Cross-Correlation')
     else:
         raise RuntimeError('tc_method not recognized')
     
-    tc.parameters['demResamplingMethod'] = demResamplingMethod
     tc.parameters['imgResamplingMethod'] = imgResamplingMethod
     
     if standardGridAreaOrPoint == 'area':
@@ -1864,8 +1870,6 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
     
     tc.parameters['mapProjection'] = t_srs
     
-    tc.parameters['nodataValueAtSea'] = nodataValueAtSea
-    
     export_extra_options = \
         ['DEM', 'latLon',
          'incidenceAngleFromEllipsoid',
@@ -1877,7 +1881,11 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         for item in export_extra:
             if item in export_extra_options:
                 key = f'save{item[0].upper()}{item[1:]}'
-                tc.parameters[key] = True
+                if tc.operator == 'SARSim-Terrain-Correction':
+                    if item == 'layoverShadowMask':
+                        sarsim.parameters[key] = True
+                else:
+                    tc.parameters[key] = True
     
     # select DEM type
     dempar = {'externalDEMFile': externalDEMFile,
