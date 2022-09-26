@@ -613,19 +613,20 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
     ############################################
     # configure the resampling methods
     
-    options = ['NEAREST_NEIGHBOUR',
-               'BILINEAR_INTERPOLATION',
-               'CUBIC_CONVOLUTION',
-               'BISINC_5_POINT_INTERPOLATION',
-               'BISINC_11_POINT_INTERPOLATION',
-               'BISINC_21_POINT_INTERPOLATION',
-               'BICUBIC_INTERPOLATION']
+    options_img = ['NEAREST_NEIGHBOUR',
+                   'BILINEAR_INTERPOLATION',
+                   'CUBIC_CONVOLUTION',
+                   'BISINC_5_POINT_INTERPOLATION',
+                   'BISINC_11_POINT_INTERPOLATION',
+                   'BISINC_21_POINT_INTERPOLATION',
+                   'BICUBIC_INTERPOLATION']
+    options_dem = options_img + ['DELAUNAY_INTERPOLATION']
     
     message = '{0} must be one of the following:\n- {1}'
-    if demResamplingMethod not in options:
-        raise ValueError(message.format('demResamplingMethod', '\n- '.join(options)))
-    if imgResamplingMethod not in options:
-        raise ValueError(message.format('imgResamplingMethod', '\n- '.join(options)))
+    if demResamplingMethod not in options_dem:
+        raise ValueError(message.format('demResamplingMethod', '\n- '.join(options_dem)))
+    if imgResamplingMethod not in options_img:
+        raise ValueError(message.format('imgResamplingMethod', '\n- '.join(options_img)))
     
     workflow.set_par('demResamplingMethod', demResamplingMethod)
     workflow.set_par('imgResamplingMethod', imgResamplingMethod,
