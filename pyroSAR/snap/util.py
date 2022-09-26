@@ -453,7 +453,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
     ############################################
     # configuration of node sequence for specific geocoding approaches
     tc = tc_parametrize(workflow=workflow, before=last.id, spacing=spacing,
-                        t_srs=t_srs, tc_method=geocoding_type, bands=bands,
+                        t_srs=t_srs, tc_method=geocoding_type, sourceBands=bands,
                         alignToStandardGrid=alignToStandardGrid,
                         standardGridOriginX=standardGridOriginX,
                         standardGridOriginY=standardGridOriginY)

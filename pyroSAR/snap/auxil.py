@@ -1719,7 +1719,7 @@ def sub_parametrize(scene, geometry=None, offset=None, buffer=0.01, copyMetadata
 
 
 def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
-                   bands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
+                   sourceBands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
                    externalDEMNoDataValue=None, externalDEMApplyEGM=True,
                    alignToStandardGrid=False, standardGridAreaOrPoint='point',
                    standardGridOriginX=0, standardGridOriginY=0,
@@ -1740,7 +1740,7 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         
          - Range-Doppler (SNAP node `Terrain-Correction`)
          - SAR simulation cross correlation (SNAP nodes `SAR-Simulation` and `SARSim-Terrain-Correction`)
-    bands: list[str] or None
+    sourceBands: list[str] or None
         the image band names to geocode; default None: geocode all incoming bands.
     spacing: int or float
         The target pixel spacing in meters.
@@ -1799,11 +1799,11 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
     if tc_method == 'Range-Doppler':
         tc = parse_node('Terrain-Correction')
         workflow.insert_node(tc, before=before)
-        tc.parameters['sourceBands'] = bands
+        tc.parameters['sourceBands'] = sourceBands
     elif tc_method == 'SAR simulation cross correlation':
         sarsim = parse_node('SAR-Simulation')
         workflow.insert_node(sarsim, before=before)
-        sarsim.parameters['sourceBands'] = bands
+        sarsim.parameters['sourceBands'] = sourceBands
         workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
         tc = parse_node('SARSim-Terrain-Correction')
         workflow.insert_node(tc, before='Cross-Correlation')
@@ -1829,12 +1829,12 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
     except TypeError:
         raise RuntimeError("format of parameter 't_srs' not recognized")
     except RuntimeError:
-        # this error can occur when the CRS does not have a corresponding EPSG code
-        # in this case the original CRS representation is written to the workflow
+        # This error can occur when the CRS does not have a corresponding EPSG code.
+        # In this case the original CRS representation is written to the workflow.
         pass
     
-    # the EPSG code 4326 is not supported by SNAP and thus the WKT string has to be defined;
-    # in all other cases defining EPSG:{code} will do
+    # The EPSG code 4326 is not supported by SNAP and thus the WKT string has to be defined.
+    # In all other cases defining EPSG:{code} will do.
     if t_srs == 4326:
         t_srs = 'GEOGCS["WGS84(DD)",' \
                 'DATUM["WGS84",' \
