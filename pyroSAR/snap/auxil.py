@@ -1818,17 +1818,17 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         tc = parse_node('Terrain-Correction')
         workflow.insert_node(tc, before=before)
         tc.parameters['sourceBands'] = sourceBands
-        tc.parameters['demResamplingMethod'] = demResamplingMethod
         tc.parameters['nodataValueAtSea'] = nodataValueAtSea
         sarsim = None
+        dem_node = tc
     elif tc_method == 'SAR simulation cross correlation':
         sarsim = parse_node('SAR-Simulation')
         workflow.insert_node(sarsim, before=before)
         sarsim.parameters['sourceBands'] = sourceBands
-        sarsim.parameters['demResamplingMethod'] = demResamplingMethod
         workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
         tc = parse_node('SARSim-Terrain-Correction')
         workflow.insert_node(tc, before='Cross-Correlation')
+        dem_node = sarsim
     else:
         raise RuntimeError('tc_method not recognized')
     
@@ -1886,10 +1886,63 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
                         sarsim.parameters[key] = True
                 else:
                     tc.parameters[key] = True
+
+    dem_parametrize(node=dem_node, demName=demName,
+                    externalDEMFile=externalDEMFile,
+                    externalDEMNoDataValue=externalDEMNoDataValue,
+                    externalDEMApplyEGM=externalDEMApplyEGM,
+                    demResamplingMethod=demResamplingMethod)
     
+    for key, val in kwargs.items():
+        tc.parameters[key] = val
+    return tc
+
+
+def dem_parametrize(workflow=None, node=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
+                    externalDEMNoDataValue=None, externalDEMApplyEGM=False,
+                    demResamplingMethod='BILINEAR_INTERPOLATION'):
+    """
+    DEM parametrization for a full workflow or a single node. In the former case, all nodes with the
+    DEM-relevant parameters can be modified at once, e.g. Terrain-Flattening and Terrain-Correction.
+    
+    Parameters
+    ----------
+    workflow: Workflow or None
+        a SNAP workflow object
+    node: Node or None
+        a SNAP node object
+    demName: str
+        The name of the auto-download DEM. Default is 'SRTM 1Sec HGT'. Is ignored when `externalDEMFile` is not None.
+        Supported options:
+        
+         - ACE2_5Min
+         - ACE30
+         - ASTER 1sec GDEM
+         - CDEM
+         - Copernicus 30m Global DEM
+         - Copernicus 90m Global DEM
+         - GETASSE30
+         - SRTM 1Sec Grid
+         - SRTM 1Sec HGT
+         - SRTM 3Sec
+    externalDEMFile: str or None, optional
+        The absolute path to an external DEM file. Default is None. Overrides `demName`.
+    externalDEMNoDataValue: int, float or None, optional
+        The no data value of the external DEM. If not specified (default) the function will try to read it from the
+        specified external DEM.
+    externalDEMApplyEGM: bool, optional
+        Apply Earth Gravitational Model to external DEM? Default is True.
+    demResamplingMethod: str
+        the DEM resampling method
+
+    Returns
+    -------
+
+    """
     # select DEM type
     dempar = {'externalDEMFile': externalDEMFile,
-              'externalDEMApplyEGM': externalDEMApplyEGM}
+              'externalDEMApplyEGM': externalDEMApplyEGM,
+              'demResamplingMethod': demResamplingMethod}
     if externalDEMFile is not None:
         if os.path.isfile(externalDEMFile):
             if externalDEMNoDataValue is None:
@@ -1909,12 +1962,15 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         dempar['externalDEMFile'] = None
         dempar['externalDEMNoDataValue'] = 0
     
-    for key, value in dempar.items():
-        workflow.set_par(key, value)
+    if workflow is not None:
+        for key, value in dempar.items():
+            workflow.set_par(key, value)
+    elif node is not None:
+        for key, value in dempar.items():
+            node.parameters[key] = value
+    else:
+        raise RuntimeError("either 'workflow' or 'node must be defined'")
     
     # download the EGM lookup table if necessary
     if dempar['externalDEMApplyEGM']:
         get_egm_lookup(geoid='EGM96', software='SNAP')
-    for key, val in kwargs.items():
-        tc.parameters[key] = val
-    return tc

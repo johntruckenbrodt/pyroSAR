@@ -15,12 +15,10 @@ import os
 import re
 import shutil
 from ..drivers import identify, identify_many, ID
-from ..auxdata import get_egm_lookup
 from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, \
     windows_fileprefix, orb_parametrize, tc_parametrize, sub_parametrize, \
-    mli_parametrize
+    mli_parametrize, dem_parametrize
 
-from spatialist import Raster
 from spatialist.ancillary import dissolve
 
 import logging
@@ -581,34 +579,11 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
             tc_select.parameters['sourceBands'] = tc_selection
     ############################################
     ############################################
-    # select DEM type
-    dempar = {'externalDEMFile': externalDEMFile,
-              'externalDEMApplyEGM': externalDEMApplyEGM}
-    if externalDEMFile is not None:
-        if os.path.isfile(externalDEMFile):
-            if externalDEMNoDataValue is None:
-                with Raster(externalDEMFile) as dem:
-                    dempar['externalDEMNoDataValue'] = dem.nodata
-                if dempar['externalDEMNoDataValue'] is None:
-                    raise RuntimeError('Cannot read NoData value from DEM file. '
-                                       'Please specify externalDEMNoDataValue')
-            else:
-                dempar['externalDEMNoDataValue'] = externalDEMNoDataValue
-            dempar['reGridMethod'] = False
-        else:
-            raise RuntimeError('specified externalDEMFile does not exist')
-        dempar['demName'] = 'External DEM'
-    else:
-        dempar['demName'] = demName
-        dempar['externalDEMFile'] = None
-        dempar['externalDEMNoDataValue'] = 0
-    
-    for key, value in dempar.items():
-        workflow.set_par(key, value)
-    
-    # download the EGM lookup table if necessary
-    if dempar['externalDEMApplyEGM']:
-        get_egm_lookup(geoid='EGM96', software='SNAP')
+    # DEM handling
+    dem_parametrize(workflow=workflow, demName=demName,
+                    externalDEMFile=externalDEMFile,
+                    externalDEMNoDataValue=externalDEMNoDataValue,
+                    externalDEMApplyEGM=externalDEMApplyEGM)
     ############################################
     ############################################
     # configure the resampling methods
