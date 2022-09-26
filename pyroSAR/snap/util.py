@@ -450,12 +450,16 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = sf
     ############################################
     # configuration of node sequence for specific geocoding approaches
-    tc = tc_parametrize(workflow=workflow, before=last.id, spacing=spacing,
-                        t_srs=t_srs, tc_method=geocoding_type, sourceBands=bands,
+    tc = tc_parametrize(spacing=spacing, t_srs=t_srs,
+                        tc_method=geocoding_type, sourceBands=bands,
                         alignToStandardGrid=alignToStandardGrid,
                         standardGridOriginX=standardGridOriginX,
                         standardGridOriginY=standardGridOriginY)
-    last = tc
+    workflow.insert_node(tc, before=last.id)
+    if isinstance(tc, list):
+        last = tc = tc[-1]
+    else:
+        last = tc
     ############################################
     # (optionally) add node for conversion from linear to db scaling
     if scaling not in ['dB', 'db', 'linear']:
@@ -776,14 +780,14 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
         wf.insert_node(ml, before=last.id)
         last = ml
     ############################################
-    tc = tc_parametrize(workflow=wf, before=last.id,
-                        spacing=spacing, t_srs=t_srs, demName=demName,
+    tc = tc_parametrize(spacing=spacing, t_srs=t_srs, demName=demName,
                         externalDEMFile=externalDEMFile,
                         externalDEMNoDataValue=externalDEMNoDataValue,
                         externalDEMApplyEGM=externalDEMApplyEGM,
                         alignToStandardGrid=alignToStandardGrid,
                         standardGridOriginX=standardGridOriginX,
                         standardGridOriginY=standardGridOriginY)
+    wf.insert_node(tc, before=last.id)
     last = tc
     ############################################
     

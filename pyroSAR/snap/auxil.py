@@ -1725,7 +1725,7 @@ def sub_parametrize(scene, geometry=None, offset=None, buffer=0.01, copyMetadata
     return subset
 
 
-def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
+def tc_parametrize(spacing, t_srs, tc_method='Range-Doppler',
                    sourceBands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
                    externalDEMNoDataValue=None, externalDEMApplyEGM=True,
                    alignToStandardGrid=False, standardGridAreaOrPoint='point',
@@ -1818,24 +1818,23 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
     
     Returns
     -------
-    Node
-        the terrain correction node object
+    Node or list[Node]
+        the Terrain-Correction node object or a list containing the objects for SAR-Simulation,
+        Cross-Correlation and SARSim-Terrain-Correction.
     """
     if tc_method == 'Range-Doppler':
         tc = parse_node('Terrain-Correction')
-        workflow.insert_node(tc, before=before)
         tc.parameters['sourceBands'] = sourceBands
         tc.parameters['nodataValueAtSea'] = nodataValueAtSea
         sarsim = None
-        dem_node = tc
+        dem_node = out = tc
     elif tc_method == 'SAR simulation cross correlation':
         sarsim = parse_node('SAR-Simulation')
-        workflow.insert_node(sarsim, before=before)
         sarsim.parameters['sourceBands'] = sourceBands
-        workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
+        cc = parse_node('Cross-Correlation')
         tc = parse_node('SARSim-Terrain-Correction')
-        workflow.insert_node(tc, before='Cross-Correlation')
         dem_node = sarsim
+        out = [sarsim, cc, tc]
     else:
         raise RuntimeError('tc_method not recognized')
     
@@ -1893,7 +1892,7 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
                         sarsim.parameters[key] = True
                 else:
                     tc.parameters[key] = True
-
+    
     dem_parametrize(node=dem_node, demName=demName,
                     externalDEMFile=externalDEMFile,
                     externalDEMNoDataValue=externalDEMNoDataValue,
@@ -1902,7 +1901,7 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
     
     for key, val in kwargs.items():
         tc.parameters[key] = val
-    return tc
+    return out
 
 
 def dem_parametrize(workflow=None, node=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
