@@ -1783,10 +1783,12 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         a list of ancillary layers to write. Supported options:
         
          - DEM
+         - latLon
          - incidenceAngleFromEllipsoid
          - layoverShadowMask
          - localIncidenceAngle
          - projectedLocalIncidenceAngle
+         - selectedSourceBand
     demResamplingMethod: str
         the DEM resampling method
     imgResamplingMethod: str
@@ -1865,11 +1867,12 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
     tc.parameters['nodataValueAtSea'] = nodataValueAtSea
     
     export_extra_options = \
-        ['DEM',
+        ['DEM', 'latLon',
          'incidenceAngleFromEllipsoid',
          'layoverShadowMask',
          'localIncidenceAngle',
-         'projectedLocalIncidenceAngle']
+         'projectedLocalIncidenceAngle',
+         'selectedSourceBand']
     if export_extra is not None:
         for item in export_extra:
             if item in export_extra_options:
