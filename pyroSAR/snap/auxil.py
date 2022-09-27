@@ -931,13 +931,13 @@ class Workflow(object):
     
     def insert_node(self, node, before=None, after=None, resetSuccessorSource=True, void=True):
         """
-        insert a node into the workflow including setting its source to its predecessor
-        and setting its ID as source of the successor.
+        insert one or multiple node(s) into the workflow including setting the source to the predecessor
+        and setting the ID as source of the successor.
         
         Parameters
         ----------
-        node: Node
-            the node to be inserted
+        node: Node or list[Node]
+            the node(s) to be inserted
         before: Node, str or list
             a Node object; the ID(s) of the node(s) before the newly inserted node; a list of node IDs is intended for
             nodes that require multiple sources, e.g. sliceAssembly
@@ -950,59 +950,66 @@ class Workflow(object):
 
         Returns
         -------
-        Node or None
-            the new node or None, depending on arguement `void`
+        Node or list[Node] or None
+            the new node, a list of nodes, or None, depending on the `node` input and argument `void`
         """
-        ncopies = [x.operator for x in self.nodes()].count(node.operator)
-        if ncopies > 0:
-            node.id = '{0} ({1})'.format(node.operator, ncopies + 1)
+        if isinstance(node, list):
+            self.insert_node(node=node[0], before=before, after=after,
+                             resetSuccessorSource=resetSuccessorSource, void=True)
+            for i, item in enumerate(node[1:]):
+                self.insert_node(node=item, before=node[i].id,
+                                 resetSuccessorSource=resetSuccessorSource, void=True)
         else:
-            node.id = node.operator
-        
-        if isinstance(before, Node):
-            before = before.id
-        if isinstance(after, Node):
-            after = after.id
-        
-        if before is None and after is None and len(self) > 0:
-            before = self[len(self) - 1].id
-        if before and not after:
-            if isinstance(before, list):
-                indices = [self.index(self[x]) for x in before]
-                predecessor = self[before[indices.index(max(indices))]]
+            ncopies = [x.operator for x in self.nodes()].count(node.operator)
+            if ncopies > 0:
+                node.id = '{0} ({1})'.format(node.operator, ncopies + 1)
             else:
-                predecessor = self[before]
-            log.debug('inserting node {} after {}'.format(node.id, predecessor.id))
-            position = self.index(predecessor) + 1
-            self.tree.insert(position, node.element)
-            newnode = Node(self.tree[position])
-            ####################################################
-            # set the source product for the new node
-            if newnode.operator != 'Read':
-                newnode.source = before
-            ####################################################
-            # set the source product for the node after the new node
-            if resetSuccessorSource:
-                self.__reset_successor_source(newnode.id)
-        ########################################################
-        elif after and not before:
-            successor = self[after]
-            log.debug('inserting node {} before {}'.format(node.id, successor.id))
-            position = self.index(successor)
-            self.tree.insert(position, node.element)
-            newnode = Node(self.tree[position])
-            ####################################################
-            # set the source product for the new node
-            if newnode.operator != 'Read':
-                source = successor.source
-                newnode.source = source
-            ####################################################
-            # set the source product for the node after the new node
-            if resetSuccessorSource:
-                self[after].source = newnode.id
-        else:
-            log.debug('inserting node {}'.format(node.id))
-            self.tree.insert(len(self.tree) - 1, node.element)
+                node.id = node.operator
+            
+            if isinstance(before, Node):
+                before = before.id
+            if isinstance(after, Node):
+                after = after.id
+            
+            if before is None and after is None and len(self) > 0:
+                before = self[len(self) - 1].id
+            if before and not after:
+                if isinstance(before, list):
+                    indices = [self.index(self[x]) for x in before]
+                    predecessor = self[before[indices.index(max(indices))]]
+                else:
+                    predecessor = self[before]
+                log.debug('inserting node {} after {}'.format(node.id, predecessor.id))
+                position = self.index(predecessor) + 1
+                self.tree.insert(position, node.element)
+                newnode = Node(self.tree[position])
+                ####################################################
+                # set the source product for the new node
+                if newnode.operator != 'Read':
+                    newnode.source = before
+                ####################################################
+                # set the source product for the node after the new node
+                if resetSuccessorSource:
+                    self.__reset_successor_source(newnode.id)
+            ########################################################
+            elif after and not before:
+                successor = self[after]
+                log.debug('inserting node {} before {}'.format(node.id, successor.id))
+                position = self.index(successor)
+                self.tree.insert(position, node.element)
+                newnode = Node(self.tree[position])
+                ####################################################
+                # set the source product for the new node
+                if newnode.operator != 'Read':
+                    source = successor.source
+                    newnode.source = source
+                ####################################################
+                # set the source product for the node after the new node
+                if resetSuccessorSource:
+                    self[after].source = newnode.id
+            else:
+                log.debug('inserting node {}'.format(node.id))
+                self.tree.insert(len(self.tree) - 1, node.element)
         if not void:
             return node
     
@@ -1198,9 +1205,9 @@ class Node(object):
         """
         params = self.element.find('.//parameters')
         if self.operator == 'BandMaths':
-            return Par_BandMath(params)
+            return Par_BandMath(operator=self.operator, element=params)
         else:
-            return Par(params)
+            return Par(operator=self.operator, element=params)
     
     @property
     def source(self):
@@ -1262,11 +1269,14 @@ class Par(object):
     
     Parameters
     ----------
+    operator: str
+        the name of the SNAP Node operator
     element: ~xml.etree.ElementTree.Element
         the node parameter XML element
     """
     
-    def __init__(self, element):
+    def __init__(self, operator, element):
+        self.operator = operator
         self.__element = element
     
     def __delitem__(self, key):
@@ -1290,7 +1300,7 @@ class Par(object):
     
     def __setitem__(self, key, value):
         if key not in self.keys():
-            raise KeyError('key {} does not exist'.format(key))
+            raise KeyError("unknown key for node '{}': '{}'".format(self.operator, key))
         strval = value2str(value)
         self.__element.find('.//{}'.format(key)).text = strval
     
@@ -1348,15 +1358,16 @@ class Par_BandMath(Par):
         the node parameter XML element
     """
     
-    def __init__(self, element):
+    def __init__(self, operator, element):
+        self.operator = operator
         self.__element = element
-        super(Par_BandMath, self).__init__(element)
+        super(Par_BandMath, self).__init__(operator, element)
     
     def __getitem__(self, item):
         if item in ['variables', 'targetBands']:
             out = []
             for x in self.__element.findall('.//{}'.format(item[:-1])):
-                out.append(Par(x))
+                out.append(Par(self.operator, x))
             return out
         else:
             raise ValueError("can only get items 'variables' and 'targetBands'")
@@ -1431,8 +1442,8 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
     Parameters
     ----------
     src: str
-        a processed SAR image in BEAM-DIMAP format (*.dim) or a directory with *.img files (ENVI format).
-        0 is assumed as no data value.
+        a processed SAR image in BEAM-DIMAP format (*.dim), a single *.img file (ENVI format) or a
+        directory with *.img files. 0 is assumed as no data value.
     only_boundary: bool
         only erode edges at the image boundary (or also at data gaps caused by e.g. masking during Terrain-Flattening)?
     connectedness: int
@@ -1527,7 +1538,7 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
         ras = None
 
 
-def mli_parametrize(scene, workflow, before, spacing=None, rlks=None, azlks=None, bands=None):
+def mli_parametrize(scene, spacing=None, rlks=None, azlks=None, **kwargs):
     """
     Convenience function for parametrizing a `Multilook` node.
     
@@ -1535,10 +1546,6 @@ def mli_parametrize(scene, workflow, before, spacing=None, rlks=None, azlks=None
     ----------
     scene: pyroSAR.drivers.ID
         The SAR scene to be processed
-    workflow: Workflow
-        the SNAP workflow object
-    before: str
-        the ID of the node after which the `Multilook` node will be inserted
     spacing: int or float or None
         the target pixel spacing for automatic determination of looks using function
         :func:`~pyroSAR.ancillary.multilook_factors`. Overridden by arguments `rlks` and `azlks` if they are not None.
@@ -1548,7 +1555,13 @@ def mli_parametrize(scene, workflow, before, spacing=None, rlks=None, azlks=None
         the number of azimuth looks
     bands: list[str] or None
         an optional list of bands names
-
+    kwargs
+        further keyword arguments for node parametrization. Known options:
+        
+         - grSquarePixel
+         - outputIntensity
+         - sourceBands
+    
     Returns
     -------
     Node or None
@@ -1576,17 +1589,17 @@ def mli_parametrize(scene, workflow, before, spacing=None, rlks=None, azlks=None
         raise RuntimeError("'rlks' and 'azlks' must either both be integers or None")
     
     if azlks > 1 or rlks > 1:
-        workflow.insert_node(parse_node('Multilook'), before=before)
-        ml = workflow['Multilook']
+        ml = parse_node('Multilook')
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
-        ml.parameters['sourceBands'] = bands
+        for key, val in kwargs.items():
+            ml.parameters[key] = val
         return ml
 
 
-def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, continueOnFail=False):
+def orb_parametrize(scene, formatName, allow_RES_OSV=True, **kwargs):
     """
-    convenience function for parametrizing an `Apply-Orbit-File` node and inserting it into a workflow.
+    convenience function for parametrizing an `Apply-Orbit-File`.
     Required Sentinel-1 orbit files are directly downloaded.
     
     Parameters
@@ -1601,9 +1614,12 @@ def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, con
         the scene's data format
     allow_RES_OSV: bool
         (only applies to Sentinel-1) Also allow the less accurate RES orbit files to be used?
-    continueOnFail: bool
-        continue SNAP processing if orbit correction fails?
+    kwargs
+        further keyword arguments for node parametrization. Known options:
         
+         - continueOnFail
+         - polyDegree
+    
     Returns
     -------
     Node
@@ -1622,26 +1638,22 @@ def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, con
             orbitType = 'Sentinel Restituted (Auto Download)'
     
     orb = parse_node('Apply-Orbit-File')
-    workflow.insert_node(orb, before=before)
     orb.parameters['orbitType'] = orbitType
-    orb.parameters['continueOnFail'] = continueOnFail
+    for key, val in kwargs.items():
+        orb.parameters[key] = val
     return orb
 
 
-def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=0.01):
+def sub_parametrize(scene, geometry=None, offset=None, buffer=0.01, copyMetadata=True, **kwargs):
     """
-    convenience function for parametrizing an `Subset` node and inserting it into a workflow.
+    convenience function for parametrizing an `Subset` node.
     
     Parameters
     ----------
     scene: pyroSAR.drivers.ID
         The SAR scene to be processed
-    workflow: Workflow
-        the SNAP workflow object
-    before: str
-        the ID of the node after which the `Apply-Orbit-File` node will be inserted
     geometry: dict or spatialist.vector.Vector or str or None
-        A vector geometry for geographic subsetting:
+        A vector geometry for geographic subsetting (node parameter geoRegion):
         
          - :class:`~spatialist.vector.Vector`: a vector object in arbitrary CRS
          - :class:`str`: a name of a file that can be read with :class:`~spatialist.vector.Vector` in arbitrary CRS
@@ -1650,12 +1662,24 @@ def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=
         a tuple with pixel coordinates as (left, right, top, bottom)
     buffer: int or float
         an additional buffer in degrees to add around the `geometry`
+    copyMetadata: bool
+        copy the metadata of the source product?
+    kwargs
+        further keyword arguments for node parametrization. Known options:
+        
+         - fullSwath
+         - referenceBand
+         - sourceBands
+         - subSamplingX
+         - subSamplingY
+         - tiePointGrids
 
     Returns
     -------
     Node
         the Subset node object
     """
+    subset = parse_node('Subset')
     if geometry:
         if isinstance(geometry, dict):
             ext = geometry
@@ -1681,18 +1705,11 @@ def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=
                 raise RuntimeError('no bounding box intersection between shapefile and scene')
             inter.close()
             wkt = bounds.convert2wkt()[0]
-        
-        subset = parse_node('Subset')
-        workflow.insert_node(subset, before=before)
         subset.parameters['region'] = [0, 0, scene.samples, scene.lines]
         subset.parameters['geoRegion'] = wkt
-        subset.parameters['copyMetadata'] = True
     #######################
     # (optionally) configure Subset node for pixel offsets
     elif offset and not geometry:
-        subset = parse_node('Subset')
-        workflow.insert_node(subset, before=before)
-        
         # left, right, top and bottom offset in pixels
         l, r, t, b = offset
         
@@ -1701,19 +1718,24 @@ def sub_parametrize(scene, workflow, before, geometry=None, offset=None, buffer=
         subset.parameters['geoRegion'] = ''
     else:
         raise RuntimeError("one of 'geometry' and 'offset' must be set")
+    
+    subset.parameters['copyMetadata'] = copyMetadata
+    for key, val in kwargs.items():
+        subset.parameters[key] = val
     return subset
 
 
-def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
-                   bands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
-                   externalDEMNoDataValue=None, externalDEMApplyEGM=True,
-                   alignToStandardGrid=False, standardGridAreaOrPoint='point',
-                   standardGridOriginX=0, standardGridOriginY=0,
-                   nodataValueAtSea=False, export_extra=None,
-                   demResamplingMethod='BILINEAR_INTERPOLATION',
-                   imgResamplingMethod='BILINEAR_INTERPOLATION'):
+def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
+                    sourceBands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
+                    externalDEMNoDataValue=None, externalDEMApplyEGM=True,
+                    alignToStandardGrid=False, standardGridAreaOrPoint='point',
+                    standardGridOriginX=0, standardGridOriginY=0,
+                    nodataValueAtSea=False, export_extra=None,
+                    demResamplingMethod='BILINEAR_INTERPOLATION',
+                    imgResamplingMethod='BILINEAR_INTERPOLATION',
+                    **kwargs):
     """
-    convenience function for parametrizing a terrain correction node and inserting it into a workflow.
+    convenience function for parametrizing geocoding nodes.
     
     Parameters
     ----------
@@ -1725,8 +1747,10 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         the terrain correction method. Supported options:
         
          - Range-Doppler (SNAP node `Terrain-Correction`)
-         - SAR simulation cross correlation (SNAP nodes `SAR-Simulation` and `SARSim-Terrain-Correction`)
-    bands: list[str] or None
+         - SAR simulation cross correlation
+           (SNAP nodes `SAR-Simulation`->`Cross-Correlation`->`SARSim-Terrain-Correction`)
+    
+    sourceBands: list[str] or None
         the image band names to geocode; default None: geocode all incoming bands.
     spacing: int or float
         The target pixel spacing in meters.
@@ -1768,35 +1792,53 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         a list of ancillary layers to write. Supported options:
         
          - DEM
-         - incidenceAngleFromEllipsoid
+         - latLon
+         - incidenceAngleFromEllipsoid (Range-Doppler only)
          - layoverShadowMask
          - localIncidenceAngle
          - projectedLocalIncidenceAngle
+         - selectedSourceBand
     demResamplingMethod: str
         the DEM resampling method
     imgResamplingMethod: str
         the image resampling method
-
+    kwargs
+        further keyword arguments for node parametrization. Known options:
+        
+         - outputComplex
+         - applyRadiometricNormalization
+         - saveSigmaNought
+         - saveGammaNought
+         - saveBetaNought
+         - incidenceAngleForSigma0
+         - incidenceAngleForGamma0
+         - auxFile
+         - externalAuxFile
+         - openShiftsFile (SAR simulation cross correlation only)
+         - openResidualsFile (SAR simulation cross correlation only)
+    
     Returns
     -------
-    Node
-        the terrain correction node object
+    Node or list[Node]
+        the Terrain-Correction node object or a list containing the objects for SAR-Simulation,
+        Cross-Correlation and SARSim-Terrain-Correction.
     """
     if tc_method == 'Range-Doppler':
         tc = parse_node('Terrain-Correction')
-        workflow.insert_node(tc, before=before)
-        tc.parameters['sourceBands'] = bands
+        tc.parameters['sourceBands'] = sourceBands
+        tc.parameters['nodataValueAtSea'] = nodataValueAtSea
+        sarsim = None
+        dem_node = out = tc
     elif tc_method == 'SAR simulation cross correlation':
         sarsim = parse_node('SAR-Simulation')
-        workflow.insert_node(sarsim, before=before)
-        sarsim.parameters['sourceBands'] = bands
-        workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
+        sarsim.parameters['sourceBands'] = sourceBands
+        cc = parse_node('Cross-Correlation')
         tc = parse_node('SARSim-Terrain-Correction')
-        workflow.insert_node(tc, before='Cross-Correlation')
+        dem_node = sarsim
+        out = [sarsim, cc, tc]
     else:
         raise RuntimeError('tc_method not recognized')
     
-    tc.parameters['demResamplingMethod'] = demResamplingMethod
     tc.parameters['imgResamplingMethod'] = imgResamplingMethod
     
     if standardGridAreaOrPoint == 'area':
@@ -1815,12 +1857,12 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
     except TypeError:
         raise RuntimeError("format of parameter 't_srs' not recognized")
     except RuntimeError:
-        # this error can occur when the CRS does not have a corresponding EPSG code
-        # in this case the original CRS representation is written to the workflow
+        # This error can occur when the CRS does not have a corresponding EPSG code.
+        # In this case the original CRS representation is written to the workflow.
         pass
     
-    # the EPSG code 4326 is not supported by SNAP and thus the WKT string has to be defined;
-    # in all other cases defining EPSG:{code} will do
+    # The EPSG code 4326 is not supported by SNAP and thus the WKT string has to be defined.
+    # In all other cases defining EPSG:{code} will do.
     if t_srs == 4326:
         t_srs = 'GEOGCS["WGS84(DD)",' \
                 'DATUM["WGS84",' \
@@ -1835,23 +1877,79 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
     
     tc.parameters['mapProjection'] = t_srs
     
-    tc.parameters['nodataValueAtSea'] = nodataValueAtSea
-    
     export_extra_options = \
-        ['DEM',
+        ['DEM', 'latLon',
          'incidenceAngleFromEllipsoid',
          'layoverShadowMask',
          'localIncidenceAngle',
-         'projectedLocalIncidenceAngle']
+         'projectedLocalIncidenceAngle',
+         'selectedSourceBand']
     if export_extra is not None:
         for item in export_extra:
             if item in export_extra_options:
                 key = f'save{item[0].upper()}{item[1:]}'
-                tc.parameters[key] = True
+                if tc.operator == 'SARSim-Terrain-Correction':
+                    if item == 'layoverShadowMask':
+                        sarsim.parameters[key] = True
+                else:
+                    tc.parameters[key] = True
     
+    dem_parametrize(node=dem_node, demName=demName,
+                    externalDEMFile=externalDEMFile,
+                    externalDEMNoDataValue=externalDEMNoDataValue,
+                    externalDEMApplyEGM=externalDEMApplyEGM,
+                    demResamplingMethod=demResamplingMethod)
+    
+    for key, val in kwargs.items():
+        tc.parameters[key] = val
+    return out
+
+
+def dem_parametrize(workflow=None, node=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
+                    externalDEMNoDataValue=None, externalDEMApplyEGM=False,
+                    demResamplingMethod='BILINEAR_INTERPOLATION'):
+    """
+    DEM parametrization for a full workflow or a single node. In the former case, all nodes with the
+    DEM-relevant parameters can be modified at once, e.g. `Terrain-Flattening` and `Terrain-Correction`.
+    
+    Parameters
+    ----------
+    workflow: Workflow or None
+        a SNAP workflow object
+    node: Node or None
+        a SNAP node object
+    demName: str
+        The name of the auto-download DEM. Default is 'SRTM 1Sec HGT'. Is ignored when `externalDEMFile` is not None.
+        Supported options:
+        
+         - ACE2_5Min
+         - ACE30
+         - ASTER 1sec GDEM
+         - CDEM
+         - Copernicus 30m Global DEM
+         - Copernicus 90m Global DEM
+         - GETASSE30
+         - SRTM 1Sec Grid
+         - SRTM 1Sec HGT
+         - SRTM 3Sec
+    externalDEMFile: str or None, optional
+        The absolute path to an external DEM file. Default is None. Overrides `demName`.
+    externalDEMNoDataValue: int, float or None, optional
+        The no data value of the external DEM. If not specified (default) the function will try to read it from the
+        specified external DEM.
+    externalDEMApplyEGM: bool, optional
+        Apply Earth Gravitational Model to external DEM? Default is True.
+    demResamplingMethod: str
+        the DEM resampling method
+
+    Returns
+    -------
+
+    """
     # select DEM type
     dempar = {'externalDEMFile': externalDEMFile,
-              'externalDEMApplyEGM': externalDEMApplyEGM}
+              'externalDEMApplyEGM': externalDEMApplyEGM,
+              'demResamplingMethod': demResamplingMethod}
     if externalDEMFile is not None:
         if os.path.isfile(externalDEMFile):
             if externalDEMNoDataValue is None:
@@ -1871,10 +1969,16 @@ def tc_parametrize(workflow, before, spacing, t_srs, tc_method='Range-Doppler',
         dempar['externalDEMFile'] = None
         dempar['externalDEMNoDataValue'] = 0
     
-    for key, value in dempar.items():
-        workflow.set_par(key, value)
+    if workflow is not None:
+        for key, value in dempar.items():
+            workflow.set_par(key, value)
+    elif node is not None:
+        for key, value in dempar.items():
+            if key in node.parameters.keys():
+                node.parameters[key] = value
+    else:
+        raise RuntimeError("either 'workflow' or 'node must be defined'")
     
     # download the EGM lookup table if necessary
     if dempar['externalDEMApplyEGM']:
         get_egm_lookup(geoid='EGM96', software='SNAP')
-    return tc

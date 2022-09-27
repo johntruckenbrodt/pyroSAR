@@ -15,12 +15,10 @@ import os
 import re
 import shutil
 from ..drivers import identify, identify_many, ID
-from ..auxdata import get_egm_lookup
 from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, \
-    windows_fileprefix, orb_parametrize, tc_parametrize, sub_parametrize, \
-    mli_parametrize
+    windows_fileprefix, orb_parametrize, geo_parametrize, sub_parametrize, \
+    mli_parametrize, dem_parametrize
 
-from spatialist import Raster
 from spatialist.ancillary import dissolve
 
 import logging
@@ -369,22 +367,24 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = deb
     ############################################
     # Apply-Orbit-File node configuration
-    last = orb_parametrize(scene=id, workflow=workflow, before=last.id,
-                           formatName=formatName, allow_RES_OSV=allow_RES_OSV)
+    orb = orb_parametrize(scene=id, formatName=formatName, allow_RES_OSV=allow_RES_OSV)
+    workflow.insert_node(orb, before=last.id)
+    last = orb
     ############################################
     # Subset node configuration
     if shapefile is not None or offset is not None:
-        last = sub_parametrize(scene=id, workflow=workflow, before=last.id,
-                               geometry=shapefile, offset=offset, buffer=0.01)
+        sub = sub_parametrize(scene=id, geometry=shapefile, offset=offset, buffer=0.01)
+        workflow.insert_node(sub, before=last.id)
+        last = sub
     ############################################
     # Multilook node configuration
     if id.sensor in ['ERS1', 'ERS2', 'ASAR']:
         bands = bandnames['beta0'] + bandnames['sigma0']
     else:
         bands = None
-    ml = mli_parametrize(scene=id, workflow=workflow, before=last.id,
-                         spacing=spacing, rlks=rlks, azlks=azlks, bands=bands)
+    ml = mli_parametrize(scene=id, spacing=spacing, rlks=rlks, azlks=azlks, sourceBands=bands)
     if ml is not None:
+        workflow.insert_node(ml, before=last.id)
         last = ml
     ############################################
     # Terrain-Flattening node configuration
@@ -450,12 +450,16 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = sf
     ############################################
     # configuration of node sequence for specific geocoding approaches
-    tc = tc_parametrize(workflow=workflow, before=last.id, spacing=spacing,
-                        t_srs=t_srs, tc_method=geocoding_type, bands=bands,
-                        alignToStandardGrid=alignToStandardGrid,
-                        standardGridOriginX=standardGridOriginX,
-                        standardGridOriginY=standardGridOriginY)
-    last = tc
+    tc = geo_parametrize(spacing=spacing, t_srs=t_srs,
+                         tc_method=geocoding_type, sourceBands=bands,
+                         alignToStandardGrid=alignToStandardGrid,
+                         standardGridOriginX=standardGridOriginX,
+                         standardGridOriginY=standardGridOriginY)
+    workflow.insert_node(tc, before=last.id)
+    if isinstance(tc, list):
+        last = tc = tc[-1]
+    else:
+        last = tc
     ############################################
     # (optionally) add node for conversion from linear to db scaling
     if scaling not in ['dB', 'db', 'linear']:
@@ -579,51 +583,29 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
             tc_select.parameters['sourceBands'] = tc_selection
     ############################################
     ############################################
-    # select DEM type
-    dempar = {'externalDEMFile': externalDEMFile,
-              'externalDEMApplyEGM': externalDEMApplyEGM}
-    if externalDEMFile is not None:
-        if os.path.isfile(externalDEMFile):
-            if externalDEMNoDataValue is None:
-                with Raster(externalDEMFile) as dem:
-                    dempar['externalDEMNoDataValue'] = dem.nodata
-                if dempar['externalDEMNoDataValue'] is None:
-                    raise RuntimeError('Cannot read NoData value from DEM file. '
-                                       'Please specify externalDEMNoDataValue')
-            else:
-                dempar['externalDEMNoDataValue'] = externalDEMNoDataValue
-            dempar['reGridMethod'] = False
-        else:
-            raise RuntimeError('specified externalDEMFile does not exist')
-        dempar['demName'] = 'External DEM'
-    else:
-        dempar['demName'] = demName
-        dempar['externalDEMFile'] = None
-        dempar['externalDEMNoDataValue'] = 0
-    
-    for key, value in dempar.items():
-        workflow.set_par(key, value)
-    
-    # download the EGM lookup table if necessary
-    if dempar['externalDEMApplyEGM']:
-        get_egm_lookup(geoid='EGM96', software='SNAP')
+    # DEM handling
+    dem_parametrize(workflow=workflow, demName=demName,
+                    externalDEMFile=externalDEMFile,
+                    externalDEMNoDataValue=externalDEMNoDataValue,
+                    externalDEMApplyEGM=externalDEMApplyEGM)
     ############################################
     ############################################
     # configure the resampling methods
     
-    options = ['NEAREST_NEIGHBOUR',
-               'BILINEAR_INTERPOLATION',
-               'CUBIC_CONVOLUTION',
-               'BISINC_5_POINT_INTERPOLATION',
-               'BISINC_11_POINT_INTERPOLATION',
-               'BISINC_21_POINT_INTERPOLATION',
-               'BICUBIC_INTERPOLATION']
+    options_img = ['NEAREST_NEIGHBOUR',
+                   'BILINEAR_INTERPOLATION',
+                   'CUBIC_CONVOLUTION',
+                   'BISINC_5_POINT_INTERPOLATION',
+                   'BISINC_11_POINT_INTERPOLATION',
+                   'BISINC_21_POINT_INTERPOLATION',
+                   'BICUBIC_INTERPOLATION']
+    options_dem = options_img + ['DELAUNAY_INTERPOLATION']
     
     message = '{0} must be one of the following:\n- {1}'
-    if demResamplingMethod not in options:
-        raise ValueError(message.format('demResamplingMethod', '\n- '.join(options)))
-    if imgResamplingMethod not in options:
-        raise ValueError(message.format('imgResamplingMethod', '\n- '.join(options)))
+    if demResamplingMethod not in options_dem:
+        raise ValueError(message.format('demResamplingMethod', '\n- '.join(options_dem)))
+    if imgResamplingMethod not in options_img:
+        raise ValueError(message.format('imgResamplingMethod', '\n- '.join(options_img)))
     
     workflow.set_par('demResamplingMethod', demResamplingMethod)
     workflow.set_par('imgResamplingMethod', imgResamplingMethod,
@@ -793,19 +775,19 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     last = select
     ############################################
     # Multilook node configuration
-    ml = mli_parametrize(scene=id, workflow=wf, before=last.id,
-                         spacing=spacing, rlks=rlks, azlks=azlks)
+    ml = mli_parametrize(scene=id, spacing=spacing, rlks=rlks, azlks=azlks)
     if ml is not None:
+        wf.insert_node(ml, before=last.id)
         last = ml
     ############################################
-    tc = tc_parametrize(workflow=wf, before=last.id,
-                        spacing=spacing, t_srs=t_srs, demName=demName,
-                        externalDEMFile=externalDEMFile,
-                        externalDEMNoDataValue=externalDEMNoDataValue,
-                        externalDEMApplyEGM=externalDEMApplyEGM,
-                        alignToStandardGrid=alignToStandardGrid,
-                        standardGridOriginX=standardGridOriginX,
-                        standardGridOriginY=standardGridOriginY)
+    tc = geo_parametrize(spacing=spacing, t_srs=t_srs, demName=demName,
+                         externalDEMFile=externalDEMFile,
+                         externalDEMNoDataValue=externalDEMNoDataValue,
+                         externalDEMApplyEGM=externalDEMApplyEGM,
+                         alignToStandardGrid=alignToStandardGrid,
+                         standardGridOriginX=standardGridOriginX,
+                         standardGridOriginY=standardGridOriginY)
+    wf.insert_node(tc, before=last.id)
     last = tc
     ############################################
     
