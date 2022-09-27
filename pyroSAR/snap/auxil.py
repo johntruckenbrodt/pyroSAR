@@ -1725,17 +1725,17 @@ def sub_parametrize(scene, geometry=None, offset=None, buffer=0.01, copyMetadata
     return subset
 
 
-def tc_parametrize(spacing, t_srs, tc_method='Range-Doppler',
-                   sourceBands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
-                   externalDEMNoDataValue=None, externalDEMApplyEGM=True,
-                   alignToStandardGrid=False, standardGridAreaOrPoint='point',
-                   standardGridOriginX=0, standardGridOriginY=0,
-                   nodataValueAtSea=False, export_extra=None,
-                   demResamplingMethod='BILINEAR_INTERPOLATION',
-                   imgResamplingMethod='BILINEAR_INTERPOLATION',
-                   **kwargs):
+def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
+                    sourceBands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
+                    externalDEMNoDataValue=None, externalDEMApplyEGM=True,
+                    alignToStandardGrid=False, standardGridAreaOrPoint='point',
+                    standardGridOriginX=0, standardGridOriginY=0,
+                    nodataValueAtSea=False, export_extra=None,
+                    demResamplingMethod='BILINEAR_INTERPOLATION',
+                    imgResamplingMethod='BILINEAR_INTERPOLATION',
+                    **kwargs):
     """
-    convenience function for parametrizing a terrain correction node and inserting it into a workflow.
+    convenience function for parametrizing geocoding nodes.
     
     Parameters
     ----------

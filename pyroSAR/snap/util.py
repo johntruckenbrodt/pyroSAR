@@ -16,7 +16,7 @@ import re
 import shutil
 from ..drivers import identify, identify_many, ID
 from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, \
-    windows_fileprefix, orb_parametrize, tc_parametrize, sub_parametrize, \
+    windows_fileprefix, orb_parametrize, geo_parametrize, sub_parametrize, \
     mli_parametrize, dem_parametrize
 
 from spatialist.ancillary import dissolve
@@ -450,11 +450,11 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = sf
     ############################################
     # configuration of node sequence for specific geocoding approaches
-    tc = tc_parametrize(spacing=spacing, t_srs=t_srs,
-                        tc_method=geocoding_type, sourceBands=bands,
-                        alignToStandardGrid=alignToStandardGrid,
-                        standardGridOriginX=standardGridOriginX,
-                        standardGridOriginY=standardGridOriginY)
+    tc = geo_parametrize(spacing=spacing, t_srs=t_srs,
+                         tc_method=geocoding_type, sourceBands=bands,
+                         alignToStandardGrid=alignToStandardGrid,
+                         standardGridOriginX=standardGridOriginX,
+                         standardGridOriginY=standardGridOriginY)
     workflow.insert_node(tc, before=last.id)
     if isinstance(tc, list):
         last = tc = tc[-1]
@@ -780,13 +780,13 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
         wf.insert_node(ml, before=last.id)
         last = ml
     ############################################
-    tc = tc_parametrize(spacing=spacing, t_srs=t_srs, demName=demName,
-                        externalDEMFile=externalDEMFile,
-                        externalDEMNoDataValue=externalDEMNoDataValue,
-                        externalDEMApplyEGM=externalDEMApplyEGM,
-                        alignToStandardGrid=alignToStandardGrid,
-                        standardGridOriginX=standardGridOriginX,
-                        standardGridOriginY=standardGridOriginY)
+    tc = geo_parametrize(spacing=spacing, t_srs=t_srs, demName=demName,
+                         externalDEMFile=externalDEMFile,
+                         externalDEMNoDataValue=externalDEMNoDataValue,
+                         externalDEMApplyEGM=externalDEMApplyEGM,
+                         alignToStandardGrid=alignToStandardGrid,
+                         standardGridOriginX=standardGridOriginX,
+                         standardGridOriginY=standardGridOriginY)
     wf.insert_node(tc, before=last.id)
     last = tc
     ############################################
