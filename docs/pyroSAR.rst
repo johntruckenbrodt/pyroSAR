@@ -51,7 +51,7 @@ Workflow Parsing and Execution
 ------------------------------
 
 .. automodule:: pyroSAR.snap.auxil
-    :members: gpt, execute, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par, Par_BandMath
+    :members: gpt, execute, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par, Par_BandMath, dem_parametrize, geo_parametrize, mli_parametrize, orb_parametrize, sub_parametrize
     :undoc-members:
     :show-inheritance:
 
@@ -68,6 +68,11 @@ Workflow Parsing and Execution
         Node
         Par
         Par_BandMath
+        dem_parametrize
+        geo_parametrize
+        mli_parametrize
+        orb_parametrize
+        sub_parametrize
 
 General Utilities
 -----------------
