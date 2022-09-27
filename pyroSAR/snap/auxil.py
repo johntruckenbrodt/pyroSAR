@@ -1442,8 +1442,8 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
     Parameters
     ----------
     src: str
-        a processed SAR image in BEAM-DIMAP format (*.dim) or a directory with *.img files (ENVI format).
-        0 is assumed as no data value.
+        a processed SAR image in BEAM-DIMAP format (*.dim), a single *.img file (ENVI format) or a
+        directory with *.img files. 0 is assumed as no data value.
     only_boundary: bool
         only erode edges at the image boundary (or also at data gaps caused by e.g. masking during Terrain-Flattening)?
     connectedness: int
@@ -1599,7 +1599,7 @@ def mli_parametrize(scene, spacing=None, rlks=None, azlks=None, **kwargs):
 
 def orb_parametrize(scene, formatName, allow_RES_OSV=True, **kwargs):
     """
-    convenience function for parametrizing an `Apply-Orbit-File` node and inserting it into a workflow.
+    convenience function for parametrizing an `Apply-Orbit-File`.
     Required Sentinel-1 orbit files are directly downloaded.
     
     Parameters
@@ -1646,7 +1646,7 @@ def orb_parametrize(scene, formatName, allow_RES_OSV=True, **kwargs):
 
 def sub_parametrize(scene, geometry=None, offset=None, buffer=0.01, copyMetadata=True, **kwargs):
     """
-    convenience function for parametrizing an `Subset` node and inserting it into a workflow.
+    convenience function for parametrizing an `Subset` node.
     
     Parameters
     ----------
@@ -1748,7 +1748,8 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         
          - Range-Doppler (SNAP node `Terrain-Correction`)
          - SAR simulation cross correlation
-         (SNAP nodes `SAR-Simulation`->`Cross-Correlation`->`SARSim-Terrain-Correction`)
+           (SNAP nodes `SAR-Simulation`->`Cross-Correlation`->`SARSim-Terrain-Correction`)
+    
     sourceBands: list[str] or None
         the image band names to geocode; default None: geocode all incoming bands.
     spacing: int or float
@@ -1909,7 +1910,7 @@ def dem_parametrize(workflow=None, node=None, demName='SRTM 1Sec HGT', externalD
                     demResamplingMethod='BILINEAR_INTERPOLATION'):
     """
     DEM parametrization for a full workflow or a single node. In the former case, all nodes with the
-    DEM-relevant parameters can be modified at once, e.g. Terrain-Flattening and Terrain-Correction.
+    DEM-relevant parameters can be modified at once, e.g. `Terrain-Flattening` and `Terrain-Correction`.
     
     Parameters
     ----------
