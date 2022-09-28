@@ -1437,13 +1437,13 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
         :align: center
         
         VV gamma0 RTC backscatter image visualizing the noisy border (left) and the cleaned result (right).
-        The area covers approx. 2.3 * 2.3 km². Pixel spacing is 20 m. connectedness 4, 1 pixel.
+        The area covers approx. 2.3 x 2.3 km². Pixel spacing is 20 m. connectedness 4, 1 pixel.
     
     Parameters
     ----------
     src: str
-        a processed SAR image in BEAM-DIMAP format (*.dim), a single *.img file (ENVI format) or a
-        directory with *.img files. 0 is assumed as no data value.
+        a processed SAR image in BEAM-DIMAP format (.dim), a single .img file (ENVI format) or a
+        directory with .img files. 0 is assumed as no data value.
     only_boundary: bool
         only erode edges at the image boundary (or also at data gaps caused by e.g. masking during Terrain-Flattening)?
     connectedness: int
