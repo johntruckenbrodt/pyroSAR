@@ -11,7 +11,6 @@
 # copied, modified, propagated, or distributed except according
 # to the terms contained in the LICENSE.txt file.
 ###############################################################################
-import io
 import os
 import re
 import csv
@@ -35,7 +34,7 @@ log = logging.getLogger(__name__)
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None,
-                 product='dem', nodata=None, dst_nodata=None, hide_nodata=False):
+                 product='dem', nodata=None, dst_nodata=None, hide_nodata=False, crop=True):
     """
     obtain all relevant DEM tiles for selected geometries
 
@@ -110,7 +109,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
     buffer: int, float, None
         a buffer in degrees to add around the individual geometries
     username: str or None
-        (optional) the user name for services requiring registration
+        (optional) the username for services requiring registration
     password: str or None
         (optional) the password for the registration account
     product: str
@@ -186,6 +185,9 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         the nodata value of the VRT file.
     hide_nodata: bool
         hide the VRT no data value?
+    crop: bool
+        crop to the provided geometries (or return the full extent of the DEM tiles)?
+        Argument `buffer` is ignored if set to `False`.
     
     Returns
     -------
@@ -235,7 +237,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             product=product,
                             nodata=nodata,
                             dst_nodata=dst_nodata,
-                            hide_nodata=hide_nodata)
+                            hide_nodata=hide_nodata,
+                            crop=crop)
 
 
 def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', threads=None,
@@ -428,7 +431,8 @@ class DEMHandler:
         return ext
     
     @staticmethod
-    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None, dst_nodata=None, hide_nodata=False):
+    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None,
+                   dst_nodata=None, hide_nodata=False, crop=True):
         if vsi is not None:
             locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in tiles])]
         else:
@@ -437,13 +441,13 @@ class DEMHandler:
             if nodata is None:
                 nodata = ras.nodata
             xres, yres = ras.res
-        opts = {'outputBounds': (extent['xmin'], extent['ymin'],
-                                 extent['xmax'], extent['ymax']),
-                'srcNodata': nodata, 'targetAlignedPixels': True,
-                'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata
-                }
+        opts = {'srcNodata': nodata, 'targetAlignedPixels': True,
+                'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata}
         if dst_nodata is not None:
             opts['VRTNodata'] = dst_nodata
+        if crop:
+            opts['outputBounds'] = (extent['xmin'], extent['ymin'],
+                                    extent['xmax'], extent['ymax'])
         gdalbuildvrt(src=locals, dst=vrtfile,
                      options=opts)
     
@@ -492,16 +496,21 @@ class DEMHandler:
         files = list(set(filenames))
         os.makedirs(outdir, exist_ok=True)
         locals = []
-        for file in files:
+        n = len(files)
+        for i, file in enumerate(files):
             remote = '{}/{}'.format(url, file)
             local = os.path.join(outdir, os.path.basename(file))
             if not os.path.isfile(local):
-                log.info('{} <<-- {}'.format(local, remote))
+                msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local, r=remote))
                 r = requests.get(remote)
                 r.raise_for_status()
                 with open(local, 'wb') as output:
                     output.write(r.content)
                 r.close()
+            else:
+                msg = '[{i: >{w}}/{n}] found local file: {l}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local))
             if os.path.isfile(local):
                 locals.append(local)
         return sorted(locals)
@@ -529,7 +538,8 @@ class DEMHandler:
         if parsed.path != '':
             ftp.cwd(parsed.path)
         locals = []
-        for product_remote in files:
+        n = len(files)
+        for i, product_remote in enumerate(files):
             product_local = os.path.join(outdir, os.path.basename(product_remote))
             if not os.path.isfile(product_local):
                 try:
@@ -538,9 +548,13 @@ class DEMHandler:
                     continue
                 address = '{}://{}/{}{}'.format(parsed.scheme, parsed.netloc,
                                                 parsed.path + '/' if parsed.path != '' else '', product_remote)
-                log.info('{} <<-- {}'.format(product_local, address))
+                msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=product_local, r=address))
                 with open(product_local, 'wb') as myfile:
                     ftp.retrbinary('RETR {}'.format(product_remote), myfile.write)
+            else:
+                msg = '[{i: >{w}}/{n}] found local file: {l}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=product_local))
             if os.path.isfile(product_local):
                 locals.append(product_local)
         ftp.close()
@@ -628,7 +642,8 @@ class DEMHandler:
         }
     
     def load(self, demType, vrt=None, buffer=None, username=None, password=None,
-             product='dem', nodata=None, dst_nodata=None, hide_nodata=False):
+             product='dem', nodata=None, dst_nodata=None, hide_nodata=False,
+             crop=True):
         """
         obtain DEM tiles for the given geometries
         
@@ -709,8 +724,15 @@ class DEMHandler:
               * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
               * 'wam': Water Indication Mask
         nodata: int or float or None
-            the no data value to write in the VRT if it will be written.
-            If `None`, the value of the source products is passed on.
+            overrides the nodata values of the source files.
+            If `None`, the value of the source products is read passed on.
+        dst_nodata: int or float or None
+            the VRT nodata value.
+        hide_nodata: bool
+            hide the nodata value in the VRT?
+        crop: bool
+            crop to the provided geometries (or return the full extent of the DEM tiles)?
+            Argument `buffer` is ignored if set to `False`.
 
         Returns
         -------
@@ -763,9 +785,9 @@ class DEMHandler:
                             vsi=self.config[demType]['vsi'],
                             extent=self.__commonextent(buffer),
                             nodata=nodata, dst_nodata=dst_nodata,
-                            hide_nodata=hide_nodata)
-            return None
-        return locals
+                            hide_nodata=hide_nodata, crop=crop)
+        else:
+            return locals
     
     def remote_ids(self, extent, demType, username=None, password=None):
         """
@@ -863,46 +885,67 @@ class DEMHandler:
             indices = [''.join(index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
             
-            ftp = ImplicitFTP_TLS()
-            parsed = urlparse(self.config[demType]['url'])
-            host = parsed.netloc
-            path = parsed.path
-            ftp.connect(host=host, port=self.config[demType]['port'])
-            ftp.login(username, password)
-            ftp.cwd(path)
+            outdir = os.path.join(self.auxdatapath, 'dem', demType)
+            mapping = os.path.join(outdir, 'mapping.csv')
+            mapping2 = os.path.join(outdir, 'mapping_append.csv')
             
-            obj = io.BytesIO()
-            ftp.retrbinary('RETR mapping.csv', obj.write)
-            obj = obj.getvalue().decode('utf-8').splitlines()
-            
-            ids = []
-            stream = csv.reader(obj, delimiter=';')
-            for row in stream:
-                if row[1] + row[2] in indices:
-                    ids.append(row[0])
-            
-            remotes = []
-            remotes_base = []
-            
-            def ftp_search(target, files):
-                pattern = '|'.join(files)
+            def ftp_search(ftp, target):
+                out = []
                 if target.endswith('/'):
+                    print(target)
                     content = ftp.nlst(target)
                     for item in content:
-                        ftp_search(target + '/' + item, files)
+                        out.extend(ftp_search(ftp, target + item))
                 else:
-                    if target.endswith('.tar') and re.search(pattern, target):
-                        base = os.path.basename(target)
-                        if base not in remotes_base:
-                            remotes.append(target)
-                            remotes_base.append(base)
+                    if target.endswith('DEM.tar'):
+                        out.append(target.encode('latin-1').decode('utf-8'))
+                return out
             
-            if len(ids) < len(indices):
-                log.warning('the available DEM tiles do not fully cover the area of interest')
+            def ftp_connect(host, path, username, password, port=990):
+                ftp = ImplicitFTP_TLS()
+                ftp.connect(host=host, port=port)
+                ftp.login(username, password)
+                ftp.cwd(path)
+                return ftp
             
-            if len(ids) > 0:
-                ftp_search(path + '/', ids)
-            ftp.quit()
+            if not os.path.isfile(mapping2):
+                parsed = urlparse(self.config[demType]['url'])
+                host = parsed.netloc
+                path = parsed.path
+                ftp = None
+                os.makedirs(outdir, exist_ok=True)
+                if not os.path.isfile(mapping):
+                    print('downloading mapping.csv')
+                    ftp = ftp_connect(host, path, username, password,
+                                      port=self.config[demType]['port'])
+                    with open(mapping, 'wb') as myfile:
+                        ftp.retrbinary('RETR mapping.csv', myfile.write)
+                print('searching FTP server')
+                if ftp is None:
+                    ftp = ftp_connect(host, path, username, password,
+                                      port=self.config[demType]['port'])
+                files = ftp_search(ftp, path + '/')
+                files_base = [os.path.basename(x) for x in files]
+                if ftp is not None:
+                    ftp.quit()
+                print('matching found files with mapping.csv')
+                with open(mapping) as obj:
+                    reader = csv.reader(obj, delimiter=';')
+                    with open(mapping2, 'w', newline='') as out:
+                        writer = csv.writer(out, delimiter=';')
+                        writer.writerow(next(reader))  # write header
+                        for row in reader:
+                            index = files_base.index(row[0])
+                            row.append(files[index])
+                            del files_base[index]
+                            del files[index]
+                            writer.writerow(row)
+            remotes = []
+            with open(mapping2) as obj:
+                stream = csv.reader(obj, delimiter=';')
+                for row in stream:
+                    if row[1] + row[2] in indices:
+                        remotes.append(row[-1])
         
         elif demType == 'Copernicus 30m Global DEM':
             remotes = cop_dem_remotes(extent, arcsecs=10)
