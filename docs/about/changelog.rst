@@ -839,3 +839,31 @@ SNAP API
 --------
 - compatibility with SNAP version 9
 - function :func:`~pyroSAR.snap.util.geocode`: improved support for ERS and ASAR
+
+0.19.0 | 2022-09-28
+===================
+
+Drivers
+-------
+- class :class:`pyroSAR.drivers.ESA`: added support for ASAR WSM
+
+SNAP API
+--------
+- new convenience functions:
+
+  + :func:`pyroSAR.snap.auxil.geo_parametrize`
+  + :func:`pyroSAR.snap.auxil.sub_parametrize`
+  + :func:`pyroSAR.snap.auxil.mli_parametrize`
+  + :func:`pyroSAR.snap.auxil.dem_parametrize`
+
+- function :func:`pyroSAR.snap.auxil.orb_parametrize`: removed args `workflow`, `before`, `continueOnFail`; added `kwargs`
+- function :func:`pyroSAR.snap.auxil.erode_edges`: extended to also take a BEAM-DIMAP product as input or a folder of multiple ENVI files (and not just and individual ENVI file)
+- function :func:`pyroSAR.snap.auxil.Workflow.insert_node`: option to insert multiple nodes at once
+
+Auxiliary Data Handling
+-----------------------
+- function :func:`pyroSAR.auxdata.dem_autoload`:
+
+  + new argument `crop` to optionally return the full extent of all overlapping DEM tiles
+  + added download status print messages
+  + download and modify a Copernicus DEM index file for future reuse; this removes the need to search the FTP server for files and thus greatly accelerates the process of collecting all files overlapping with the AOI
