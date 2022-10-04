@@ -182,9 +182,31 @@ def test_archive(tmpdir, testdata):
     
     db.add_tables(mytable)
     assert 'mytable' in db.get_tablenames()
+    db.drop_table('mytable')
+    assert 'mytable' not in db.get_tablenames()
     with pytest.raises(TypeError):
         db.filter_scenelist([1])
     db.close()
+
+
+def test_archive_geometry(tmpdir, testdata):
+    dbfile = os.path.join(str(tmpdir), 'scenes.db')
+    db = pyroSAR.Archive(dbfile)
+    db.insert(testdata['s1'])
+    db.close()
+    db = pyroSAR.Archive(dbfile, add_geometry=True)
+    db.update_geometry_field()
+    db.insert(testdata['s1_2'])
+    db.close()
+    os.remove(dbfile)
+    dbfile = os.path.join(str(tmpdir), 'scenes_geo.db')
+    db_geo = pyroSAR.Archive(dbfile, add_geometry=True)
+    db_geo.insert(testdata['s1'])
+    db_geo.close()
+    db_geo = pyroSAR.Archive(dbfile)
+    db_geo.insert(testdata['s1_2'])
+    db_geo.close()
+    os.remove(dbfile)
 
 
 def test_archive2(tmpdir, testdata):
