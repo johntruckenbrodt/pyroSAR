@@ -1588,7 +1588,7 @@ def mli_parametrize(scene, spacing=None, rlks=None, azlks=None, **kwargs):
     if [rlks, azlks].count(None) > 0:
         raise RuntimeError("'rlks' and 'azlks' must either both be integers or None")
     
-    if azlks > 1 or rlks > 1:
+    if azlks > 1 or rlks > 1 or scene.sensor in ['ERS1', 'ERS2', 'ASAR']:
         ml = parse_node('Multilook')
         ml.parameters['nAzLooks'] = azlks
         ml.parameters['nRgLooks'] = rlks
@@ -1625,10 +1625,10 @@ def orb_parametrize(scene, formatName, allow_RES_OSV=True, **kwargs):
     Node
         the Apply-Orbit-File node object
     """
-    orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
+    orbit_lookup = {'ENVISAT': 'PRARE Precise (ERS1&2) (Auto Download)',
                     'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
     orbitType = orbit_lookup[formatName]
-    if formatName == 'ENVISAT' and scene.acquisition_mode == 'WSM':
+    if formatName == 'ENVISAT' and scene.sensor == 'ASAR':
         orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
     
     if formatName == 'SENTINEL-1':
