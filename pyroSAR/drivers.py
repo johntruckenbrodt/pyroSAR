@@ -68,7 +68,6 @@ import socket
 import time
 import platform
 import subprocess
-import json
 import logging
 
 log = logging.getLogger(__name__)
@@ -133,7 +132,7 @@ def identify_many(scenes, pbar=False, sortkey=None):
 
     Parameters
     ----------
-    scenes: list[str]
+    scenes: list[str or ID]
         the file names of the scenes to be identified
     pbar: bool
         adds a progressbar if True
