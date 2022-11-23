@@ -2259,6 +2259,10 @@ class Archive(object):
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
+            dirname = os.path.dirname(dbfile)
+            w_ok = os.access(dirname, os.W_OK)
+            if not w_ok:
+                raise RuntimeError('cannot write to directory {}'.format(dirname))
             # catch if .db extension is missing
             root, ext = os.path.splitext(dbfile)
             if len(ext) == 0:
