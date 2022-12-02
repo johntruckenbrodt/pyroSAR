@@ -2880,8 +2880,8 @@ class Archive(object):
         if len(double) > 0:
             log.info('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
     
-    def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None,
-               recursive=False, polarizations=None, **args):
+    def select(self, vectorobject=None, mindate=None, maxdate=None, date_strict=True,
+               processdir=None, recursive=False, polarizations=None, **args):
         """
         select scenes from the database
 
@@ -2889,16 +2889,22 @@ class Archive(object):
         ----------
         vectorobject: :class:`~spatialist.vector.Vector`
             a geometry with which the scenes need to overlap
-        mindate: str or datetime.datetime, optional
+        mindate: str or datetime or None
             the minimum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
-        maxdate: str or datetime.datetime, optional
+        maxdate: str or datetime or None
             the maximum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
+        date_strict: bool
+            treat dates as strict limits or also allow flexible limits to incorporate scenes
+            whose acquisition period overlaps with the defined limit?
+            
+            - strict: start >= mindate & stop <= maxdate
+            - not strict: stop >= mindate & start <= maxdate
         processdir: str, optional
             A directory to be scanned for already processed scenes;
             the selected scenes will be filtered to those that have not yet been processed. Default: None
         recursive: bool
             (only if `processdir` is not None) should also the subdirectories of the `processdir` be scanned?
-        polarizations: list
+        polarizations: list[str]
             a list of polarization strings, e.g. ['HH', 'VV']
         **args:
             any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
@@ -2921,14 +2927,17 @@ class Archive(object):
                 arg_format.append('''scene LIKE '%%{0}%%' '''.format(os.path.basename(args[key])))
             else:
                 if isinstance(args[key], (float, int, str)):
-                    arg_format.append('''{0}='{1}' '''.format(key, args[key]))
+                    arg_format.append("""{0}='{1}'""".format(key, args[key]))
                 elif isinstance(args[key], (tuple, list)):
-                    arg_format.append('''{0} IN ('{1}')'''.format(key, "', '".join(map(str, args[key]))))
+                    arg_format.append("""{0} IN ('{1}')""".format(key, "', '".join(map(str, args[key]))))
         if mindate:
             if isinstance(mindate, datetime):
                 mindate = mindate.strftime('%Y%m%dT%H%M%S')
             if re.search('[0-9]{8}T[0-9]{6}', mindate):
-                arg_format.append('start>=?')
+                if date_strict:
+                    arg_format.append('start>=?')
+                else:
+                    arg_format.append('stop>=?')
                 vals.append(mindate)
             else:
                 log.info('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
@@ -2936,7 +2945,10 @@ class Archive(object):
             if isinstance(maxdate, datetime):
                 maxdate = maxdate.strftime('%Y%m%dT%H%M%S')
             if re.search('[0-9]{8}T[0-9]{6}', maxdate):
-                arg_format.append('stop<=?')
+                if date_strict:
+                    arg_format.append('stop<=?')
+                else:
+                    arg_format.append('start<=?')
                 vals.append(maxdate)
             else:
                 log.info('WARNING: argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
@@ -2964,7 +2976,7 @@ class Archive(object):
         query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
         # the query gets assembled stepwise here
         for val in vals:
-            query = query.replace('?', ''' '{0}' ''', 1).format(val)
+            query = query.replace('?', """'{0}'""", 1).format(val)
         log.debug(query)
         
         # core SQL execution
