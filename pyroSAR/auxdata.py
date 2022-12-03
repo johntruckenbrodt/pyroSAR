@@ -622,7 +622,7 @@ class DEMHandler:
                               'vsi': '/vsizip/',
                               'pattern': {'dem': '*.hgt'}
                               },
-            'SRTM 3Sec': {'url': 'https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF',
+            'SRTM 3Sec': {'url': 'https://download.esa.int/step/auxdata/dem/SRTM90/tiff',
                           'nodata': -32768.0,
                           'vsi': '/vsizip/',
                           'pattern': {'dem': 'srtm*.tif'}
