@@ -98,7 +98,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
         - 'SRTM 3Sec'
 
-          * url: https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF
+          * url: https://download.esa.int/step/auxdata/dem/SRTM90/tiff
           * height reference: EGM96
         
         - 'TDX90m'
@@ -850,7 +850,7 @@ class DEMHandler:
         candidates = []
         for geo in self.geometries:
             corners = self.__applybuffer(geo.extent, buffer)
-            candidates.extend(self.remote_ids(corners, demType=dem_type,
+            candidates.extend(self.remote_ids(corners, dem_type=dem_type,
                                               username=username, password=password))
         
         if dem_type in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM',
@@ -896,7 +896,7 @@ class DEMHandler:
         else:
             return locals
     
-    def remote_ids(self, extent, demType, username=None, password=None):
+    def remote_ids(self, extent, dem_type, username=None, password=None):
         """
         parse the names of the remote files overlapping with an area of interest
 
@@ -904,7 +904,7 @@ class DEMHandler:
         ----------
         extent: dict
             the extent of the area of interest with keys xmin, xmax, ymin, ymax
-        demType: str
+        dem_type: str
             the type fo DEM to be used
         username: str or None
             the download account username
@@ -941,7 +941,7 @@ class DEMHandler:
             candidates = [skeleton.format(res=arcsecs, *item) for item in indices]
             remotes = []
             for candidate in candidates:
-                response = requests.get(self.config[demType]['url'],
+                response = requests.get(self.config[dem_type]['url'],
                                         params={'prefix': candidate})
                 xml = ET.fromstring(response.content)
                 content = xml.findall('.//Contents', namespaces=xml.nsmap)
@@ -949,17 +949,17 @@ class DEMHandler:
                     remotes.append(candidate)
             return remotes
         
-        if demType == 'SRTM 1Sec HGT':
+        if dem_type == 'SRTM 1Sec HGT':
             lat, lon = self.intrange(extent, step=1)
             remotes = ['{0}{1}.SRTMGL1.hgt.zip'.format(*index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
         
-        elif demType == 'GETASSE30':
+        elif dem_type == 'GETASSE30':
             lat, lon = self.intrange(extent, step=15)
             remotes = ['{0}{1}.zip'.format(*index(x, y, nx=3, ny=2, reverse=True))
                        for x in lon for y in lat]
         
-        elif demType == 'TDX90m':
+        elif dem_type == 'TDX90m':
             lat, lon = self.intrange(extent, step=1)
             remotes = []
             for x in lon:
@@ -969,7 +969,7 @@ class DEMHandler:
                     remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
                                    .format(x=xf, xr=xr, y=yf, hem=xf[0]))
         
-        elif demType == 'AW3D30':
+        elif dem_type == 'AW3D30':
             remotes = []
             lat, lon = self.intrange(extent, step=1)
             for x in lon:
@@ -978,21 +978,21 @@ class DEMHandler:
                         '{0}{1}/{2}{3}.tar.gz'.format(*index(x // 5 * 5, y // 5 * 5),
                                                       *index(x, y)))
         
-        elif demType == 'SRTM 3Sec':
+        elif dem_type == 'SRTM 3Sec':
             lat = range(int((60 - float(extent['ymin'])) // 5) + 1,
                         int((60 - float(extent['ymax'])) // 5) + 2)
             lon = range(int((float(extent['xmin']) + 180) // 5) + 1,
                         int((float(extent['xmax']) + 180) // 5) + 2)
             remotes = ['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in lon for y in lat]
         
-        elif demType in ['Copernicus 10m EEA DEM',
+        elif dem_type in ['Copernicus 10m EEA DEM',
                          'Copernicus 30m Global DEM II',
                          'Copernicus 90m Global DEM II']:
             lat, lon = self.intrange(extent, step=1)
             indices = [''.join(index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
             
-            outdir = os.path.join(self.auxdatapath, 'dem', demType)
+            outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
             mapping = os.path.join(outdir, 'mapping.csv')
             mapping2 = os.path.join(outdir, 'mapping_append.csv')
             
@@ -1016,7 +1016,7 @@ class DEMHandler:
                 return ftp
             
             if not os.path.isfile(mapping2):
-                parsed = urlparse(self.config[demType]['url'])
+                parsed = urlparse(self.config[dem_type]['url'])
                 host = parsed.netloc
                 path = parsed.path
                 ftp = None
@@ -1024,13 +1024,13 @@ class DEMHandler:
                 if not os.path.isfile(mapping):
                     print('downloading mapping.csv')
                     ftp = ftp_connect(host, path, username, password,
-                                      port=self.config[demType]['port'])
+                                      port=self.config[dem_type]['port'])
                     with open(mapping, 'wb') as myfile:
                         ftp.retrbinary('RETR mapping.csv', myfile.write)
                 print('searching FTP server')
                 if ftp is None:
                     ftp = ftp_connect(host, path, username, password,
-                                      port=self.config[demType]['port'])
+                                      port=self.config[dem_type]['port'])
                 files = ftp_search(ftp, path + '/')
                 files_base = [os.path.basename(x) for x in files]
                 if ftp is not None:
@@ -1054,14 +1054,14 @@ class DEMHandler:
                     if row[1] + row[2] in indices:
                         remotes.append(row[-1])
         
-        elif demType == 'Copernicus 30m Global DEM':
+        elif dem_type == 'Copernicus 30m Global DEM':
             remotes = cop_dem_remotes(extent, arcsecs=10)
         
-        elif demType == 'Copernicus 90m Global DEM':
+        elif dem_type == 'Copernicus 90m Global DEM':
             remotes = cop_dem_remotes(extent, arcsecs=30)
         
         else:
-            raise ValueError('unknown demType: {}'.format(demType))
+            raise ValueError('unknown demType: {}'.format(dem_type))
         
         return sorted(remotes)
 
