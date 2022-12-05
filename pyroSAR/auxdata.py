@@ -16,6 +16,8 @@ import os
 import re
 import csv
 import ssl
+import numpy
+import fnmatch
 import ftplib
 import requests
 import zipfile as zf
@@ -24,6 +26,7 @@ from urllib.parse import urlparse
 from lxml import etree as ET
 from pyroSAR.examine import ExamineSnap
 from spatialist.raster import Raster, Dtype
+from spatialist.vector import bbox
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
@@ -110,7 +113,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
     buffer: int, float, None
         a buffer in degrees to add around the individual geometries
     username: str or None
-        (optional) the user name for services requiring registration
+        (optional) the username for services requiring registration
     password: str or None
         (optional) the password for the registration account
     product: str
@@ -227,14 +230,14 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                    geoid_convert=True, geoid='EGM96')
     """
     with DEMHandler(geometries) as handler:
-        return handler.load(demType=demType,
+        return handler.load(dem_type=demType,
                             username=username,
                             password=password,
                             vrt=vrt,
                             buffer=buffer,
                             product=product,
                             nodata=nodata,
-                            dst_nodata=dst_nodata,
+                            vrt_nodata=dst_nodata,
                             hide_nodata=hide_nodata)
 
 
@@ -426,25 +429,76 @@ class DEMHandler:
             ext['ymax'] += buffer
         return ext
     
+    def __find_first(self, dem_type, product):
+        outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
+        vsi = self.config[dem_type]['vsi']
+        pattern = fnmatch.translate(self.config[dem_type]['pattern'][product])
+        for root, dirs, files in os.walk(outdir):
+            for file in files:
+                if vsi is None:
+                    if re.search(pattern, file):
+                        return os.path.join(root, file)
+                else:
+                    if re.search(r'\.(?:zip|tar(\.gz)?)$', file):
+                        fname = os.path.join(root, file)
+                        content = finder(fname, [pattern], regex=True)
+                        if len(content) > 0:
+                            if dem_type == 'GETASSE30':
+                                getasse30_hdr(fname)
+                            return vsi + content[0]
+    
     @staticmethod
-    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None, dst_nodata=None, hide_nodata=False):
-        if vsi is not None:
+    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, src_nodata=None,
+                   dst_nodata=None, hide_nodata=False, resolution=None):
+        """
+        Build a VRT mosaic from DEM tiles. The VRT is cropped to the specified `extent` but the pixel grid
+        of the source files is preserved and no resampling/shifting is applied.
+        
+        Parameters
+        ----------
+        tiles: list[str]
+            a list of DEM files or compressed archives containing DEM files
+        vrtfile: str
+            the output VRT filename
+        pattern: str
+            the search pattern for finding DEM tiles in compressed archives
+        vsi: str or None
+            the GDAL VSI directive to prepend the DEM tile name, e.g. /vsizip/ or /vsitar/
+        extent: dict:
+            a dictionary with keys `xmin`, `ymin`, `xmax` and `ymax`
+        src_nodata: int or float or None
+            the nodata value of the source DEM tiles; default None: read the value from the first item in `tiles`
+        dst_nodata: int or float or None
+            the nodata value of the output VRT file; default None: do not define a nodata value
+        hide_nodata: bool
+            hide the nodata value of the ouptu VRT file?
+        resolution: int or float or None
+            the spatial resolution of the source DEM tiles; default None: read the value from the first item in `tiles`
+
+        Returns
+        -------
+
+        """
+        if vsi is not None and not tiles[0].endswith('.tif'):
             locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in tiles])]
         else:
             locals = tiles
         with Raster(locals[0]) as ras:
-            if nodata is None:
-                nodata = ras.nodata
-            xres, yres = ras.res
+            if src_nodata is None:
+                src_nodata = ras.nodata
+            if resolution is None:
+                xres, yres = ras.res
+            else:
+                xres, yres = resolution
         opts = {'outputBounds': (extent['xmin'], extent['ymin'],
                                  extent['xmax'], extent['ymax']),
-                'srcNodata': nodata, 'targetAlignedPixels': True,
+                'srcNodata': src_nodata,
+                'targetAlignedPixels': True,  # preserve source file pixel grid
                 'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata
                 }
         if dst_nodata is not None:
             opts['VRTNodata'] = dst_nodata
-        gdalbuildvrt(src=locals, dst=vrtfile,
-                     options=opts)
+        gdalbuildvrt(src=locals, dst=vrtfile, options=opts)
     
     def __commonextent(self, buffer=None):
         ext_new = {}
@@ -460,6 +514,27 @@ class DEMHandler:
                         ext_new[key] = geo.extent[key]
         ext_new = self.__applybuffer(ext_new, buffer)
         return ext_new
+    
+    @staticmethod
+    def __create_dummy_dem():
+        path = os.path.join(os.path.expanduser('~'), '.pyrosar', 'auxdata')
+        os.makedirs(name=path, exist_ok=True)
+        filename = os.path.join(path, 'dummy_dem.tif')
+        driver = gdal.GetDriverByName('GTiff')
+        dataset = driver.Create(filename, 1, 1, 1, 1)
+        geo = [-180, 360, 0, 90, 0, -180]
+        dataset.SetGeoTransform(geo)
+        dataset.SetProjection('EPSG:4326')
+        band = dataset.GetRasterBand(1)
+        band.SetNoDataValue(255)
+        mat = numpy.zeros(shape=(1, 1))
+        band.WriteArray(mat, 0, 0)
+        band.FlushCache()
+        del mat
+        band = None
+        dataset = None
+        driver = None
+        return filename
     
     @staticmethod
     def intrange(extent, step):
@@ -488,6 +563,11 @@ class DEMHandler:
     
     @staticmethod
     def __retrieve(url, filenames, outdir):
+        # check that URL is reachable
+        r = requests.get(url)
+        r.raise_for_status()
+        r.close()
+        
         files = list(set(filenames))
         os.makedirs(outdir, exist_ok=True)
         locals = []
@@ -497,6 +577,10 @@ class DEMHandler:
             if not os.path.isfile(local):
                 log.info('{} <<-- {}'.format(local, remote))
                 r = requests.get(remote)
+                # a tile might not exist over ocean
+                if r.status_code == 404:
+                    r.close()
+                    continue
                 r.raise_for_status()
                 with open(local, 'wb') as output:
                     output.write(r.content)
@@ -626,14 +710,16 @@ class DEMHandler:
                        }
         }
     
-    def load(self, demType, vrt=None, buffer=None, username=None, password=None,
-             product='dem', nodata=None, dst_nodata=None, hide_nodata=False):
+    def load(self, dem_type, vrt=None, buffer=None, username=None, password=None,
+             product='dem', nodata=None, vrt_nodata=None, hide_nodata=False):
         """
-        obtain DEM tiles for the given geometries
+        obtain DEM tiles for the given geometries and either return the file names in a list
+        or combine them into a VRT mosaic. The VRT is cropped to the combined extent of the geometries
+        but the pixel grid of the source files is preserved and no resampling/shifting is applied.
         
         Parameters
         ----------
-        demType: str
+        dem_type: str
             the type fo DEM to be used
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
@@ -710,59 +796,75 @@ class DEMHandler:
         nodata: int or float or None
             the no data value to write in the VRT if it will be written.
             If `None`, the value of the source products is passed on.
+        vrt_nodata: int or float or None
+            the nodata value of the output VRT file; default None: do not define a nodata value
+        hide_nodata: bool
+            hide the nodata value of the ouptu VRT file?
 
         Returns
         -------
-        list or None
+        list[str] or None
             the names of the obtained files or None if a VRT file was defined
         """
         keys = self.config.keys()
-        if demType not in keys:
+        if dem_type not in keys:
             raise RuntimeError("demType '{}' is not supported\n  "
                                "possible options: '{}'"
-                               .format(demType, "', '".join(keys)))
+                               .format(dem_type, "', '".join(keys)))
         
-        products = self.config[demType]['pattern'].keys()
+        products = self.config[dem_type]['pattern'].keys()
         if product not in products:
             raise RuntimeError("product '{0}' not available for demType '{1}'\n"
-                               "  options: '{2}'".format(product, demType, "', '".join(products)))
+                               "  options: '{2}'".format(product, dem_type, "', '".join(products)))
         
-        outdir = os.path.join(self.auxdatapath, 'dem', demType)
+        outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
         
-        remotes = []
+        candidates = []
         for geo in self.geometries:
             corners = self.__applybuffer(geo.extent, buffer)
-            remotes.extend(self.remote_ids(corners, demType=demType,
-                                           username=username, password=password))
+            candidates.extend(self.remote_ids(corners, demType=dem_type,
+                                              username=username, password=password))
         
-        if len(remotes) == 0:
-            raise RuntimeError('could not find DEM tiles for the area of interest')
-        
-        if demType in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM',
-                       'Copernicus 30m Global DEM II', 'Copernicus 90m Global DEM II']:
+        if dem_type in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM',
+                        'Copernicus 30m Global DEM II', 'Copernicus 90m Global DEM II']:
             port = 0
-            if 'port' in self.config[demType].keys():
-                port = self.config[demType]['port']
-            locals = self.__retrieve_ftp(self.config[demType]['url'], remotes, outdir,
-                                         username=username, password=password, port=port)
+            if 'port' in self.config[dem_type].keys():
+                port = self.config[dem_type]['port']
+            locals = self.__retrieve_ftp(url=self.config[dem_type]['url'],
+                                         filenames=candidates,
+                                         outdir=outdir, username=username,
+                                         password=password, port=port)
         else:
-            locals = self.__retrieve(self.config[demType]['url'], remotes, outdir)
+            locals = self.__retrieve(url=self.config[dem_type]['url'],
+                                     filenames=candidates, outdir=outdir)
         
-        if demType == 'GETASSE30':
+        if len(locals) == 0:
+            if product != 'dem':
+                msg = 'could not find {0} {1} tiles for the area of interest'
+                raise RuntimeError(msg.format(dem_type, product))
+            locals = [self.__create_dummy_dem()]
+            ref = self.__find_first(dem_type=dem_type, product=product)
+            with Raster(ref) as ras:
+                resolution = ras.res
+        else:
+            resolution = None
+        
+        if dem_type == 'GETASSE30':
             for item in locals:
                 getasse30_hdr(item)
         
         if nodata is None:
             if product == 'dem':
-                nodata = self.config[demType]['nodata']
+                nodata = self.config[dem_type]['nodata']
         
         if vrt is not None:
             self.__buildvrt(tiles=locals, vrtfile=vrt,
-                            pattern=self.config[demType]['pattern'][product],
-                            vsi=self.config[demType]['vsi'],
+                            pattern=self.config[dem_type]['pattern'][product],
+                            vsi=self.config[dem_type]['vsi'],
                             extent=self.__commonextent(buffer),
-                            nodata=nodata, dst_nodata=dst_nodata,
-                            hide_nodata=hide_nodata)
+                            src_nodata=nodata, dst_nodata=vrt_nodata,
+                            hide_nodata=hide_nodata,
+                            resolution=resolution)
             return None
         return locals
     
