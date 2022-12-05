@@ -6,33 +6,40 @@ General Topics
 ==============
 
 .. toctree::
-   :maxdepth: 1
+    :maxdepth: 1
 
-   general/installation
-   general/filenaming
-   general/OSV
-   general/DEM
-   general/snap
-   general/processing
-   general/logging
+    general/installation
+    general/filenaming
+    general/OSV
+    general/DEM
+    general/snap
+    general/processing
+    general/logging
 
 API Documentation
 =================
 
 .. toctree::
+    :maxdepth: 1
 
-   pyroSAR
+    api/drivers
+    api/snap
+    api/gamma
+    api/sentinel-1
+    api/auxdata
+    api/datacube
+    api/ancillary
 
 About
 =====
 
 .. toctree::
-   :maxdepth: 1
+    :maxdepth: 1
 
-   about/projects
-   about/changelog
-   about/publications
-   about/references
+    about/projects
+    about/changelog
+    about/publications
+    about/references
 
 Indices and tables
 ==================
