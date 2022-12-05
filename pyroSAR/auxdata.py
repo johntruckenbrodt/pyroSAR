@@ -568,8 +568,10 @@ class DEMHandler:
     
     @staticmethod
     def __retrieve(url, filenames, outdir):
-        # check that URL is reachable
-        r = requests.get(url)
+        # check that base URL is reachable
+        url_parse = urlparse(url)
+        url_base = url_parse.scheme + '://' + url_parse.netloc
+        r = requests.get(url_base)
         r.raise_for_status()
         r.close()
         
