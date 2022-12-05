@@ -209,7 +209,7 @@ Auxiliary Data Tools
 ====================
 
 .. automodule:: pyroSAR.auxdata
-    :members: dem_autoload, dem_create, get_egm_lookup
+    :members: dem_autoload, dem_create, get_egm_lookup, get_dem_options
     :undoc-members:
     :show-inheritance:
 
@@ -219,6 +219,7 @@ Auxiliary Data Tools
         dem_autoload
         dem_create
         get_egm_lookup
+        get_dem_options
 
 Datacube Tools
 ==============

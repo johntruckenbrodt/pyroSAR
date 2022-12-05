@@ -637,7 +637,8 @@ class DEMHandler:
                        'vsi': '/vsitar/',
                        'pattern': {'dem': '*DSM.tif',
                                    'msk': '*MSK.tif',
-                                   'stk': '*STK.tif'}
+                                   'stk': '*STK.tif'},
+                       'authentication': False
                        },
             'Copernicus 10m EEA DEM': {'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1',
                                        'nodata': -32767.0,
@@ -647,12 +648,14 @@ class DEMHandler:
                                                    'edm': '*EDM.tif',
                                                    'flm': '*FLM.tif',
                                                    'hem': '*HEM.tif',
-                                                   'wbm': '*WBM.tif'}
+                                                   'wbm': '*WBM.tif'},
+                                       'authentication': True
                                        },
             'Copernicus 30m Global DEM': {'url': 'https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com',
                                           'nodata': None,
                                           'vsi': None,
-                                          'pattern': {'dem': '*DSM*'}
+                                          'pattern': {'dem': '*DSM*'},
+                                          'authentication': False
                                           },
             'Copernicus 30m Global DEM II': {
                 'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-30-DGED/2021_1',
@@ -663,12 +666,14 @@ class DEMHandler:
                             'edm': '*EDM.tif',
                             'flm': '*FLM.tif',
                             'hem': '*HEM.tif',
-                            'wbm': '*WBM.tif'}
+                            'wbm': '*WBM.tif'},
+                'authentication': True
             },
             'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com',
                                           'nodata': None,
                                           'vsi': None,
-                                          'pattern': {'dem': '*DSM*'}
+                                          'pattern': {'dem': '*DSM*'},
+                                          'authentication': False
                                           },
             'Copernicus 90m Global DEM II': {
                 'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-90-DGED/2021_1',
@@ -679,22 +684,26 @@ class DEMHandler:
                             'edm': '*EDM.tif',
                             'flm': '*FLM.tif',
                             'hem': '*HEM.tif',
-                            'wbm': '*WBM.tif'}
+                            'wbm': '*WBM.tif'},
+                'authentication': True
             },
             'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
                           'nodata': None,
                           'vsi': '/vsizip/',
-                          'pattern': {'dem': '*.GETASSE30'}
+                          'pattern': {'dem': '*.GETASSE30'},
+                          'authentication': False
                           },
             'SRTM 1Sec HGT': {'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
                               'nodata': -32768.0,
                               'vsi': '/vsizip/',
-                              'pattern': {'dem': '*.hgt'}
+                              'pattern': {'dem': '*.hgt'},
+                              'authentication': False
                               },
             'SRTM 3Sec': {'url': 'https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF',
                           'nodata': -32768.0,
                           'vsi': '/vsizip/',
-                          'pattern': {'dem': 'srtm*.tif'}
+                          'pattern': {'dem': 'srtm*.tif'},
+                          'authentication': False
                           },
             'TDX90m': {'url': 'ftpes://tandemx-90m.dlr.de',
                        'nodata': -32767.0,
@@ -706,7 +715,8 @@ class DEMHandler:
                                    'cov': '*_COV.tif',
                                    'hem': '*_HEM.tif',
                                    'lsm': '*_LSM.tif',
-                                   'wam': '*_WAM.tif'}
+                                   'wam': '*_WAM.tif'},
+                       'authentication': True
                        }
         }
     
@@ -1065,6 +1075,34 @@ def getasse30_hdr(fname):
                 obj.map_info = '{{{}}}'.format(','.join(map_info))
                 obj.coordinate_system_string = crsConvert(4326, 'wkt')
                 zip.writestr(hdr, str(obj))
+
+
+def get_dem_options(require_auth=None):
+    """
+    Get the names of all supported DEM type options.
+    
+    Parameters
+    ----------
+    require_auth: bool or None
+        only return options that do/don't require authentication. Default None: return all options.
+
+    Returns
+    -------
+    list[str]
+        the names of the DEM options
+    """
+    out = []
+    # create a dummy vector geometry for initializing the DEMHandler
+    ext = {'xmin': -44, 'xmax': -43, 'ymin': 30, 'ymax': 31}
+    with bbox(coordinates=ext, crs=4326) as vec:
+        with DEMHandler(geometries=[vec]) as handler:
+            for key, properties in handler.config.items():
+                if require_auth is None:
+                    out.append(key)
+                else:
+                    if require_auth == properties['authentication']:
+                        out.append(key)
+            return sorted(out)
 
 
 def get_egm_lookup(geoid, software):
