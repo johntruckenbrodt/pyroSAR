@@ -399,7 +399,7 @@ class DEMHandler:
     
     Parameters
     ----------
-    geometries: list of spatialist.vector.Vector
+    geometries: list[spatialist.vector.Vector]
         a list of geometries
     """
     
@@ -525,23 +525,33 @@ class DEMHandler:
     
     @staticmethod
     def __create_dummy_dem():
+        """
+        Create a dummy file which spans the whole globe and is 1x1 pixels large to be as small as possible.
+        This file is used to create dummy DEMs over ocean.
+        
+        Returns
+        -------
+        str
+            the name of the file in the user's home directory: ~/.pyrosar/auxdata/dummy_dem.tif
+        """
         path = os.path.join(os.path.expanduser('~'), '.pyrosar', 'auxdata')
         os.makedirs(name=path, exist_ok=True)
         filename = os.path.join(path, 'dummy_dem.tif')
-        driver = gdal.GetDriverByName('GTiff')
-        dataset = driver.Create(filename, 1, 1, 1, 1)
-        geo = [-180, 360, 0, 90, 0, -180]
-        dataset.SetGeoTransform(geo)
-        dataset.SetProjection('EPSG:4326')
-        band = dataset.GetRasterBand(1)
-        band.SetNoDataValue(255)
-        mat = numpy.zeros(shape=(1, 1))
-        band.WriteArray(mat, 0, 0)
-        band.FlushCache()
-        del mat
-        band = None
-        dataset = None
-        driver = None
+        if not os.path.isfile(filename):
+            driver = gdal.GetDriverByName('GTiff')
+            dataset = driver.Create(filename, 1, 1, 1, 1)
+            geo = [-180, 360, 0, 90, 0, -180]
+            dataset.SetGeoTransform(geo)
+            dataset.SetProjection('EPSG:4326')
+            band = dataset.GetRasterBand(1)
+            band.SetNoDataValue(255)
+            mat = numpy.zeros(shape=(1, 1))
+            band.WriteArray(mat, 0, 0)
+            band.FlushCache()
+            del mat
+            band = None
+            dataset = None
+            driver = None
         return filename
     
     @staticmethod
@@ -604,14 +614,16 @@ class DEMHandler:
                 locals.append(local)
         return sorted(locals)
     
-    def __retrieve_ftp(self, url, filenames, outdir, username, password, port=0):
+    @staticmethod
+    def __retrieve_ftp(url, filenames, outdir, username, password, port=0):
         files = list(set(filenames))
         os.makedirs(outdir, exist_ok=True)
         
         parsed = urlparse(url)
+        timeout = 100
         
         if parsed.scheme == 'ftpes':
-            ftp = ftplib.FTP_TLS(parsed.netloc)
+            ftp = ftplib.FTP_TLS(host=parsed.netloc, timeout=timeout)
             try:
                 ftp.login(username, password)  # login anonymously before securing control channel
             except ftplib.error_perm as e:
@@ -619,10 +631,10 @@ class DEMHandler:
             ftp.prot_p()  # switch to secure data connection.. IMPORTANT! Otherwise, only the user and password is encrypted and not all the file data.
         elif parsed.scheme == 'ftps':
             ftp = ImplicitFTP_TLS()
-            ftp.connect(host=parsed.netloc, port=port)
+            ftp.connect(host=parsed.netloc, timeout=timeout, port=port)
             ftp.login(username, password)
         else:
-            ftp = ftplib.FTP(parsed.netloc, timeout=100)
+            ftp = ftplib.FTP(host=parsed.netloc, timeout=timeout)
             ftp.login()
         if parsed.path != '':
             ftp.cwd(parsed.path)
@@ -636,7 +648,8 @@ class DEMHandler:
                 except ftplib.error_temp:
                     continue
                 address = '{}://{}/{}{}'.format(parsed.scheme, parsed.netloc,
-                                                parsed.path + '/' if parsed.path != '' else '', product_remote)
+                                                parsed.path + '/' if parsed.path != '' else '',
+                                                product_remote)
                 msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
                 log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=product_local, r=address))
                 with open(product_local, 'wb') as myfile:
@@ -824,15 +837,16 @@ class DEMHandler:
               * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
               * 'wam': Water Indication Mask
         nodata: int or float or None
-            overrides the nodata values of the source files.
+            overrides the nodata values of the source files written to the VRT.
             If `None`, the value of the source products is read passed on.
         vrt_nodata: int or float or None
             the nodata value of the output VRT file; default None: do not define a nodata value.
         hide_nodata: bool
-            hide the nodata value of the ouptut VRT file?
+            hide the nodata value of the output VRT file?
         crop: bool
-            crop to the provided geometries (or return the full extent of the DEM tiles)?
-            Argument `buffer` is ignored if set to `False`.
+            If a VRT is created, crop it to  spatial extent of the provided geometries
+            (or return the full extent of the DEM tiles)?
+            This parameter is ignored when no DEM tile overlaps with the AOI (over ocean).
         
         Returns
         -------
@@ -854,12 +868,11 @@ class DEMHandler:
         
         candidates = []
         for geo in self.geometries:
-            corners = self.__applybuffer(geo.extent, buffer)
-            candidates.extend(self.remote_ids(corners, dem_type=dem_type,
+            corners = self.__applybuffer(extent=geo.extent, buffer=buffer)
+            candidates.extend(self.remote_ids(extent=corners, dem_type=dem_type,
                                               username=username, password=password))
         
-        if dem_type in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM',
-                        'Copernicus 30m Global DEM II', 'Copernicus 90m Global DEM II']:
+        if self.config[dem_type]['url'].startswith('ftp'):
             port = 0
             if 'port' in self.config[dem_type].keys():
                 port = self.config[dem_type]['port']
@@ -871,26 +884,29 @@ class DEMHandler:
             locals = self.__retrieve(url=self.config[dem_type]['url'],
                                      filenames=candidates, outdir=outdir)
         
+        # special case where no DEM tiles were found because the AOI is completely over ocean
+        resolution = None
         if len(locals) == 0:
-            if product != 'dem':
-                msg = 'could not find {0} {1} tiles for the area of interest'
-                raise RuntimeError(msg.format(dem_type, product))
-            locals = [self.__create_dummy_dem()]
-            ref = self.__find_first(dem_type=dem_type, product=product)
-            with Raster(ref) as ras:
-                resolution = ras.res
-        else:
-            resolution = None
+            if vrt is not None:
+                if product != 'dem':
+                    msg = 'could not find {0} {1} tiles for the area of interest'
+                    raise RuntimeError(msg.format(dem_type, product))
+                locals = [self.__create_dummy_dem()]  # define a dummy file as source file
+                crop = True  # otherwise the full dummy file is returned
+                ref = self.__find_first(dem_type=dem_type, product=product)
+                with Raster(ref) as ras:
+                    resolution = ras.res
         
+        # make sure all tiles get an ENVI HDR file so that they are GDAL-readable
         if dem_type == 'GETASSE30':
             for item in locals:
                 getasse30_hdr(item)
         
-        if nodata is None:
-            if product == 'dem':
-                nodata = self.config[dem_type]['nodata']
-        
         if vrt is not None:
+            if nodata is None:
+                if product == 'dem':
+                    nodata = self.config[dem_type]['nodata']
+            
             self.__buildvrt(tiles=locals, vrtfile=vrt,
                             pattern=self.config[dem_type]['pattern'][product],
                             vsi=self.config[dem_type]['vsi'],
