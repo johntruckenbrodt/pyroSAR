@@ -478,7 +478,10 @@ class DEMHandler:
             hide the nodata value of the ouptu VRT file?
         resolution: int or float or None
             the spatial resolution of the source DEM tiles; default None: read the value from the first item in `tiles`
-
+        crop: bool
+            crop to the provided geometries (or return the full extent of the DEM tiles)?
+            Argument `buffer` is ignored if set to `False`.
+        
         Returns
         -------
 
@@ -988,8 +991,8 @@ class DEMHandler:
             remotes = ['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in lon for y in lat]
         
         elif dem_type in ['Copernicus 10m EEA DEM',
-                         'Copernicus 30m Global DEM II',
-                         'Copernicus 90m Global DEM II']:
+                          'Copernicus 30m Global DEM II',
+                          'Copernicus 90m Global DEM II']:
             lat, lon = self.intrange(extent, step=1)
             indices = [''.join(index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
