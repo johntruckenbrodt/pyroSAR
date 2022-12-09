@@ -723,7 +723,7 @@ class DEMHandler:
                                        'authentication': True
                                        },
             'Copernicus 30m Global DEM': {'url': 'https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com',
-                                          'nodata': None,
+                                          'nodata': -32767.0,
                                           'resolution': {'0-50': (1 / 3600, 1 / 3600),
                                                          '50-60': (1.5 / 3600, 1 / 3600),
                                                          '60-70': (2 / 3600, 1 / 3600),
@@ -759,7 +759,7 @@ class DEMHandler:
                 'authentication': True
             },
             'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com',
-                                          'nodata': None,
+                                          'nodata': -32767.0,
                                           'resolution': {'0-50': (1 / 1200, 1 / 1200),
                                                          '50-60': (1.5 / 1200, 1 / 1200),
                                                          '60-70': (2 / 1200, 1 / 1200),
