@@ -479,8 +479,9 @@ class DEMHandler:
             Default None: do not define a nodata value and use `src_nodata` instead.
         hide_nodata: bool
             hide the nodata value of the output VRT file?
-        resolution: int or float or None
-            the spatial resolution of the source DEM tiles; default None: read the value from the first item in `tiles`
+        resolution: tuple[int or float] or None
+            the spatial resolution (X, Y) of the source DEM tiles.
+            Default None: read the value from the first item in `tiles`
         crop: bool
             crop to the provided geometries (or return the full extent of the DEM tiles)?
             Argument `buffer` is ignored if set to `False`.
@@ -522,6 +523,16 @@ class DEMHandler:
                        xml_declaration=False, encoding='utf-8')
     
     def __commonextent(self, buffer=None):
+        """
+        
+        Parameters
+        ----------
+        buffer: int or float or None
+
+        Returns
+        -------
+        dict
+        """
         ext_new = {}
         for geo in self.geometries:
             if len(ext_new.keys()) == 0:
@@ -680,6 +691,7 @@ class DEMHandler:
         return {
             'AW3D30': {'url': 'ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804',
                        'nodata': -9999,
+                       'resolution': {'0-90': (1 / 3600, 1 / 3600)},
                        'vsi': '/vsitar/',
                        'pattern': {'dem': '*DSM.tif',
                                    'msk': '*MSK.tif',
@@ -691,6 +703,12 @@ class DEMHandler:
                        },
             'Copernicus 10m EEA DEM': {'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1',
                                        'nodata': -32767.0,
+                                       'resolution': {'0-50': (1 / 9000, 1 / 9000),
+                                                      '50-60': (1.5 / 9000, 1 / 9000),
+                                                      '60-70': (2 / 9000, 1 / 9000),
+                                                      '70-80': (3 / 9000, 1 / 9000),
+                                                      '80-85': (5 / 9000, 1 / 9000),
+                                                      '85-90': (10 / 9000, 1 / 9000)},
                                        'vsi': '/vsitar/',
                                        'port': 990,
                                        'pattern': {'dem': '*DEM.tif',
@@ -707,6 +725,12 @@ class DEMHandler:
                                        },
             'Copernicus 30m Global DEM': {'url': 'https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com',
                                           'nodata': None,
+                                          'resolution': {'0-50': (1 / 3600, 1 / 3600),
+                                                         '50-60': (1.5 / 3600, 1 / 3600),
+                                                         '60-70': (2 / 3600, 1 / 3600),
+                                                         '70-80': (3 / 3600, 1 / 3600),
+                                                         '80-85': (5 / 3600, 1 / 3600),
+                                                         '85-90': (10 / 3600, 1 / 3600)},
                                           'vsi': None,
                                           'pattern': {'dem': '*DSM*'},
                                           'datatype': {'dem': 'Float32'},
@@ -715,6 +739,12 @@ class DEMHandler:
             'Copernicus 30m Global DEM II': {
                 'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-30-DGED/2021_1',
                 'nodata': -32767.0,
+                'resolution': {'0-50': (1 / 3600, 1 / 3600),
+                               '50-60': (1.5 / 3600, 1 / 3600),
+                               '60-70': (2 / 3600, 1 / 3600),
+                               '70-80': (3 / 3600, 1 / 3600),
+                               '80-85': (5 / 3600, 1 / 3600),
+                               '85-90': (10 / 3600, 1 / 3600)},
                 'vsi': '/vsitar/',
                 'port': 990,
                 'pattern': {'dem': '*DEM.tif',
@@ -731,6 +761,12 @@ class DEMHandler:
             },
             'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com',
                                           'nodata': None,
+                                          'resolution': {'0-50': (1 / 1200, 1 / 1200),
+                                                         '50-60': (1.5 / 1200, 1 / 1200),
+                                                         '60-70': (2 / 1200, 1 / 1200),
+                                                         '70-80': (3 / 1200, 1 / 1200),
+                                                         '80-85': (5 / 1200, 1 / 1200),
+                                                         '85-90': (10 / 1200, 1 / 1200)},
                                           'vsi': None,
                                           'pattern': {'dem': '*DSM*'},
                                           'datatype': {'dem': 'Float32'},
@@ -739,6 +775,12 @@ class DEMHandler:
             'Copernicus 90m Global DEM II': {
                 'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-90-DGED/2021_1',
                 'nodata': -32767.0,
+                'resolution': {'0-50': (1 / 1200, 1 / 1200),
+                               '50-60': (1.5 / 1200, 1 / 1200),
+                               '60-70': (2 / 1200, 1 / 1200),
+                               '70-80': (3 / 1200, 1 / 1200),
+                               '80-85': (5 / 1200, 1 / 1200),
+                               '85-90': (10 / 1200, 1 / 1200)},
                 'vsi': '/vsitar/',
                 'port': 990,
                 'pattern': {'dem': '*DEM.tif',
@@ -755,6 +797,7 @@ class DEMHandler:
             },
             'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
                           'nodata': None,
+                          'resolution': {'0-90': (15 / 1800, 15 / 1800)},
                           'vsi': '/vsizip/',
                           'pattern': {'dem': '*.GETASSE30'},
                           'datatype': {'dem': 'Int16'},
@@ -762,6 +805,7 @@ class DEMHandler:
                           },
             'SRTM 1Sec HGT': {'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
                               'nodata': -32768.0,
+                              'resolution': {'0-90': (1 / 3600, 1 / 3600)},
                               'vsi': '/vsizip/',
                               'pattern': {'dem': '*.hgt'},
                               'datatype': {'dem': 'Int16'},
@@ -769,6 +813,7 @@ class DEMHandler:
                               },
             'SRTM 3Sec': {'url': 'https://download.esa.int/step/auxdata/dem/SRTM90/tiff',
                           'nodata': -32768.0,
+                          'resolution': {'0-90': (5 / 6000, 5 / 6000)},
                           'vsi': '/vsizip/',
                           'pattern': {'dem': 'srtm*.tif'},
                           'datatype': {'dem': 'Int16'},
@@ -776,6 +821,12 @@ class DEMHandler:
                           },
             'TDX90m': {'url': 'ftpes://tandemx-90m.dlr.de',
                        'nodata': -32767.0,
+                       'resolution': {'0-50': (1 / 1200, 1 / 1200),
+                                      '50-60': (1.5 / 1200, 1 / 1200),
+                                      '60-70': (2 / 1200, 1 / 1200),
+                                      '70-80': (3 / 1200, 1 / 1200),
+                                      '80-85': (5 / 1200, 1 / 1200),
+                                      '85-90': (10 / 1200, 1 / 1200)},
                        'vsi': '/vsizip/',
                        'pattern': {'dem': '*_DEM.tif',
                                    'am2': '*_AM2.tif',
@@ -810,7 +861,7 @@ class DEMHandler:
             the type fo DEM to be used
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
-        buffer: int, float, None
+        buffer: int or float or None
             a buffer in degrees to add around the individual geometries
         username: str or None
             the download account username
@@ -939,9 +990,13 @@ class DEMHandler:
                 locals = [self.__create_dummy_dem()]  # define a dummy file as source file
                 crop = True  # otherwise the full dummy file is returned
                 datatype = self.config[dem_type]['datatype'][product]
-                ref = self.__find_first(dem_type=dem_type, product=product)
-                with Raster(ref) as ras:
-                    resolution = ras.res
+                # determine the target resolution based on minimum latitude
+                extent = self.__commonextent(buffer=buffer)
+                for key, val in self.config[dem_type]['resolution'].items():
+                    ymin, ymax = [int(y) for y in key.split('-')]
+                    if ymin <= extent['ymin'] <= ymax:
+                        resolution = val
+                        break
         
         # make sure all tiles get an ENVI HDR file so that they are GDAL-readable
         if dem_type == 'GETASSE30':
