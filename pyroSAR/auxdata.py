@@ -20,6 +20,7 @@ import fnmatch
 import ftplib
 import requests
 import zipfile as zf
+from lxml import etree
 from math import ceil, floor
 from urllib.parse import urlparse
 from lxml import etree as ET
@@ -260,7 +261,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default (None): use the crs of ``src``.
-    tr: None or tuple
+    tr: None or tuple[int or float]
         the target resolution as (xres, yres)
     resampling_method: str
         the gdalwarp resampling method; See `here <https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r>`_
@@ -281,7 +282,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
         
          - 'EGM96'
          - 'EGM2008'
-    outputBounds: list or None
+    outputBounds: list[int or float] or None
         output bounds as [xmin, ymin, xmax, ymax] in target SRS
     nodata: int or float or str or None
         the no data value of the source and destination files.
@@ -394,8 +395,8 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
 
 class DEMHandler:
     """
-    | An interface to obtain DEM data for selected geometries
-    | The files are downloaded into the ESA SNAP auxdata directory structure
+    | An interface to obtain DEM data for selected geometries.
+    | The files are downloaded into the ESA SNAP auxiliary data directory structure.
     
     Parameters
     ----------
@@ -453,7 +454,8 @@ class DEMHandler:
     
     @staticmethod
     def __buildvrt(tiles, vrtfile, pattern, vsi, extent, src_nodata=None,
-                   dst_nodata=None, hide_nodata=False, resolution=None, crop=True):
+                   dst_nodata=None, hide_nodata=False, resolution=None,
+                   crop=True, dst_datatype=None):
         """
         Build a VRT mosaic from DEM tiles. The VRT is cropped to the specified `extent` but the pixel grid
         of the source files is preserved and no resampling/shifting is applied.
@@ -468,19 +470,23 @@ class DEMHandler:
             the search pattern for finding DEM tiles in compressed archives
         vsi: str or None
             the GDAL VSI directive to prepend the DEM tile name, e.g. /vsizip/ or /vsitar/
-        extent: dict:
+        extent: dict
             a dictionary with keys `xmin`, `ymin`, `xmax` and `ymax`
         src_nodata: int or float or None
             the nodata value of the source DEM tiles; default None: read the value from the first item in `tiles`
         dst_nodata: int or float or None
-            the nodata value of the output VRT file; default None: do not define a nodata value
+            the nodata value of the output VRT file.
+            Default None: do not define a nodata value and use `src_nodata` instead.
         hide_nodata: bool
-            hide the nodata value of the ouptu VRT file?
+            hide the nodata value of the output VRT file?
         resolution: int or float or None
             the spatial resolution of the source DEM tiles; default None: read the value from the first item in `tiles`
         crop: bool
             crop to the provided geometries (or return the full extent of the DEM tiles)?
             Argument `buffer` is ignored if set to `False`.
+        dst_datatype: int or str or None
+            the VRT data type as supported by :class:`spatialist.raster.Dtype`.
+            Default None: use the same data type as the source files.
         
         Returns
         -------
@@ -507,6 +513,13 @@ class DEMHandler:
             opts['outputBounds'] = (extent['xmin'], extent['ymin'],
                                     extent['xmax'], extent['ymax'])
         gdalbuildvrt(src=locals, dst=vrtfile, options=opts)
+        if dst_datatype is not None:
+            datatype = Dtype(dst_datatype).gdalstr
+            tree = etree.parse(source=vrtfile)
+            band = tree.find(path='VRTRasterBand')
+            band.attrib['dataType'] = datatype
+            tree.write(file=vrtfile, pretty_print=True,
+                       xml_declaration=False, encoding='utf-8')
     
     def __commonextent(self, buffer=None):
         ext_new = {}
@@ -671,6 +684,9 @@ class DEMHandler:
                        'pattern': {'dem': '*DSM.tif',
                                    'msk': '*MSK.tif',
                                    'stk': '*STK.tif'},
+                       'datatype': {'dem': 'Int16',
+                                    'msk': 'Byte',
+                                    'stk': 'Byte'},
                        'authentication': False
                        },
             'Copernicus 10m EEA DEM': {'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1',
@@ -682,12 +698,18 @@ class DEMHandler:
                                                    'flm': '*FLM.tif',
                                                    'hem': '*HEM.tif',
                                                    'wbm': '*WBM.tif'},
+                                       'datatype': {'dem': 'Float32',
+                                                    'edm': 'Byte',
+                                                    'flm': 'Byte',
+                                                    'hem': 'Float32',
+                                                    'wbm': 'Byte'},
                                        'authentication': True
                                        },
             'Copernicus 30m Global DEM': {'url': 'https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com',
                                           'nodata': None,
                                           'vsi': None,
                                           'pattern': {'dem': '*DSM*'},
+                                          'datatype': {'dem': 'Float32'},
                                           'authentication': False
                                           },
             'Copernicus 30m Global DEM II': {
@@ -700,12 +722,18 @@ class DEMHandler:
                             'flm': '*FLM.tif',
                             'hem': '*HEM.tif',
                             'wbm': '*WBM.tif'},
+                'datatype': {'dem': 'Float32',
+                             'edm': 'Byte',
+                             'flm': 'Byte',
+                             'hem': 'Float32',
+                             'wbm': 'Byte'},
                 'authentication': True
             },
             'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com',
                                           'nodata': None,
                                           'vsi': None,
                                           'pattern': {'dem': '*DSM*'},
+                                          'datatype': {'dem': 'Float32'},
                                           'authentication': False
                                           },
             'Copernicus 90m Global DEM II': {
@@ -718,24 +746,32 @@ class DEMHandler:
                             'flm': '*FLM.tif',
                             'hem': '*HEM.tif',
                             'wbm': '*WBM.tif'},
+                'datatype': {'dem': 'Float32',
+                             'edm': 'Byte',
+                             'flm': 'Byte',
+                             'hem': 'Float32',
+                             'wbm': 'Byte'},
                 'authentication': True
             },
             'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
                           'nodata': None,
                           'vsi': '/vsizip/',
                           'pattern': {'dem': '*.GETASSE30'},
+                          'datatype': {'dem': 'Int16'},
                           'authentication': False
                           },
             'SRTM 1Sec HGT': {'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
                               'nodata': -32768.0,
                               'vsi': '/vsizip/',
                               'pattern': {'dem': '*.hgt'},
+                              'datatype': {'dem': 'Int16'},
                               'authentication': False
                               },
             'SRTM 3Sec': {'url': 'https://download.esa.int/step/auxdata/dem/SRTM90/tiff',
                           'nodata': -32768.0,
                           'vsi': '/vsizip/',
                           'pattern': {'dem': 'srtm*.tif'},
+                          'datatype': {'dem': 'Int16'},
                           'authentication': False
                           },
             'TDX90m': {'url': 'ftpes://tandemx-90m.dlr.de',
@@ -749,6 +785,14 @@ class DEMHandler:
                                    'hem': '*_HEM.tif',
                                    'lsm': '*_LSM.tif',
                                    'wam': '*_WAM.tif'},
+                       'datatype': {'dem': 'Float32',
+                                    'am2': 'UInt16',
+                                    'amp': 'UInt16',
+                                    'com': 'Byte',
+                                    'cov': 'Byte',
+                                    'hem': 'Float32',
+                                    'lsm': 'Byte',
+                                    'wam': 'Byte'},
                        'authentication': True
                        }
         }
@@ -886,6 +930,7 @@ class DEMHandler:
         
         # special case where no DEM tiles were found because the AOI is completely over ocean
         resolution = None
+        datatype = None
         if len(locals) == 0:
             if vrt is not None:
                 if product != 'dem':
@@ -893,6 +938,7 @@ class DEMHandler:
                     raise RuntimeError(msg.format(dem_type, product))
                 locals = [self.__create_dummy_dem()]  # define a dummy file as source file
                 crop = True  # otherwise the full dummy file is returned
+                datatype = self.config[dem_type]['datatype'][product]
                 ref = self.__find_first(dem_type=dem_type, product=product)
                 with Raster(ref) as ras:
                     resolution = ras.res
@@ -913,7 +959,8 @@ class DEMHandler:
                             extent=self.__commonextent(buffer),
                             src_nodata=nodata, dst_nodata=vrt_nodata,
                             hide_nodata=hide_nodata,
-                            resolution=resolution, crop=crop)
+                            resolution=resolution, crop=crop,
+                            dst_datatype=datatype)
         else:
             return locals
     
