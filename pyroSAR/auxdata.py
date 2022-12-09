@@ -302,6 +302,8 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
     with Raster(src) as ras:
         if nodata is None:
             nodata = ras.nodata
+        if tr is None:
+            tr = ras.res
         epsg_in = ras.epsg
     
     if nodata is None:
@@ -342,18 +344,15 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
-                     'resampleAlg': resampling_method}
+                     'resampleAlg': resampling_method,
+                     'xRes': tr[0], 'yRes': tr[1],
+                     'targetAlignedPixels': True}
     
     if dtype is not None:
         gdalwarp_args['outputType'] = Dtype(dtype).gdalint
     
     if outputBounds is not None:
         gdalwarp_args['outputBounds'] = outputBounds
-    
-    if tr is not None:
-        gdalwarp_args.update({'xRes': tr[0],
-                              'yRes': tr[1],
-                              'targetAlignedPixels': True})
     
     if geoid_convert:
         geoid_epsg = {'EGM96': 5773,
