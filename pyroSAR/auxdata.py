@@ -1091,7 +1091,7 @@ class DEMHandler:
                 xr = abs(x) // 10 * 10
                 for y in lat:
                     yf, xf = index(x=x, y=y, nx=3, ny=2)
-                    remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
+                    remotes.append('DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
                                    .format(x=xf, xr=xr, y=yf, hem=xf[0]))
         
         elif dem_type == 'AW3D30':
