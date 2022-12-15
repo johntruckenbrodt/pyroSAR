@@ -37,8 +37,8 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None,
-                 product='dem', nodata=None, dst_nodata=None, hide_nodata=False, crop=True):
+def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
+                 password=None, product='dem', crop=True):
     """
     obtain all relevant DEM tiles for selected geometries
 
@@ -183,12 +183,6 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
           * 'wam': Water Indication Mask
     
-    nodata: int or float or None
-        the no data value of the source files.
-    dst_nodata: int or float or None
-        the nodata value of the VRT file.
-    hide_nodata: bool
-        hide the VRT no data value?
     crop: bool
         crop to the provided geometries (or return the full extent of the DEM tiles)?
         Argument `buffer` is ignored if set to `False`.
@@ -239,9 +233,6 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                             vrt=vrt,
                             buffer=buffer,
                             product=product,
-                            nodata=nodata,
-                            vrt_nodata=dst_nodata,
-                            hide_nodata=hide_nodata,
                             crop=crop)
 
 
@@ -692,7 +683,9 @@ class DEMHandler:
     def config(self):
         return {
             'AW3D30': {'url': 'ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804',
-                       'nodata': -9999,
+                       'nodata': {'dem': -9999,
+                                  'msk': 3,
+                                  'stk': 0},
                        'resolution': {'0-90': (1 / 3600, 1 / 3600)},
                        'vsi': '/vsitar/',
                        'pattern': {'dem': '*DSM.tif',
@@ -704,7 +697,11 @@ class DEMHandler:
                        'authentication': False
                        },
             'Copernicus 10m EEA DEM': {'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1',
-                                       'nodata': -32767.0,
+                                       'nodata': {'dem': -32767.0,
+                                                  'edm': 8,
+                                                  'flm': 1,
+                                                  'hem': -32767.0,
+                                                  'wbm': 1},
                                        'resolution': {'0-50': (1 / 9000, 1 / 9000),
                                                       '50-60': (1.5 / 9000, 1 / 9000),
                                                       '60-70': (2 / 9000, 1 / 9000),
@@ -726,7 +723,7 @@ class DEMHandler:
                                        'authentication': True
                                        },
             'Copernicus 30m Global DEM': {'url': 'https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com',
-                                          'nodata': -32767.0,
+                                          'nodata': {'dem': -32767.0},
                                           'resolution': {'0-50': (1 / 3600, 1 / 3600),
                                                          '50-60': (1.5 / 3600, 1 / 3600),
                                                          '60-70': (2 / 3600, 1 / 3600),
@@ -740,7 +737,11 @@ class DEMHandler:
                                           },
             'Copernicus 30m Global DEM II': {
                 'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-30-DGED/2021_1',
-                'nodata': -32767.0,
+                'nodata': {'dem': -32767.0,
+                           'edm': 8,
+                           'flm': 1,
+                           'hem': -32767.0,
+                           'wbm': 1},
                 'resolution': {'0-50': (1 / 3600, 1 / 3600),
                                '50-60': (1.5 / 3600, 1 / 3600),
                                '60-70': (2 / 3600, 1 / 3600),
@@ -762,7 +763,7 @@ class DEMHandler:
                 'authentication': True
             },
             'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com',
-                                          'nodata': -32767.0,
+                                          'nodata': {'dem': -32767.0},
                                           'resolution': {'0-50': (1 / 1200, 1 / 1200),
                                                          '50-60': (1.5 / 1200, 1 / 1200),
                                                          '60-70': (2 / 1200, 1 / 1200),
@@ -776,7 +777,11 @@ class DEMHandler:
                                           },
             'Copernicus 90m Global DEM II': {
                 'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-90-DGED/2021_1',
-                'nodata': -32767.0,
+                'nodata': {'dem': -32767.0,
+                           'edm': 8,
+                           'flm': 1,
+                           'hem': -32767.0,
+                           'wbm': 1},
                 'resolution': {'0-50': (1 / 1200, 1 / 1200),
                                '50-60': (1.5 / 1200, 1 / 1200),
                                '60-70': (2 / 1200, 1 / 1200),
@@ -798,7 +803,7 @@ class DEMHandler:
                 'authentication': True
             },
             'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
-                          'nodata': None,
+                          'nodata': {'dem': None},
                           'resolution': {'0-90': (15 / 1800, 15 / 1800)},
                           'vsi': '/vsizip/',
                           'pattern': {'dem': '*.GETASSE30'},
@@ -806,7 +811,7 @@ class DEMHandler:
                           'authentication': False
                           },
             'SRTM 1Sec HGT': {'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
-                              'nodata': -32768.0,
+                              'nodata': {'dem': -32768.0},
                               'resolution': {'0-90': (1 / 3600, 1 / 3600)},
                               'vsi': '/vsizip/',
                               'pattern': {'dem': '*.hgt'},
@@ -814,7 +819,7 @@ class DEMHandler:
                               'authentication': False
                               },
             'SRTM 3Sec': {'url': 'https://download.esa.int/step/auxdata/dem/SRTM90/tiff',
-                          'nodata': -32768.0,
+                          'nodata': {'dem': -32768.0},
                           'resolution': {'0-90': (5 / 6000, 5 / 6000)},
                           'vsi': '/vsizip/',
                           'pattern': {'dem': 'srtm*.tif'},
@@ -822,7 +827,14 @@ class DEMHandler:
                           'authentication': False
                           },
             'TDX90m': {'url': 'ftpes://tandemx-90m.dlr.de',
-                       'nodata': -32767.0,
+                       'nodata': {'dem': -32767.0,
+                                  'am2': 0,
+                                  'amp': 0,
+                                  'com': 0,
+                                  'cov': 0,
+                                  'hem': -32767.0,
+                                  'lsm': 0,
+                                  'wam': 0},
                        'resolution': {'0-50': (1 / 1200, 1 / 1200),
                                       '50-60': (1.5 / 1200, 1 / 1200),
                                       '60-70': (2 / 1200, 1 / 1200),
@@ -850,8 +862,8 @@ class DEMHandler:
                        }
         }
     
-    def load(self, dem_type, vrt=None, buffer=None, username=None, password=None,
-             product='dem', nodata=None, vrt_nodata=None, hide_nodata=False, crop=True):
+    def load(self, dem_type, vrt=None, buffer=None, username=None,
+             password=None, product='dem', crop=True):
         """
         obtain DEM tiles for the given geometries and either return the file names in a list
         or combine them into a VRT mosaic. The VRT is cropped to the combined extent of the geometries
@@ -933,13 +945,6 @@ class DEMHandler:
               * 'hem': Height Error Map
               * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
               * 'wam': Water Indication Mask
-        nodata: int or float or None
-            overrides the nodata values of the source files written to the VRT.
-            If `None`, the value of the source products is read passed on.
-        vrt_nodata: int or float or None
-            the nodata value of the output VRT file; default None: do not define a nodata value.
-        hide_nodata: bool
-            hide the nodata value of the output VRT file?
         crop: bool
             If a VRT is created, crop it to  spatial extent of the provided geometries
             (or return the full extent of the DEM tiles)?
@@ -1006,16 +1011,15 @@ class DEMHandler:
                 getasse30_hdr(item)
         
         if vrt is not None:
-            if nodata is None:
-                if product == 'dem':
-                    nodata = self.config[dem_type]['nodata']
+            src_nodata = self.config[dem_type]['nodata'][product]
+            dst_nodata = 0 if product == 'dem' else None
             
             self.__buildvrt(tiles=locals, vrtfile=vrt,
                             pattern=self.config[dem_type]['pattern'][product],
                             vsi=self.config[dem_type]['vsi'],
                             extent=self.__commonextent(buffer),
-                            src_nodata=nodata, dst_nodata=vrt_nodata,
-                            hide_nodata=hide_nodata,
+                            src_nodata=src_nodata, dst_nodata=dst_nodata,
+                            hide_nodata=True,
                             resolution=resolution, crop=crop,
                             dst_datatype=datatype)
         else:
