@@ -40,7 +40,7 @@ log = logging.getLogger(__name__)
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
                  password=None, product='dem', crop=True):
     """
-    obtain all relevant DEM tiles for selected geometries
+    obtain all relevant DEM tiles for selected geometries and optionally mosaic them in a VRT.
 
     Parameters
     ----------
@@ -989,14 +989,20 @@ class DEMHandler:
         # special case where no DEM tiles were found because the AOI is completely over ocean
         resolution = None
         datatype = None
+        src_nodata = None
+        dst_nodata = None
         if len(locals) == 0:
             if vrt is not None:
-                if product != 'dem':
-                    msg = 'could not find {0} {1} tiles for the area of interest'
-                    raise RuntimeError(msg.format(dem_type, product))
-                locals = [self.__create_dummy_dem()]  # define a dummy file as source file
+                # define a dummy file as source file; this file contains one pixel spanning the whole globe
+                # this pixel has value 0, nodata value is 255
+                locals = [self.__create_dummy_dem()]
                 crop = True  # otherwise the full dummy file is returned
                 datatype = self.config[dem_type]['datatype'][product]
+                src_nodata = 0  # define the data value as nodata, so it can be overwritten in the VRT
+                if product == 'dem':
+                    dst_nodata = 0
+                else:
+                    dst_nodata = self.config[dem_type]['nodata'][product]
                 # determine the target resolution based on minimum latitude
                 extent = self.__commonextent(buffer=buffer)
                 for key, val in self.config[dem_type]['resolution'].items():
@@ -1005,14 +1011,16 @@ class DEMHandler:
                         resolution = val
                         break
         
-        # make sure all tiles get an ENVI HDR file so that they are GDAL-readable
+        # make sure all GETASSE30 tiles get an ENVI HDR file so that they are GDAL-readable
         if dem_type == 'GETASSE30':
             for item in locals:
                 getasse30_hdr(item)
         
         if vrt is not None:
-            src_nodata = self.config[dem_type]['nodata'][product]
-            dst_nodata = 0 if product == 'dem' else None
+            if src_nodata is None:
+                src_nodata = self.config[dem_type]['nodata'][product]
+            if dst_nodata is None:
+                dst_nodata = 0 if product == 'dem' else None
             
             self.__buildvrt(tiles=locals, vrtfile=vrt,
                             pattern=self.config[dem_type]['pattern'][product],
