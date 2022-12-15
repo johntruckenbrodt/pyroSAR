@@ -139,6 +139,10 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
         - 'Copernicus 30m Global DEM'
         
           * 'dem': the actual Digital Elevation Model
+          * 'edm': Editing Mask
+          * 'flm': Filling Mask
+          * 'hem': Height Error Mask
+          * 'wbm': Water Body Mask
         
         - 'Copernicus 30m Global DEM II'
         
@@ -151,6 +155,10 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
         - 'Copernicus 90m Global DEM'
         
           * 'dem': the actual Digital Elevation Model
+          * 'edm': Editing Mask
+          * 'flm': Filling Mask
+          * 'hem': Height Error Mask
+          * 'wbm': Water Body Mask
         
         - 'Copernicus 90m Global DEM II'
         
@@ -723,7 +731,11 @@ class DEMHandler:
                                        'authentication': True
                                        },
             'Copernicus 30m Global DEM': {'url': 'https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com',
-                                          'nodata': {'dem': -32767.0},
+                                          'nodata': {'dem': -32767.0,
+                                                     'edm': 8,
+                                                     'flm': 1,
+                                                     'hem': -32767.0,
+                                                     'wbm': 1},
                                           'resolution': {'0-50': (1 / 3600, 1 / 3600),
                                                          '50-60': (1.5 / 3600, 1 / 3600),
                                                          '60-70': (2 / 3600, 1 / 3600),
@@ -731,8 +743,16 @@ class DEMHandler:
                                                          '80-85': (5 / 3600, 1 / 3600),
                                                          '85-90': (10 / 3600, 1 / 3600)},
                                           'vsi': None,
-                                          'pattern': {'dem': '*DSM*'},
-                                          'datatype': {'dem': 'Float32'},
+                                          'pattern': {'dem': '*DEM.tif',
+                                                      'edm': '*EDM.tif',
+                                                      'flm': '*FLM.tif',
+                                                      'hem': '*HEM.tif',
+                                                      'wbm': '*WBM.tif'},
+                                          'datatype': {'dem': 'Float32',
+                                                       'edm': 'Byte',
+                                                       'flm': 'Byte',
+                                                       'hem': 'Float32',
+                                                       'wbm': 'Byte'},
                                           'authentication': False
                                           },
             'Copernicus 30m Global DEM II': {
@@ -763,7 +783,11 @@ class DEMHandler:
                 'authentication': True
             },
             'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com',
-                                          'nodata': {'dem': -32767.0},
+                                          'nodata': {'dem': -32767.0,
+                                                     'edm': 8,
+                                                     'flm': 1,
+                                                     'hem': -32767.0,
+                                                     'wbm': 1},
                                           'resolution': {'0-50': (1 / 1200, 1 / 1200),
                                                          '50-60': (1.5 / 1200, 1 / 1200),
                                                          '60-70': (2 / 1200, 1 / 1200),
@@ -771,8 +795,16 @@ class DEMHandler:
                                                          '80-85': (5 / 1200, 1 / 1200),
                                                          '85-90': (10 / 1200, 1 / 1200)},
                                           'vsi': None,
-                                          'pattern': {'dem': '*DSM*'},
-                                          'datatype': {'dem': 'Float32'},
+                                          'pattern': {'dem': '*DEM.tif',
+                                                      'edm': '*EDM.tif',
+                                                      'flm': '*FLM.tif',
+                                                      'hem': '*HEM.tif',
+                                                      'wbm': '*WBM.tif'},
+                                          'datatype': {'dem': 'Float32',
+                                                       'edm': 'Byte',
+                                                       'flm': 'Byte',
+                                                       'hem': 'Float32',
+                                                       'wbm': 'Byte'},
                                           'authentication': False
                                           },
             'Copernicus 90m Global DEM II': {
@@ -902,6 +934,10 @@ class DEMHandler:
              - 'Copernicus 30m Global DEM'
              
               * 'dem': the actual Digital Elevation Model
+              * 'edm': Editing Mask
+              * 'flm': Filling Mask
+              * 'hem': Height Error Mask
+              * 'wbm': Water Body Mask
              
              - 'Copernicus 30m Global DEM II'
              
@@ -914,6 +950,10 @@ class DEMHandler:
              - 'Copernicus 90m Global DEM'
              
               * 'dem': the actual Digital Elevation Model
+              * 'edm': Editing Mask
+              * 'flm': Filling Mask
+              * 'hem': Height Error Mask
+              * 'wbm': Water Body Mask
              
              - 'Copernicus 90m Global DEM II'
              
@@ -972,7 +1012,8 @@ class DEMHandler:
         for geo in self.geometries:
             corners = self.__applybuffer(extent=geo.extent, buffer=buffer)
             candidates.extend(self.remote_ids(extent=corners, dem_type=dem_type,
-                                              username=username, password=password))
+                                              username=username, password=password,
+                                              product=product))
         
         if self.config[dem_type]['url'].startswith('ftp'):
             port = 0
@@ -1033,7 +1074,7 @@ class DEMHandler:
         else:
             return locals
     
-    def remote_ids(self, extent, dem_type, username=None, password=None):
+    def remote_ids(self, extent, dem_type, product='dem', username=None, password=None):
         """
         parse the names of the remote files overlapping with an area of interest
 
@@ -1043,6 +1084,9 @@ class DEMHandler:
             the extent of the area of interest with keys xmin, xmax, ymin, ymax
         dem_type: str
             the type fo DEM to be used
+        product: str
+            the sub-product to extract from the DEM product. Only needed for DEM options 'Copernicus 30m Global DEM'
+            and 'Copernicus 90m Global DEM' and ignored otherwise.
         username: str or None
             the download account username
         password: str or None
@@ -1069,13 +1113,15 @@ class DEMHandler:
                 yf = ''
             return yf, xf
         
-        def cop_dem_remotes(extent, arcsecs):
+        def cop_dem_remotes(extent, arcsecs, product='dem'):
             lat, lon = self.intrange(extent, step=1)
             indices = [index(x, y, nx=3, ny=2)
                        for x in lon for y in lat]
-            base = 'Copernicus_DSM_COG_{res}_{0}_00_{1}_00_DEM'
-            skeleton = '{base}/{base}.tif'.format(base=base)
-            candidates = [skeleton.format(res=arcsecs, *item) for item in indices]
+            base = 'Copernicus_DSM_COG_{res}_{0}_00_{1}_00'
+            skeleton = '{base}_DEM/{sub}{base}_{product}.tif'
+            sub = '' if product == 'dem' else 'AUXFILES/'
+            base = skeleton.format(base=base, sub=sub, product=product.upper())
+            candidates = [base.format(res=arcsecs, *item) for item in indices]
             remotes = []
             for candidate in candidates:
                 response = requests.get(self.config[dem_type]['url'],
@@ -1192,10 +1238,10 @@ class DEMHandler:
                         remotes.append(row[-1])
         
         elif dem_type == 'Copernicus 30m Global DEM':
-            remotes = cop_dem_remotes(extent, arcsecs=10)
+            remotes = cop_dem_remotes(extent=extent, arcsecs=10, product=product)
         
         elif dem_type == 'Copernicus 90m Global DEM':
-            remotes = cop_dem_remotes(extent, arcsecs=30)
+            remotes = cop_dem_remotes(extent=extent, arcsecs=30, product=product)
         
         else:
             raise ValueError('unknown demType: {}'.format(dem_type))
