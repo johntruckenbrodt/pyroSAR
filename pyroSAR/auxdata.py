@@ -619,13 +619,13 @@ class DEMHandler:
             remote = '{}/{}'.format(url, file)
             local = os.path.join(outdir, os.path.basename(file))
             if not os.path.isfile(local):
-                msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
-                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local, r=remote))
                 r = requests.get(remote)
                 # a tile might not exist over ocean
                 if r.status_code == 404:
                     r.close()
                     continue
+                msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local, r=remote))
                 r.raise_for_status()
                 with open(local, 'wb') as output:
                     output.write(r.content)
@@ -638,34 +638,36 @@ class DEMHandler:
         return sorted(locals)
     
     @staticmethod
-    def __retrieve_ftp(url, filenames, outdir, username, password, port=0):
+    def __retrieve_ftp(url, filenames, outdir, username, password, port=0, offline=False):
         files = list(set(filenames))
         os.makedirs(outdir, exist_ok=True)
         
         parsed = urlparse(url)
         timeout = 100
-        
-        if parsed.scheme == 'ftpes':
-            ftp = ftplib.FTP_TLS(host=parsed.netloc, timeout=timeout)
-            try:
-                ftp.login(username, password)  # login anonymously before securing control channel
-            except ftplib.error_perm as e:
-                raise RuntimeError(str(e))
-            ftp.prot_p()  # switch to secure data connection.. IMPORTANT! Otherwise, only the user and password is encrypted and not all the file data.
-        elif parsed.scheme == 'ftps':
-            ftp = ImplicitFTP_TLS()
-            ftp.connect(host=parsed.netloc, timeout=timeout, port=port)
-            ftp.login(username, password)
+        if not offline:
+            if parsed.scheme == 'ftpes':
+                ftp = ftplib.FTP_TLS(host=parsed.netloc, timeout=timeout)
+                try:
+                    ftp.login(username, password)  # login anonymously before securing control channel
+                except ftplib.error_perm as e:
+                    raise RuntimeError(str(e))
+                ftp.prot_p()  # switch to secure data connection.. IMPORTANT! Otherwise, only the user and password is encrypted and not all the file data.
+            elif parsed.scheme == 'ftps':
+                ftp = ImplicitFTP_TLS()
+                ftp.connect(host=parsed.netloc, timeout=timeout, port=port)
+                ftp.login(username, password)
+            else:
+                ftp = ftplib.FTP(host=parsed.netloc, timeout=timeout)
+                ftp.login()
+            if parsed.path != '':
+                ftp.cwd(parsed.path)
         else:
-            ftp = ftplib.FTP(host=parsed.netloc, timeout=timeout)
-            ftp.login()
-        if parsed.path != '':
-            ftp.cwd(parsed.path)
+            ftp = None
         locals = []
         n = len(files)
         for i, product_remote in enumerate(files):
             product_local = os.path.join(outdir, os.path.basename(product_remote))
-            if not os.path.isfile(product_local):
+            if not os.path.isfile(product_local) and not offline:
                 try:
                     targetlist = ftp.nlst(product_remote)
                 except ftplib.error_temp:
@@ -682,7 +684,8 @@ class DEMHandler:
                 log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=product_local))
             if os.path.isfile(product_local):
                 locals.append(product_local)
-        ftp.close()
+        if ftp is not None:
+            ftp.close()
         return sorted(locals)
     
     @property
