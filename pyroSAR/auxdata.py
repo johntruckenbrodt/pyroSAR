@@ -193,11 +193,10 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
     
     crop: bool
         crop to the provided geometries (or return the full extent of the DEM tiles)?
-        Argument `buffer` is ignored if set to `False`.
     
     Returns
     -------
-    list or None
+    list[str] or None
         the names of the obtained files or None if a VRT file was defined
     
     Examples
@@ -453,7 +452,7 @@ class DEMHandler:
     @staticmethod
     def __buildvrt(tiles, vrtfile, pattern, vsi, extent, src_nodata=None,
                    dst_nodata=None, hide_nodata=False, resolution=None,
-                   crop=True, dst_datatype=None):
+                   tap=True, dst_datatype=None):
         """
         Build a VRT mosaic from DEM tiles. The VRT is cropped to the specified `extent` but the pixel grid
         of the source files is preserved and no resampling/shifting is applied.
@@ -480,9 +479,8 @@ class DEMHandler:
         resolution: tuple[int or float] or None
             the spatial resolution (X, Y) of the source DEM tiles.
             Default None: read the value from the first item in `tiles`
-        crop: bool
-            crop to the provided geometries (or return the full extent of the DEM tiles)?
-            Argument `buffer` is ignored if set to `False`.
+        tap: bool
+            align target pixels?
         dst_datatype: int or str or None
             the VRT data type as supported by :class:`spatialist.raster.Dtype`.
             Default None: use the same data type as the source files.
@@ -503,14 +501,13 @@ class DEMHandler:
             else:
                 xres, yres = resolution
         opts = {'srcNodata': src_nodata,
-                'targetAlignedPixels': True,  # preserve source file pixel grid
+                'targetAlignedPixels': tap,
                 'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata
                 }
         if dst_nodata is not None:
             opts['VRTNodata'] = dst_nodata
-        if crop:
-            opts['outputBounds'] = (extent['xmin'], extent['ymin'],
-                                    extent['xmax'], extent['ymax'])
+        opts['outputBounds'] = (extent['xmin'], extent['ymin'],
+                                extent['xmax'], extent['ymax'])
         gdalbuildvrt(src=locals, dst=vrtfile, options=opts)
         if dst_datatype is not None:
             datatype = Dtype(dst_datatype).gdalstr
@@ -600,6 +597,26 @@ class DEMHandler:
                     ceil(float(extent['xmax']) / step) * step,
                     step)
         return lat, lon
+    
+    def __get_resolution(self, dem_type, y):
+        """
+        
+        Parameters
+        ----------
+        dem_type: str
+            the DEM type
+        y: int or float
+            the latitude for which to get the resolution
+
+        Returns
+        -------
+        tuple
+            (xres, yres)
+        """
+        for key, val in self.config[dem_type]['resolution'].items():
+            ymin, ymax = [int(y) for y in key.split('-')]
+            if ymin <= y <= ymax:
+                return val
     
     @staticmethod
     def __retrieve(url, filenames, outdir):
@@ -695,6 +712,8 @@ class DEMHandler:
                                   'msk': 3,
                                   'stk': 0},
                        'resolution': {'0-90': (1 / 3600, 1 / 3600)},
+                       'tilesize': 1,
+                       'area_or_point': 'area',
                        'vsi': '/vsitar/',
                        'pattern': {'dem': '*DSM.tif',
                                    'msk': '*MSK.tif',
@@ -716,6 +735,8 @@ class DEMHandler:
                                                       '70-80': (3 / 9000, 1 / 9000),
                                                       '80-85': (5 / 9000, 1 / 9000),
                                                       '85-90': (10 / 9000, 1 / 9000)},
+                                       'tilesize': 1,
+                                       'area_or_point': 'point',
                                        'vsi': '/vsitar/',
                                        'port': 990,
                                        'pattern': {'dem': '*DEM.tif',
@@ -742,6 +763,8 @@ class DEMHandler:
                                                          '70-80': (3 / 3600, 1 / 3600),
                                                          '80-85': (5 / 3600, 1 / 3600),
                                                          '85-90': (10 / 3600, 1 / 3600)},
+                                          'tilesize': 1,
+                                          'area_or_point': 'point',
                                           'vsi': None,
                                           'pattern': {'dem': '*DEM.tif',
                                                       'edm': '*EDM.tif',
@@ -768,6 +791,8 @@ class DEMHandler:
                                '70-80': (3 / 3600, 1 / 3600),
                                '80-85': (5 / 3600, 1 / 3600),
                                '85-90': (10 / 3600, 1 / 3600)},
+                'tilesize': 1,
+                'area_or_point': 'point',
                 'vsi': '/vsitar/',
                 'port': 990,
                 'pattern': {'dem': '*DEM.tif',
@@ -794,6 +819,8 @@ class DEMHandler:
                                                          '70-80': (3 / 1200, 1 / 1200),
                                                          '80-85': (5 / 1200, 1 / 1200),
                                                          '85-90': (10 / 1200, 1 / 1200)},
+                                          'tilesize': 1,
+                                          'area_or_point': 'point',
                                           'vsi': None,
                                           'pattern': {'dem': '*DEM.tif',
                                                       'edm': '*EDM.tif',
@@ -820,6 +847,8 @@ class DEMHandler:
                                '70-80': (3 / 1200, 1 / 1200),
                                '80-85': (5 / 1200, 1 / 1200),
                                '85-90': (10 / 1200, 1 / 1200)},
+                'tilesize': 1,
+                'area_or_point': 'point',
                 'vsi': '/vsitar/',
                 'port': 990,
                 'pattern': {'dem': '*DEM.tif',
@@ -837,6 +866,8 @@ class DEMHandler:
             'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
                           'nodata': {'dem': None},
                           'resolution': {'0-90': (15 / 1800, 15 / 1800)},
+                          'tilesize': 15,
+                          'area_or_point': 'area',
                           'vsi': '/vsizip/',
                           'pattern': {'dem': '*.GETASSE30'},
                           'datatype': {'dem': 'Int16'},
@@ -845,6 +876,8 @@ class DEMHandler:
             'SRTM 1Sec HGT': {'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
                               'nodata': {'dem': -32768.0},
                               'resolution': {'0-90': (1 / 3600, 1 / 3600)},
+                              'tilesize': 1,
+                              'area_or_point': 'point',
                               'vsi': '/vsizip/',
                               'pattern': {'dem': '*.hgt'},
                               'datatype': {'dem': 'Int16'},
@@ -853,6 +886,8 @@ class DEMHandler:
             'SRTM 3Sec': {'url': 'https://download.esa.int/step/auxdata/dem/SRTM90/tiff',
                           'nodata': {'dem': -32768.0},
                           'resolution': {'0-90': (5 / 6000, 5 / 6000)},
+                          'tilesize': 5,
+                          'area_or_point': 'area',
                           'vsi': '/vsizip/',
                           'pattern': {'dem': 'srtm*.tif'},
                           'datatype': {'dem': 'Int16'},
@@ -873,6 +908,8 @@ class DEMHandler:
                                       '70-80': (3 / 1200, 1 / 1200),
                                       '80-85': (5 / 1200, 1 / 1200),
                                       '85-90': (10 / 1200, 1 / 1200)},
+                       'tilesize': 1,
+                       'area_or_point': 'point',
                        'vsi': '/vsizip/',
                        'pattern': {'dem': '*_DEM.tif',
                                    'am2': '*_AM2.tif',
@@ -987,8 +1024,9 @@ class DEMHandler:
               * 'wam': Water Indication Mask
         crop: bool
             If a VRT is created, crop it to  spatial extent of the provided geometries
-            (or return the full extent of the DEM tiles)?
-            This parameter is ignored when no DEM tile overlaps with the AOI (over ocean).
+            or return the full extent of the DEM tiles? In the latter case, the common
+            bounding box of the geometries is expanded so that the coordinates are
+            multiples of the tile size of the respective DEM option.
         
         Returns
         -------
@@ -1027,17 +1065,34 @@ class DEMHandler:
             locals = self.__retrieve(url=self.config[dem_type]['url'],
                                      filenames=candidates, outdir=outdir)
         
-        # special case where no DEM tiles were found because the AOI is completely over ocean
         resolution = None
         datatype = None
         src_nodata = None
         dst_nodata = None
+        tap = False
+        extent = self.__commonextent(buffer=buffer)
+        aop = self.config[dem_type]['area_or_point']
+        res = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
+        if not crop:
+            f = self.config[dem_type]['tilesize']
+            extent['xmin'] = floor(extent['xmin'] / f) * f
+            extent['ymin'] = floor(extent['ymin'] / f) * f
+            extent['xmax'] = ceil(extent['xmax'] / f) * f
+            extent['ymax'] = ceil(extent['ymax'] / f) * f
+        if aop == 'point':
+            shift_x = res[0] / 2
+            shift_y = res[1] / 2
+            extent['xmin'] -= shift_x
+            extent['ymin'] += shift_y
+            extent['xmax'] -= shift_x
+            extent['ymax'] += shift_y
+        
+        # special case where no DEM tiles were found because the AOI is completely over ocean
         if len(locals) == 0:
             if vrt is not None:
                 # define a dummy file as source file; this file contains one pixel spanning the whole globe
                 # this pixel has value 0, nodata value is 255
                 locals = [self.__create_dummy_dem()]
-                crop = True  # otherwise the full dummy file is returned
                 datatype = self.config[dem_type]['datatype'][product]
                 src_nodata = 0  # define the data value as nodata, so it can be overwritten in the VRT
                 if product == 'dem':
@@ -1045,12 +1100,7 @@ class DEMHandler:
                 else:
                     dst_nodata = self.config[dem_type]['nodata'][product]
                 # determine the target resolution based on minimum latitude
-                extent = self.__commonextent(buffer=buffer)
-                for key, val in self.config[dem_type]['resolution'].items():
-                    ymin, ymax = [int(y) for y in key.split('-')]
-                    if ymin <= extent['ymin'] <= ymax:
-                        resolution = val
-                        break
+                resolution = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
         
         # make sure all GETASSE30 tiles get an ENVI HDR file so that they are GDAL-readable
         if dem_type == 'GETASSE30':
@@ -1066,11 +1116,11 @@ class DEMHandler:
             self.__buildvrt(tiles=locals, vrtfile=vrt,
                             pattern=self.config[dem_type]['pattern'][product],
                             vsi=self.config[dem_type]['vsi'],
-                            extent=self.__commonextent(buffer),
+                            extent=extent,
                             src_nodata=src_nodata, dst_nodata=dst_nodata,
                             hide_nodata=True,
-                            resolution=resolution, crop=crop,
-                            dst_datatype=datatype)
+                            resolution=resolution,
+                            tap=tap, dst_datatype=datatype)
         else:
             return locals
     
