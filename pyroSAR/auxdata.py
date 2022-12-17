@@ -304,9 +304,6 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
             tr = ras.res
         epsg_in = ras.epsg
     
-    if nodata is None:
-        raise RuntimeError('the nodata value could not be read from the source file. Please explicitly define it.')
-    
     if t_srs is None:
         epsg_out = epsg_in
     else:
