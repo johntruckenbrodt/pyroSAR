@@ -773,25 +773,38 @@ class BEAM_DIMAP(ID):
     def scanMetadata(self):
         self.root = ET.parse(self.scene).getroot()
         
-        def get_by_name(attr):
-            return self.root.find('.//MDATTR[@name="{}"]'.format(attr)).text
+        def get_by_name(attr, section='Abstracted_Metadata'):
+            element = self.root.find('.//MDElem[@name="{}"]'.format(section))
+            out = element.find('.//MDATTR[@name="{}"]'.format(attr))
+            if out is None or out.text == '99999.0':
+                msg = 'cannot get attribute {} from section {}'
+                raise RuntimeError(msg.format(attr, section))
+            return out.text
         
-        self.meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE')
-        self.meta['IPF_version'] = get_by_name('Processing_system_identifier')
-        self.meta['sensor'] = get_by_name('MISSION').replace('ENTINEL-', '')
-        self.meta['orbit'] = get_by_name('PASS')[0]
+        section = 'Abstracted_Metadata'
+        self.meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE', section=section)
+        self.meta['IPF_version'] = get_by_name('Processing_system_identifier', section=section)
+        self.meta['sensor'] = get_by_name('MISSION', section=section).replace('ENTINEL-', '')
+        self.meta['orbit'] = get_by_name('PASS', section=section)[0]
         pols = [x.text for x in self.root.findall('.//MDATTR[@desc="Polarization"]')]
         self.meta['polarizations'] = list(set([x for x in pols if '-' not in x]))
-        self.meta['spacing'] = (round(float(get_by_name('range_spacing')), 6),
-                                round(float(get_by_name('azimuth_spacing')), 6))
+        self.meta['spacing'] = (round(float(get_by_name('range_spacing', section=section)), 6),
+                                round(float(get_by_name('azimuth_spacing', section=section)), 6))
         self.meta['samples'] = int(self.root.find('.//BAND_RASTER_WIDTH').text)
         self.meta['lines'] = int(self.root.find('.//BAND_RASTER_HEIGHT').text)
         self.meta['bands'] = int(self.root.find('.//NBANDS').text)
-        self.meta['orbitNumber_abs'] = int(get_by_name('ABS_ORBIT'))
-        self.meta['orbitNumber_rel'] = int(get_by_name('REL_ORBIT'))
-        self.meta['cycleNumber'] = int(get_by_name('cycleNumber'))
-        self.meta['frameNumber'] = int(get_by_name('data_take_id'))
+        self.meta['orbitNumber_abs'] = int(get_by_name('ABS_ORBIT', section=section))
+        self.meta['orbitNumber_rel'] = int(get_by_name('REL_ORBIT', section=section))
+        self.meta['cycleNumber'] = int(get_by_name('orbit_cycle', section=section))
+        self.meta['frameNumber'] = int(get_by_name('data_take_id', section=section))
         self.meta['product'] = self.root.find('.//PRODUCT_TYPE').text
+        
+        srgr = bool(int(get_by_name('srgr_flag', section=section)))
+        self.meta['image_geometry'] = 'GROUND_RANGE' if srgr else 'SLANT_RANGE'
+        
+        inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
+        incidence = [float(x.text) for x in inc_elements]
+        self.meta['incidence'] = median(incidence)
         
         # Metadata sections that need some parsing to match naming convention with SAFE format
         start = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_START_TIME').text,
@@ -807,16 +820,16 @@ class BEAM_DIMAP(ID):
             self.meta['projection'] = crsConvert(4326, 'wkt')
         
         longs = [
-            get_by_name('first_far_long'),
-            get_by_name('first_near_long'),
-            get_by_name('last_far_long'),
-            get_by_name('last_near_long')
+            get_by_name('first_far_long', section=section),
+            get_by_name('first_near_long', section=section),
+            get_by_name('last_far_long', section=section),
+            get_by_name('last_near_long', section=section)
         ]
         lats = [
-            get_by_name('first_far_lat'),
-            get_by_name('first_near_lat'),
-            get_by_name('last_far_lat'),
-            get_by_name('last_near_lat')
+            get_by_name('first_far_lat', section=section),
+            get_by_name('first_near_lat', section=section),
+            get_by_name('last_far_lat', section=section),
+            get_by_name('last_near_lat', section=section)
         ]
         # Convert to floats
         longs = [float(lon) for lon in longs]
@@ -1564,8 +1577,8 @@ class ESA(ID):
             raise RuntimeError("unsupported adquisition mode: {}".format(self.meta['acquisition_mode']))
         
         self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax'], \
-        self.meta['rangeResolution'], self.meta['azimuthResolution'], \
-        self.meta['neszNear'], self.meta['neszFar'] = \
+            self.meta['rangeResolution'], self.meta['azimuthResolution'], \
+            self.meta['neszNear'], self.meta['neszFar'] = \
             get_angles_resolution(self.meta['sensor'], self.meta['acquisition_mode'],
                                   self.meta['SPH_SWATH'], self.meta['start'])
         self.meta['incidence'] = median([self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax']])
@@ -2144,7 +2157,7 @@ class TDM(TSX):
             meta['bistatic'] = False
         
         meta['orbit'] = tree.find('.//acquisitionGeometry/orbitDirection', namespaces).text[0]
-
+        
         pattern = ".//productComponents/component[@componentClass='imageData']/file/location/name"
         elements = tree.findall(pattern, )
         self.primary_scene = os.path.join(self.scene, elements[0].text)
