@@ -381,17 +381,17 @@ class OSV(object):
 
         Parameters
         ----------
-        sensor: str or list
+        sensor: str or list[str]
             The S1 mission(s):
             
              - 'S1A'
              - 'S1B'
              - ['S1A', 'S1B']
-        osvtype: {'POE', 'RES'}
+        osvtype: str or list[str]
             the type of orbit files required
-        start: str
+        start: str or None
             the date to start searching for files in format YYYYmmddTHHMMSS
-        stop: str
+        stop: str or None
             the date to stop searching for files in format YYYYmmddTHHMMSS
         url_option: int
             the URL to query for OSV files

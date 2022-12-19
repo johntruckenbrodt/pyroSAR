@@ -1633,7 +1633,8 @@ def orb_parametrize(scene, formatName, allow_RES_OSV=True, **kwargs):
         orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
     
     if formatName == 'SENTINEL-1':
-        match = scene.getOSV(osvType='POE', returnMatch=True)
+        osv_type = ['POE', 'RES'] if allow_RES_OSV else 'POE'
+        match = scene.getOSV(osvType=osv_type, returnMatch=True)
         if match is None and allow_RES_OSV:
             scene.getOSV(osvType='RES')
             orbitType = 'Sentinel Restituted (Auto Download)'

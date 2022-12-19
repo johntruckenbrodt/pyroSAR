@@ -1710,7 +1710,7 @@ class SAFE(ID):
         osvdir: str
             the directory of OSV files; subdirectories POEORB and RESORB are created automatically;
             if no directory is defined, the standard SNAP auxdata location is used
-        osvType: str or list
+        osvType: str or list[str]
             the type of orbit file either 'POE', 'RES' or a list of both;
             if both are selected, the best matching file will be retrieved. I.e., POE if available and RES otherwise
         returnMatch: bool
@@ -1740,33 +1740,34 @@ class SAFE(ID):
         before = (date - timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
         after = (date + timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
         
-        if useLocal:
-            with S1.OSV(osvdir, timeout=timeout) as osv:
-                match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
-            if match is not None:
+        with S1.OSV(osvdir, timeout=timeout) as osv:
+            if useLocal:
+                match = osv.match(sensor=self.sensor, timestamp=self.start,
+                                  osvtype=osvType)
                 return match if returnMatch else None
-        
-        if osvType in ['POE', 'RES']:
-            with S1.OSV(osvdir, timeout=timeout) as osv:
-                files = osv.catch(sensor=self.sensor, osvtype=osvType, start=before, stop=after,
+            
+            if osvType in ['POE', 'RES']:
+                files = osv.catch(sensor=self.sensor, osvtype=osvType,
+                                  start=before, stop=after,
                                   url_option=url_option)
-        
-        elif sorted(osvType) == ['POE', 'RES']:
-            with S1.OSV(osvdir, timeout=timeout) as osv:
-                files = osv.catch(sensor=self.sensor, osvtype='POE', start=before, stop=after,
+            elif sorted(osvType) == ['POE', 'RES']:
+                files = osv.catch(sensor=self.sensor, osvtype='POE',
+                                  start=before, stop=after,
                                   url_option=url_option)
                 if len(files) == 0:
-                    files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after,
+                    files = osv.catch(sensor=self.sensor, osvtype='RES',
+                                      start=before, stop=after,
                                       url_option=url_option)
-        else:
-            raise TypeError("osvType must either be 'POE', 'RES' or a list of both")
-        
-        osv.retrieve(files)
-        
-        if returnMatch:
-            with S1.OSV(osvdir, timeout=timeout) as osv:
-                match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
-            return match
+            else:
+                msg = "osvType must either be 'POE', 'RES' or a list of both"
+                raise TypeError(msg)
+            
+            osv.retrieve(files)
+            
+            if returnMatch:
+                match = osv.match(sensor=self.sensor, timestamp=self.start,
+                                  osvtype=osvType)
+                return match
     
     def quicklook(self, outname, format='kmz', na_transparent=True):
         """
