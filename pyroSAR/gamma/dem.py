@@ -186,7 +186,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
         the name of the final DEM file
     buffer: float or None
         a buffer in degrees to create around the geometry
-    t_srs: int, str or osr.SpatialReference
+    t_srs: int, str or osgeo.osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
@@ -280,7 +280,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
             raise RuntimeError("'geoid_mode' is not supported")
         
         dem_create(vrt, dem, t_srs=epsg, tr=tr, geoid_convert=gdal_geoid,
-                   resampling_method=resampling_method, outputBounds=bounds,
+                   resampleAlg=resampling_method, outputBounds=bounds,
                    geoid=geoid)
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
@@ -499,7 +499,7 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
     par = {'format': 'ENVI',
            'srcNodata': nodata, ' dstNodata': nodata,
            'options': ['-q']}
-    gdalwarp(demlist, outname, par)
+    gdalwarp(src=demlist, dst=outname, **par)
     
     if byteorder == 1:
         swap(outname, outname + '_swap')
@@ -605,9 +605,9 @@ def makeSRTM(scenes, srtmdir, outname):
     srtm_temp = srtm_vrt.replace('.vrt', '_tmp')
     srtm_final = srtm_vrt.replace('.vrt', '')
     
-    gdalbuildvrt(hgt_files, srtm_vrt, {'srcNodata': nodata, 'options': ['-overwrite']})
+    gdalbuildvrt(src=hgt_files, dst=srtm_vrt, srcNodata=nodata, options=['-overwrite'])
     
-    gdal_translate(srtm_vrt, srtm_temp, {'format': 'ENVI', 'noData': nodata})
+    gdal_translate(src=srtm_vrt, dst=srtm_temp, format='ENVI', noData=nodata)
     
     diff.srtm2dem(SRTM_DEM=srtm_temp,
                   DEM=srtm_final,

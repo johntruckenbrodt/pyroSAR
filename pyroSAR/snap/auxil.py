@@ -504,7 +504,7 @@ def writer(xmlfile, outdir, basename_extensions=None,
             else:
                 nodata = 0
             translateoptions['noData'] = nodata
-            gdal_translate(item, name_new, translateoptions)
+            gdal_translate(src=item, dst=name_new, **translateoptions)
     else:
         raise RuntimeError('The output file format must be ENVI or BEAM-DIMAP.')
     ###########################################################################
@@ -1756,7 +1756,7 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         the image band names to geocode; default None: geocode all incoming bands.
     spacing: int or float
         The target pixel spacing in meters.
-    t_srs: int, str or osr.SpatialReference
+    t_srs: int or str or osgeo.osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
     demName: str

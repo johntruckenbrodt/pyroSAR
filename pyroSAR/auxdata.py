@@ -243,11 +243,18 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
                             crop=crop)
 
 
-def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', threads=None,
-               geoid_convert=False, geoid='EGM96', outputBounds=None, nodata=None,
-               dtype=None, pbar=False):
+def dem_create(src, dst, t_srs=None, tr=None, threads=None,
+               geoid_convert=False, geoid='EGM96', nodata=None,
+               dtype=None, pbar=False, **kwargs):
     """
-    create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
+    Create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid.
+    This is basically a convenience wrapper around :func:`osgeo.gdal.Warp` via :func:`spatialist.auxil.gdalwarp`.
+    The following argument defaults deviate from those of :func:`osgeo.gdal.WarpOptions`:
+    
+    - `format` is set to 'GTiff'
+    - `resampleAlg` is set to 'bilinear'
+    - `targetAlignedPixels` is set to 'True'
+    
     
     Parameters
     ----------
@@ -255,15 +262,12 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
         the input dataset, e.g. a VRT from function :func:`dem_autoload`
     dst: str
         the output dataset
-    t_srs: None, int, str or osr.SpatialReference
+    t_srs: None, int, str or osgeo.osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default (None): use the crs of ``src``.
     tr: None or tuple[int or float]
         the target resolution as (xres, yres)
-    resampling_method: str
-        the gdalwarp resampling method; See `here <https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r>`_
-        for options.
     threads: int, str or None
         the number of threads to use. Possible values:
         
@@ -280,8 +284,6 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
         
          - 'EGM96'
          - 'EGM2008'
-    outputBounds: list[int or float] or None
-        output bounds as [xmin, ymin, xmax, ymax] in target SRS
     nodata: int or float or str or None
         the no data value of the source and destination files.
         Can be used if no source nodata value can be read or to override it.
@@ -289,8 +291,19 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
     dtype: str or None
         override the data type of the written file; Default None: use same type as source data.
         Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
+        See :class:`spatialist.raster.Dtype`.
     pbar: bool
         add a progressbar?
+    **kwargs
+        additional keyword arguments to be passed to :func:`spatialist.auxil.gdalwarp`.
+        See :func:`osgeo.gdal.WarpOptions` for options. The following arguments cannot
+        be set as they are controlled internally:
+        
+        - `xRes`, `yRes`: controlled via argument `tr`
+        - `srcSRS`, `dstSRS`: controlled via the CRS of `src` and arguments `t_srs`, `geoid`, `geoid_convert`
+        - `srcNodata`, `dstNodata`: controlled via argument `nodata`
+        - `outputType`: controlled via argument `dtype`
+        - `multithread` controlled via argument `threads`
     
     Returns
     -------
@@ -339,15 +352,12 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
-                     'resampleAlg': resampling_method,
+                     'resampleAlg': 'bilinear',
                      'xRes': tr[0], 'yRes': tr[1],
                      'targetAlignedPixels': True}
     
     if dtype is not None:
         gdalwarp_args['outputType'] = Dtype(dtype).gdalint
-    
-    if outputBounds is not None:
-        gdalwarp_args['outputBounds'] = outputBounds
     
     if geoid_convert:
         geoid_epsg = {'EGM96': 5773,
@@ -371,6 +381,15 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
                        'noaa-vdatum-gdal-variable-paths-for-linux-ubuntu'
             raise RuntimeError(errstr + addition)
     
+    locked = ['xRes', 'yRes', 'srcSRS', 'dstSRS', 'srcNodata',
+              'dstNodata', 'outputType', 'multithread']
+    for key, val in kwargs.items():
+        if key not in locked:
+            gdalwarp_args[key] = val
+        else:
+            msg = "argument '{}' cannot be set via kwargs as it is set internally."
+            raise RuntimeError(msg.format(key))
+    
     try:
         message = 'creating mosaic'
         crs = gdalwarp_args['dstSRS']
@@ -378,7 +397,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
             message += ' and reprojecting to {}'.format(crs)
         message += ': {}'.format(dst)
         log.info(message)
-        gdalwarp(src, dst, gdalwarp_args, pbar)
+        gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
     except Exception:
         if os.path.isfile(dst):
             os.remove(dst)
@@ -505,7 +524,7 @@ class DEMHandler:
             opts['VRTNodata'] = dst_nodata
         opts['outputBounds'] = (extent['xmin'], extent['ymin'],
                                 extent['xmax'], extent['ymax'])
-        gdalbuildvrt(src=locals, dst=vrtfile, options=opts)
+        gdalbuildvrt(src=locals, dst=vrtfile, **opts)
         if dst_datatype is not None:
             datatype = Dtype(dst_datatype).gdalstr
             tree = etree.parse(source=vrtfile)

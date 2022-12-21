@@ -697,8 +697,7 @@ Drivers
 
 Auxiliary Data Handling
 -----------------------
-- create water body mask mosaics from ancillary DEM products;
-  see section :ref:`extrapolation of water masks`. Affects the following:
+- create water body mask mosaics from ancillary DEM products. Affects the following:
 
   + function :func:`pyroSAR.auxdata.dem_autoload`: new arguments `nodata` and `hide_nodata`
 
