@@ -182,7 +182,7 @@ def filter_processed(scenelist, outdir, recursive=False):
 
     Parameters
     ----------
-    scenelist: list
+    scenelist: list[ID]
         a list of pyroSAR objects
     outdir: str
         the processing directory
@@ -191,7 +191,7 @@ def filter_processed(scenelist, outdir, recursive=False):
 
     Returns
     -------
-    list
+    list[ID]
         a list of those scenes, which have not been processed yet
     """
     return [x for x in scenelist if not x.is_processed(outdir, recursive)]
@@ -2506,7 +2506,7 @@ class Archive(object):
 
         Parameters
         ----------
-        scene_in: str or ID or list
+        scene_in: str or ID or list[str or ID]
             a SAR scene or a list of scenes to be inserted
         pbar: bool
             show a progress bar?
@@ -2708,12 +2708,12 @@ class Archive(object):
 
         Parameters
         ----------
-        scenelist: :obj:`list` of :obj:`str` or :obj:`pyroSAR.drivers.ID`
+        scenelist: list[str or ID]
             the scenes to be filtered
 
         Returns
         -------
-        list
+        list[ID]
             the file names of the scenes whose basename is not yet registered in the database
 
         """
@@ -2786,7 +2786,7 @@ class Archive(object):
 
         Returns
         -------
-        list
+        list[str]
             the directory names
         """
         # ORM query, get all directories
@@ -2825,7 +2825,7 @@ class Archive(object):
 
         Parameters
         ----------
-        scenelist: list
+        scenelist: list[str]
             the file locations
         directory: str
             a folder to which the files are moved

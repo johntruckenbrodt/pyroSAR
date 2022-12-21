@@ -40,5 +40,5 @@ def auxdata_dem_cases():
     cases = [('AW3D30', ['N050E010/N051E011.tar.gz']),
              ('SRTM 1Sec HGT', ['N51E011.SRTMGL1.hgt.zip']),
              ('SRTM 3Sec', ['srtm_39_02.zip']),
-             ('TDX90m', ['90mdem/DEM/N51/E010/TDM1_DEM__30_N51E011.zip'])]
+             ('TDX90m', ['DEM/N51/E010/TDM1_DEM__30_N51E011.zip'])]
     return cases
