@@ -1575,7 +1575,8 @@ def mli_parametrize(scene, spacing=None, rlks=None, azlks=None, **kwargs):
         image_geometry = scene.meta['image_geometry']
         incidence = scene.meta['incidence']
     except KeyError:
-        raise RuntimeError('This function does not yet support sensor {}'.format(scene.sensor))
+        msg = 'This function does not yet support {} products in {} format'
+        raise RuntimeError(msg.format(scene.sensor, scene.__class__.__name__))
     
     if rlks is None and azlks is None:
         if spacing is None:
@@ -1632,7 +1633,8 @@ def orb_parametrize(scene, formatName, allow_RES_OSV=True, **kwargs):
         orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
     
     if formatName == 'SENTINEL-1':
-        match = scene.getOSV(osvType='POE', returnMatch=True)
+        osv_type = ['POE', 'RES'] if allow_RES_OSV else 'POE'
+        match = scene.getOSV(osvType=osv_type, returnMatch=True)
         if match is None and allow_RES_OSV:
             scene.getOSV(osvType='RES')
             orbitType = 'Sentinel Restituted (Auto Download)'
