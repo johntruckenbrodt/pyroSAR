@@ -1735,7 +1735,6 @@ class SAFE(ID):
         :class:`pyroSAR.S1.OSV`
         """
         date = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
-        
         # create a time span with one day before and one after the acquisition
         before = (date - timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
         after = (date + timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
@@ -1744,7 +1743,8 @@ class SAFE(ID):
             if useLocal:
                 match = osv.match(sensor=self.sensor, timestamp=self.start,
                                   osvtype=osvType)
-                return match if returnMatch else None
+                if match is not None:
+                    return match if returnMatch else None
             
             if osvType in ['POE', 'RES']:
                 files = osv.catch(sensor=self.sensor, osvtype=osvType,
