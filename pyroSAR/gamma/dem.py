@@ -499,7 +499,7 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
     par = {'format': 'ENVI',
            'srcNodata': nodata, ' dstNodata': nodata,
            'options': ['-q']}
-    gdalwarp(demlist, outname, par)
+    gdalwarp(src=demlist, dst=outname, **par)
     
     if byteorder == 1:
         swap(outname, outname + '_swap')
@@ -605,9 +605,9 @@ def makeSRTM(scenes, srtmdir, outname):
     srtm_temp = srtm_vrt.replace('.vrt', '_tmp')
     srtm_final = srtm_vrt.replace('.vrt', '')
     
-    gdalbuildvrt(hgt_files, srtm_vrt, {'srcNodata': nodata, 'options': ['-overwrite']})
+    gdalbuildvrt(src=hgt_files, dst=srtm_vrt, srcNodata=nodata, options=['-overwrite'])
     
-    gdal_translate(srtm_vrt, srtm_temp, {'format': 'ENVI', 'noData': nodata})
+    gdal_translate(src=srtm_vrt, dst=srtm_temp, format='ENVI', noData=nodata)
     
     diff.srtm2dem(SRTM_DEM=srtm_temp,
                   DEM=srtm_final,

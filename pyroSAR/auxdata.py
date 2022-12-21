@@ -378,7 +378,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
             message += ' and reprojecting to {}'.format(crs)
         message += ': {}'.format(dst)
         log.info(message)
-        gdalwarp(src, dst, gdalwarp_args, pbar)
+        gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
     except Exception:
         if os.path.isfile(dst):
             os.remove(dst)
@@ -505,7 +505,7 @@ class DEMHandler:
             opts['VRTNodata'] = dst_nodata
         opts['outputBounds'] = (extent['xmin'], extent['ymin'],
                                 extent['xmax'], extent['ymax'])
-        gdalbuildvrt(src=locals, dst=vrtfile, options=opts)
+        gdalbuildvrt(src=locals, dst=vrtfile, **opts)
         if dst_datatype is not None:
             datatype = Dtype(dst_datatype).gdalstr
             tree = etree.parse(source=vrtfile)
