@@ -186,7 +186,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
         the name of the final DEM file
     buffer: float or None
         a buffer in degrees to create around the geometry
-    t_srs: int, str or osr.SpatialReference
+    t_srs: int, str or osgeo.osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.

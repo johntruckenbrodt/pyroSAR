@@ -47,7 +47,8 @@ autosummary_generate = []
 # which is defined in setup.py and requirements.txt
 version_spatialist = get_version('spatialist')
 
-intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
+intersphinx_mapping = {'osgeo': ('https://gdal.org', None),
+                       'python': ('https://docs.python.org/3', None),
                        'requests': ('https://requests.readthedocs.io/en/latest', None),
                        'scipy': ('https://docs.scipy.org/doc/scipy', None),
                        'spatialist': ('https://spatialist.readthedocs.io/en/v{}'

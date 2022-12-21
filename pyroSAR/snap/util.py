@@ -65,7 +65,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         mosaicked with SNAP's SliceAssembly operator.
     outdir: str
         The directory to write the final files to.
-    t_srs: int, str or osr.SpatialReference
+    t_srs: int or str or osgeo.osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
@@ -663,7 +663,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
         The polarizations to be processed, e.g. ['VV', 'VH'].
     spacing: int or float
         The target pixel spacing in meters.
-    t_srs: int or str or osr.SpatialReference
+    t_srs: int or str or osgeo.osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
     refarea: str
         either 'beta0', 'gamma0' or 'sigma0'.

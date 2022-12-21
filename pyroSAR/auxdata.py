@@ -255,7 +255,7 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear', thre
         the input dataset, e.g. a VRT from function :func:`dem_autoload`
     dst: str
         the output dataset
-    t_srs: None, int, str or osr.SpatialReference
+    t_srs: None, int, str or osgeo.osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default (None): use the crs of ``src``.
