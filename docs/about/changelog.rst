@@ -866,3 +866,31 @@ Auxiliary Data Handling
   + new argument `crop` to optionally return the full extent of all overlapping DEM tiles
   + added download status print messages
   + download and modify a Copernicus DEM index file for future reuse; this removes the need to search the FTP server for files and thus greatly accelerates the process of collecting all files overlapping with the AOI
+
+0.20.0 | 2022-12-27
+===================
+
+Drivers
+-------
+- class :class:`pyroSAR.drivers.ESA`: changed ASAR orbit type from DELFT to DORIS
+- class :class:`pyroSAR.drivers.BEAM_DIMAP`: new attributes `meta['incidence']` and `meta['image_geometry']`
+- class :class:`pyroSAR.drivers.Archive`: new argument `date_strict` for method :meth:`~pyroSAR.drivers.Archive.select`
+
+SNAP API
+--------
+- function :func:`pyroSAR.snap.util.geocode`: force multi-looking for ERS1, ERS2, ASAR even if range and azimuth factor are both 1
+
+Auxiliary Data Handling
+-----------------------
+- function :func:`pyroSAR.auxdata.dem_autoload`:
+
+  + no longer require DEM tiles for creating a mosaic to address ocean cases
+  + simplified handling and removed arguments `nodata`, `dst_nodata` and `hide_nodata`
+  + the DEM option 'Copernicus 30m Global DEM' now also includes several auxiliary layers that can be downloaded automatically
+  + the URLs for DEM options 'SRTM 3Sec' and 'TDX90m' have been updated
+
+- function :func:`pyroSAR.auxdata.dem_create`:
+
+  + option to customize the output DEM via additional keyword arguments to be passed to :func:`spatialist.auxil.gdalwarp`
+  + no longer require a nodata value
+
