@@ -1,7 +1,7 @@
 ###############################################################################
 # tools for handling auxiliary data in software pyroSAR
 
-# Copyright (c) 2019-2022, the pyroSAR Developers.
+# Copyright (c) 2019-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -245,7 +245,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
 
 def dem_create(src, dst, t_srs=None, tr=None, threads=None,
                geoid_convert=False, geoid='EGM96', nodata=None,
-               dtype=None, pbar=False, **kwargs):
+               resampleAlg='bilinear', dtype=None, pbar=False, **kwargs):
     """
     Create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid.
     This is basically a convenience wrapper around :func:`osgeo.gdal.Warp` via :func:`spatialist.auxil.gdalwarp`.
@@ -288,6 +288,9 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
         the no data value of the source and destination files.
         Can be used if no source nodata value can be read or to override it.
         A special string 'None' can be used to skip reading the value from the source file.
+    resampleAlg: str
+        the resampling algorithm tu be used. See here for options:
+        https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r
     dtype: str or None
         override the data type of the written file; Default None: use same type as source data.
         Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
@@ -352,7 +355,7 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
-                     'resampleAlg': 'bilinear',
+                     'resampleAlg': resampleAlg,
                      'xRes': tr[0], 'yRes': tr[1],
                      'targetAlignedPixels': True}
     
