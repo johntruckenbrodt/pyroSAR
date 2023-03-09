@@ -87,7 +87,7 @@ def identify(scene):
 
     Returns
     -------
-    a subclass object of :class:`~pyroSAR.drivers.ID`
+    pyroSAR.drivers.ID
         a pyroSAR metadata handler
     
     Examples
@@ -136,7 +136,7 @@ def identify_many(scenes, pbar=False, sortkey=None):
         the file names of the scenes to be identified
     pbar: bool
         adds a progressbar if True
-    sortkey: str
+    sortkey: str or None
         sort the handler object list by an attribute
     Returns
     -------
@@ -2913,9 +2913,9 @@ class Archive(object):
         ----------
         vectorobject: :class:`~spatialist.vector.Vector`
             a geometry with which the scenes need to overlap
-        mindate: str or datetime or None
+        mindate: str or datetime.datetime or None
             the minimum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
-        maxdate: str or datetime or None
+        maxdate: str or datetime.datetime or None
             the maximum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
         date_strict: bool
             treat dates as strict limits or also allow flexible limits to incorporate scenes
@@ -2923,7 +2923,7 @@ class Archive(object):
             
             - strict: start >= mindate & stop <= maxdate
             - not strict: stop >= mindate & start <= maxdate
-        processdir: str, optional
+        processdir: str or None
             A directory to be scanned for already processed scenes;
             the selected scenes will be filtered to those that have not yet been processed. Default: None
         recursive: bool
@@ -2984,8 +2984,9 @@ class Archive(object):
         
         if vectorobject:
             if isinstance(vectorobject, Vector):
-                vectorobject.reproject(4326)
-                site_geom = vectorobject.convert2wkt(set3D=False)[0]
+                with vectorobject.clone() as vec:
+                    vec.reproject(4326)
+                    site_geom = vec.convert2wkt(set3D=False)[0]
                 # postgres has a different way to store geometries
                 if self.driver == 'postgresql':
                     arg_format.append("st_intersects(bbox, 'SRID=4326; {}')".format(
