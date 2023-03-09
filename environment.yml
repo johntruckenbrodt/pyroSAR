@@ -9,7 +9,7 @@ dependencies:
   - pyyaml
   - requests
   - psycopg2
-  - sqlalchemy>=1.4
+  - sqlalchemy>=1.4,<2.0
   - sqlalchemy-utils>=0.37
   - geoalchemy2
   - gdal>=2.4
