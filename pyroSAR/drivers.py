@@ -2306,7 +2306,13 @@ class Archive(object):
         # create engine, containing URL and driver
         log.debug('starting DB engine for {}'.format(URL.create(**self.url_dict)))
         self.url = URL.create(**self.url_dict)
-        self.engine = create_engine(self.url, echo=False)
+        # https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS
+        self.engine = create_engine(url=self.url, echo=False,
+                                    connect_args={
+                                        'keepalives': 1,
+                                        'keepalives_idle': 30,
+                                        'keepalives_interval': 10,
+                                        'keepalives_count': 5})
         
         # call to ____load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
