@@ -19,7 +19,8 @@ version = '.'.join(version_full.split('.')[:2])
 # release is automatically added to the latex document title and header
 release = version
 
-autodoc_mock_imports = ['osgeo', 'sqlite3']
+autodoc_mock_imports = ['osgeo', 'sqlalchemy', 'sqlalchemy_utils', 'geoalchemy2',
+                        'lxml', 'progressbar', 'spatialist']
 
 # If your documentation needs a minimal Sphinx version, state it here.
 needs_sphinx = '1.6'
@@ -43,16 +44,11 @@ bibtex_bibfiles = ['references.bib']
 # autodoc_default_flags = ['members']
 autosummary_generate = []
 
-# explicitly link to documentation of the spatialist version installed alongside pyroSAR,
-# which is defined in setup.py and requirements.txt
-version_spatialist = get_version('spatialist')
-
 intersphinx_mapping = {'osgeo': ('https://gdal.org', None),
                        'python': ('https://docs.python.org/3', None),
                        'requests': ('https://requests.readthedocs.io/en/latest', None),
                        'scipy': ('https://docs.scipy.org/doc/scipy', None),
-                       'spatialist': ('https://spatialist.readthedocs.io/en/v{}'
-                                      .format(version_spatialist), None),
+                       'spatialist': ('https://spatialist.readthedocs.io/en/latest', None),
                        'sqlalchemy': ('https://docs.sqlalchemy.org/en/latest', None),
                        'sqlalchemy-utils': ('https://sqlalchemy-utils.readthedocs.io/en/latest', None)
                        }
