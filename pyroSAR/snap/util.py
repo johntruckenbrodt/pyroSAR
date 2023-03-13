@@ -35,7 +35,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
             speckleFilter=False, refarea='gamma0', clean_edges=False, clean_edges_npixels=1,
-            rlks=None, azlks=None):
+            rlks=None, azlks=None, dem_oversampling_multiple=2):
     """
     general function for geocoding of SAR backscatter images with SNAP.
     
@@ -198,6 +198,11 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
     azlks: int or None
         the number of azimuth looks. Like `rlks`.
+    dem_oversampling_multiple: int
+        a factor to multiply the DEM oversampling factor computed by SNAP.
+        Used only for terrain flattening.
+        The SNAP default of 1 has been found to be insufficient with stripe
+        artifacts remaining in the image.
     
     Returns
     -------
@@ -393,6 +398,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         tf = parse_node('Terrain-Flattening')
         workflow.insert_node(tf, before=last.id)
         tf.parameters['sourceBands'] = bandnames['beta0']
+        tf.parameters['oversamplingMultiple'] = dem_oversampling_multiple
         if 'reGridMethod' in tf.parameters.keys():
             if externalDEMFile is None:
                 tf.parameters['reGridMethod'] = True
