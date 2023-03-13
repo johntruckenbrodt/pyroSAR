@@ -58,7 +58,7 @@ install:
   # Configure the VM.
   - conda env create --file environment-dev.yml
   - conda activate ps_test_dev
-  - python setup.py install
+  - pip install .
 
 # Skip .NET project specific build phase.
 build: false

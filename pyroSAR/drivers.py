@@ -2289,6 +2289,8 @@ class Archive(object):
             self.driver = 'postgresql'
             if not self.__check_host(host, port):
                 sys.exit('Server not found!')
+
+        connect_args = {}
         
         # create dict, with which a URL to the db is created
         if self.driver == 'sqlite':
@@ -2302,11 +2304,18 @@ class Archive(object):
                              'host': host,
                              'port': port,
                              'database': dbfile}
+            connect_args = {
+                'keepalives': 1,
+                'keepalives_idle': 30,
+                'keepalives_interval': 10,
+                'keepalives_count': 5}
         
         # create engine, containing URL and driver
         log.debug('starting DB engine for {}'.format(URL.create(**self.url_dict)))
         self.url = URL.create(**self.url_dict)
-        self.engine = create_engine(self.url, echo=False)
+        # https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS
+        self.engine = create_engine(url=self.url, echo=False,
+                                    connect_args=connect_args)
         
         # call to ____load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
@@ -2358,7 +2367,8 @@ class Archive(object):
                                  Column('vv', Integer),
                                  Column('hv', Integer),
                                  Column('vh', Integer),
-                                 Column('bbox', Geometry(geometry_type='POLYGON', management=True, srid=4326)))
+                                 Column('bbox', Geometry(geometry_type='POLYGON',
+                                                         management=True, srid=4326)))
         
         # add custom fields
         if self.custom_fields is not None:

@@ -2,3 +2,5 @@ recursive-include pyroSAR/snap *.xml
 recursive-include pyroSAR/snap/data *
 recursive-include pyroSAR/ERS/data *
 recursive-exclude tests *
+recursive-exclude .github *
+exclude .travis.yml appveyor.yml

@@ -44,9 +44,8 @@ install:
   - pip install --ignore-installed setuptools pip six certifi # install packages inside the venv if the system version is too old
   - pip install numpy
   - pip install GDAL==$(gdal-config --version) --global-option=build_ext --global-option="$(gdal-config --cflags)"
-  - pip install -r requirements-dev.txt
   - pip install coveralls coverage
-  - python setup.py install
+  - pip install .[test]
 
 #before_script:
 #  - travis_wait 40 . ./pyroSAR/install/download_testdata.sh
