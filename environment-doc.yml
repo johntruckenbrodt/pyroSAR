@@ -1,0 +1,13 @@
+name: ps_doc
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - matplotlib
+  - numpy
+  - sphinx
+  - sphinxcontrib-bibtex>=2.2
+  - pip
+  - cairosvg
+  - pip:
+      - sphinxcontrib-svg2pdfconverter
