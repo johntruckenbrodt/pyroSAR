@@ -19,9 +19,3 @@ dependencies:
   - coveralls
   - coverage
   - pytest
-  - sphinx
-  - sphinxcontrib-bibtex>=2.2
-  - pip
-  - cairosvg
-  - pip:
-      - sphinxcontrib-svg2pdfconverter
