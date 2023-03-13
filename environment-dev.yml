@@ -15,6 +15,7 @@ dependencies:
   - gdal>=2.4
   - pillow
   - lxml
+  - packaging
   - coveralls
   - coverage
   - pytest

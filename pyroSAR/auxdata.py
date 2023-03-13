@@ -24,6 +24,7 @@ from lxml import etree
 from math import ceil, floor
 from urllib.parse import urlparse
 from lxml import etree as ET
+from packaging import version
 from pyroSAR.examine import ExamineSnap
 from spatialist.raster import Raster, Dtype
 from spatialist.vector import bbox
@@ -368,21 +369,17 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
         if geoid in geoid_epsg.keys():
             epsg = geoid_epsg[geoid]
             gdalwarp_args['srcSRS'] += '+{}'.format(epsg)
-            # the following line is a temporary workaround until compound EPSG codes can
-            # directly be used for vertical CRS transformations
-            # see https://github.com/OSGeo/gdal/pull/4639
-            gdalwarp_args['srcSRS'] = crsConvert(gdalwarp_args['srcSRS'], 'proj4')
+            # the following line is a workaround for older GDAL versions that did not
+            # support compound EPSG codes. See https://github.com/OSGeo/gdal/pull/4639.
+            if version.parse(gdal.__version__) < version.parse('3.4.0'):
+                gdalwarp_args['srcSRS'] = crsConvert(gdalwarp_args['srcSRS'], 'proj4')
         else:
             raise RuntimeError('geoid model not yet supported')
         try:
             get_egm_lookup(geoid=geoid, software='PROJ')
         except OSError as e:
             errstr = str(e)
-            addition = '\nplease refer to the following site for instructions ' \
-                       'on how to use EGM GTX files (requires PROJ >= 5.0.0):\n' \
-                       'https://gis.stackexchange.com/questions/258532/' \
-                       'noaa-vdatum-gdal-variable-paths-for-linux-ubuntu'
-            raise RuntimeError(errstr + addition)
+            raise RuntimeError(errstr)
     
     locked = ['xRes', 'yRes', 'srcSRS', 'dstSRS', 'srcNodata',
               'dstNodata', 'outputType', 'multithread']
@@ -1413,7 +1410,7 @@ def get_egm_lookup(geoid, software):
         - SNAP: default directory: ``~/.snap/auxdata/dem/egm96``; URL:
         
           * https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip
-        - PROJ: requires the ``PROJ_LIB`` environment variable to be set as download directory; URLs:
+        - PROJ: requires ``PROJ_DATA`` or ``PROJ_LIB`` environment variable to be set as download directory; URLs:
         
           * https://cdn.proj.org/us_nga_egm96_15.tif
           * https://cdn.proj.org/us_nga_egm08_25.tif
@@ -1439,24 +1436,30 @@ def get_egm_lookup(geoid, software):
             r.close()
     
     elif software == 'PROJ':
-        gtx_lookup = {'EGM96': 'us_nga_egm96_15.tif',
-                      'EGM2008': 'us_nga_egm08_25.tif'}
-        gtx_remote = 'https://cdn.proj.org/' + gtx_lookup[geoid]
+        lookup = {'EGM96': 'us_nga_egm96_15.tif',
+                  'EGM2008': 'us_nga_egm08_25.tif'}
+        remote = 'https://cdn.proj.org/' + lookup[geoid]
         
-        proj_lib = os.environ.get('PROJ_LIB')
-        if proj_lib is not None:
-            gtx_local = os.path.join(proj_lib, os.path.basename(gtx_remote))
-            if not os.path.isfile(gtx_local):
-                if not os.access(proj_lib, os.W_OK):
-                    raise OSError("cannot write to 'PROJ_LIB' path: {}".format(proj_lib))
-                log.info('{} <<-- {}'.format(gtx_local, gtx_remote))
-                r = requests.get(gtx_remote)
+        # starting with PROJ 9.1, the PROJ_DATA variable is used.
+        # Earlier versions make use of PROJ_LIB.
+        var = 'PROJ_DATA'
+        proj_dir = os.environ.get(var)
+        if proj_dir is None:
+            var = 'PROJ_LIB'
+            proj_dir = os.environ.get(var)
+        if proj_dir is not None:
+            local = os.path.join(proj_dir, os.path.basename(remote))
+            if not os.path.isfile(local):
+                if not os.access(proj_dir, os.W_OK):
+                    raise OSError("cannot write to '{0}' path: {1}".format(var, proj_dir))
+                log.info('{} <<-- {}'.format(local, remote))
+                r = requests.get(remote)
                 r.raise_for_status()
-                with open(gtx_local, 'wb') as out:
+                with open(local, 'wb') as out:
                     out.write(r.content)
                 r.close()
         else:
-            raise RuntimeError("environment variable 'PROJ_LIB' not set")
+            raise RuntimeError("Neither environment variable 'PROJ_DATA' nor 'PROJ_LIB' not set")
     else:
         raise TypeError("software must be either 'SNAP' or 'PROJ'")
 
