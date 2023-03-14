@@ -1459,7 +1459,7 @@ def get_egm_lookup(geoid, software):
                     out.write(r.content)
                 r.close()
         else:
-            raise RuntimeError("Neither environment variable 'PROJ_DATA' nor 'PROJ_LIB' not set")
+            raise RuntimeError("Neither environment variable 'PROJ_DATA' nor 'PROJ_LIB' are set")
     else:
         raise TypeError("software must be either 'SNAP' or 'PROJ'")
 
