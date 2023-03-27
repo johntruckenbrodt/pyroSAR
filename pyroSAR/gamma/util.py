@@ -589,14 +589,14 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         Otherwise the function will raise an error if no POE file exists.
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
-    export_extra: list of str or None
+    export_extra: list[str] or None
         a list of image file IDs to be exported to outdir
         
          - format is GeoTIFF if the file is geocoded and ENVI otherwise. Non-geocoded images can be converted via GAMMA
            command data2tiff yet the output was found impossible to read with GIS software
          - scaling of SAR image products is applied as defined by parameter `scaling`
          - see Notes for ID options
-    basename_extensions: list of str or None
+    basename_extensions: list[str] or None
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     removeS1BorderNoiseMethod: str or None
         the S1 GRD border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
@@ -980,7 +980,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
                                   logpath=path_log,
                                   outdir=tmpdir,
                                   shellscript=shellscript)
-                par2hdr(n.dem_seg_geo + '.par', fname + '_.hdr')
+                par2hdr(n.dem_seg_geo + '.par', fname + '.hdr')
             # SAR image products
             product_match = [x for x in products if x.endswith(key)]
             if len(product_match) > 0:
@@ -1296,6 +1296,9 @@ def pixel_area_wrap(image, namespace, lut, logpath=None, outdir=None, shellscrip
         # sigma0 = MLI * ellip_pix_sigma0 / pix_area_sigma0
         # gamma0 = MLI * ellip_pix_sigma0 / pix_area_gamma0
         namespace.appreciate(['pix_area_gamma0', 'pix_ellip_sigma0', 'pix_ratio'])
+        pixel_area_args['pix_gamma0'] = namespace.pix_area_gamma0
+        radcal_mli_args['pix_area'] = namespace.pix_ellip_sigma0
+        
         # actual illuminated area as obtained from integrating DEM-facets (pix_area_sigma0 | pix_area_gamma0)
         diff.pixel_area(**pixel_area_args)
         
@@ -1400,10 +1403,19 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, ou
     else:
         gc_map_args.update({'MLI_par': image + '.par'})
         if do_execute(gc_map_args, out_id, exist_ok):
+            # gc_map2 is the successor of gc_map. However, earlier versions did not yet come with full functionality.
+            gc_map2_ok = False
             if 'gc_map2' in dir(diff):
+                keys = list(gc_map_args.keys())
+                keys.remove('ls_mode')
+                gc_map2_ok = all([hasarg(diff.gc_map2, x) for x in keys])
+            if gc_map2_ok:
                 del gc_map_args['ls_mode']
                 diff.gc_map2(**gc_map_args)
             else:
+                # gc_map might have an argument OFF_par, which is not needed for SLC/MLI geocoding
+                if hasarg(diff.gc_map, 'OFF_par'):
+                    gc_map_args.update({'OFF_par': '-'})
                 diff.gc_map(**gc_map_args)
     
     # create ENVI header files for all created images
