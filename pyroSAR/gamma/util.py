@@ -26,8 +26,8 @@ import shutil
 import zipfile as zf
 from datetime import datetime
 from urllib.error import URLError
-
-from spatialist import haversine
+import numpy as np
+from spatialist import haversine, Raster
 from spatialist.ancillary import union, finder
 
 from ..S1 import OSV
@@ -896,15 +896,20 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     ######################################################################
     log.info('radiometric terrain correction and backward geocoding')
     for image in images:
-        lat.product(data_1=image,
-                    data_2=n.pix_ratio,
-                    product=image + '_gamma0-rtc',
-                    width=reference_par.range_samples,
-                    bx=1,
-                    by=1,
-                    logpath=path_log,
-                    outdir=tmpdir,
-                    shellscript=shellscript)
+        if 'lat' in locals():
+            lat.product(data_1=image,
+                        data_2=n.pix_ratio,
+                        product=image + '_gamma0-rtc',
+                        width=reference_par.range_samples,
+                        bx=1,
+                        by=1,
+                        logpath=path_log,
+                        outdir=tmpdir,
+                        shellscript=shellscript)
+        else:
+            lat_product(data_in1=image,
+                        data_in2=n.pix_ratio,
+                        data_out=image + '_gamma0-rtc')
         par2hdr(reference + '.par', image + '_gamma0-rtc.hdr')
         diff.geocode_back(data_in=image + '_gamma0-rtc',
                           width_in=reference_par.range_samples,
@@ -930,14 +935,18 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
             else:
                 width = reference_par.range_samples
                 refpar = reference + '.par'
-            lat.linear_to_dB(data_in=data_in,
-                             data_out=data_in + '_db',
-                             width=width,
-                             inverse_flag=0,
-                             null_value=nodata,
-                             logpath=path_log,
-                             outdir=tmpdir,
-                             shellscript=shellscript)
+            if 'lat' in locals():
+                lat.linear_to_dB(data_in=data_in,
+                                 data_out=data_in + '_db',
+                                 width=width,
+                                 inverse_flag=0,
+                                 null_value=nodata,
+                                 logpath=path_log,
+                                 outdir=tmpdir,
+                                 shellscript=shellscript)
+            else:
+                lat_linear_to_db(data_in=data_in,
+                                 data_out=data_in + '_db')
             par2hdr(refpar, data_in + '_db.hdr')
             data_in += '_db'
         if re.search('_geo', os.path.basename(data_in)):
@@ -1306,27 +1315,41 @@ def pixel_area_wrap(image, namespace, lut, logpath=None, outdir=None, shellscrip
         isp.radcal_MLI(**radcal_mli_args)
         par2hdr(image + '.par', image + '_cal.hdr')
         
+        if os.path.isfile(image + '.hdr'):
+            shutil.copy(src=image + '.hdr', dst=namespace.pix_area_gamma0 + '.hdr')
+            shutil.copy(src=image + '.hdr', dst=namespace.pix_ellip_sigma0 + '.hdr')
+        
         # ratio of ellipsoid based pixel area and DEM-facet pixel area
-        lat.ratio(d1=namespace.pix_ellip_sigma0,
-                  d2=namespace.pix_area_gamma0,
-                  ratio=namespace.pix_ratio,
-                  width=image_par.range_samples,
-                  bx=1,
-                  by=1,
-                  logpath=logpath,
-                  outdir=outdir,
-                  shellscript=shellscript)
+        if 'lat' in locals():
+            lat.ratio(d1=namespace.pix_ellip_sigma0,
+                      d2=namespace.pix_area_gamma0,
+                      ratio=namespace.pix_ratio,
+                      width=image_par.range_samples,
+                      bx=1,
+                      by=1,
+                      logpath=logpath,
+                      outdir=outdir,
+                      shellscript=shellscript)
+        else:
+            lat_ratio(data_in1=namespace.pix_ellip_sigma0,
+                      data_in2=namespace.pix_area_gamma0,
+                      data_out=namespace.pix_ratio)
     
     if namespace.isappreciated('gs_ratio'):
-        lat.ratio(d1=namespace.pix_area_gamma0,
-                  d2=namespace.pix_area_sigma0,
-                  ratio=namespace.gs_ratio,
-                  width=image_par.range_samples,
-                  bx=1,
-                  by=1,
-                  logpath=logpath,
-                  outdir=outdir,
-                  shellscript=shellscript)
+        if 'lat' in locals():
+            lat.ratio(d1=namespace.pix_area_gamma0,
+                      d2=namespace.pix_area_sigma0,
+                      ratio=namespace.gs_ratio,
+                      width=image_par.range_samples,
+                      bx=1,
+                      by=1,
+                      logpath=logpath,
+                      outdir=outdir,
+                      shellscript=shellscript)
+        else:
+            lat_ratio(data_in1=namespace.pix_area_gamma0,
+                      data_in2=namespace.pix_area_sigma0,
+                      data_out=namespace.gs_ratio)
     
     for item in ['pix_area_sigma0', 'pix_area_gamma0',
                  'pix_ratio', 'pix_ellip_sigma0', 'gs_ratio']:
@@ -1424,3 +1447,99 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, ou
         if namespace.isappreciated(item):
             mods = {'data_type': 1} if item == 'ls_map_geo' else None
             par2hdr(namespace.dem_seg_geo + '.par', namespace.get(item) + '.hdr', mods)
+
+
+def lat_linear_to_db(data_in, data_out):
+    """
+    Alternative to LAT module command linear_to_dB.
+    
+    Parameters
+    ----------
+    data_in: str
+        the input data file
+    data_out: str
+        the output data file
+
+    Returns
+    -------
+
+    """
+    with Raster(data_in) as ras:
+        a1 = ras.array()
+        a1[a1 <= 0] = np.nan
+        out = 10 * np.log10(a1)
+        tmp = data_out + '_tmp'
+        ras.write(outname=tmp, array=out, format='ENVI',
+                  nodata=0, dtype='float32')
+    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
+    shutil.copy(src=data_in + '.hdr', dst=data_out + '.hdr')
+    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
+        os.remove(item)
+
+
+def lat_product(data_in1, data_in2, data_out):
+    """
+    Alternative to LAT module command product.
+    
+    Parameters
+    ----------
+    data_in1: str
+        input data file 1
+    data_in2: str
+        input data file 2
+    data_out: str
+        the output data file
+
+    Returns
+    -------
+
+    """
+    with Raster(data_in1) as ras:
+        a1 = ras.array()
+        a1[a1 == 0] = np.nan
+    with Raster(data_in2) as ras:
+        a2 = ras.array()
+        a2[a2 == 0] = np.nan
+        out = a1 * a2
+        tmp = data_out + '_tmp'
+        ras.write(outname=tmp, array=out, format='ENVI',
+                  nodata=0, dtype='float32')
+    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
+    shutil.copy(src=data_in1 + '.hdr', dst=data_out + '.hdr')
+    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
+        if os.path.isfile(item):
+            os.remove(item)
+
+
+def lat_ratio(data_in1, data_in2, data_out):
+    """
+    Alternative to LAT module command ratio.
+
+    Parameters
+    ----------
+    data_in1: str
+        input data file 1
+    data_in2: str
+        input data file 2
+    data_out: str
+        the output data file
+
+    Returns
+    -------
+
+    """
+    with Raster(data_in1) as ras:
+        a1 = ras.array()
+        a1[a1 == 0] = np.nan
+    with Raster(data_in2) as ras:
+        a2 = ras.array()
+        a2[a2 == 0] = np.nan
+        out = a1 / a2
+        tmp = data_out + '_tmp'
+        ras.write(outname=tmp, array=out, format='ENVI',
+                  nodata=0, dtype='float32')
+    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
+    shutil.copy(src=data_in1 + '.hdr', dst=data_out + '.hdr')
+    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
+        if os.path.isfile(item):
+            os.remove(item)
