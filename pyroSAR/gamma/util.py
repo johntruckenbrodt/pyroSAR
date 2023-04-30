@@ -155,7 +155,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
     S1_bnr: bool
         only Sentinel-1 GRD: should border noise removal be applied to the image?
         This is available since version 20191203, for older versions this argument is ignored.
-    basename_extensions: list of str
+    basename_extensions: list[str] or None
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     exist_ok: bool
         allow existing output files and do not create new ones?
@@ -166,11 +166,11 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
     outdir: str or None
         the directory to execute the command in
     shellscript: str or None
-        a file to write the GAMMA commands to in shell format
+        a file to write the GAMMA commands to in bash format
 
     Returns
     -------
-    list or None
+    list[str] or None
         the sorted image file names if ``return_fnames=True`` and None otherwise
     """
     
@@ -372,6 +372,12 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                         pars['edge_flag'] = 2
                     else:
                         pars['edge_flag'] = 0
+                else:
+                    if S1_bnr:
+                        raise RuntimeError("The command par_S1_GRD of this GAMMA "
+                                           "version does not support border noise "
+                                           "removal. You may want to consider "
+                                           "pyroSAR's own method for this task.")
                 pars['MLI'] = outname
                 pars['MLI_par'] = outname + '.par'
                 if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
@@ -636,12 +642,12 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     
     - images in map geometry
     
-      * **dem_seg_geo**: dem subsetted to the extent of the intersect between input DEM and SAR image
+      * **dem_seg_geo**: dem subsetted to the extent of the intersection between input DEM and SAR image
       * (**u_geo**): zenith angle of surface normal vector n (angle between z and n)
       * (**v_geo**): orientation angle of n (between x and projection of n in xy plane)
       * **inc_geo**: local incidence angle (between surface normal and look vector)
       * (**psi_geo**): projection angle (between surface normal and image plane normal)
-      * **ls_map_geo**: layover and shadow map (in map projection)
+      * **ls_map_geo**: layover and shadow map
       * (**sim_sar_geo**): simulated SAR backscatter image
       * (**pix_ellip_sigma0_geo**): ellipsoid-based pixel area
       * (**pix_area_sigma0_geo**): illuminated area as obtained from integrating DEM-facets in sigma projection (command pixel_area)
@@ -1068,7 +1074,7 @@ def multilook(infile, outfile, spacing, rlks=None, azlks=None,
 
     Parameters
     ----------
-    infile: str or list
+    infile: str or list[str]
         one of the following:
         
         - a SAR image in GAMMA format with a parameter file <infile>.par
