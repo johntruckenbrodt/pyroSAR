@@ -1,7 +1,7 @@
 ###############################################################################
 # universal core routines for processing SAR images with GAMMA
 
-# Copyright (c) 2014-2022, the pyroSAR Developers.
+# Copyright (c) 2014-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -437,7 +437,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         return sorted(fnames)
 
 
-def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20, logpath=None, outdir=None, shellscript=None):
+def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
+               logpath=None, outdir=None, shellscript=None):
     """
     correct GAMMA parameter files with orbit state vector information from dedicated OSV files;
     OSV files are downloaded automatically to either the defined `osvdir` or relative to the
@@ -690,6 +691,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     # - conversion to GAMMA format
     # - multilooking
     # - DEM product generation
+    # - terrain flattening
     exist_ok = False
     
     scenes = scene if isinstance(scene, list) else [scene]
@@ -838,7 +840,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     # RTC reference area computation #####################################
     ######################################################################
     log.info('computing pixel area')
-    pixel_area_wrap(image=reference, namespace=n, lut=n.lut_init,
+    pixel_area_wrap(image=reference, namespace=n, lut=n.lut_init, exist_ok=exist_ok,
                     logpath=path_log, outdir=tmpdir, shellscript=shellscript)
     
     ######################################################################
@@ -1253,7 +1255,8 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
     os.remove(tab_out)
 
 
-def pixel_area_wrap(image, namespace, lut, logpath=None, outdir=None, shellscript=None):
+def pixel_area_wrap(image, namespace, lut, exist_ok=False,
+                    logpath=None, outdir=None, shellscript=None):
     """
     helper function for computing pixel_area files in function geocode.
     
@@ -1265,6 +1268,8 @@ def pixel_area_wrap(image, namespace, lut, logpath=None, outdir=None, shellscrip
         an object collecting all output file names
     lut: str
         the name of the lookup table
+    exist_ok: bool
+        allow existing output files and do not create new ones?
     logpath: str
         a directory to write command logfiles to
     outdir: str
@@ -1277,6 +1282,9 @@ def pixel_area_wrap(image, namespace, lut, logpath=None, outdir=None, shellscrip
 
     """
     image_par = ISPPar(image + '.par')
+    
+    if namespace.isappreciated('gs_ratio'):
+        namespace.appreciate(['pix_area_sigma0', 'pix_area_gamma0'])
     
     pixel_area_args = {'MLI_par': image + '.par',
                        'DEM_par': namespace.dem_seg_geo + '.par',
@@ -1305,11 +1313,13 @@ def pixel_area_wrap(image, namespace, lut, logpath=None, outdir=None, shellscrip
     if hasarg(diff.pixel_area, 'sig2gam_ratio'):
         namespace.appreciate(['pix_ratio'])
         pixel_area_args['sig2gam_ratio'] = namespace.pix_ratio
-        diff.pixel_area(**pixel_area_args)
+        if do_execute(pixel_area_args, ['pix_sigma0', 'pix_gamma0', 'sig2gam_ratio'], exist_ok):
+            diff.pixel_area(**pixel_area_args)
         
         if namespace.isappreciated('pix_ellip_sigma0'):
-            isp.radcal_MLI(**radcal_mli_args)
-            par2hdr(image + '.par', image + '_cal.hdr')
+            if do_execute(radcal_mli_args, ['pix_area'], exist_ok):
+                isp.radcal_MLI(**radcal_mli_args)
+                par2hdr(image + '.par', image + '_cal.hdr')
     else:
         # sigma0 = MLI * ellip_pix_sigma0 / pix_area_sigma0
         # gamma0 = MLI * ellip_pix_sigma0 / pix_area_gamma0
@@ -1318,55 +1328,72 @@ def pixel_area_wrap(image, namespace, lut, logpath=None, outdir=None, shellscrip
         radcal_mli_args['pix_area'] = namespace.pix_ellip_sigma0
         
         # actual illuminated area as obtained from integrating DEM-facets (pix_area_sigma0 | pix_area_gamma0)
-        diff.pixel_area(**pixel_area_args)
+        if do_execute(pixel_area_args, ['pix_sigma0', 'pix_gamma0'], exist_ok):
+            diff.pixel_area(**pixel_area_args)
         
         # ellipsoid-based pixel area (ellip_pix_sigma0)
-        isp.radcal_MLI(**radcal_mli_args)
-        par2hdr(image + '.par', image + '_cal.hdr')
+        if do_execute(radcal_mli_args, ['pix_area'], exist_ok):
+            isp.radcal_MLI(**radcal_mli_args)
+            par2hdr(image + '.par', image + '_cal.hdr')
         
         if os.path.isfile(image + '.hdr'):
-            shutil.copy(src=image + '.hdr', dst=namespace.pix_area_gamma0 + '.hdr')
-            shutil.copy(src=image + '.hdr', dst=namespace.pix_ellip_sigma0 + '.hdr')
+            for item in ['pix_area_sigma0', 'pix_area_gamma0', 'pix_ellip_sigma0']:
+                if namespace.isappreciated(item):
+                    hdr_out = namespace[item] + '.hdr'
+                    c1 = not os.path.isfile(hdr_out)
+                    c2 = os.path.isfile(hdr_out) and not exist_ok
+                    if c1 or c2:
+                        shutil.copy(src=image + '.hdr', dst=hdr_out)
         
         # ratio of ellipsoid based pixel area and DEM-facet pixel area
-        if 'lat' in locals():
-            lat.ratio(d1=namespace.pix_ellip_sigma0,
-                      d2=namespace.pix_area_gamma0,
-                      ratio=namespace.pix_ratio,
-                      width=image_par.range_samples,
-                      bx=1,
-                      by=1,
-                      logpath=logpath,
-                      outdir=outdir,
-                      shellscript=shellscript)
-        else:
-            lat_ratio(data_in1=namespace.pix_ellip_sigma0,
-                      data_in2=namespace.pix_area_gamma0,
-                      data_out=namespace.pix_ratio)
+        c1 = not os.path.isfile(namespace.pix_ratio)
+        c2 = os.path.isfile(namespace.pix_ratio) and not exist_ok
+        if c1 or c2:
+            if 'lat' in locals():
+                lat.ratio(d1=namespace.pix_ellip_sigma0,
+                          d2=namespace.pix_area_gamma0,
+                          ratio=namespace.pix_ratio,
+                          width=image_par.range_samples,
+                          bx=1,
+                          by=1,
+                          logpath=logpath,
+                          outdir=outdir,
+                          shellscript=shellscript)
+            else:
+                lat_ratio(data_in1=namespace.pix_ellip_sigma0,
+                          data_in2=namespace.pix_area_gamma0,
+                          data_out=namespace.pix_ratio)
     
     if namespace.isappreciated('gs_ratio'):
-        if 'lat' in locals():
-            lat.ratio(d1=namespace.pix_area_gamma0,
-                      d2=namespace.pix_area_sigma0,
-                      ratio=namespace.gs_ratio,
-                      width=image_par.range_samples,
-                      bx=1,
-                      by=1,
-                      logpath=logpath,
-                      outdir=outdir,
-                      shellscript=shellscript)
-        else:
-            lat_ratio(data_in1=namespace.pix_area_gamma0,
-                      data_in2=namespace.pix_area_sigma0,
-                      data_out=namespace.gs_ratio)
+        c1 = not os.path.isfile(namespace.gs_ratio)
+        c2 = os.path.isfile(namespace.gs_ratio) and not exist_ok
+        if c1 or c2:
+            if 'lat' in locals():
+                lat.ratio(d1=namespace.pix_area_gamma0,
+                          d2=namespace.pix_area_sigma0,
+                          ratio=namespace.gs_ratio,
+                          width=image_par.range_samples,
+                          bx=1,
+                          by=1,
+                          logpath=logpath,
+                          outdir=outdir,
+                          shellscript=shellscript)
+            else:
+                lat_ratio(data_in1=namespace.pix_area_gamma0,
+                          data_in2=namespace.pix_area_sigma0,
+                          data_out=namespace.gs_ratio)
     
     for item in ['pix_area_sigma0', 'pix_area_gamma0',
                  'pix_ratio', 'pix_ellip_sigma0', 'gs_ratio']:
         if namespace.isappreciated(item):
-            par2hdr(image + '.par', namespace[item] + '.hdr')
+            hdr_out = namespace[item] + '.hdr'
+            c1 = not os.path.isfile(item)
+            c2 = os.path.isfile(hdr_out) and not exist_ok
+            par2hdr(image + '.par', hdr_out)
 
 
-def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, outdir=None, shellscript=None):
+def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False,
+                logpath=None, outdir=None, shellscript=None):
     """
     helper function for computing DEM products in function geocode.
 
@@ -1380,6 +1407,8 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, ou
         the digital elevation model
     spacing: int or float
         the target pixel spacing in meters
+    exist_ok: bool
+        allow existing output files and do not create new ones?
     logpath: str
         a directory to write command logfiles to
     outdir: str
@@ -1391,7 +1420,8 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, ou
     -------
 
     """
-    # compute DEM oversampling factors; will be 1 for range and azimuth if the DEM spacing matches the target spacing
+    # compute DEM oversampling factors; will be 1 for range and
+    # azimuth if the DEM spacing matches the target spacing
     ovs_lat, ovs_lon = ovs(dem + '.par', spacing)
     
     image_par = ISPPar(image + '.par')
@@ -1435,7 +1465,8 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, ou
     else:
         gc_map_args.update({'MLI_par': image + '.par'})
         if do_execute(gc_map_args, out_id, exist_ok):
-            # gc_map2 is the successor of gc_map. However, earlier versions did not yet come with full functionality.
+            # gc_map2 is the successor of gc_map. However, earlier versions
+            # did not yet come with full functionality.
             gc_map2_ok = False
             if 'gc_map2' in dir(diff):
                 keys = list(gc_map_args.keys())
