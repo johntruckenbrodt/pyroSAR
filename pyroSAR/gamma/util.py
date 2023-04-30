@@ -1158,7 +1158,10 @@ def multilook(infile, outfile, spacing, rlks=None, azlks=None,
                         tab.write(' '.join(item) + '\n')
             pars['SLC_tab'] = slc_tab
             if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
-                isp.multi_look_ScanSAR(**pars)
+                if 'multi_look_ScanSAR' in dir(isp):
+                    isp.multi_look_ScanSAR(**pars)
+                else:
+                    isp.multi_S1_TOPS(**pars)
                 par2hdr(outfile + '.par', outfile + '.hdr')
     else:
         # multilooking of MLI images
