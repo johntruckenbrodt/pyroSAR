@@ -1495,12 +1495,12 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
     write_intermediates = False  # this is intended for debugging
     
     def erosion(src, dst, structure, only_boundary, write_intermediates=False):
-        if not os.path.isfile(dst):
-            with Raster(src) as ref:
-                array = ref.array()
+        with Raster(src) as ref:
+            array = ref.array()
+            if not os.path.isfile(dst):
                 mask = array != 0
                 # do not perform erosion if data only contains nodata (mask == 1)
-                if len(mask[mask == 0]) == 0:
+                if len(mask[mask == 1]) == 0:
                     ref.write(outname=dst, array=mask, dtype='Byte',
                               options=['COMPRESS=DEFLATE'])
                     return array, mask
@@ -1521,9 +1521,9 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
                 mask = binary_erosion(input=mask, structure=structure)
                 ref.write(outname=dst, array=mask, dtype='Byte',
                           options=['COMPRESS=DEFLATE'])
-        else:
-            with Raster(dst) as ras:
-                mask = ras.array()
+            else:
+                with Raster(dst) as ras:
+                    mask = ras.array()
         array[mask == 0] = 0
         return array, mask
     
@@ -1541,7 +1541,7 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
             with Raster(img) as ras:
                 array = ras.array()
             array[mask == 0] = 0
-        # do not apply mask if it only contains 1
+        # do not apply mask if it only contains 1 (valid data)
         if len(mask[mask == 0]) == 0:
             break
         ras = gdal.Open(img, GA_Update)
