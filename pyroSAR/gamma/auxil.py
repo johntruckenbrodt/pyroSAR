@@ -407,12 +407,32 @@ class Namespace(object):
         return '-'
     
     def appreciate(self, keys):
+        """
+        
+        Parameters
+        ----------
+        keys: list[str]
+
+        Returns
+        -------
+
+        """
         for key in keys:
             setattr(self, key.replace('.', '_'), os.path.join(self.__outdir, self.__base + '_' + key))
             if key not in self.__reg:
                 self.__reg.append(key.replace('.', '_'))
     
     def depreciate(self, keys):
+        """
+        
+        Parameters
+        ----------
+        keys: list[str]
+
+        Returns
+        -------
+
+        """
         for key in keys:
             setattr(self, key.replace('.', '_'), '-')
             if key not in self.__reg:
@@ -478,7 +498,7 @@ def do_execute(par, ids, exist_ok):
     ----------
     par: dict
         a dictionary containing all arguments for the command
-    ids: list
+    ids: list[str]
         the IDs of the output files
     exist_ok: bool
         allow existing output files?

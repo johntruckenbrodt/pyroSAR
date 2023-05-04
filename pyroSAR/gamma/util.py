@@ -1,7 +1,7 @@
 ###############################################################################
 # universal core routines for processing SAR images with GAMMA
 
-# Copyright (c) 2014-2022, the pyroSAR Developers.
+# Copyright (c) 2014-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -26,8 +26,8 @@ import shutil
 import zipfile as zf
 from datetime import datetime
 from urllib.error import URLError
-
-from spatialist import haversine
+import numpy as np
+from spatialist import haversine, Raster
 from spatialist.ancillary import union, finder
 
 from ..S1 import OSV
@@ -155,7 +155,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
     S1_bnr: bool
         only Sentinel-1 GRD: should border noise removal be applied to the image?
         This is available since version 20191203, for older versions this argument is ignored.
-    basename_extensions: list of str
+    basename_extensions: list[str] or None
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     exist_ok: bool
         allow existing output files and do not create new ones?
@@ -166,11 +166,11 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
     outdir: str or None
         the directory to execute the command in
     shellscript: str or None
-        a file to write the GAMMA commands to in shell format
+        a file to write the GAMMA commands to in bash format
 
     Returns
     -------
-    list or None
+    list[str] or None
         the sorted image file names if ``return_fnames=True`` and None otherwise
     """
     
@@ -372,6 +372,12 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                         pars['edge_flag'] = 2
                     else:
                         pars['edge_flag'] = 0
+                else:
+                    if S1_bnr:
+                        raise RuntimeError("The command par_S1_GRD of this GAMMA "
+                                           "version does not support border noise "
+                                           "removal. You may want to consider "
+                                           "pyroSAR's own method for this task.")
                 pars['MLI'] = outname
                 pars['MLI_par'] = outname + '.par'
                 if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
@@ -431,7 +437,8 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         return sorted(fnames)
 
 
-def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20, logpath=None, outdir=None, shellscript=None):
+def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
+               logpath=None, outdir=None, shellscript=None):
     """
     correct GAMMA parameter files with orbit state vector information from dedicated OSV files;
     OSV files are downloaded automatically to either the defined `osvdir` or relative to the
@@ -589,14 +596,14 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         Otherwise the function will raise an error if no POE file exists.
     cleanup: bool
         should all files written to the temporary directory during function execution be deleted after processing?
-    export_extra: list of str or None
+    export_extra: list[str] or None
         a list of image file IDs to be exported to outdir
         
          - format is GeoTIFF if the file is geocoded and ENVI otherwise. Non-geocoded images can be converted via GAMMA
            command data2tiff yet the output was found impossible to read with GIS software
          - scaling of SAR image products is applied as defined by parameter `scaling`
          - see Notes for ID options
-    basename_extensions: list of str or None
+    basename_extensions: list[str] or None
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
     removeS1BorderNoiseMethod: str or None
         the S1 GRD border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
@@ -636,12 +643,12 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     
     - images in map geometry
     
-      * **dem_seg_geo**: dem subsetted to the extent of the intersect between input DEM and SAR image
+      * **dem_seg_geo**: dem subsetted to the extent of the intersection between input DEM and SAR image
       * (**u_geo**): zenith angle of surface normal vector n (angle between z and n)
       * (**v_geo**): orientation angle of n (between x and projection of n in xy plane)
       * **inc_geo**: local incidence angle (between surface normal and look vector)
       * (**psi_geo**): projection angle (between surface normal and image plane normal)
-      * **ls_map_geo**: layover and shadow map (in map projection)
+      * **ls_map_geo**: layover and shadow map
       * (**sim_sar_geo**): simulated SAR backscatter image
       * (**pix_ellip_sigma0_geo**): ellipsoid-based pixel area
       * (**pix_area_sigma0_geo**): illuminated area as obtained from integrating DEM-facets in sigma projection (command pixel_area)
@@ -684,6 +691,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     # - conversion to GAMMA format
     # - multilooking
     # - DEM product generation
+    # - terrain flattening
     exist_ok = False
     
     scenes = scene if isinstance(scene, list) else [scene]
@@ -832,7 +840,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     # RTC reference area computation #####################################
     ######################################################################
     log.info('computing pixel area')
-    pixel_area_wrap(image=reference, namespace=n, lut=n.lut_init,
+    pixel_area_wrap(image=reference, namespace=n, lut=n.lut_init, exist_ok=exist_ok,
                     logpath=path_log, outdir=tmpdir, shellscript=shellscript)
     
     ######################################################################
@@ -896,15 +904,20 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     ######################################################################
     log.info('radiometric terrain correction and backward geocoding')
     for image in images:
-        lat.product(data_1=image,
-                    data_2=n.pix_ratio,
-                    product=image + '_gamma0-rtc',
-                    width=reference_par.range_samples,
-                    bx=1,
-                    by=1,
-                    logpath=path_log,
-                    outdir=tmpdir,
-                    shellscript=shellscript)
+        if 'lat' in locals():
+            lat.product(data_1=image,
+                        data_2=n.pix_ratio,
+                        product=image + '_gamma0-rtc',
+                        width=reference_par.range_samples,
+                        bx=1,
+                        by=1,
+                        logpath=path_log,
+                        outdir=tmpdir,
+                        shellscript=shellscript)
+        else:
+            lat_product(data_in1=image,
+                        data_in2=n.pix_ratio,
+                        data_out=image + '_gamma0-rtc')
         par2hdr(reference + '.par', image + '_gamma0-rtc.hdr')
         diff.geocode_back(data_in=image + '_gamma0-rtc',
                           width_in=reference_par.range_samples,
@@ -930,14 +943,18 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
             else:
                 width = reference_par.range_samples
                 refpar = reference + '.par'
-            lat.linear_to_dB(data_in=data_in,
-                             data_out=data_in + '_db',
-                             width=width,
-                             inverse_flag=0,
-                             null_value=nodata,
-                             logpath=path_log,
-                             outdir=tmpdir,
-                             shellscript=shellscript)
+            if 'lat' in locals():
+                lat.linear_to_dB(data_in=data_in,
+                                 data_out=data_in + '_db',
+                                 width=width,
+                                 inverse_flag=0,
+                                 null_value=nodata,
+                                 logpath=path_log,
+                                 outdir=tmpdir,
+                                 shellscript=shellscript)
+            else:
+                lat_linear_to_db(data_in=data_in,
+                                 data_out=data_in + '_db')
             par2hdr(refpar, data_in + '_db.hdr')
             data_in += '_db'
         if re.search('_geo', os.path.basename(data_in)):
@@ -980,7 +997,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
                                   logpath=path_log,
                                   outdir=tmpdir,
                                   shellscript=shellscript)
-                par2hdr(n.dem_seg_geo + '.par', fname + '_.hdr')
+                par2hdr(n.dem_seg_geo + '.par', fname + '.hdr')
             # SAR image products
             product_match = [x for x in products if x.endswith(key)]
             if len(product_match) > 0:
@@ -1059,7 +1076,7 @@ def multilook(infile, outfile, spacing, rlks=None, azlks=None,
 
     Parameters
     ----------
-    infile: str or list
+    infile: str or list[str]
         one of the following:
         
         - a SAR image in GAMMA format with a parameter file <infile>.par
@@ -1143,7 +1160,10 @@ def multilook(infile, outfile, spacing, rlks=None, azlks=None,
                         tab.write(' '.join(item) + '\n')
             pars['SLC_tab'] = slc_tab
             if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
-                isp.multi_look_ScanSAR(**pars)
+                if 'multi_look_ScanSAR' in dir(isp):
+                    isp.multi_look_ScanSAR(**pars)
+                else:
+                    isp.multi_S1_TOPS(**pars)
                 par2hdr(outfile + '.par', outfile + '.hdr')
     else:
         # multilooking of MLI images
@@ -1235,7 +1255,8 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
     os.remove(tab_out)
 
 
-def pixel_area_wrap(image, namespace, lut, logpath=None, outdir=None, shellscript=None):
+def pixel_area_wrap(image, namespace, lut, exist_ok=False,
+                    logpath=None, outdir=None, shellscript=None):
     """
     helper function for computing pixel_area files in function geocode.
     
@@ -1247,6 +1268,8 @@ def pixel_area_wrap(image, namespace, lut, logpath=None, outdir=None, shellscrip
         an object collecting all output file names
     lut: str
         the name of the lookup table
+    exist_ok: bool
+        allow existing output files and do not create new ones?
     logpath: str
         a directory to write command logfiles to
     outdir: str
@@ -1259,6 +1282,9 @@ def pixel_area_wrap(image, namespace, lut, logpath=None, outdir=None, shellscrip
 
     """
     image_par = ISPPar(image + '.par')
+    
+    if namespace.isappreciated('gs_ratio'):
+        namespace.appreciate(['pix_area_sigma0', 'pix_area_gamma0'])
     
     pixel_area_args = {'MLI_par': image + '.par',
                        'DEM_par': namespace.dem_seg_geo + '.par',
@@ -1287,51 +1313,87 @@ def pixel_area_wrap(image, namespace, lut, logpath=None, outdir=None, shellscrip
     if hasarg(diff.pixel_area, 'sig2gam_ratio'):
         namespace.appreciate(['pix_ratio'])
         pixel_area_args['sig2gam_ratio'] = namespace.pix_ratio
-        diff.pixel_area(**pixel_area_args)
+        if do_execute(pixel_area_args, ['pix_sigma0', 'pix_gamma0', 'sig2gam_ratio'], exist_ok):
+            diff.pixel_area(**pixel_area_args)
         
         if namespace.isappreciated('pix_ellip_sigma0'):
-            isp.radcal_MLI(**radcal_mli_args)
-            par2hdr(image + '.par', image + '_cal.hdr')
+            if do_execute(radcal_mli_args, ['pix_area'], exist_ok):
+                isp.radcal_MLI(**radcal_mli_args)
+                par2hdr(image + '.par', image + '_cal.hdr')
     else:
         # sigma0 = MLI * ellip_pix_sigma0 / pix_area_sigma0
         # gamma0 = MLI * ellip_pix_sigma0 / pix_area_gamma0
         namespace.appreciate(['pix_area_gamma0', 'pix_ellip_sigma0', 'pix_ratio'])
+        pixel_area_args['pix_gamma0'] = namespace.pix_area_gamma0
+        radcal_mli_args['pix_area'] = namespace.pix_ellip_sigma0
+        
         # actual illuminated area as obtained from integrating DEM-facets (pix_area_sigma0 | pix_area_gamma0)
-        diff.pixel_area(**pixel_area_args)
+        if do_execute(pixel_area_args, ['pix_sigma0', 'pix_gamma0'], exist_ok):
+            diff.pixel_area(**pixel_area_args)
         
         # ellipsoid-based pixel area (ellip_pix_sigma0)
-        isp.radcal_MLI(**radcal_mli_args)
-        par2hdr(image + '.par', image + '_cal.hdr')
+        if do_execute(radcal_mli_args, ['pix_area'], exist_ok):
+            isp.radcal_MLI(**radcal_mli_args)
+            par2hdr(image + '.par', image + '_cal.hdr')
+        
+        if os.path.isfile(image + '.hdr'):
+            for item in ['pix_area_sigma0', 'pix_area_gamma0', 'pix_ellip_sigma0']:
+                if namespace.isappreciated(item):
+                    hdr_out = namespace[item] + '.hdr'
+                    c1 = not os.path.isfile(hdr_out)
+                    c2 = os.path.isfile(hdr_out) and not exist_ok
+                    if c1 or c2:
+                        shutil.copy(src=image + '.hdr', dst=hdr_out)
         
         # ratio of ellipsoid based pixel area and DEM-facet pixel area
-        lat.ratio(d1=namespace.pix_ellip_sigma0,
-                  d2=namespace.pix_area_gamma0,
-                  ratio=namespace.pix_ratio,
-                  width=image_par.range_samples,
-                  bx=1,
-                  by=1,
-                  logpath=logpath,
-                  outdir=outdir,
-                  shellscript=shellscript)
+        c1 = not os.path.isfile(namespace.pix_ratio)
+        c2 = os.path.isfile(namespace.pix_ratio) and not exist_ok
+        if c1 or c2:
+            if 'lat' in locals():
+                lat.ratio(d1=namespace.pix_ellip_sigma0,
+                          d2=namespace.pix_area_gamma0,
+                          ratio=namespace.pix_ratio,
+                          width=image_par.range_samples,
+                          bx=1,
+                          by=1,
+                          logpath=logpath,
+                          outdir=outdir,
+                          shellscript=shellscript)
+            else:
+                lat_ratio(data_in1=namespace.pix_ellip_sigma0,
+                          data_in2=namespace.pix_area_gamma0,
+                          data_out=namespace.pix_ratio)
     
     if namespace.isappreciated('gs_ratio'):
-        lat.ratio(d1=namespace.pix_area_gamma0,
-                  d2=namespace.pix_area_sigma0,
-                  ratio=namespace.gs_ratio,
-                  width=image_par.range_samples,
-                  bx=1,
-                  by=1,
-                  logpath=logpath,
-                  outdir=outdir,
-                  shellscript=shellscript)
+        c1 = not os.path.isfile(namespace.gs_ratio)
+        c2 = os.path.isfile(namespace.gs_ratio) and not exist_ok
+        if c1 or c2:
+            if 'lat' in locals():
+                lat.ratio(d1=namespace.pix_area_gamma0,
+                          d2=namespace.pix_area_sigma0,
+                          ratio=namespace.gs_ratio,
+                          width=image_par.range_samples,
+                          bx=1,
+                          by=1,
+                          logpath=logpath,
+                          outdir=outdir,
+                          shellscript=shellscript)
+            else:
+                lat_ratio(data_in1=namespace.pix_area_gamma0,
+                          data_in2=namespace.pix_area_sigma0,
+                          data_out=namespace.gs_ratio)
     
     for item in ['pix_area_sigma0', 'pix_area_gamma0',
                  'pix_ratio', 'pix_ellip_sigma0', 'gs_ratio']:
         if namespace.isappreciated(item):
-            par2hdr(image + '.par', namespace[item] + '.hdr')
+            hdr_out = namespace[item] + '.hdr'
+            c1 = not os.path.isfile(item)
+            c2 = os.path.isfile(hdr_out) and not exist_ok
+            par2hdr(image + '.par', hdr_out)
 
 
-def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, outdir=None, shellscript=None):
+def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False,
+                logpath=None, outdir=None, shellscript=None):
     """
     helper function for computing DEM products in function geocode.
 
@@ -1345,6 +1407,8 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, ou
         the digital elevation model
     spacing: int or float
         the target pixel spacing in meters
+    exist_ok: bool
+        allow existing output files and do not create new ones?
     logpath: str
         a directory to write command logfiles to
     outdir: str
@@ -1356,7 +1420,8 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, ou
     -------
 
     """
-    # compute DEM oversampling factors; will be 1 for range and azimuth if the DEM spacing matches the target spacing
+    # compute DEM oversampling factors; will be 1 for range and
+    # azimuth if the DEM spacing matches the target spacing
     ovs_lat, ovs_lon = ovs(dem + '.par', spacing)
     
     image_par = ISPPar(image + '.par')
@@ -1400,10 +1465,20 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, ou
     else:
         gc_map_args.update({'MLI_par': image + '.par'})
         if do_execute(gc_map_args, out_id, exist_ok):
+            # gc_map2 is the successor of gc_map. However, earlier versions
+            # did not yet come with full functionality.
+            gc_map2_ok = False
             if 'gc_map2' in dir(diff):
+                keys = list(gc_map_args.keys())
+                keys.remove('ls_mode')
+                gc_map2_ok = all([hasarg(diff.gc_map2, x) for x in keys])
+            if gc_map2_ok:
                 del gc_map_args['ls_mode']
                 diff.gc_map2(**gc_map_args)
             else:
+                # gc_map might have an argument OFF_par, which is not needed for SLC/MLI geocoding
+                if hasarg(diff.gc_map, 'OFF_par'):
+                    gc_map_args.update({'OFF_par': '-'})
                 diff.gc_map(**gc_map_args)
     
     # create ENVI header files for all created images
@@ -1412,3 +1487,99 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False, logpath=None, ou
         if namespace.isappreciated(item):
             mods = {'data_type': 1} if item == 'ls_map_geo' else None
             par2hdr(namespace.dem_seg_geo + '.par', namespace.get(item) + '.hdr', mods)
+
+
+def lat_linear_to_db(data_in, data_out):
+    """
+    Alternative to LAT module command linear_to_dB.
+    
+    Parameters
+    ----------
+    data_in: str
+        the input data file
+    data_out: str
+        the output data file
+
+    Returns
+    -------
+
+    """
+    with Raster(data_in) as ras:
+        a1 = ras.array()
+        a1[a1 <= 0] = np.nan
+        out = 10 * np.log10(a1)
+        tmp = data_out + '_tmp'
+        ras.write(outname=tmp, array=out, format='ENVI',
+                  nodata=0, dtype='float32')
+    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
+    shutil.copy(src=data_in + '.hdr', dst=data_out + '.hdr')
+    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
+        os.remove(item)
+
+
+def lat_product(data_in1, data_in2, data_out):
+    """
+    Alternative to LAT module command product.
+    
+    Parameters
+    ----------
+    data_in1: str
+        input data file 1
+    data_in2: str
+        input data file 2
+    data_out: str
+        the output data file
+
+    Returns
+    -------
+
+    """
+    with Raster(data_in1) as ras:
+        a1 = ras.array()
+        a1[a1 == 0] = np.nan
+    with Raster(data_in2) as ras:
+        a2 = ras.array()
+        a2[a2 == 0] = np.nan
+        out = a1 * a2
+        tmp = data_out + '_tmp'
+        ras.write(outname=tmp, array=out, format='ENVI',
+                  nodata=0, dtype='float32')
+    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
+    shutil.copy(src=data_in1 + '.hdr', dst=data_out + '.hdr')
+    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
+        if os.path.isfile(item):
+            os.remove(item)
+
+
+def lat_ratio(data_in1, data_in2, data_out):
+    """
+    Alternative to LAT module command ratio.
+
+    Parameters
+    ----------
+    data_in1: str
+        input data file 1
+    data_in2: str
+        input data file 2
+    data_out: str
+        the output data file
+
+    Returns
+    -------
+
+    """
+    with Raster(data_in1) as ras:
+        a1 = ras.array()
+        a1[a1 == 0] = np.nan
+    with Raster(data_in2) as ras:
+        a2 = ras.array()
+        a2[a2 == 0] = np.nan
+        out = a1 / a2
+        tmp = data_out + '_tmp'
+        ras.write(outname=tmp, array=out, format='ENVI',
+                  nodata=0, dtype='float32')
+    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
+    shutil.copy(src=data_in1 + '.hdr', dst=data_out + '.hdr')
+    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
+        if os.path.isfile(item):
+            os.remove(item)
