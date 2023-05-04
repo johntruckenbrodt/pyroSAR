@@ -1527,6 +1527,10 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
         array[mask == 0] = 0
         return array, mask
     
+    # make sure a backscatter image is used for creating the mask
+    backscatter = [x for x in images if re.search('^(?:Sig|Gam)ma0_', os.path.basename(x))]
+    images.insert(0, images.pop(images.index(backscatter[0])))
+    
     mask = None
     for img in images:
         if mask is None:
