@@ -1,7 +1,7 @@
 ###############################################################################
 # pyroSAR SNAP API tools
 
-# Copyright (c) 2017-2022, the pyroSAR Developers.
+# Copyright (c) 2017-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -1499,6 +1499,10 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
             with Raster(src) as ref:
                 array = ref.array()
                 mask = array != 0
+                # do not perform erosion if data only contains nodata (mask == 1)
+                if len(mask[mask == 0]) == 0:
+                    ref.write(outname=dst, array=mask, dtype='Byte')
+                    return array, mask
                 if write_intermediates:
                     ref.write(dst.replace('.tif', '_init.tif'),
                               array=mask, dtype='Byte')
@@ -1529,7 +1533,9 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
             with Raster(img) as ras:
                 array = ras.array()
             array[mask == 0] = 0
-        
+        # do not apply mask if it only contains 1
+        if len(mask[mask == 0]) == 0:
+            break
         ras = gdal.Open(img, GA_Update)
         band = ras.GetRasterBand(1)
         band.WriteArray(array)
