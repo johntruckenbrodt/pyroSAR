@@ -1,7 +1,7 @@
 ###############################################################################
 # preparation of DEM data for use in GAMMA
 
-# Copyright (c) 2014-2021, the pyroSAR Developers.
+# Copyright (c) 2014-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -32,6 +32,7 @@ from pyroSAR.examine import ExamineGamma
 from pyroSAR.ancillary import hasarg
 
 import logging
+
 log = logging.getLogger(__name__)
 
 try:
@@ -185,7 +186,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
         the name of the final DEM file
     buffer: float or None
         a buffer in degrees to create around the geometry
-    t_srs: int, str or osr.SpatialReference
+    t_srs: int, str or osgeo.osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
@@ -224,10 +225,11 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
     
     if epsg != 4326:
         if not hasarg(diff.create_dem_par, 'EPSG'):
-            raise RuntimeError('using a different CRS than 4326 is currently not supported for this version of GAMMA')
+            raise RuntimeError('using a different CRS than 4326 is currently '
+                               'not supported for this version of GAMMA')
         if 'dem_import' not in dir(diff):
-            raise RuntimeError('using a different CRS than 4326 currently requires command dem_import, '
-                               'which is not part of this version of GAMMA')
+            raise RuntimeError('using a different CRS than 4326 currently requires command '
+                               'dem_import, which is not part of this version of GAMMA')
         if tr is None:
             raise RuntimeError('tr needs to be defined if t_srs is not 4326')
     
@@ -255,67 +257,43 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
         dem_autoload([geometry], demType, vrt=vrt, username=username,
                      password=password, buffer=buffer)
         
-        # The heights of the TanDEM-X DEM products are ellipsoidal heights, all others are EGM96 Geoid heights
-        # GAMMA works only with Ellipsoid heights and the offset needs to be corrected
+        # TanDEM-X DEM, GETASSE30 DEM: ellipsoidal heights,
+        # Copernicus DEM: EGM2008 geoid, all others are EGM96 heights
+        # GAMMA works only with ellipsoid heights and the offset needs to be corrected
         # starting from GDAL 2.2 the conversion can be done directly in GDAL; see docs of gdalwarp
-        gflg = 0
-        geoid = 'EGM96'
-        gdal_geoid = False
         message = 'conversion to GAMMA format'
+        geoid = None
         if demType not in ['TDX90m', 'GETASSE30']:
             message = 'geoid correction and conversion to GAMMA format'
-            if geoid_mode == 'gdal':
-                gdal_geoid = True
-            elif geoid_mode == 'gamma':
-                gflg = 2
-            else:
-                raise RuntimeError("'geoid_mode' is not supported")
             if re.search('Copernicus [139]0m', demType):
                 geoid = 'EGM2008'
             elif demType in ['AW3D30', 'SRTM 1Sec HGT', 'SRTM 3Sec']:
-                pass  # defined above
+                geoid = 'EGM96'
             else:
                 raise RuntimeError("'demType' is not supported")
         
+        if geoid_mode == 'gdal':
+            gamma_geoid = None
+            if geoid is not None:
+                gdal_geoid = True
+            else:
+                gdal_geoid = False
+        elif geoid_mode == 'gamma':
+            gdal_geoid = False
+            gamma_geoid = geoid
+        else:
+            raise RuntimeError("'geoid_mode' is not supported")
+        
         dem_create(vrt, dem, t_srs=epsg, tr=tr, geoid_convert=gdal_geoid,
-                   resampling_method=resampling_method, outputBounds=bounds,
+                   resampleAlg=resampling_method, outputBounds=bounds,
                    geoid=geoid)
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
         log.info(message)
         
-        if epsg == 4326 and geoid == 'EGM96':
-            # old approach for backwards compatibility
-            diff.srtm2dem(SRTM_DEM=dem,
-                          DEM=outfile_tmp,
-                          DEM_par=outfile_tmp + '.par',
-                          gflg=gflg,
-                          geoid='-',
-                          logpath=logpath,
-                          outdir=tmpdir)
-        else:
-            # new approach enabling an arbitrary target CRS
-            diff.create_dem_par(DEM_par=outfile_tmp + '.par',
-                                inlist=[''] * 9,
-                                EPSG=epsg)
-            dem_import_pars = {'input_DEM': dem,
-                               'DEM': outfile_tmp,
-                               'DEM_par': outfile_tmp + '.par'}
-            if gflg == 2:
-                home = ExamineGamma().home
-                if geoid == 'EGM96':
-                    geoid_file = os.path.join(home, 'DIFF', 'scripts', 'egm96.dem')
-                elif geoid == 'EGM2008':
-                    geoid_file = os.path.join(home, 'DIFF', 'scripts', 'egm2008-5.dem')
-                else:
-                    raise RuntimeError('conversion of {} geoid is not supported by GAMMA'.format(geoid))
-                dem_import_pars['geoid'] = geoid_file
-                dem_import_pars['geoid_par'] = geoid_file + '_par'
-            
-            diff.dem_import(**dem_import_pars)
-        
-        par2hdr(outfile_tmp + '.par', outfile_tmp + '.hdr', nodata=0)
+        dem_import(src=dem, dst=outfile_tmp, geoid=gamma_geoid,
+                   logpath=logpath, outdir=tmpdir)
         
         for suffix in ['', '.par', '.hdr']:
             shutil.copyfile(outfile_tmp + suffix, outfile + suffix)
@@ -324,6 +302,83 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
         raise e
     finally:
         shutil.rmtree(tmpdir)
+
+
+def dem_import(src, dst, geoid=None, logpath=None, outdir=None):
+    """
+    convert an existing DEM in GDAL-readable format to GAMMA format including optional geoid-ellipsoid conversion.
+    
+    Parameters
+    ----------
+    src: str
+        the input DEM
+    dst: str
+        the output DEM
+    geoid: str or None
+        the geoid height reference of `src`; supported options:
+        
+        - 'EGM96'
+        - 'EGM2008'
+        - None: assume WGS84 ellipsoid heights and do not convert heights
+    logpath: str or None
+        a directory to write logfiles to
+    outdir: str or None
+        the directory to execute the command in
+
+    Returns
+    -------
+
+    """
+    with raster.Raster(src) as ras:
+        epsg = ras.epsg
+    if epsg != 4326:
+        if not hasarg(diff.create_dem_par, 'EPSG'):
+            raise RuntimeError('using a different CRS than EPSG:4326 is currently '
+                               'not supported for this version of GAMMA')
+        if 'dem_import' not in dir(diff):
+            raise RuntimeError('using a different CRS than 4326 currently requires command '
+                               'dem_import, which is not part of this version of GAMMA')
+    dst_base = os.path.splitext(dst)[0]
+    if geoid is not None:
+        # "Add interpolated geoid offset relative to the WGS84 datum;
+        # NODATA are set to the interpolated geoid offset."
+        gflg = 2
+    else:
+        # "No geoid offset correction, replace NODATA with a valid near-zero value."
+        gflg = 0
+    if epsg == 4326 and geoid == 'EGM96':
+        # old approach for backwards compatibility
+        diff.srtm2dem(SRTM_DEM=src,
+                      DEM=dst,
+                      DEM_par=dst + '.par',
+                      gflg=gflg,
+                      geoid='-',
+                      logpath=logpath,
+                      outdir=outdir)
+    else:
+        # new approach enabling an arbitrary target CRS EPSG code
+        diff.create_dem_par(DEM_par=dst_base + '.par',
+                            inlist=[''] * 9,
+                            EPSG=epsg)
+        dem_import_pars = {'input_DEM': src,
+                           'DEM': dst,
+                           'DEM_par': dst_base + '.par',
+                           'logpath': logpath,
+                           'outdir': outdir}
+        if gflg == 2:
+            home = ExamineGamma().home
+            if geoid == 'EGM96':
+                geoid_file = os.path.join(home, 'DIFF', 'scripts', 'egm96.dem')
+            elif geoid == 'EGM2008':
+                geoid_file = os.path.join(home, 'DIFF', 'scripts', 'egm2008-5.dem')
+            else:
+                raise RuntimeError('conversion of {} geoid is not supported by GAMMA'.format(geoid))
+            dem_import_pars['geoid'] = geoid_file
+            dem_import_pars['geoid_par'] = geoid_file + '_par'
+        
+        diff.dem_import(**dem_import_pars)
+    
+    par2hdr(dst_base + '.par', dst_base + '.hdr', nodata=0)
 
 
 def dempar(dem, logpath=None):
@@ -424,7 +479,7 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
 
     Parameters
     ----------
-    demlist: list
+    demlist: list[str]
         a list of DEM names to be mosaiced
     outname: str
         the name of the final mosaic file
@@ -449,7 +504,7 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
     par = {'format': 'ENVI',
            'srcNodata': nodata, ' dstNodata': nodata,
            'options': ['-q']}
-    gdalwarp(demlist, outname, par)
+    gdalwarp(src=demlist, dst=outname, **par)
     
     if byteorder == 1:
         swap(outname, outname + '_swap')
@@ -555,9 +610,9 @@ def makeSRTM(scenes, srtmdir, outname):
     srtm_temp = srtm_vrt.replace('.vrt', '_tmp')
     srtm_final = srtm_vrt.replace('.vrt', '')
     
-    gdalbuildvrt(hgt_files, srtm_vrt, {'srcNodata': nodata, 'options': ['-overwrite']})
+    gdalbuildvrt(src=hgt_files, dst=srtm_vrt, srcNodata=nodata, options=['-overwrite'])
     
-    gdal_translate(srtm_vrt, srtm_temp, {'format': 'ENVI', 'noData': nodata})
+    gdal_translate(src=srtm_vrt, dst=srtm_temp, format='ENVI', noData=nodata)
     
     diff.srtm2dem(SRTM_DEM=srtm_temp,
                   DEM=srtm_final,

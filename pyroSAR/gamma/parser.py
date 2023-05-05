@@ -20,6 +20,7 @@ from spatialist.ancillary import finder, which, dissolve
 from pyroSAR.examine import ExamineGamma
 
 import logging
+
 log = logging.getLogger(__name__)
 
 
@@ -57,10 +58,11 @@ def parse_command(command, indent='    '):
         # for all other commands stderr is just appended to stdout
         out += err
     
+    warning = None
     pattern = r'([\w\.]+ (?:has been|was) re(?:named to|placed(?: that [ \*\n]*|) by)(?: the ISP program|) [\w\.]+)'
     match = re.search(pattern, out)
     if match:
-        raise DeprecationWarning('\n' + out)
+        warning = "raise DeprecationWarning('{}')".format(match.group())
     
     if re.search(r"Can't locate FILE/Path\.pm in @INC", out):
         raise RuntimeError('unable to parse Perl script')
@@ -90,6 +92,8 @@ def parse_command(command, indent='    '):
                                            ('SLC_par', '<SLC_MLI_par>'),
                                            ('SLC/MLI_par', 'SLC_MLI_par')],
                        'data2geotiff': [('nodata', 'no_data')],
+                       'def_mod': [('<def>', '<def_rate>'),
+                                   ('def         (output)', 'def_rate    (output)')],
                        'dis2hgt': [('m/cycle', 'm_cycle')],
                        'discc': [('min_corr', 'cmin'),
                                  ('max_corr', 'cmax')],
@@ -169,6 +173,8 @@ def parse_command(command, indent='    '):
                        'mosaic': [('<..>', '<...>'),
                                   ('DEM_parout', 'DEM_par_out')],
                        'multi_class_mapping': [('...', '<...>')],
+                       'multi_def': [('<def>', '<def_rate>'),
+                                     ('def             (output)', 'def_rate        (output)')],
                        'multi_look_geo': [('geo_SLC', 'SLC'),
                                           ('SLC/MLI', ('SLC_MLI'))],
                        'multi_look_MLI': [('MLI in_par', 'MLI_in_par')],
@@ -463,7 +469,10 @@ def parse_command(command, indent='    '):
     # create the process call string
     proc_str = "process(cmd, logpath=logpath, outdir=outdir{inlist}, shellscript=shellscript)" \
         .format(inlist=', inlist=inlist' if command_base in inlist else '')
-    fun_proc = '{0}\n{1}'.format(cmd_str, proc_str)
+    if warning is not None:
+        fun_proc = warning
+    else:
+        fun_proc = '{0}\n{1}'.format(cmd_str, proc_str)
     
     if command_base == 'lin_comb_cpx':
         fun_proc = fun_proc.replace('factors_r, factors_i', 'zip(factors_r, factors_i)')
@@ -671,7 +680,8 @@ def parse_module(bindir, outfile):
         with open(outfile, 'a') as out:
             out.write(outstring)
     if len(failed) > 0:
-        log.info('the following functions could not be parsed:\n{0}\n({1} total)'.format('\n'.join(failed), len(failed)))
+        log.info(
+            'the following functions could not be parsed:\n{0}\n({1} total)'.format('\n'.join(failed), len(failed)))
 
 
 def autoparse():

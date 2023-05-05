@@ -5,7 +5,8 @@ Projects using pyroSAR
 pyroSAR is/was used in these projects:
 
 - `BACI <http://www.baci-h2020.eu/index.php/Main/HomePage>`_
-- `CCI Biomass <http://cci.esa.int/biomass>`_
+- `CCI Biomass <https://climate.esa.int/en/projects/biomass/>`_
+- `COPA <https://sentinel.esa.int/web/sentinel/sentinel-1-ard-normalised-radar-backscatter-nrb-product>`_
 - `EMSAfrica <https://www.emsafrica.org/>`_
 - `GlobBiomass <https://globbiomass.org/>`_
 - `SALDi <https://www.saldi.uni-jena.de/>`_

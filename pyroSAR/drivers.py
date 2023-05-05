@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2021, the pyroSAR Developers.
+# Copyright (c) 2016-2022, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -40,13 +40,16 @@ import xml.etree.ElementTree as ET
 import zipfile as zf
 from datetime import datetime, timedelta
 from time import strptime, strftime
+from statistics import median
+from itertools import groupby
+from PIL import Image
 
 import progressbar as pb
 from osgeo import gdal, osr, ogr
 from osgeo.gdalconst import GA_ReadOnly
 
 from . import S1
-from .ERS import passdb_query
+from .ERS import passdb_query, get_angles_resolution
 from .xml_util import getNamespaces
 
 from spatialist import crsConvert, sqlite3, Vector, bbox
@@ -65,7 +68,6 @@ import socket
 import time
 import platform
 import subprocess
-
 import logging
 
 log = logging.getLogger(__name__)
@@ -85,7 +87,7 @@ def identify(scene):
 
     Returns
     -------
-    a subclass object of :class:`~pyroSAR.drivers.ID`
+    pyroSAR.drivers.ID
         a pyroSAR metadata handler
     
     Examples
@@ -118,7 +120,7 @@ def identify(scene):
     for handler in ID.__subclasses__():
         try:
             return handler(scene)
-        except (RuntimeError, KeyError):
+        except (RuntimeError, KeyError, AttributeError):
             pass
     raise RuntimeError('data format not supported')
 
@@ -130,15 +132,15 @@ def identify_many(scenes, pbar=False, sortkey=None):
 
     Parameters
     ----------
-    scenes: list
+    scenes: list[str or ID]
         the file names of the scenes to be identified
     pbar: bool
         adds a progressbar if True
-    sortkey: str
+    sortkey: str or None
         sort the handler object list by an attribute
     Returns
     -------
-    list
+    list[ID]
         a list of pyroSAR metadata handlers
     
     Examples
@@ -180,7 +182,7 @@ def filter_processed(scenelist, outdir, recursive=False):
 
     Parameters
     ----------
-    scenelist: list
+    scenelist: list[ID]
         a list of pyroSAR objects
     outdir: str
         the processing directory
@@ -189,7 +191,7 @@ def filter_processed(scenelist, outdir, recursive=False):
 
     Returns
     -------
-    list
+    list[ID]
         a list of those scenes, which have not been processed yet
     """
     return [x for x in scenelist if not x.is_processed(outdir, recursive)]
@@ -369,7 +371,7 @@ class ID(object):
              also match folders (or just files)?
         Returns
         -------
-        list
+        list[str]
             the matched file names
         
         See Also
@@ -378,8 +380,12 @@ class ID(object):
         """
         foldermode = 1 if include_folders else 0
         
-        files = finder(target=self.scene, matchlist=[pattern],
-                       foldermode=foldermode, regex=True)
+        try:
+            files = finder(target=self.scene, matchlist=[pattern],
+                           foldermode=foldermode, regex=True)
+        except RuntimeError:
+            # Return the scene if only a file and not zip
+            return self.scene
         
         if os.path.isdir(self.scene) \
                 and re.search(pattern, os.path.basename(self.scene)) \
@@ -398,6 +404,9 @@ class ID(object):
             the metadata attributes
         """
         files = self.findfiles(r'(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)')
+        # If only one file return the file in array
+        if isinstance(files, str):
+            files = [files]
         
         if len(files) == 1:
             prefix = {'zip': '/vsizip/', 'tar': '/vsitar/', None: ''}[self.compression]
@@ -413,6 +422,8 @@ class ID(object):
         extension = os.path.splitext(header)[1]
         if extension in ext_lookup:
             meta['sensor'] = ext_lookup[extension]
+            info = gdal.Info(prefix + header, options=gdal.InfoOptions(allMetadata=True, format='json'))
+            meta['extra'] = info
         
         img = gdal.Open(prefix + header, GA_ReadOnly)
         gdalmeta = img.GetMetadata()
@@ -429,7 +440,7 @@ class ID(object):
             except ValueError:
                 pass
             
-            if re.search('(?:LAT|LONG)', entry[0]):
+            if re.search('LAT|LONG', entry[0]):
                 entry[1] /= 1000000.
             meta[entry[0]] = entry[1]
         return meta
@@ -734,6 +745,100 @@ class ID(object):
         self.scene = directory
         main = os.path.join(self.scene, os.path.basename(self.file))
         self.file = main if os.path.isfile(main) else self.scene
+
+
+class BEAM_DIMAP(ID):
+    """
+    Handler class for BEAM-DIMAP data
+
+    Sensors:
+        * SNAP supported sensors
+    """
+    
+    def __init__(self, scene):
+        
+        if not scene.lower().endswith('.dim'):
+            raise RuntimeError('Scene format is not BEAM-DIMAP')
+        
+        self.root = None
+        self.scene = scene
+        self.meta = dict()
+        self.scanMetadata()
+        
+        super(BEAM_DIMAP, self).__init__(self.meta)
+    
+    def getCorners(self):
+        return self.meta['corners']
+    
+    def scanMetadata(self):
+        self.root = ET.parse(self.scene).getroot()
+        
+        def get_by_name(attr, section='Abstracted_Metadata'):
+            element = self.root.find('.//MDElem[@name="{}"]'.format(section))
+            out = element.find('.//MDATTR[@name="{}"]'.format(attr))
+            if out is None or out.text == '99999.0':
+                msg = 'cannot get attribute {} from section {}'
+                raise RuntimeError(msg.format(attr, section))
+            return out.text
+        
+        section = 'Abstracted_Metadata'
+        self.meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE', section=section)
+        self.meta['IPF_version'] = get_by_name('Processing_system_identifier', section=section)
+        self.meta['sensor'] = get_by_name('MISSION', section=section).replace('ENTINEL-', '')
+        self.meta['orbit'] = get_by_name('PASS', section=section)[0]
+        pols = [x.text for x in self.root.findall('.//MDATTR[@desc="Polarization"]')]
+        self.meta['polarizations'] = list(set([x for x in pols if '-' not in x]))
+        self.meta['spacing'] = (round(float(get_by_name('range_spacing', section=section)), 6),
+                                round(float(get_by_name('azimuth_spacing', section=section)), 6))
+        self.meta['samples'] = int(self.root.find('.//BAND_RASTER_WIDTH').text)
+        self.meta['lines'] = int(self.root.find('.//BAND_RASTER_HEIGHT').text)
+        self.meta['bands'] = int(self.root.find('.//NBANDS').text)
+        self.meta['orbitNumber_abs'] = int(get_by_name('ABS_ORBIT', section=section))
+        self.meta['orbitNumber_rel'] = int(get_by_name('REL_ORBIT', section=section))
+        self.meta['cycleNumber'] = int(get_by_name('orbit_cycle', section=section))
+        self.meta['frameNumber'] = int(get_by_name('data_take_id', section=section))
+        self.meta['product'] = self.root.find('.//PRODUCT_TYPE').text
+        
+        srgr = bool(int(get_by_name('srgr_flag', section=section)))
+        self.meta['image_geometry'] = 'GROUND_RANGE' if srgr else 'SLANT_RANGE'
+        
+        inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
+        incidence = [float(x.text) for x in inc_elements]
+        self.meta['incidence'] = median(incidence)
+        
+        # Metadata sections that need some parsing to match naming convention with SAFE format
+        start = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_START_TIME').text,
+                                  '%d-%b-%Y %H:%M:%S.%f')
+        self.meta['start'] = start.strftime('%Y%m%dT%H%M%S')
+        stop = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_STOP_TIME').text,
+                                 '%d-%b-%Y %H:%M:%S.%f')
+        self.meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
+        
+        if self.root.find('.//WKT') is not None:
+            self.meta['projection'] = self.root.find('.//WKT').text.lstrip()
+        else:
+            self.meta['projection'] = crsConvert(4326, 'wkt')
+        
+        longs = [
+            get_by_name('first_far_long', section=section),
+            get_by_name('first_near_long', section=section),
+            get_by_name('last_far_long', section=section),
+            get_by_name('last_near_long', section=section)
+        ]
+        lats = [
+            get_by_name('first_far_lat', section=section),
+            get_by_name('first_near_lat', section=section),
+            get_by_name('last_far_lat', section=section),
+            get_by_name('last_near_lat', section=section)
+        ]
+        # Convert to floats
+        longs = [float(lon) for lon in longs]
+        lats = [float(lat) for lat in lats]
+        self.meta['corners'] = {'xmin': min(longs), 'xmax': max(longs),
+                                'ymin': min(lats), 'ymax': max(lats)}
+    
+    def unpack(self, directory, overwrite=False, exist_ok=False):
+        raise RuntimeError('unpacking of BEAM-DIMAP products is not supported')
 
 
 class CEOS_ERS(ID):
@@ -1433,16 +1538,17 @@ class ESA(ID):
                        r'(?P<relative_orbit>[0-9]{5})_' \
                        r'(?P<absolute_orbit>[0-9]{5})_' \
                        r'(?P<counter>[0-9]{4,})\.' \
-                       r'(?P<satellite_ID>[EN][12])' \
-                       r'(?P<extension>(?:\.zip|\.tar\.gz|))$'
-        
+                       r'(?P<satellite_ID>[EN][12])'
         self.pattern_pid = r'(?P<sat_id>(?:SAR|ASA))_' \
                            r'(?P<image_mode>(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_)))_' \
                            r'(?P<processing_level>[012B][CP])'
         
         self.scene = os.path.realpath(scene)
         
-        self.examine()
+        if re.search('.[EN][12]$', self.scene):
+            self.file = self.scene
+        else:
+            self.examine()
         
         match = re.match(re.compile(self.pattern), os.path.basename(self.file))
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
@@ -1451,10 +1557,31 @@ class ESA(ID):
             raise RuntimeError('product level 0 not supported (yet)')
         
         self.meta = self.scanMetadata()
+        
+        corners = self.getCorners()
+        self.meta['coordinates'] = [tuple([corners['xmin'], corners['ymin']]),
+                                    tuple([corners['xmin'], corners['ymax']]),
+                                    tuple([corners['xmax'], corners['ymin']]),
+                                    tuple([corners['xmax'], corners['ymax']])]
         self.meta['acquisition_mode'] = match2.group('image_mode')
         self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
         self.meta['frameNumber'] = int(match.group('counter'))
         
+        if self.meta['acquisition_mode'] == 'IMS' \
+                or self.meta['acquisition_mode'] == 'APS' \
+                or self.meta['acquisition_mode'] == 'WSM':
+            self.meta['image_geometry'] = 'SLANT_RANGE'
+        elif self.meta['acquisition_mode'] == 'IMP' or self.meta['acquisition_mode'] == 'APP':
+            self.meta['image_geometry'] = 'GROUND_RANGE'
+        else:
+            raise RuntimeError("unsupported adquisition mode: {}".format(self.meta['acquisition_mode']))
+        
+        self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax'], \
+            self.meta['rangeResolution'], self.meta['azimuthResolution'], \
+            self.meta['neszNear'], self.meta['neszFar'] = \
+            get_angles_resolution(self.meta['sensor'], self.meta['acquisition_mode'],
+                                  self.meta['SPH_SWATH'], self.meta['start'])
+        self.meta['incidence'] = median([self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax']])
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
     
@@ -1574,7 +1701,7 @@ class SAFE(ID):
         lon = [x[0] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=20, url_option=1):
+    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=300, url_option=1):
         """
         download Orbit State Vector files for the scene
 
@@ -1583,7 +1710,7 @@ class SAFE(ID):
         osvdir: str
             the directory of OSV files; subdirectories POEORB and RESORB are created automatically;
             if no directory is defined, the standard SNAP auxdata location is used
-        osvType: str or list
+        osvType: str or list[str]
             the type of orbit file either 'POE', 'RES' or a list of both;
             if both are selected, the best matching file will be retrieved. I.e., POE if available and RES otherwise
         returnMatch: bool
@@ -1608,40 +1735,59 @@ class SAFE(ID):
         :class:`pyroSAR.S1.OSV`
         """
         date = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
-        
         # create a time span with one day before and one after the acquisition
         before = (date - timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
         after = (date + timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
         
-        if useLocal:
-            with S1.OSV(osvdir, timeout=timeout) as osv:
-                match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
-            if match is not None:
-                return match if returnMatch else None
-        
-        if osvType in ['POE', 'RES']:
-            with S1.OSV(osvdir, timeout=timeout) as osv:
-                files = osv.catch(sensor=self.sensor, osvtype=osvType, start=before, stop=after,
+        with S1.OSV(osvdir, timeout=timeout) as osv:
+            if useLocal:
+                match = osv.match(sensor=self.sensor, timestamp=self.start,
+                                  osvtype=osvType)
+                if match is not None:
+                    return match if returnMatch else None
+            
+            if osvType in ['POE', 'RES']:
+                files = osv.catch(sensor=self.sensor, osvtype=osvType,
+                                  start=before, stop=after,
                                   url_option=url_option)
-        
-        elif sorted(osvType) == ['POE', 'RES']:
-            with S1.OSV(osvdir, timeout=timeout) as osv:
-                files = osv.catch(sensor=self.sensor, osvtype='POE', start=before, stop=after,
+            elif sorted(osvType) == ['POE', 'RES']:
+                files = osv.catch(sensor=self.sensor, osvtype='POE',
+                                  start=before, stop=after,
                                   url_option=url_option)
                 if len(files) == 0:
-                    files = osv.catch(sensor=self.sensor, osvtype='RES', start=before, stop=after,
+                    files = osv.catch(sensor=self.sensor, osvtype='RES',
+                                      start=before, stop=after,
                                       url_option=url_option)
-        else:
-            raise TypeError("osvType must either be 'POE', 'RES' or a list of both")
-        
-        osv.retrieve(files)
-        
-        if returnMatch:
-            with S1.OSV(osvdir, timeout=timeout) as osv:
-                match = osv.match(sensor=self.sensor, timestamp=self.start, osvtype=osvType)
-            return match
+            else:
+                msg = "osvType must either be 'POE', 'RES' or a list of both"
+                raise TypeError(msg)
+            
+            osv.retrieve(files)
+            
+            if returnMatch:
+                match = osv.match(sensor=self.sensor, timestamp=self.start,
+                                  osvtype=osvType)
+                return match
     
-    def quicklook(self, outname, format='kmz'):
+    def quicklook(self, outname, format='kmz', na_transparent=True):
+        """
+        Write a quicklook file for the scene.
+        
+        Parameters
+        ----------
+        outname: str
+            the file to write
+        format: str
+            the quicklook format. Currently supported options:
+            
+             - kmz
+        na_transparent: bool
+            make NA values transparent?
+
+        Returns
+        -------
+
+        """
         if format != 'kmz':
             raise RuntimeError('currently only kmz is supported as format')
         kml_name = self.findfiles('map-overlay.kml')[0]
@@ -1652,7 +1798,90 @@ class SAFE(ID):
                 kml = kml.replace('Sentinel-1 Map Overlay', self.outname_base())
                 out.writestr('doc.kml', data=kml)
             with self.getFileObj(png_name) as png_in:
-                out.writestr('quick-look.png', data=png_in.getvalue())
+                if na_transparent:
+                    img = Image.open(png_in)
+                    img = img.convert('RGBA')
+                    datas = img.getdata()
+                    newData = []
+                    for item in datas:
+                        if item[0] == 0 and item[1] == 0 and item[2] == 0:
+                            newData.append((0, 0, 0, 0))
+                        else:
+                            newData.append(item)
+                    img.putdata(newData)
+                    buf = BytesIO()
+                    img.save(buf, format='png')
+                    out.writestr('quick-look.png', buf.getvalue())
+                else:
+                    out.writestr('quick-look.png', data=png_in.getvalue())
+    
+    def resolution(self):
+        """
+        Compute the mid-swath resolution of the Sentinel-1 product. For GRD products the resolution is expressed in
+        ground range and in slant range otherwise.
+        
+        References:
+            * https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/resolutions/level-1-single-look-complex
+            * https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/resolutions/level-1-ground-range-detected
+            * https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/document-library/-/asset_publisher/1dO7RF5fJMbd/content/sentinel-1-product-definition
+        
+        Returns
+        -------
+        tuple[float]
+            the resolution as (range, azimuth)
+        """
+        if 'resolution' in self.meta.keys():
+            return self.meta['resolution']
+        annotations = self.findfiles(self.pattern_ds)
+        key = lambda x: re.search('-[vh]{2}-', x).group()
+        groups = groupby(sorted(annotations, key=key), key=key)
+        annotations = [list(value) for key, value in groups][0]
+        proc_pars = []  # processing parameters per sub-swath
+        sp_az = []  # azimuth pixel spacings per sub-swath
+        ti_az = []  # azimuth time intervals per sub-swath
+        for ann in annotations:
+            with self.getFileObj(ann) as ann_xml:
+                tree = ET.fromstring(ann_xml.read())
+                par = tree.findall('.//swathProcParams')
+                proc_pars.extend(par)
+                for i in range(len(par)):
+                    sp_az.append(float(tree.find('.//azimuthPixelSpacing').text))
+                    ti_az.append(float(tree.find('.//azimuthTimeInterval').text))
+        c = 299792458.0  # speed of light
+        # see Sentinel-1 product definition for Hamming window coefficients
+        # and Impulse Response Width (IRW) broadening factors:
+        coefficients = [0.52, 0.6, 0.61, 0.62, 0.63, 0.65, 0.70, 0.72, 0.73, 0.75]
+        b_factors = [1.54, 1.32, 1.3, 1.28, 1.27, 1.24, 1.18, 1.16, 1.15, 1.13]
+        resolutions_rg = []
+        resolutions_az = []
+        for i, par in enumerate(proc_pars):
+            # computation of slant range resolution
+            rg_proc = par.find('rangeProcessing')
+            wrg = float(rg_proc.find('windowCoefficient').text)
+            brg = float(rg_proc.find('processingBandwidth').text)
+            lbrg = float(rg_proc.find('lookBandwidth').text)
+            lrg = brg / lbrg
+            kbrg = b_factors[coefficients.index(wrg)]
+            resolutions_rg.append(0.886 * c / (2 * brg) * kbrg * lrg)
+            
+            # computation of azimuth resolution; yet to be checked for correctness
+            az_proc = par.find('azimuthProcessing')
+            waz = float(az_proc.find('windowCoefficient').text)
+            baz = float(az_proc.find('processingBandwidth').text)
+            lbaz = float(az_proc.find('lookBandwidth').text)
+            laz = baz / lbaz
+            kbaz = b_factors[coefficients.index(waz)]
+            vsat = sp_az[i] / ti_az[i]
+            resolutions_az.append(0.886 * vsat / baz * kbaz * laz)
+        
+        resolution_rg = median(resolutions_rg)
+        resolution_az = median(resolutions_az)
+        
+        if self.meta['image_geometry'] == 'GROUND_RANGE':
+            resolution_rg /= math.sin(math.radians(self.meta['incidence']))
+        
+        self.meta['resolution'] = resolution_rg, resolution_az
+        return self.meta['resolution']
     
     def scanMetadata(self):
         with self.getFileObj(self.findfiles('manifest.safe')[0]) as input:
@@ -1661,7 +1890,11 @@ class SAFE(ID):
         tree = ET.fromstring(manifest)
         
         meta = dict()
-        meta['acquisition_mode'] = tree.find('.//s1sarl1:mode', namespaces).text
+        acqmode = tree.find('.//s1sarl1:mode', namespaces).text
+        if acqmode == 'SM':
+            meta['acquisition_mode'] = tree.find('.//s1sarl1:swath', namespaces).text
+        else:
+            meta['acquisition_mode'] = acqmode
         meta['acquisition_time'] = dict(
             [(x, tree.find('.//safe:{}Time'.format(x), namespaces).text) for x in ['start', 'stop']])
         meta['start'], meta['stop'] = (self.parse_date(meta['acquisition_time'][x]) for x in ['start', 'stop'])
@@ -1690,17 +1923,26 @@ class SAFE(ID):
         meta['totalSlices'] = int(tree.find('.//s1sarl1:totalSlices', namespaces).text)
         
         annotations = self.findfiles(self.pattern_ds)
-        with self.getFileObj(annotations[0]) as ann_xml:
-            ann_tree = ET.fromstring(ann_xml.read())
+        key = lambda x: re.search('-[vh]{2}-', x).group()
+        groups = groupby(sorted(annotations, key=key), key=key)
+        annotations = [list(value) for key, value in groups][0]
+        ann_trees = []
+        for ann in annotations:
+            with self.getFileObj(ann) as ann_xml:
+                ann_trees.append(ET.fromstring(ann_xml.read()))
         
-        meta['spacing'] = tuple([float(ann_tree.find('.//{}PixelSpacing'.format(dim)).text)
-                                 for dim in ['range', 'azimuth']])
-        meta['samples'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfSamples').text)
-        meta['lines'] = int(ann_tree.find('.//imageAnnotation/imageInformation/numberOfLines').text)
-        heading = float(ann_tree.find('.//platformHeading').text)
+        sp_rg = [float(x.find('.//rangePixelSpacing').text) for x in ann_trees]
+        sp_az = [float(x.find('.//azimuthPixelSpacing').text) for x in ann_trees]
+        meta['spacing'] = (median(sp_rg), median(sp_az))
+        samples = [x.find('.//imageAnnotation/imageInformation/numberOfSamples').text for x in ann_trees]
+        meta['samples'] = sum([int(x) for x in samples])
+        lines = [x.find('.//imageAnnotation/imageInformation/numberOfLines').text for x in ann_trees]
+        meta['lines'] = sum([int(x) for x in lines])
+        heading = median(float(x.find('.//platformHeading').text) for x in ann_trees)
         meta['heading'] = heading if heading > 0 else heading + 360
-        meta['incidence'] = float(ann_tree.find('.//incidenceAngleMidSwath').text)
-        meta['image_geometry'] = ann_tree.find('.//projection').text.replace(' ', '_').upper()
+        incidence = [float(x.find('.//incidenceAngleMidSwath').text) for x in ann_trees]
+        meta['incidence'] = median(incidence)
+        meta['image_geometry'] = ann_trees[0].find('.//projection').text.replace(' ', '_').upper()
         
         return meta
     
@@ -1746,25 +1988,26 @@ class TSX(ID):
     """
     
     def __init__(self, scene):
-        self.scene = os.path.realpath(scene)
-        
-        self.pattern = r'^(?P<sat>T[DS]X1)_SAR__' \
-                       r'(?P<prod>SSC|MGD|GEC|EEC)_' \
-                       r'(?P<var>____|SE__|RE__|MON1|MON2|BTX1|BRX2)_' \
-                       r'(?P<mode>SM|SL|HS|HS300|ST|SC)_' \
-                       r'(?P<pols>[SDTQ])_' \
-                       r'(?:SRA|DRA)_' \
-                       r'(?P<start>[0-9]{8}T[0-9]{6})_' \
-                       r'(?P<stop>[0-9]{8}T[0-9]{6})(?:\.xml|)$'
-        
-        self.pattern_ds = r'^IMAGE_(?P<pol>HH|HV|VH|VV)_(?:SRA|FWD|AFT)_(?P<beam>[^\.]+)\.(cos|tif)$'
-        self.examine(include_folders=False)
-        
-        if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
-            raise RuntimeError('folder does not match TSX scene naming convention')
-        
-        self.meta = self.scanMetadata()
-        self.meta['projection'] = crsConvert(4326, 'wkt')
+        if isinstance(scene, str):
+            self.scene = os.path.realpath(scene)
+            
+            self.pattern = r'^(?P<sat>T[DS]X1)_SAR__' \
+                           r'(?P<prod>SSC|MGD|GEC|EEC)_' \
+                           r'(?P<var>____|SE__|RE__|MON1|MON2|BTX1|BRX2)_' \
+                           r'(?P<mode>SM|SL|HS|HS300|ST|SC)_' \
+                           r'(?P<pols>[SDTQ])_' \
+                           r'(?:SRA|DRA)_' \
+                           r'(?P<start>[0-9]{8}T[0-9]{6})_' \
+                           r'(?P<stop>[0-9]{8}T[0-9]{6})(?:\.xml|)$'
+            
+            self.pattern_ds = r'^IMAGE_(?P<pol>HH|HV|VH|VV)_(?:SRA|FWD|AFT)_(?P<beam>[^\.]+)\.(cos|tif)$'
+            self.examine(include_folders=False)
+            
+            if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
+                raise RuntimeError('folder does not match TSX scene naming convention')
+            
+            self.meta = self.scanMetadata()
+            self.meta['projection'] = crsConvert(4326, 'wkt')
         
         super(TSX, self).__init__(self.meta)
     
@@ -1774,6 +2017,8 @@ class TSX(ID):
         pts = tree.findall('.//gridPoint')
         lat = [float(x.find('lat').text) for x in pts]
         lon = [float(x.find('lon').text) for x in pts]
+        # shift lon in case of west direction.
+        lon = [x - 360 if x > 180 else x for x in lon]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def scanMetadata(self):
@@ -1811,6 +2056,143 @@ class TSX(ID):
         header = [x for x in match if not x.endswith('xml') and 'iif' not in x][0].replace(self.scene, '').strip('/')
         outdir = os.path.join(directory, os.path.basename(header))
         self._unpack(outdir, offset=header, overwrite=overwrite, exist_ok=exist_ok)
+
+
+class TDM(TSX):
+    """
+    Handler class for TerraSAR-X and TanDEM-X experimental data
+    
+    Sensors:
+        * TDM1
+
+    References:
+        * TD-GS-PS-3028  TanDEM-X Experimental Product Description
+    
+    Acquisition modes:
+        * HS:    High Resolution SpotLight
+        * SL:    SpotLight
+        * SM:    StripMap
+    
+    Polarisation modes:
+        * Single (S): all acquisition modes
+        * Dual   (D): High Resolution SpotLight (HS), SpotLight (SL) and StripMap (SM)
+        * Twin   (T): StripMap (SM) (experimental)
+        * Quad   (Q): StripMap (SM) (experimental)
+    
+    Products:
+        * CoSSCs: (bi-static) SAR co-registered single look slant range complex products (CoSSCs)
+
+
+    Examples
+    ----------
+    Ingest all Tandem-X Bistatic scenes in a directory and its sub-directories into the database:
+
+    >>> from pyroSAR import Archive, identify
+    >>> from spatialist.ancillary import finder
+    >>> dbfile = '/.../scenelist.db'
+    >>> archive_tdm = '/.../TDM/'
+    >>> scenes_tdm = finder(archive_tdm, [r'^TDM1.*'], foldermode=2, regex=True, recursive=True)
+    >>> with Archive(dbfile) as archive:
+    >>>     archive.insert(scenes_tdm)
+    """
+    
+    def __init__(self, scene):
+        self.scene = os.path.realpath(scene)
+        
+        self.pattern = r'^(?P<sat>T[D]M1)_SAR__' \
+                       r'(?P<prod>COS)_' \
+                       r'(?P<var>____|MONO|BIST|ALT1|ALT2)_' \
+                       r'(?P<mode>SM|SL|HS)_' \
+                       r'(?P<pols>[SDQ])_' \
+                       r'(?:SRA|DRA)_' \
+                       r'(?P<start>[0-9]{8}T[0-9]{6})_' \
+                       r'(?P<stop>[0-9]{8}T[0-9]{6})(?:\.xml|)$'
+        
+        self.pattern_ds = r'^IMAGE_(?P<pol>HH|HV|VH|VV)_(?:SRA|FWD|AFT)_(?P<beam>[^\.]+)\.(cos|tif)$'
+        self.examine(include_folders=False)
+        
+        if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
+            raise RuntimeError('folder does not match TDM scene naming convention')
+        
+        self.meta = self.scanMetadata()
+        self.meta['projection'] = crsConvert(4326, 'wkt')
+        
+        super(TDM, self).__init__(self.meta)
+    
+    def getCorners(self):
+        geocs = self.getFileObj(self.file).getvalue()
+        tree = ET.fromstring(geocs)
+        pts = tree.findall('.//sceneCornerCoord')
+        lat = [float(x.find('lat').text) for x in pts]
+        lon = [float(x.find('lon').text) for x in pts]
+        # shift lon in case of west direction.
+        lon = [x - 360 if x > 180 else x for x in lon]
+        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+    
+    def scanMetadata(self):
+        annotation = self.getFileObj(self.file).getvalue()
+        namespaces = getNamespaces(annotation)
+        tree = ET.fromstring(annotation)
+        meta = dict()
+        meta['sensor'] = tree.find('.//commonAcquisitionInfo/missionID', namespaces).text.replace('-', '')
+        meta['product'] = tree.find('.//productInfo/productType', namespaces).text
+        meta['SAT1'] = tree.find('.//commonAcquisitionInfo/satelliteIDsat1', namespaces).text
+        meta['SAT2'] = tree.find('.//commonAcquisitionInfo/satelliteIDsat2', namespaces).text
+        meta['inSARmasterID'] = tree.find('.//commonAcquisitionInfo/inSARmasterID', namespaces).text
+        pattern = './/commonAcquisitionInfo/satelliteID{}'.format(meta['inSARmasterID'].lower())
+        meta['inSARmaster'] = tree.find(pattern, namespaces).text.replace('-', '')
+        
+        pattern = './/commonAcquisitionInfo/operationsInfo/acquisitionItemID'
+        meta['acquisitionItemID'] = int(tree.find(pattern, namespaces).text)
+        
+        meta['effectiveBaseline'] = float(tree.find('.//acquisitionGeometry/effectiveBaseline', namespaces).text)
+        meta['heightOfAmbiguity'] = float(tree.find('.//acquisitionGeometry/heightOfAmbiguity', namespaces).text)
+        meta['distanceActivePos'] = float(tree.find('.//acquisitionGeometry/distanceActivePos', namespaces).text)
+        meta['distanceTracks'] = float(tree.find('.//acquisitionGeometry/distanceTracks', namespaces).text)
+        
+        meta['cooperativeMode'] = tree.find('.//commonAcquisitionInfo/cooperativeMode', namespaces).text
+        
+        if meta['cooperativeMode'].lower() == "bistatic":
+            meta['bistatic'] = True
+        else:
+            meta['bistatic'] = False
+        
+        meta['orbit'] = tree.find('.//acquisitionGeometry/orbitDirection', namespaces).text[0]
+        
+        pattern = ".//productComponents/component[@componentClass='imageData']/file/location/name"
+        elements = tree.findall(pattern, )
+        self.primary_scene = os.path.join(self.scene, elements[0].text)
+        self.secondary_scene = os.path.join(self.scene, elements[1].text)
+        meta["SAT1"] = TSX(self.primary_scene).scanMetadata()
+        meta["SAT2"] = TSX(self.secondary_scene).scanMetadata()
+        
+        meta['start'] = self.parse_date(tree.find('.//orbitHeader/firstStateTime/firstStateTimeUTC', namespaces).text)
+        meta['stop'] = self.parse_date(tree.find('.//orbitHeader/lastStateTime/lastStateTimeUTC', namespaces).text)
+        meta['samples'] = int(tree.find('.//coregistration/coregRaster/samples', namespaces).text)
+        meta['lines'] = int(tree.find('.//coregistration/coregRaster/lines', namespaces).text)
+        rlks = float(tree.find('.//processingInfo/inSARProcessing/looks/range', namespaces).text)
+        azlks = float(tree.find('.//processingInfo/inSARProcessing/looks/azimuth', namespaces).text)
+        meta['looks'] = (rlks, azlks)
+        meta['incidence'] = float(tree.find('.//commonSceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
+        
+        meta['orbit'] = meta[meta['inSARmasterID']]['orbit']
+        meta['polarizations'] = meta[meta['inSARmasterID']]['polarizations']
+        
+        meta['orbitNumber_abs'] = meta[meta['inSARmasterID']]['orbitNumber_abs']
+        meta['orbitNumber_rel'] = meta[meta['inSARmasterID']]['orbitNumber_rel']
+        meta['cycleNumber'] = meta[meta['inSARmasterID']]['cycleNumber']
+        meta['frameNumber'] = meta[meta['inSARmasterID']]['frameNumber']
+        
+        meta['acquisition_mode'] = meta[meta['inSARmasterID']]['acquisition_mode']
+        meta['start'] = meta[meta['inSARmasterID']]['start']
+        meta['stop'] = meta[meta['inSARmasterID']]['stop']
+        meta['spacing'] = meta[meta['inSARmasterID']]['spacing']
+        meta['samples'] = meta[meta['inSARmasterID']]['samples']
+        meta['lines'] = meta[meta['inSARmasterID']]['lines']
+        meta['looks'] = meta[meta['inSARmasterID']]['looks']
+        meta['incidence'] = meta[meta['inSARmasterID']]['incidence']
+        
+        return meta
 
 
 class Archive(object):
@@ -1895,6 +2277,10 @@ class Archive(object):
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
+            dirname = os.path.dirname(dbfile)
+            w_ok = os.access(dirname, os.W_OK)
+            if not w_ok:
+                raise RuntimeError('cannot write to directory {}'.format(dirname))
             # catch if .db extension is missing
             root, ext = os.path.splitext(dbfile)
             if len(ext) == 0:
@@ -1903,6 +2289,8 @@ class Archive(object):
             self.driver = 'postgresql'
             if not self.__check_host(host, port):
                 sys.exit('Server not found!')
+
+        connect_args = {}
         
         # create dict, with which a URL to the db is created
         if self.driver == 'sqlite':
@@ -1916,11 +2304,18 @@ class Archive(object):
                              'host': host,
                              'port': port,
                              'database': dbfile}
+            connect_args = {
+                'keepalives': 1,
+                'keepalives_idle': 30,
+                'keepalives_interval': 10,
+                'keepalives_count': 5}
         
         # create engine, containing URL and driver
-        log.debug('starting DB engine for {}'.format(URL(**self.url_dict)))
-        self.url = URL(**self.url_dict)
-        self.engine = create_engine(self.url, echo=False)
+        log.debug('starting DB engine for {}'.format(URL.create(**self.url_dict)))
+        self.url = URL.create(**self.url_dict)
+        # https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS
+        self.engine = create_engine(url=self.url, echo=False,
+                                    connect_args=connect_args)
         
         # call to ____load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
@@ -1972,7 +2367,8 @@ class Archive(object):
                                  Column('vv', Integer),
                                  Column('hv', Integer),
                                  Column('vh', Integer),
-                                 Column('bbox', Geometry(geometry_type='POLYGON', management=True, srid=4326)))
+                                 Column('bbox', Geometry(geometry_type='POLYGON',
+                                                         management=True, srid=4326)))
         
         # add custom fields
         if self.custom_fields is not None:
@@ -2062,7 +2458,7 @@ class Archive(object):
                 except sqlite3.OperationalError:
                     continue
         elif platform.system() == 'Darwin':
-            for option in ['mod_spatialite.so']:  # , 'mod_spatialite.dylib']:
+            for option in ['mod_spatialite.so', 'mod_spatialite.7.dylib']:  # , 'mod_spatialite.dylib']:
                 try:
                     dbapi_conn.load_extension(option)
                 except sqlite3.OperationalError:
@@ -2134,7 +2530,7 @@ class Archive(object):
 
         Parameters
         ----------
-        scene_in: str or ID or list
+        scene_in: str or ID or list[str or ID]
             a SAR scene or a list of scenes to be inserted
         pbar: bool
             show a progress bar?
@@ -2336,12 +2732,12 @@ class Archive(object):
 
         Parameters
         ----------
-        scenelist: :obj:`list` of :obj:`str` or :obj:`pyroSAR.drivers.ID`
+        scenelist: list[str or ID]
             the scenes to be filtered
 
         Returns
         -------
-        list
+        list[ID]
             the file names of the scenes whose basename is not yet registered in the database
 
         """
@@ -2414,7 +2810,7 @@ class Archive(object):
 
         Returns
         -------
-        list
+        list[str]
             the directory names
         """
         # ORM query, get all directories
@@ -2453,7 +2849,7 @@ class Archive(object):
 
         Parameters
         ----------
-        scenelist: list
+        scenelist: list[str]
             the file locations
         directory: str
             a folder to which the files are moved
@@ -2508,8 +2904,8 @@ class Archive(object):
         if len(double) > 0:
             log.info('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
     
-    def select(self, vectorobject=None, mindate=None, maxdate=None, processdir=None,
-               recursive=False, polarizations=None, **args):
+    def select(self, vectorobject=None, mindate=None, maxdate=None, date_strict=True,
+               processdir=None, recursive=False, polarizations=None, **args):
         """
         select scenes from the database
 
@@ -2517,23 +2913,29 @@ class Archive(object):
         ----------
         vectorobject: :class:`~spatialist.vector.Vector`
             a geometry with which the scenes need to overlap
-        mindate: str or datetime.datetime, optional
+        mindate: str or datetime.datetime or None
             the minimum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
-        maxdate: str or datetime.datetime, optional
+        maxdate: str or datetime.datetime or None
             the maximum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
-        processdir: str, optional
+        date_strict: bool
+            treat dates as strict limits or also allow flexible limits to incorporate scenes
+            whose acquisition period overlaps with the defined limit?
+            
+            - strict: start >= mindate & stop <= maxdate
+            - not strict: stop >= mindate & start <= maxdate
+        processdir: str or None
             A directory to be scanned for already processed scenes;
             the selected scenes will be filtered to those that have not yet been processed. Default: None
         recursive: bool
             (only if `processdir` is not None) should also the subdirectories of the `processdir` be scanned?
-        polarizations: list
+        polarizations: list[str]
             a list of polarization strings, e.g. ['HH', 'VV']
         **args:
             any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
 
         Returns
         -------
-        list
+        list[str]
             the file names pointing to the selected scenes
 
         """
@@ -2549,14 +2951,17 @@ class Archive(object):
                 arg_format.append('''scene LIKE '%%{0}%%' '''.format(os.path.basename(args[key])))
             else:
                 if isinstance(args[key], (float, int, str)):
-                    arg_format.append('''{0}='{1}' '''.format(key, args[key]))
+                    arg_format.append("""{0}='{1}'""".format(key, args[key]))
                 elif isinstance(args[key], (tuple, list)):
-                    arg_format.append('''{0} IN ('{1}')'''.format(key, "', '".join(map(str, args[key]))))
+                    arg_format.append("""{0} IN ('{1}')""".format(key, "', '".join(map(str, args[key]))))
         if mindate:
             if isinstance(mindate, datetime):
                 mindate = mindate.strftime('%Y%m%dT%H%M%S')
             if re.search('[0-9]{8}T[0-9]{6}', mindate):
-                arg_format.append('start>=?')
+                if date_strict:
+                    arg_format.append('start>=?')
+                else:
+                    arg_format.append('stop>=?')
                 vals.append(mindate)
             else:
                 log.info('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
@@ -2564,7 +2969,10 @@ class Archive(object):
             if isinstance(maxdate, datetime):
                 maxdate = maxdate.strftime('%Y%m%dT%H%M%S')
             if re.search('[0-9]{8}T[0-9]{6}', maxdate):
-                arg_format.append('stop<=?')
+                if date_strict:
+                    arg_format.append('stop<=?')
+                else:
+                    arg_format.append('start<=?')
                 vals.append(maxdate)
             else:
                 log.info('WARNING: argument maxdate is ignored, must be in format YYYYmmddTHHMMSS')
@@ -2576,8 +2984,9 @@ class Archive(object):
         
         if vectorobject:
             if isinstance(vectorobject, Vector):
-                vectorobject.reproject(4326)
-                site_geom = vectorobject.convert2wkt(set3D=False)[0]
+                with vectorobject.clone() as vec:
+                    vec.reproject(4326)
+                    site_geom = vec.convert2wkt(set3D=False)[0]
                 # postgres has a different way to store geometries
                 if self.driver == 'postgresql':
                     arg_format.append("st_intersects(bbox, 'SRID=4326; {}')".format(
@@ -2592,7 +3001,7 @@ class Archive(object):
         query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
         # the query gets assembled stepwise here
         for val in vals:
-            query = query.replace('?', ''' '{0}' ''', 1).format(val)
+            query = query.replace('?', """'{0}'""", 1).format(val)
         log.debug(query)
         
         # core SQL execution

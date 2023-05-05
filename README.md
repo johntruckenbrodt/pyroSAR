@@ -5,8 +5,8 @@
 <h3 align="center">A Python Framework for Large-Scale SAR Satellite Data Processing</h3>
 
 <p align="center">
-  <a href='https://www.travis-ci.com/johntruckenbrodt/pyroSAR'>
-    <img src='https://www.travis-ci.com/johntruckenbrodt/pyroSAR.svg?branch=master' alt='Travis Status'></a>
+  <a href='https://app.travis-ci.com/johntruckenbrodt/pyroSAR'>
+    <img src='https://app.travis-ci.com/johntruckenbrodt/pyroSAR.svg?branch=master' alt='Travis Status'></a>
   <a href='https://ci.appveyor.com/project/johntruckenbrodt/pyrosar'>
     <img src='https://ci.appveyor.com/api/projects/status/won0layps8mkss9h/branch/master?svg=true' alt='AppVeyor Status' /></a>
   <a href='https://coveralls.io/github/johntruckenbrodt/pyroSAR?branch=master'>

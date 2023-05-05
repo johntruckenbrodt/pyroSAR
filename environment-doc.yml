@@ -1,0 +1,13 @@
+name: ps_doc
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - matplotlib
+  - numpy
+  - sphinx<7.0  # https://github.com/readthedocs/sphinx_rtd_theme/issues/1463
+  - sphinxcontrib-bibtex>=2.2
+  - pip
+  - cairosvg
+  - pip:
+      - sphinxcontrib-svg2pdfconverter

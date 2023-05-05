@@ -12,13 +12,13 @@
 # to the terms contained in the LICENSE.txt file.
 ###############################################################################
 import os
+import re
 import shutil
-import pyroSAR
-from ..ancillary import multilook_factors
-from ..auxdata import get_egm_lookup
-from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, windows_fileprefix
+from ..drivers import identify, identify_many, ID
+from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, \
+    windows_fileprefix, orb_parametrize, geo_parametrize, sub_parametrize, \
+    mli_parametrize, dem_parametrize
 
-from spatialist import crsConvert, Vector, Raster, bbox, intersect
 from spatialist.ancillary import dissolve
 
 import logging
@@ -26,7 +26,7 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=None, scaling='dB',
+def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefile=None, scaling='dB',
             geocoding_type='Range-Doppler', removeS1BorderNoise=True, removeS1BorderNoiseMethod='pyroSAR',
             removeS1ThermalNoise=True, offset=None, allow_RES_OSV=False, demName='SRTM 1Sec HGT',
             externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True, terrainFlattening=True,
@@ -34,7 +34,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             gpt_exceptions=None, gpt_args=None, returnWF=False, nodataValueAtSea=True,
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
-            speckleFilter=False, refarea='gamma0'):
+            speckleFilter=False, refarea='gamma0', clean_edges=False, clean_edges_npixels=1,
+            rlks=None, azlks=None, dem_oversampling_multiple=2):
     """
     general function for geocoding of SAR backscatter images with SNAP.
     
@@ -64,13 +65,13 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         mosaicked with SNAP's SliceAssembly operator.
     outdir: str
         The directory to write the final files to.
-    t_srs: int, str or osr.SpatialReference
+    t_srs: int or str or osgeo.osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
-    tr: int or float, optional
+    spacing: int or float, optional
         The target pixel spacing in meters. Default is 20
-    polarizations: list or str
+    polarizations: list[str] or str
         The polarizations to be processed; can be a string for a single polarization, e.g. 'VV', or a list of several
         polarizations, e.g. ['VV', 'VH']. With the special value 'all' (default) all available polarizations are
         processed.
@@ -169,6 +170,12 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - 'BICUBIC_INTERPOLATION'
     imgResamplingMethod: str
         The resampling method for geocoding the SAR image; the options are identical to demResamplingMethod.
+    alignToStandardGrid: bool
+        Align all processed images to a common grid?
+    standardGridOriginX: int or float
+        The x origin value for grid alignment
+    standardGridOriginY: int or float
+        The y origin value for grid alignment
     speckleFilter: str
         One of the following:
         
@@ -181,12 +188,21 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
          - 'Lee Sigma'
     refarea: str or list
         'sigma0', 'gamma0' or a list of both
-    alignToStandardGrid: bool
-        Align all processed images to a common grid?
-    standardGridOriginX: int or float
-        The x origin value for grid alignment
-    standardGridOriginY: int or float
-        The y origin value for grid alignment
+    clean_edges: bool
+        erode noisy image edges? See :func:`pyroSAR.snap.auxil.erode_edges`.
+        Does not apply to layover-shadow mask.
+    clean_edges_npixels: int
+        the number of pixels to erode.
+    rlks: int or None
+        the number of range looks. If not None, overrides the computation done by function
+        :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
+    azlks: int or None
+        the number of azimuth looks. Like `rlks`.
+    dem_oversampling_multiple: int
+        a factor to multiply the DEM oversampling factor computed by SNAP.
+        Used only for terrain flattening.
+        The SNAP default of 1 has been found to be insufficient with stripe
+        artifacts remaining in the image.
     
     Returns
     -------
@@ -217,14 +233,20 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     :class:`spatialist.vector.Vector`,
     :func:`spatialist.auxil.crsConvert()`
     """
-    if isinstance(infile, pyroSAR.ID):
+    if clean_edges:
+        try:
+            import scipy
+        except ImportError:
+            raise RuntimeError('please install scipy to clean edges')
+    
+    if isinstance(infile, ID):
         id = infile
         ids = [id]
     elif isinstance(infile, str):
-        id = pyroSAR.identify(infile)
+        id = identify(infile)
         ids = [id]
     elif isinstance(infile, list):
-        ids = pyroSAR.identify_many(infile, sortkey='start')
+        ids = identify_many(infile, sortkey='start')
         id = ids[0]
     else:
         raise TypeError("'infile' must be of type str, list or pyroSAR.ID")
@@ -272,7 +294,7 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             swaths = ['IW1', 'IW2', 'IW3']
         elif id.acquisition_mode == 'EW':
             swaths = ['EW1', 'EW2', 'EW3', 'EW4', 'EW5']
-        elif id.acquisition_mode == 'SM':
+        elif re.search('S[1-6]', id.acquisition_mode):
             pass
         else:
             raise RuntimeError('acquisition mode {} not supported'.format(id.acquisition_mode))
@@ -323,6 +345,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         else:
             for opt in refarea:
                 cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
+        if id.sensor in ['ERS1', 'ERS2', 'ASAR']:
+            cal.parameters['createBetaBand'] = True
         last = cal
         ############################################
         # ThermalNoiseRemoval node configuration
@@ -348,94 +372,24 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         last = deb
     ############################################
     # Apply-Orbit-File node configuration
-    orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
-                    'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
-    orbitType = orbit_lookup[formatName]
-    if formatName == 'ENVISAT' and id.acquisition_mode == 'WSM':
-        orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
-    
-    if formatName == 'SENTINEL-1':
-        match = id.getOSV(osvType='POE', returnMatch=True)
-        if match is None and allow_RES_OSV:
-            id.getOSV(osvType='RES')
-            orbitType = 'Sentinel Restituted (Auto Download)'
-    
-    orb = parse_node('Apply-Orbit-File')
+    orb = orb_parametrize(scene=id, formatName=formatName, allow_RES_OSV=allow_RES_OSV)
     workflow.insert_node(orb, before=last.id)
-    orb.parameters['orbitType'] = orbitType
-    orb.parameters['continueOnFail'] = False
     last = orb
     ############################################
     # Subset node configuration
-    #######################
-    # (optionally) add subset node and add bounding box coordinates of defined shapefile
-    if shapefile:
-        if isinstance(shapefile, dict):
-            ext = shapefile
-        else:
-            if isinstance(shapefile, Vector):
-                shp = shapefile.clone()
-            elif isinstance(shapefile, str):
-                shp = Vector(shapefile)
-            else:
-                raise TypeError("argument 'shapefile' must be either a dictionary, a Vector object or a string.")
-            # reproject the geometry to WGS 84 latlon
-            shp.reproject(4326)
-            ext = shp.extent
-            shp.close()
-        # add an extra buffer of 0.01 degrees
-        buffer = 0.01
-        ext['xmin'] -= buffer
-        ext['ymin'] -= buffer
-        ext['xmax'] += buffer
-        ext['ymax'] += buffer
-        with bbox(ext, 4326) as bounds:
-            inter = intersect(id.bbox(), bounds)
-            if not inter:
-                raise RuntimeError('no bounding box intersection between shapefile and scene')
-            inter.close()
-            wkt = bounds.convert2wkt()[0]
-        
-        subset = parse_node('Subset')
-        workflow.insert_node(subset, before=last.id)
-        subset.parameters['region'] = [0, 0, id.samples, id.lines]
-        subset.parameters['geoRegion'] = wkt
-        subset.parameters['copyMetadata'] = True
-        last = subset
-    #######################
-    # (optionally) configure Subset node for pixel offsets
-    if offset and not shapefile:
-        subset = parse_node('Subset')
-        workflow.insert_node(subset, before=last.id)
-        
-        # left, right, top and bottom offset in pixels
-        l, r, t, b = offset
-        
-        subset_values = [l, t, id.samples - l - r, id.lines - t - b]
-        subset.parameters['region'] = subset_values
-        subset.parameters['geoRegion'] = ''
-        last = subset
+    if shapefile is not None or offset is not None:
+        sub = sub_parametrize(scene=id, geometry=shapefile, offset=offset, buffer=0.01)
+        workflow.insert_node(sub, before=last.id)
+        last = sub
     ############################################
     # Multilook node configuration
-    try:
-        image_geometry = id.meta['image_geometry']
-        incidence = id.meta['incidence']
-    except KeyError:
-        raise RuntimeError('This function does not yet support sensor {}'.format(id.sensor))
-    
-    rlks, azlks = multilook_factors(sp_rg=id.spacing[0],
-                                    sp_az=id.spacing[1],
-                                    tr_rg=tr,
-                                    tr_az=tr,
-                                    geometry=image_geometry,
-                                    incidence=incidence)
-    
-    if azlks > 1 or rlks > 1:
-        workflow.insert_node(parse_node('Multilook'), before=last.id)
-        ml = workflow['Multilook']
-        ml.parameters['nAzLooks'] = azlks
-        ml.parameters['nRgLooks'] = rlks
-        ml.parameters['sourceBands'] = None
+    if id.sensor in ['ERS1', 'ERS2', 'ASAR']:
+        bands = bandnames['beta0'] + bandnames['sigma0']
+    else:
+        bands = None
+    ml = mli_parametrize(scene=id, spacing=spacing, rlks=rlks, azlks=azlks, sourceBands=bands)
+    if ml is not None:
+        workflow.insert_node(ml, before=last.id)
         last = ml
     ############################################
     # Terrain-Flattening node configuration
@@ -443,10 +397,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
     if terrainFlattening:
         tf = parse_node('Terrain-Flattening')
         workflow.insert_node(tf, before=last.id)
-        if id.sensor in ['ERS1', 'ERS2'] or (id.sensor == 'ASAR' and id.acquisition_mode != 'APP'):
-            tf.parameters['sourceBands'] = 'Beta0'
-        else:
-            tf.parameters['sourceBands'] = bandnames['beta0']
+        tf.parameters['sourceBands'] = bandnames['beta0']
+        tf.parameters['oversamplingMultiple'] = dem_oversampling_multiple
         if 'reGridMethod' in tf.parameters.keys():
             if externalDEMFile is None:
                 tf.parameters['reGridMethod'] = True
@@ -504,55 +456,16 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         last = sf
     ############################################
     # configuration of node sequence for specific geocoding approaches
-    if geocoding_type == 'Range-Doppler':
-        tc = parse_node('Terrain-Correction')
-        workflow.insert_node(tc, before=last.id)
-        tc.parameters['sourceBands'] = bands
-    elif geocoding_type == 'SAR simulation cross correlation':
-        sarsim = parse_node('SAR-Simulation')
-        workflow.insert_node(sarsim, before=last.id)
-        sarsim.parameters['sourceBands'] = bands
-        
-        workflow.insert_node(parse_node('Cross-Correlation'), before='SAR-Simulation')
-        
-        tc = parse_node('SARSim-Terrain-Correction')
-        workflow.insert_node(tc, before='Cross-Correlation')
+    tc = geo_parametrize(spacing=spacing, t_srs=t_srs,
+                         tc_method=geocoding_type, sourceBands=bands,
+                         alignToStandardGrid=alignToStandardGrid,
+                         standardGridOriginX=standardGridOriginX,
+                         standardGridOriginY=standardGridOriginY)
+    workflow.insert_node(tc, before=last.id)
+    if isinstance(tc, list):
+        last = tc = tc[-1]
     else:
-        raise RuntimeError('geocode_type not recognized')
-    
-    tc.parameters['alignToStandardGrid'] = alignToStandardGrid
-    tc.parameters['standardGridOriginX'] = standardGridOriginX
-    tc.parameters['standardGridOriginY'] = standardGridOriginY
-    last = tc
-    #######################
-    # specify spatial resolution and coordinate reference system of the output dataset
-    tc.parameters['pixelSpacingInMeter'] = tr
-    
-    try:
-        # try to convert the CRS into EPSG code (for readability in the workflow XML)
-        t_srs = crsConvert(t_srs, 'epsg')
-    except TypeError:
-        raise RuntimeError("format of parameter 't_srs' not recognized")
-    except RuntimeError:
-        # this error can occur when the CRS does not have a corresponding EPSG code
-        # in this case the original CRS representation is written to the workflow
-        pass
-    
-    # the EPSG code 4326 is not supported by SNAP and thus the WKT string has to be defined;
-    # in all other cases defining EPSG:{code} will do
-    if t_srs == 4326:
-        t_srs = 'GEOGCS["WGS84(DD)",' \
-                'DATUM["WGS84",' \
-                'SPHEROID["WGS84", 6378137.0, 298.257223563]],' \
-                'PRIMEM["Greenwich", 0.0],' \
-                'UNIT["degree", 0.017453292519943295],' \
-                'AXIS["Geodetic longitude", EAST],' \
-                'AXIS["Geodetic latitude", NORTH]]'
-    
-    if isinstance(t_srs, int):
-        t_srs = 'EPSG:{}'.format(t_srs)
-    
-    tc.parameters['mapProjection'] = t_srs
+        last = tc
     ############################################
     # (optionally) add node for conversion from linear to db scaling
     if scaling not in ['dB', 'db', 'linear']:
@@ -589,7 +502,10 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             if item in tc_options:
                 key = 'save{}{}'.format(item[0].upper(), item[1:])
                 tc.parameters[key] = True
-                tc_selection.append(item)
+                if item == 'DEM':
+                    tc_selection.append('elevation')
+                else:
+                    tc_selection.append(item)
             elif item == 'scatteringArea':
                 if not terrainFlattening:
                     raise RuntimeError('scatteringArea can only be created if terrain flattening is performed')
@@ -673,51 +589,29 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             tc_select.parameters['sourceBands'] = tc_selection
     ############################################
     ############################################
-    # select DEM type
-    dempar = {'externalDEMFile': externalDEMFile,
-              'externalDEMApplyEGM': externalDEMApplyEGM}
-    if externalDEMFile is not None:
-        if os.path.isfile(externalDEMFile):
-            if externalDEMNoDataValue is None:
-                with Raster(externalDEMFile) as dem:
-                    dempar['externalDEMNoDataValue'] = dem.nodata
-                if dempar['externalDEMNoDataValue'] is None:
-                    raise RuntimeError('Cannot read NoData value from DEM file. '
-                                       'Please specify externalDEMNoDataValue')
-            else:
-                dempar['externalDEMNoDataValue'] = externalDEMNoDataValue
-            dempar['reGridMethod'] = False
-        else:
-            raise RuntimeError('specified externalDEMFile does not exist')
-        dempar['demName'] = 'External DEM'
-    else:
-        dempar['demName'] = demName
-        dempar['externalDEMFile'] = None
-        dempar['externalDEMNoDataValue'] = 0
-    
-    for key, value in dempar.items():
-        workflow.set_par(key, value)
-    
-    # download the EGM lookup table if necessary
-    if dempar['externalDEMApplyEGM']:
-        get_egm_lookup(geoid='EGM96', software='SNAP')
+    # DEM handling
+    dem_parametrize(workflow=workflow, demName=demName,
+                    externalDEMFile=externalDEMFile,
+                    externalDEMNoDataValue=externalDEMNoDataValue,
+                    externalDEMApplyEGM=externalDEMApplyEGM)
     ############################################
     ############################################
     # configure the resampling methods
     
-    options = ['NEAREST_NEIGHBOUR',
-               'BILINEAR_INTERPOLATION',
-               'CUBIC_CONVOLUTION',
-               'BISINC_5_POINT_INTERPOLATION',
-               'BISINC_11_POINT_INTERPOLATION',
-               'BISINC_21_POINT_INTERPOLATION',
-               'BICUBIC_INTERPOLATION']
+    options_img = ['NEAREST_NEIGHBOUR',
+                   'BILINEAR_INTERPOLATION',
+                   'CUBIC_CONVOLUTION',
+                   'BISINC_5_POINT_INTERPOLATION',
+                   'BISINC_11_POINT_INTERPOLATION',
+                   'BISINC_21_POINT_INTERPOLATION',
+                   'BICUBIC_INTERPOLATION']
+    options_dem = options_img + ['DELAUNAY_INTERPOLATION']
     
     message = '{0} must be one of the following:\n- {1}'
-    if demResamplingMethod not in options:
-        raise ValueError(message.format('demResamplingMethod', '\n- '.join(options)))
-    if imgResamplingMethod not in options:
-        raise ValueError(message.format('imgResamplingMethod', '\n- '.join(options)))
+    if demResamplingMethod not in options_dem:
+        raise ValueError(message.format('demResamplingMethod', '\n- '.join(options_dem)))
+    if imgResamplingMethod not in options_img:
+        raise ValueError(message.format('imgResamplingMethod', '\n- '.join(options_img)))
     
     workflow.set_par('demResamplingMethod', demResamplingMethod)
     workflow.set_par('imgResamplingMethod', imgResamplingMethod,
@@ -742,7 +636,8 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
             gpt(wf_name, groups=groups, cleanup=cleanup, tmpdir=outname,
                 gpt_exceptions=gpt_exceptions, gpt_args=gpt_args,
                 removeS1BorderNoiseMethod=removeS1BorderNoiseMethod)
-            writer(xmlfile=wf_name, outdir=outdir, basename_extensions=basename_extensions)
+            writer(xmlfile=wf_name, outdir=outdir, basename_extensions=basename_extensions,
+                   clean_edges=clean_edges, clean_edges_npixels=clean_edges_npixels)
         except Exception as e:
             log.info(str(e))
             with open(wf_name.replace('_proc.xml', '_error.log'), 'w') as logfile:
@@ -754,3 +649,174 @@ def geocode(infile, outdir, t_srs=4326, tr=20, polarizations='all', shapefile=No
         log.info('done')
     if returnWF:
         return wf_name
+
+
+def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0', tmpdir=None, test=False, cleanup=True,
+                demName='SRTM 1Sec HGT', externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
+                alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0, groupsize=1,
+                clean_edges=False, clean_edges_npixels=1, rlks=None, azlks=None):
+    """
+    Generate Sentinel-1 noise power images for each polarization, calibrated to either beta, sigma or gamma nought.
+    The written GeoTIFF files will carry the suffix NEBZ, NESZ or NEGZ respectively.
+
+    Parameters
+    ----------
+    infile: str
+        The SAR scene(s) to be processed
+    outdir: str
+        The directory to write the final files to.
+    polarizations: list[str]
+        The polarizations to be processed, e.g. ['VV', 'VH'].
+    spacing: int or float
+        The target pixel spacing in meters.
+    t_srs: int or str or osgeo.osr.SpatialReference
+        A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
+    refarea: str
+        either 'beta0', 'gamma0' or 'sigma0'.
+    tmpdir: str
+        Path of custom temporary directory, useful to separate output folder and temp folder. If `None`, the `outdir`
+        location will be used. The created subdirectory will be deleted after processing if ``cleanup=True``.
+    test: bool
+        If set to True the workflow xml file is only written and not executed. Default is False.
+    cleanup: bool
+        Should all files written to the temporary directory during function execution be deleted after processing?
+        Default is True.
+    demName: str
+        The name of the auto-download DEM. Default is 'SRTM 1Sec HGT'. Is ignored when `externalDEMFile` is not None.
+        Supported options:
+        
+         - ACE2_5Min
+         - ACE30
+         - ASTER 1sec GDEM
+         - CDEM
+         - Copernicus 30m Global DEM
+         - Copernicus 90m Global DEM
+         - GETASSE30
+         - SRTM 1Sec Grid
+         - SRTM 1Sec HGT
+         - SRTM 3Sec
+    externalDEMFile: str or None, optional
+        The absolute path to an external DEM file. Default is None. Overrides `demName`.
+    externalDEMNoDataValue: int, float or None, optional
+        The no data value of the external DEM. If not specified (default) the function will try to read it from the
+        specified external DEM.
+    externalDEMApplyEGM: bool, optional
+        Apply Earth Gravitational Model to external DEM? Default is True.
+    alignToStandardGrid: bool
+        Align all processed images to a common grid?
+    standardGridOriginX: int or float
+        The x origin value for grid alignment
+    standardGridOriginY: int or float
+        The y origin value for grid alignment
+    groupsize: int
+        The number of workers executed together in one gpt call.
+    clean_edges: bool
+        erode noisy image edges? See :func:`pyroSAR.snap.auxil.erode_edges`.
+        Does not apply to layover-shadow mask.
+    clean_edges_npixels: int
+        the number of pixels to erode.
+    rlks: int or None
+        the number of range looks. If not None, overrides the computation done by function
+        :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
+    azlks: int or None
+        the number of azimuth looks. Like `rlks`.
+    
+    Returns
+    -------
+
+    """
+    if clean_edges:
+        try:
+            import scipy
+        except ImportError:
+            raise RuntimeError('please install scipy to clean edges')
+    
+    if refarea not in ['beta0', 'sigma0', 'gamma0']:
+        raise ValueError('refarea not supported')
+    
+    id = identify(infile)
+    
+    if id.sensor not in ['S1A', 'S1B']:
+        raise RuntimeError('this function is for Sentinel-1 only')
+    
+    os.makedirs(outdir, exist_ok=True)
+    if tmpdir is not None:
+        os.makedirs(tmpdir, exist_ok=True)
+    
+    wf = parse_recipe('blank')
+    
+    read = parse_node('Read')
+    read.parameters['file'] = infile
+    wf.insert_node(read)
+    ############################################
+    orb = orb_parametrize(scene=id, workflow=wf, before=read.id,
+                          formatName='SENTINEL-1', allow_RES_OSV=True)
+    ############################################
+    cal = parse_node('Calibration')
+    wf.insert_node(cal, before=orb.id)
+    cal.parameters['selectedPolarisations'] = polarizations
+    cal.parameters['outputBetaBand'] = False
+    cal.parameters['outputSigmaBand'] = False
+    cal.parameters['outputGammaBand'] = False
+    
+    inband = refarea.capitalize()
+    cal.parameters['output{}Band'.format(inband[:-1])] = True
+    
+    tnr = parse_node('ThermalNoiseRemoval')
+    wf.insert_node(tnr, before=cal.id)
+    if 'outputNoise' in tnr.parameters.keys():
+        tnr.parameters['outputNoise'] = True
+    last = tnr
+    ############################################
+    if id.product == 'SLC' and id.acquisition_mode in ['EW', 'IW']:
+        deb = parse_node('TOPSAR-Deburst')
+        wf.insert_node(deb, before=tnr.id)
+        last = deb
+    ############################################
+    select = parse_node('BandSelect')
+    wf.insert_node(select, before=last.id)
+    measure = 'NE{}Z'.format(refarea.capitalize()[0])
+    bands = ['{}_{}'.format(measure, pol) for pol in polarizations]
+    select.parameters['sourceBands'] = bands
+    last = select
+    ############################################
+    # Multilook node configuration
+    ml = mli_parametrize(scene=id, spacing=spacing, rlks=rlks, azlks=azlks)
+    if ml is not None:
+        wf.insert_node(ml, before=last.id)
+        last = ml
+    ############################################
+    tc = geo_parametrize(spacing=spacing, t_srs=t_srs, demName=demName,
+                         externalDEMFile=externalDEMFile,
+                         externalDEMNoDataValue=externalDEMNoDataValue,
+                         externalDEMApplyEGM=externalDEMApplyEGM,
+                         alignToStandardGrid=alignToStandardGrid,
+                         standardGridOriginX=standardGridOriginX,
+                         standardGridOriginY=standardGridOriginY)
+    wf.insert_node(tc, before=last.id)
+    last = tc
+    ############################################
+    
+    suffix = wf.suffix()
+    if tmpdir is None:
+        tmpdir = outdir
+    basename = id.outname_base() + '_' + suffix
+    procdir = os.path.join(tmpdir, basename)
+    outname = os.path.join(procdir, basename + '.dim')
+    
+    write = parse_node('Write')
+    wf.insert_node(write, before=last.id)
+    write.parameters['file'] = outname
+    write.parameters['formatName'] = 'BEAM-DIMAP'
+    
+    wf_name = os.path.join(outdir, basename + '_proc.xml')
+    wf.write(wf_name)
+    
+    if not test:
+        groups = groupbyWorkers(wf_name, groupsize)
+        gpt(xmlfile=wf_name, tmpdir=procdir, groups=groups, cleanup=cleanup)
+        writer(xmlfile=wf_name, outdir=outdir, clean_edges=clean_edges,
+               clean_edges_npixels=clean_edges_npixels)
+        if cleanup:
+            if os.path.isdir(procdir):
+                shutil.rmtree(procdir, onerror=windows_fileprefix)

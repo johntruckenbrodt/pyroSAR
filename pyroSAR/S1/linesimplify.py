@@ -74,7 +74,7 @@ def createPoly(xn, yn, xmax, ymax, plot=False):
 
     Returns
     -------
-    ogr.Geometry
+    osgeo.ogr.Geometry
     """
     ring = ogr.Geometry(ogr.wkbLinearRing)
     ring.AddPoint_2D(0, 0)

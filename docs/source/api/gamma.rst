@@ -1,68 +1,8 @@
-Drivers
-=======
+GAMMA
+=====
 
-.. automodule:: pyroSAR.drivers
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-    .. rubric:: classes
-
-    .. autosummary::
-        :nosignatures:
-
-        ID
-        CEOS_PSR
-        CEOS_ERS
-        EORC_PSR
-        ESA
-        SAFE
-        TSX
-        Archive
-
-    .. rubric:: functions
-
-    .. autosummary::
-        :nosignatures:
-
-        identify
-        identify_many
-        filter_processed
-        getFileObj
-        parse_date
-        drop_archive
-
-SNAP Processing
-===============
-
-.. automodule:: pyroSAR.snap.util
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Workflow Parsing and Execution
-------------------------------
-
-.. automodule:: pyroSAR.snap.auxil
-    :members: gpt, execute, parse_node, parse_recipe, split, groupbyWorkers, Workflow, Node, Par
-    :undoc-members:
-    :show-inheritance:
-
-    .. autosummary::
-        :nosignatures:
-
-        gpt
-        execute
-        parse_node
-        parse_recipe
-        split
-        groupbyWorkers
-        Workflow
-        Node
-        Par
-
-GAMMA Processing
-================
+Processing
+----------
 
 .. automodule:: pyroSAR.gamma
     :members: geocode, convert2gamma, ISPPar, process, ovs, S1_deburst, correctOSV, multilook, par2hdr, UTM, calibrate
@@ -88,7 +28,7 @@ DEM tools
 ---------
 
 .. automodule:: pyroSAR.gamma.dem
-    :members: dem_autocreate, dempar, fill, hgt, hgt_collect, makeSRTM, mosaic, swap
+    :members: dem_autocreate, dem_import, dempar, fill, hgt, hgt_collect, makeSRTM, mosaic, swap
     :undoc-members:
     :show-inheritance:
 
@@ -96,6 +36,7 @@ DEM tools
         :nosignatures:
 
         dem_autocreate
+        dem_import
         dempar
         fill
         hgt
@@ -167,59 +108,3 @@ Within each function, the command name and all parameters are passed to function
     :members:
     :undoc-members:
     :show-inheritance:
-
-Sentinel-1 Tools
-================
-
-.. automodule:: pyroSAR.S1
-    :members: OSV, removeGRDBorderNoise
-    :undoc-members:
-    :show-inheritance:
-
-    .. autosummary::
-        :nosignatures:
-
-        OSV
-        removeGRDBorderNoise
-
-Auxiliary Data Tools
-====================
-
-.. automodule:: pyroSAR.auxdata
-    :members: dem_autoload, dem_create, get_egm_lookup
-    :undoc-members:
-    :show-inheritance:
-
-    .. autosummary::
-        :nosignatures:
-
-        dem_autoload
-        dem_create
-        get_egm_lookup
-
-Datacube Tools
-==============
-.. automodule:: pyroSAR.datacube_util
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Ancillary Functions
-===================
-
-.. automodule:: pyroSAR.ancillary
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-    .. autosummary::
-        :nosignatures:
-
-        find_datasets
-        getargs
-        groupby
-        groupbyTime
-        hasarg
-        multilook_factors
-        parse_datasetname
-        seconds

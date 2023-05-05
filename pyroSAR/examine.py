@@ -1,6 +1,6 @@
 ###############################################################################
 # Examination of SAR processing software
-# Copyright (c) 2019-2021, the pyroSAR Developers.
+# Copyright (c) 2019-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -16,12 +16,13 @@ import os
 import shutil
 import platform
 import re
+import subprocess
 import warnings
 import subprocess as sp
 import pkg_resources
 
 from pyroSAR._dev_config import ConfigHandler
-from spatialist.ancillary import finder
+from spatialist.ancillary import finder, run
 
 import logging
 
@@ -123,6 +124,9 @@ class ExamineSnap(object):
         else:
             executables = [self.path] + options
         
+        if len(executables) == 0:
+            log.debug("could not detect any potential 'snap' executables")
+        
         # for each possible SNAP executable, check whether additional files and directories exist relative to it
         # to confirm whether it actually is a ESA SNAP installation or something else like e.g. the Ubuntu App Manager
         for path in executables:
@@ -133,11 +137,13 @@ class ExamineSnap(object):
             # check whether a directory etc exists relative to the SNAP executable
             etc = os.path.join(os.path.dirname(os.path.dirname(path)), 'etc')
             if not os.path.isdir(etc):
+                log.debug("could not find the 'etc' directory")
                 continue
             
             # check the content of the etc directory
             auxdata = os.listdir(etc)
             if 'snap.auxdata.properties' not in auxdata:
+                log.debug("could not find the 'snap.auxdata.properties' file")
                 continue
             else:
                 auxdata_properties = os.path.join(etc, 'snap.auxdata.properties')
@@ -145,6 +151,7 @@ class ExamineSnap(object):
             # identify the gpt executable
             gpt_candidates = finder(os.path.dirname(path), ['gpt', 'gpt.exe'])
             if len(gpt_candidates) == 0:
+                log.debug("could not find the 'gpt' executable")
                 continue
             else:
                 gpt = gpt_candidates[0]
@@ -337,7 +344,11 @@ class ExamineSnap(object):
         else:
             raise RuntimeError('operating system not supported')
         
-        fname = os.path.join(path, 'var', 'log', 'messages.log')
+        conda_env_path = os.environ.get('CONDA_PREFIX')
+        if conda_env_path is not None and conda_env_path in self.gpt:
+            fname = os.path.join(conda_env_path, 'snap', '.snap', 'system', 'var', 'log', 'messages.log')
+        else:
+            fname = os.path.join(path, 'var', 'log', 'messages.log')
         
         if not os.path.isfile(fname):
             try:
@@ -346,6 +357,9 @@ class ExamineSnap(object):
                 sp.check_call([self.path, '--nosplash', '--dummytest', '--console', 'suppress'])
             except sp.CalledProcessError:
                 pass
+        
+        if not os.path.isfile(fname):
+            raise RuntimeError("cannot find 'messages.log' to read SNAP module versions from.")
         
         with open(fname, 'r') as m:
             content = m.read()
@@ -382,12 +396,12 @@ class ExamineGamma(object):
         self.version = re.search('GAMMA_SOFTWARE-(?P<version>[0-9]{8})',
                                  getattr(self, 'home')).group('version')
         
-        if not hasattr(self, 'gdal_config'):
-            gdal_config = '/usr/bin/gdal-config'
-            if not os.path.isfile(gdal_config):
-                warnings.warn('could not find GDAL system installation under {}\n'
-                              'please modify the pyroSAR configuration: {}'.format(gdal_config, self.fname))
+        try:
+            out, err = run(['which', 'gdal-config'], void=False)
+            gdal_config = out.strip('\n')
             self.gdal_config = gdal_config
+        except subprocess.CalledProcessError:
+            raise RuntimeError('could not find command gdal-config.')
         self.__update_config()
     
     def __read_config(self):
@@ -401,7 +415,7 @@ class ExamineGamma(object):
         if 'GAMMA' not in config.sections:
             config.add_section('GAMMA')
         
-        for attr in ['home', 'version', 'gdal_config']:
+        for attr in ['home', 'version']:
             self.__update_config_attr(attr, getattr(self, attr), 'GAMMA')
     
     @staticmethod

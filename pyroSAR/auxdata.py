@@ -1,7 +1,7 @@
 ###############################################################################
 # tools for handling auxiliary data in software pyroSAR
 
-# Copyright (c) 2019-2021, the pyroSAR Developers.
+# Copyright (c) 2019-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -11,36 +11,41 @@
 # copied, modified, propagated, or distributed except according
 # to the terms contained in the LICENSE.txt file.
 ###############################################################################
-import io
 import os
 import re
 import csv
 import ssl
+import numpy
+import fnmatch
 import ftplib
 import requests
 import zipfile as zf
-from urllib.request import urlopen
-from urllib.error import HTTPError
+from lxml import etree
+from math import ceil, floor
 from urllib.parse import urlparse
-
+from lxml import etree as ET
+from packaging import version
 from pyroSAR.examine import ExamineSnap
-from spatialist import Raster
+from spatialist.raster import Raster, Dtype
+from spatialist.vector import bbox
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
+from osgeo import gdal
 
 import logging
 
 log = logging.getLogger(__name__)
 
 
-def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
+def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
+                 password=None, product='dem', crop=True):
     """
-    obtain all relevant DEM tiles for selected geometries
+    obtain all relevant DEM tiles for selected geometries and optionally mosaic them in a VRT.
 
     Parameters
     ----------
-    geometries: list
+    geometries: list[spatialist.vector.Vector]
         a list of :class:`spatialist.vector.Vector` geometries to obtain DEM data for;
         CRS must be WGS84 LatLon (EPSG 4326)
     demType: str
@@ -95,7 +100,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
 
         - 'SRTM 3Sec'
 
-          * url: https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF
+          * url: https://download.esa.int/step/auxdata/dem/SRTM90/tiff
           * height reference: EGM96
         
         - 'TDX90m'
@@ -109,7 +114,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
     buffer: int, float, None
         a buffer in degrees to add around the individual geometries
     username: str or None
-        (optional) the user name for services requiring registration
+        (optional) the username for services requiring registration
     password: str or None
         (optional) the password for the registration account
     product: str
@@ -135,6 +140,10 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         - 'Copernicus 30m Global DEM'
         
           * 'dem': the actual Digital Elevation Model
+          * 'edm': Editing Mask
+          * 'flm': Filling Mask
+          * 'hem': Height Error Mask
+          * 'wbm': Water Body Mask
         
         - 'Copernicus 30m Global DEM II'
         
@@ -147,6 +156,10 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
         - 'Copernicus 90m Global DEM'
         
           * 'dem': the actual Digital Elevation Model
+          * 'edm': Editing Mask
+          * 'flm': Filling Mask
+          * 'hem': Height Error Mask
+          * 'wbm': Water Body Mask
         
         - 'Copernicus 90m Global DEM II'
         
@@ -179,9 +192,12 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
           * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
           * 'wam': Water Indication Mask
     
+    crop: bool
+        crop to the provided geometries (or return the full extent of the DEM tiles)?
+    
     Returns
     -------
-    list or None
+    list[str] or None
         the names of the obtained files or None if a VRT file was defined
     
     Examples
@@ -219,18 +235,27 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None, pass
                    geoid_convert=True, geoid='EGM96')
     """
     with DEMHandler(geometries) as handler:
-        return handler.load(demType=demType,
+        return handler.load(dem_type=demType,
                             username=username,
                             password=password,
                             vrt=vrt,
                             buffer=buffer,
-                            product=product)
+                            product=product,
+                            crop=crop)
 
 
-def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
-               geoid_convert=False, geoid='EGM96', outputBounds=None):
+def dem_create(src, dst, t_srs=None, tr=None, threads=None,
+               geoid_convert=False, geoid='EGM96', nodata=None,
+               resampleAlg='bilinear', dtype=None, pbar=False, **kwargs):
     """
-    create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid
+    Create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid.
+    This is basically a convenience wrapper around :func:`osgeo.gdal.Warp` via :func:`spatialist.auxil.gdalwarp`.
+    The following argument defaults deviate from those of :func:`osgeo.gdal.WarpOptions`:
+    
+    - `format` is set to 'GTiff'
+    - `resampleAlg` is set to 'bilinear'
+    - `targetAlignedPixels` is set to 'True'
+    
     
     Parameters
     ----------
@@ -238,15 +263,21 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
         the input dataset, e.g. a VRT from function :func:`dem_autoload`
     dst: str
         the output dataset
-    t_srs: None, int, str or osr.SpatialReference
+    t_srs: None, int, str or osgeo.osr.SpatialReference
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default (None): use the crs of ``src``.
-    tr: None or tuple
+    tr: None or tuple[int or float]
         the target resolution as (xres, yres)
-    resampling_method: str
-        the gdalwarp resampling method; See `here <https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r>`_
-        for options.
+    threads: int, str or None
+        the number of threads to use. Possible values:
+        
+         - Default `None`: use the value of `GDAL_NUM_THREADS` without modification. If `GDAL_NUM_THREADS` is None,
+           multi-threading is still turned on and two threads are used, one for I/O and one for computation.
+         - integer value: temporarily modify `GDAL_NUM_THREADS` and reset it once done.
+           If 1, multithreading is turned off.
+         - `ALL_CPUS`: special string to use all cores/CPUs of the computer; will also temporarily
+           modify `GDAL_NUM_THREADS`.
     geoid_convert: bool
         convert geoid heights?
     geoid: str
@@ -254,8 +285,29 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
         
          - 'EGM96'
          - 'EGM2008'
-    outputBounds: list or None
-        output bounds as [xmin, ymin, xmax, ymax] in target SRS
+    nodata: int or float or str or None
+        the no data value of the source and destination files.
+        Can be used if no source nodata value can be read or to override it.
+        A special string 'None' can be used to skip reading the value from the source file.
+    resampleAlg: str
+        the resampling algorithm tu be used. See here for options:
+        https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r
+    dtype: str or None
+        override the data type of the written file; Default None: use same type as source data.
+        Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
+        See :class:`spatialist.raster.Dtype`.
+    pbar: bool
+        add a progressbar?
+    **kwargs
+        additional keyword arguments to be passed to :func:`spatialist.auxil.gdalwarp`.
+        See :func:`osgeo.gdal.WarpOptions` for options. The following arguments cannot
+        be set as they are controlled internally:
+        
+        - `xRes`, `yRes`: controlled via argument `tr`
+        - `srcSRS`, `dstSRS`: controlled via the CRS of `src` and arguments `t_srs`, `geoid`, `geoid_convert`
+        - `srcNodata`, `dstNodata`: controlled via argument `nodata`
+        - `outputType`: controlled via argument `dtype`
+        - `multithread` controlled via argument `threads`
     
     Returns
     -------
@@ -263,7 +315,10 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
     """
     
     with Raster(src) as ras:
-        nodata = ras.nodata
+        if nodata is None:
+            nodata = ras.nodata
+        if tr is None:
+            tr = ras.res
         epsg_in = ras.epsg
     
     if t_srs is None:
@@ -271,19 +326,42 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
     else:
         epsg_out = crsConvert(t_srs, 'epsg')
     
-    gdalwarp_args = {'format': 'GTiff', 'multithread': True,
+    threads_system = gdal.GetConfigOption('GDAL_NUM_THREADS')
+    if threads is None:
+        threads = threads_system
+        try:
+            threads = int(threads)
+        except (ValueError, TypeError):
+            pass
+    if isinstance(threads, str):
+        if threads != 'ALL_CPUS':
+            raise ValueError("unsupported value for 'threads': '{}'".format(threads))
+        else:
+            multithread = True
+            gdal.SetConfigOption('GDAL_NUM_THREADS', threads)
+    elif isinstance(threads, int):
+        if threads == 1:
+            multithread = False
+        elif threads > 1:
+            multithread = True
+            gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
+        else:
+            raise ValueError("if 'threads' is of type int, it must be >= 1")
+    elif threads is None:
+        multithread = True
+    else:
+        raise TypeError("'threads' must be of type int, str or None. Is: {}".format(type(threads)))
+    
+    gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
                      'dstSRS': 'EPSG:{}'.format(epsg_out),
-                     'resampleAlg': resampling_method}
+                     'resampleAlg': resampleAlg,
+                     'xRes': tr[0], 'yRes': tr[1],
+                     'targetAlignedPixels': True}
     
-    if outputBounds is not None:
-        gdalwarp_args['outputBounds'] = outputBounds
-    
-    if tr is not None:
-        gdalwarp_args.update({'xRes': tr[0],
-                              'yRes': tr[1],
-                              'targetAlignedPixels': True})
+    if dtype is not None:
+        gdalwarp_args['outputType'] = Dtype(dtype).gdalint
     
     if geoid_convert:
         geoid_epsg = {'EGM96': 5773,
@@ -291,45 +369,51 @@ def dem_create(src, dst, t_srs=None, tr=None, resampling_method='bilinear',
         if geoid in geoid_epsg.keys():
             epsg = geoid_epsg[geoid]
             gdalwarp_args['srcSRS'] += '+{}'.format(epsg)
-            # the following line is a temporary workaround until compound EPSG codes can
-            # directly be used for vertical CRS transformations
-            # see https://github.com/OSGeo/gdal/pull/4639
-            gdalwarp_args['srcSRS'] = crsConvert(gdalwarp_args['srcSRS'], 'proj4') \
-                .replace('us_nga_egm96_15.tif', 'egm96_15.gtx') \
-                .replace('us_nga_egm08_25.tif', 'egm08_25.gtx')
+            # the following line is a workaround for older GDAL versions that did not
+            # support compound EPSG codes. See https://github.com/OSGeo/gdal/pull/4639.
+            if version.parse(gdal.__version__) < version.parse('3.4.0'):
+                gdalwarp_args['srcSRS'] = crsConvert(gdalwarp_args['srcSRS'], 'proj4')
         else:
             raise RuntimeError('geoid model not yet supported')
         try:
             get_egm_lookup(geoid=geoid, software='PROJ')
         except OSError as e:
             errstr = str(e)
-            addition = '\nplease refer to the following site for instructions ' \
-                       'on how to use EGM GTX files (requires PROJ >= 5.0.0):\n' \
-                       'https://gis.stackexchange.com/questions/258532/' \
-                       'noaa-vdatum-gdal-variable-paths-for-linux-ubuntu'
-            raise RuntimeError(errstr + addition)
+            raise RuntimeError(errstr)
+    
+    locked = ['xRes', 'yRes', 'srcSRS', 'dstSRS', 'srcNodata',
+              'dstNodata', 'outputType', 'multithread']
+    for key, val in kwargs.items():
+        if key not in locked:
+            gdalwarp_args[key] = val
+        else:
+            msg = "argument '{}' cannot be set via kwargs as it is set internally."
+            raise RuntimeError(msg.format(key))
     
     try:
         message = 'creating mosaic'
         crs = gdalwarp_args['dstSRS']
         if crs != 'EPSG:4326':
             message += ' and reprojecting to {}'.format(crs)
+        message += ': {}'.format(dst)
         log.info(message)
-        gdalwarp(src, dst, gdalwarp_args)
+        gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
     except Exception:
         if os.path.isfile(dst):
             os.remove(dst)
         raise
+    finally:
+        gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
 
 
 class DEMHandler:
     """
-    | An interface to obtain DEM data for selected geometries
-    | The files are downloaded into the ESA SNAP auxdata directory structure
+    | An interface to obtain DEM data for selected geometries.
+    | The files are downloaded into the ESA SNAP auxiliary data directory structure.
     
     Parameters
     ----------
-    geometries: list of spatialist.vector.Vector
+    geometries: list[spatialist.vector.Vector]
         a list of geometries
     """
     
@@ -363,24 +447,103 @@ class DEMHandler:
             ext['ymax'] += buffer
         return ext
     
+    def __find_first(self, dem_type, product):
+        outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
+        vsi = self.config[dem_type]['vsi']
+        pattern = fnmatch.translate(self.config[dem_type]['pattern'][product])
+        for root, dirs, files in os.walk(outdir):
+            for file in files:
+                if vsi is None:
+                    if re.search(pattern, file):
+                        return os.path.join(root, file)
+                else:
+                    if re.search(r'\.(?:zip|tar(\.gz)?)$', file):
+                        fname = os.path.join(root, file)
+                        content = finder(fname, [pattern], regex=True)
+                        if len(content) > 0:
+                            if dem_type == 'GETASSE30':
+                                getasse30_hdr(fname)
+                            return vsi + content[0]
+    
     @staticmethod
-    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, nodata=None):
-        if vsi is not None:
+    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, src_nodata=None,
+                   dst_nodata=None, hide_nodata=False, resolution=None,
+                   tap=True, dst_datatype=None):
+        """
+        Build a VRT mosaic from DEM tiles. The VRT is cropped to the specified `extent` but the pixel grid
+        of the source files is preserved and no resampling/shifting is applied.
+        
+        Parameters
+        ----------
+        tiles: list[str]
+            a list of DEM files or compressed archives containing DEM files
+        vrtfile: str
+            the output VRT filename
+        pattern: str
+            the search pattern for finding DEM tiles in compressed archives
+        vsi: str or None
+            the GDAL VSI directive to prepend the DEM tile name, e.g. /vsizip/ or /vsitar/
+        extent: dict
+            a dictionary with keys `xmin`, `ymin`, `xmax` and `ymax`
+        src_nodata: int or float or None
+            the nodata value of the source DEM tiles; default None: read the value from the first item in `tiles`
+        dst_nodata: int or float or None
+            the nodata value of the output VRT file.
+            Default None: do not define a nodata value and use `src_nodata` instead.
+        hide_nodata: bool
+            hide the nodata value of the output VRT file?
+        resolution: tuple[int or float] or None
+            the spatial resolution (X, Y) of the source DEM tiles.
+            Default None: read the value from the first item in `tiles`
+        tap: bool
+            align target pixels?
+        dst_datatype: int or str or None
+            the VRT data type as supported by :class:`spatialist.raster.Dtype`.
+            Default None: use the same data type as the source files.
+        
+        Returns
+        -------
+
+        """
+        if vsi is not None and not tiles[0].endswith('.tif'):
             locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in tiles])]
         else:
             locals = tiles
         with Raster(locals[0]) as ras:
-            if nodata is None:
-                nodata = ras.nodata
-            xres, yres = ras.res
-        opts = {'outputBounds': (extent['xmin'], extent['ymin'],
-                                 extent['xmax'], extent['ymax']),
-                'srcNodata': nodata, 'targetAlignedPixels': True,
-                'xRes': xres, 'yRes': yres}
-        gdalbuildvrt(src=locals, dst=vrtfile,
-                     options=opts)
+            if src_nodata is None:
+                src_nodata = ras.nodata
+            if resolution is None:
+                xres, yres = ras.res
+            else:
+                xres, yres = resolution
+        opts = {'srcNodata': src_nodata,
+                'targetAlignedPixels': tap,
+                'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata
+                }
+        if dst_nodata is not None:
+            opts['VRTNodata'] = dst_nodata
+        opts['outputBounds'] = (extent['xmin'], extent['ymin'],
+                                extent['xmax'], extent['ymax'])
+        gdalbuildvrt(src=locals, dst=vrtfile, **opts)
+        if dst_datatype is not None:
+            datatype = Dtype(dst_datatype).gdalstr
+            tree = etree.parse(source=vrtfile)
+            band = tree.find(path='VRTRasterBand')
+            band.attrib['dataType'] = datatype
+            tree.write(file=vrtfile, pretty_print=True,
+                       xml_declaration=False, encoding='utf-8')
     
     def __commonextent(self, buffer=None):
+        """
+        
+        Parameters
+        ----------
+        buffer: int or float or None
+
+        Returns
+        -------
+        dict
+        """
         ext_new = {}
         for geo in self.geometries:
             if len(ext_new.keys()) == 0:
@@ -396,135 +559,373 @@ class DEMHandler:
         return ext_new
     
     @staticmethod
+    def __create_dummy_dem():
+        """
+        Create a dummy file which spans the whole globe and is 1x1 pixels large to be as small as possible.
+        This file is used to create dummy DEMs over ocean.
+        
+        Returns
+        -------
+        str
+            the name of the file in the user's home directory: ~/.pyrosar/auxdata/dummy_dem.tif
+        """
+        path = os.path.join(os.path.expanduser('~'), '.pyrosar', 'auxdata')
+        os.makedirs(name=path, exist_ok=True)
+        filename = os.path.join(path, 'dummy_dem.tif')
+        if not os.path.isfile(filename):
+            driver = gdal.GetDriverByName('GTiff')
+            dataset = driver.Create(filename, 1, 1, 1, 1)
+            geo = [-180, 360, 0, 90, 0, -180]
+            dataset.SetGeoTransform(geo)
+            dataset.SetProjection('EPSG:4326')
+            band = dataset.GetRasterBand(1)
+            band.SetNoDataValue(255)
+            mat = numpy.zeros(shape=(1, 1))
+            band.WriteArray(mat, 0, 0)
+            band.FlushCache()
+            del mat
+            band = None
+            dataset = None
+            driver = None
+        return filename
+    
+    @staticmethod
+    def intrange(extent, step):
+        """
+        generate sequence of integer coordinates marking the tie points of the individual DEM tiles
+        
+        Parameters
+        ----------
+        extent: dict
+            a dictionary with keys `xmin`, `xmax`, `ymin` and `ymax` with coordinates in EPSG:4326.
+        step: int
+            the sequence steps
+
+        Returns
+        -------
+        tuple[range]
+            the integer sequences as (latitude, longitude)
+        """
+        lat = range(floor(float(extent['ymin']) / step) * step,
+                    ceil(float(extent['ymax']) / step) * step,
+                    step)
+        lon = range(floor(float(extent['xmin']) / step) * step,
+                    ceil(float(extent['xmax']) / step) * step,
+                    step)
+        return lat, lon
+    
+    def __get_resolution(self, dem_type, y):
+        """
+        
+        Parameters
+        ----------
+        dem_type: str
+            the DEM type
+        y: int or float
+            the latitude for which to get the resolution
+
+        Returns
+        -------
+        tuple
+            (xres, yres)
+        """
+        for key, val in self.config[dem_type]['resolution'].items():
+            ymin, ymax = [int(y) for y in key.split('-')]
+            if ymin <= y <= ymax:
+                return val
+    
+    @staticmethod
     def __retrieve(url, filenames, outdir):
+        # check that base URL is reachable
+        url_parse = urlparse(url)
+        url_base = url_parse.scheme + '://' + url_parse.netloc
+        r = requests.get(url_base)
+        r.raise_for_status()
+        r.close()
+        
         files = list(set(filenames))
         os.makedirs(outdir, exist_ok=True)
         locals = []
-        for file in files:
-            infile = '{}/{}'.format(url, file)
-            outfile = os.path.join(outdir, os.path.basename(file))
-            if not os.path.isfile(outfile):
-                try:
-                    input = urlopen(infile)
-                    log.info('{} <<-- {}'.format(outfile, infile))
-                except HTTPError:
+        n = len(files)
+        for i, file in enumerate(files):
+            remote = '{}/{}'.format(url, file)
+            local = os.path.join(outdir, os.path.basename(file))
+            if not os.path.isfile(local):
+                r = requests.get(remote)
+                # a tile might not exist over ocean
+                if r.status_code == 404:
+                    r.close()
                     continue
-                with open(outfile, 'wb') as output:
-                    output.write(input.read())
-                input.close()
-            if os.path.isfile(outfile):
-                locals.append(outfile)
+                msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local, r=remote))
+                r.raise_for_status()
+                with open(local, 'wb') as output:
+                    output.write(r.content)
+                r.close()
+            else:
+                msg = '[{i: >{w}}/{n}] found local file: {l}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local))
+            if os.path.isfile(local):
+                locals.append(local)
         return sorted(locals)
     
-    def __retrieve_ftp(self, url, filenames, outdir, username, password, port=0):
+    @staticmethod
+    def __retrieve_ftp(url, filenames, outdir, username, password, port=0, offline=False):
         files = list(set(filenames))
         os.makedirs(outdir, exist_ok=True)
         
         parsed = urlparse(url)
-        
-        if parsed.scheme == 'ftpes':
-            ftp = ftplib.FTP_TLS(parsed.netloc)
-            try:
-                ftp.login(username, password)  # login anonymously before securing control channel
-            except ftplib.error_perm as e:
-                raise RuntimeError(str(e))
-            ftp.prot_p()  # switch to secure data connection.. IMPORTANT! Otherwise, only the user and password is encrypted and not all the file data.
-        elif parsed.scheme == 'ftps':
-            ftp = ImplicitFTP_TLS()
-            ftp.connect(host=parsed.netloc, port=port)
-            ftp.login(username, password)
+        timeout = 100
+        if not offline:
+            if parsed.scheme == 'ftpes':
+                ftp = ftplib.FTP_TLS(host=parsed.netloc, timeout=timeout)
+                try:
+                    ftp.login(username, password)  # login anonymously before securing control channel
+                except ftplib.error_perm as e:
+                    raise RuntimeError(str(e))
+                ftp.prot_p()  # switch to secure data connection.. IMPORTANT! Otherwise, only the user and password is encrypted and not all the file data.
+            elif parsed.scheme == 'ftps':
+                ftp = ImplicitFTP_TLS()
+                ftp.connect(host=parsed.netloc, timeout=timeout, port=port)
+                ftp.login(username, password)
+            else:
+                ftp = ftplib.FTP(host=parsed.netloc, timeout=timeout)
+                ftp.login()
+            if parsed.path != '':
+                ftp.cwd(parsed.path)
         else:
-            ftp = ftplib.FTP(parsed.netloc, timeout=100)
-            ftp.login()
-        if parsed.path != '':
-            ftp.cwd(parsed.path)
+            ftp = None
         locals = []
-        for product_remote in files:
+        n = len(files)
+        for i, product_remote in enumerate(files):
             product_local = os.path.join(outdir, os.path.basename(product_remote))
-            if not os.path.isfile(product_local):
+            if not os.path.isfile(product_local) and not offline:
                 try:
                     targetlist = ftp.nlst(product_remote)
                 except ftplib.error_temp:
                     continue
                 address = '{}://{}/{}{}'.format(parsed.scheme, parsed.netloc,
-                                                parsed.path + '/' if parsed.path != '' else '', product_remote)
-                log.info('{} <<-- {}'.format(product_local, address))
+                                                parsed.path + '/' if parsed.path != '' else '',
+                                                product_remote)
+                msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=product_local, r=address))
                 with open(product_local, 'wb') as myfile:
                     ftp.retrbinary('RETR {}'.format(product_remote), myfile.write)
+            else:
+                msg = '[{i: >{w}}/{n}] found local file: {l}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=product_local))
             if os.path.isfile(product_local):
                 locals.append(product_local)
-        ftp.close()
+        if ftp is not None:
+            ftp.close()
         return sorted(locals)
     
     @property
     def config(self):
         return {
             'AW3D30': {'url': 'ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804',
-                       'nodata': -9999,
+                       'nodata': {'dem': -9999,
+                                  'msk': 3,
+                                  'stk': 0},
+                       'resolution': {'0-90': (1 / 3600, 1 / 3600)},
+                       'tilesize': 1,
+                       'area_or_point': 'area',
                        'vsi': '/vsitar/',
                        'pattern': {'dem': '*DSM.tif',
                                    'msk': '*MSK.tif',
-                                   'stk': '*STK.tif'}
+                                   'stk': '*STK.tif'},
+                       'datatype': {'dem': 'Int16',
+                                    'msk': 'Byte',
+                                    'stk': 'Byte'},
+                       'authentication': False
                        },
             'Copernicus 10m EEA DEM': {'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1',
-                                       'nodata': -32767.0,
+                                       'nodata': {'dem': -32767.0,
+                                                  'edm': 8,
+                                                  'flm': 1,
+                                                  'hem': -32767.0,
+                                                  'wbm': 1},
+                                       'resolution': {'0-50': (1 / 9000, 1 / 9000),
+                                                      '50-60': (1.5 / 9000, 1 / 9000),
+                                                      '60-70': (2 / 9000, 1 / 9000),
+                                                      '70-80': (3 / 9000, 1 / 9000),
+                                                      '80-85': (5 / 9000, 1 / 9000),
+                                                      '85-90': (10 / 9000, 1 / 9000)},
+                                       'tilesize': 1,
+                                       'area_or_point': 'point',
                                        'vsi': '/vsitar/',
                                        'port': 990,
                                        'pattern': {'dem': '*DEM.tif',
                                                    'edm': '*EDM.tif',
                                                    'flm': '*FLM.tif',
                                                    'hem': '*HEM.tif',
-                                                   'wbm': '*WBM.tif'}
+                                                   'wbm': '*WBM.tif'},
+                                       'datatype': {'dem': 'Float32',
+                                                    'edm': 'Byte',
+                                                    'flm': 'Byte',
+                                                    'hem': 'Float32',
+                                                    'wbm': 'Byte'},
+                                       'authentication': True
                                        },
             'Copernicus 30m Global DEM': {'url': 'https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com',
-                                          'nodata': None,
+                                          'nodata': {'dem': -32767.0,
+                                                     'edm': 8,
+                                                     'flm': 1,
+                                                     'hem': -32767.0,
+                                                     'wbm': 1},
+                                          'resolution': {'0-50': (1 / 3600, 1 / 3600),
+                                                         '50-60': (1.5 / 3600, 1 / 3600),
+                                                         '60-70': (2 / 3600, 1 / 3600),
+                                                         '70-80': (3 / 3600, 1 / 3600),
+                                                         '80-85': (5 / 3600, 1 / 3600),
+                                                         '85-90': (10 / 3600, 1 / 3600)},
+                                          'tilesize': 1,
+                                          'area_or_point': 'point',
                                           'vsi': None,
-                                          'pattern': {'dem': '*DSM*'}
+                                          'pattern': {'dem': '*DEM.tif',
+                                                      'edm': '*EDM.tif',
+                                                      'flm': '*FLM.tif',
+                                                      'hem': '*HEM.tif',
+                                                      'wbm': '*WBM.tif'},
+                                          'datatype': {'dem': 'Float32',
+                                                       'edm': 'Byte',
+                                                       'flm': 'Byte',
+                                                       'hem': 'Float32',
+                                                       'wbm': 'Byte'},
+                                          'authentication': False
                                           },
             'Copernicus 30m Global DEM II': {
                 'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-30-DGED/2021_1',
-                'nodata': -32767.0,
+                'nodata': {'dem': -32767.0,
+                           'edm': 8,
+                           'flm': 1,
+                           'hem': -32767.0,
+                           'wbm': 1},
+                'resolution': {'0-50': (1 / 3600, 1 / 3600),
+                               '50-60': (1.5 / 3600, 1 / 3600),
+                               '60-70': (2 / 3600, 1 / 3600),
+                               '70-80': (3 / 3600, 1 / 3600),
+                               '80-85': (5 / 3600, 1 / 3600),
+                               '85-90': (10 / 3600, 1 / 3600)},
+                'tilesize': 1,
+                'area_or_point': 'point',
                 'vsi': '/vsitar/',
                 'port': 990,
                 'pattern': {'dem': '*DEM.tif',
                             'edm': '*EDM.tif',
                             'flm': '*FLM.tif',
                             'hem': '*HEM.tif',
-                            'wbm': '*WBM.tif'}
+                            'wbm': '*WBM.tif'},
+                'datatype': {'dem': 'Float32',
+                             'edm': 'Byte',
+                             'flm': 'Byte',
+                             'hem': 'Float32',
+                             'wbm': 'Byte'},
+                'authentication': True
             },
             'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com',
-                                          'nodata': None,
+                                          'nodata': {'dem': -32767.0,
+                                                     'edm': 8,
+                                                     'flm': 1,
+                                                     'hem': -32767.0,
+                                                     'wbm': 1},
+                                          'resolution': {'0-50': (1 / 1200, 1 / 1200),
+                                                         '50-60': (1.5 / 1200, 1 / 1200),
+                                                         '60-70': (2 / 1200, 1 / 1200),
+                                                         '70-80': (3 / 1200, 1 / 1200),
+                                                         '80-85': (5 / 1200, 1 / 1200),
+                                                         '85-90': (10 / 1200, 1 / 1200)},
+                                          'tilesize': 1,
+                                          'area_or_point': 'point',
                                           'vsi': None,
-                                          'pattern': {'dem': '*DSM*'}
+                                          'pattern': {'dem': '*DEM.tif',
+                                                      'edm': '*EDM.tif',
+                                                      'flm': '*FLM.tif',
+                                                      'hem': '*HEM.tif',
+                                                      'wbm': '*WBM.tif'},
+                                          'datatype': {'dem': 'Float32',
+                                                       'edm': 'Byte',
+                                                       'flm': 'Byte',
+                                                       'hem': 'Float32',
+                                                       'wbm': 'Byte'},
+                                          'authentication': False
                                           },
             'Copernicus 90m Global DEM II': {
                 'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-90-DGED/2021_1',
-                'nodata': -32767.0,
+                'nodata': {'dem': -32767.0,
+                           'edm': 8,
+                           'flm': 1,
+                           'hem': -32767.0,
+                           'wbm': 1},
+                'resolution': {'0-50': (1 / 1200, 1 / 1200),
+                               '50-60': (1.5 / 1200, 1 / 1200),
+                               '60-70': (2 / 1200, 1 / 1200),
+                               '70-80': (3 / 1200, 1 / 1200),
+                               '80-85': (5 / 1200, 1 / 1200),
+                               '85-90': (10 / 1200, 1 / 1200)},
+                'tilesize': 1,
+                'area_or_point': 'point',
                 'vsi': '/vsitar/',
                 'port': 990,
                 'pattern': {'dem': '*DEM.tif',
                             'edm': '*EDM.tif',
                             'flm': '*FLM.tif',
                             'hem': '*HEM.tif',
-                            'wbm': '*WBM.tif'}
+                            'wbm': '*WBM.tif'},
+                'datatype': {'dem': 'Float32',
+                             'edm': 'Byte',
+                             'flm': 'Byte',
+                             'hem': 'Float32',
+                             'wbm': 'Byte'},
+                'authentication': True
             },
             'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
-                          'nodata': None,
+                          'nodata': {'dem': None},
+                          'resolution': {'0-90': (15 / 1800, 15 / 1800)},
+                          'tilesize': 15,
+                          'area_or_point': 'area',
                           'vsi': '/vsizip/',
-                          'pattern': {'dem': '*.GETASSE30'}
+                          'pattern': {'dem': '*.GETASSE30'},
+                          'datatype': {'dem': 'Int16'},
+                          'authentication': False
                           },
             'SRTM 1Sec HGT': {'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
-                              'nodata': -32768.0,
+                              'nodata': {'dem': -32768.0},
+                              'resolution': {'0-90': (1 / 3600, 1 / 3600)},
+                              'tilesize': 1,
+                              'area_or_point': 'point',
                               'vsi': '/vsizip/',
-                              'pattern': {'dem': '*.hgt'}
+                              'pattern': {'dem': '*.hgt'},
+                              'datatype': {'dem': 'Int16'},
+                              'authentication': False
                               },
-            'SRTM 3Sec': {'url': 'https://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF',
-                          'nodata': -32768.0,
+            'SRTM 3Sec': {'url': 'https://download.esa.int/step/auxdata/dem/SRTM90/tiff',
+                          'nodata': {'dem': -32768.0},
+                          'resolution': {'0-90': (5 / 6000, 5 / 6000)},
+                          'tilesize': 5,
+                          'area_or_point': 'area',
                           'vsi': '/vsizip/',
-                          'pattern': {'dem': 'srtm*.tif'}
+                          'pattern': {'dem': 'srtm*.tif'},
+                          'datatype': {'dem': 'Int16'},
+                          'authentication': False
                           },
             'TDX90m': {'url': 'ftpes://tandemx-90m.dlr.de',
-                       'nodata': -32767.0,
+                       'nodata': {'dem': -32767.0,
+                                  'am2': 0,
+                                  'amp': 0,
+                                  'com': 0,
+                                  'cov': 0,
+                                  'hem': -32767.0,
+                                  'lsm': 0,
+                                  'wam': 0},
+                       'resolution': {'0-50': (1 / 1200, 1 / 1200),
+                                      '50-60': (1.5 / 1200, 1 / 1200),
+                                      '60-70': (2 / 1200, 1 / 1200),
+                                      '70-80': (3 / 1200, 1 / 1200),
+                                      '80-85': (5 / 1200, 1 / 1200),
+                                      '85-90': (10 / 1200, 1 / 1200)},
+                       'tilesize': 1,
+                       'area_or_point': 'point',
                        'vsi': '/vsizip/',
                        'pattern': {'dem': '*_DEM.tif',
                                    'am2': '*_AM2.tif',
@@ -533,21 +934,33 @@ class DEMHandler:
                                    'cov': '*_COV.tif',
                                    'hem': '*_HEM.tif',
                                    'lsm': '*_LSM.tif',
-                                   'wam': '*_WAM.tif'}
+                                   'wam': '*_WAM.tif'},
+                       'datatype': {'dem': 'Float32',
+                                    'am2': 'UInt16',
+                                    'amp': 'UInt16',
+                                    'com': 'Byte',
+                                    'cov': 'Byte',
+                                    'hem': 'Float32',
+                                    'lsm': 'Byte',
+                                    'wam': 'Byte'},
+                       'authentication': True
                        }
         }
     
-    def load(self, demType, vrt=None, buffer=None, username=None, password=None, product='dem'):
+    def load(self, dem_type, vrt=None, buffer=None, username=None,
+             password=None, product='dem', crop=True):
         """
-        obtain DEM tiles for the given geometries
+        obtain DEM tiles for the given geometries and either return the file names in a list
+        or combine them into a VRT mosaic. The VRT is cropped to the combined extent of the geometries
+        but the pixel grid of the source files is preserved and no resampling/shifting is applied.
         
         Parameters
         ----------
-        demType: str
+        dem_type: str
             the type fo DEM to be used
         vrt: str or None
             an optional GDAL VRT file created from the obtained DEM tiles
-        buffer: int, float, None
+        buffer: int or float or None
             a buffer in degrees to add around the individual geometries
         username: str or None
             the download account username
@@ -574,6 +987,10 @@ class DEMHandler:
              - 'Copernicus 30m Global DEM'
              
               * 'dem': the actual Digital Elevation Model
+              * 'edm': Editing Mask
+              * 'flm': Filling Mask
+              * 'hem': Height Error Mask
+              * 'wbm': Water Body Mask
              
              - 'Copernicus 30m Global DEM II'
              
@@ -586,6 +1003,10 @@ class DEMHandler:
              - 'Copernicus 90m Global DEM'
              
               * 'dem': the actual Digital Elevation Model
+              * 'edm': Editing Mask
+              * 'flm': Filling Mask
+              * 'hem': Height Error Mask
+              * 'wbm': Water Body Mask
              
              - 'Copernicus 90m Global DEM II'
              
@@ -617,60 +1038,109 @@ class DEMHandler:
               * 'hem': Height Error Map
               * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
               * 'wam': Water Indication Mask
-
+        crop: bool
+            If a VRT is created, crop it to  spatial extent of the provided geometries
+            or return the full extent of the DEM tiles? In the latter case, the common
+            bounding box of the geometries is expanded so that the coordinates are
+            multiples of the tile size of the respective DEM option.
+        
         Returns
         -------
-        list or None
+        list[str] or None
             the names of the obtained files or None if a VRT file was defined
         """
         keys = self.config.keys()
-        if demType not in keys:
+        if dem_type not in keys:
             raise RuntimeError("demType '{}' is not supported\n  "
                                "possible options: '{}'"
-                               .format(demType, "', '".join(keys)))
+                               .format(dem_type, "', '".join(keys)))
         
-        products = self.config[demType]['pattern'].keys()
+        products = self.config[dem_type]['pattern'].keys()
         if product not in products:
             raise RuntimeError("product '{0}' not available for demType '{1}'\n"
-                               "  options: '{2}'".format(product, demType, "', '".join(products)))
+                               "  options: '{2}'".format(product, dem_type, "', '".join(products)))
         
-        outdir = os.path.join(self.auxdatapath, 'dem', demType)
+        outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
         
-        remotes = []
+        candidates = []
         for geo in self.geometries:
-            corners = self.__applybuffer(geo.extent, buffer)
-            remotes.extend(self.remote_ids(corners, demType=demType,
-                                           username=username, password=password))
+            corners = self.__applybuffer(extent=geo.extent, buffer=buffer)
+            candidates.extend(self.remote_ids(extent=corners, dem_type=dem_type,
+                                              username=username, password=password,
+                                              product=product))
         
-        if demType in ['AW3D30', 'TDX90m', 'Copernicus 10m EEA DEM',
-                       'Copernicus 30m Global DEM II', 'Copernicus 90m Global DEM II']:
+        if self.config[dem_type]['url'].startswith('ftp'):
             port = 0
-            if 'port' in self.config[demType].keys():
-                port = self.config[demType]['port']
-            locals = self.__retrieve_ftp(self.config[demType]['url'], remotes, outdir,
-                                         username=username, password=password, port=port)
+            if 'port' in self.config[dem_type].keys():
+                port = self.config[dem_type]['port']
+            locals = self.__retrieve_ftp(url=self.config[dem_type]['url'],
+                                         filenames=candidates,
+                                         outdir=outdir, username=username,
+                                         password=password, port=port)
         else:
-            locals = self.__retrieve(self.config[demType]['url'], remotes, outdir)
+            locals = self.__retrieve(url=self.config[dem_type]['url'],
+                                     filenames=candidates, outdir=outdir)
         
-        if demType == 'GETASSE30':
+        resolution = None
+        datatype = None
+        src_nodata = None
+        dst_nodata = None
+        tap = False
+        extent = self.__commonextent(buffer=buffer)
+        aop = self.config[dem_type]['area_or_point']
+        res = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
+        if not crop:
+            f = self.config[dem_type]['tilesize']
+            extent['xmin'] = floor(extent['xmin'] / f) * f
+            extent['ymin'] = floor(extent['ymin'] / f) * f
+            extent['xmax'] = ceil(extent['xmax'] / f) * f
+            extent['ymax'] = ceil(extent['ymax'] / f) * f
+        if aop == 'point':
+            shift_x = res[0] / 2
+            shift_y = res[1] / 2
+            extent['xmin'] -= shift_x
+            extent['ymin'] += shift_y
+            extent['xmax'] -= shift_x
+            extent['ymax'] += shift_y
+        
+        # special case where no DEM tiles were found because the AOI is completely over ocean
+        if len(locals) == 0:
+            if vrt is not None:
+                # define a dummy file as source file; this file contains one pixel spanning the whole globe
+                # this pixel has value 0, nodata value is 255
+                locals = [self.__create_dummy_dem()]
+                datatype = self.config[dem_type]['datatype'][product]
+                src_nodata = 0  # define the data value as nodata, so it can be overwritten in the VRT
+                if product == 'dem':
+                    dst_nodata = 0
+                else:
+                    dst_nodata = self.config[dem_type]['nodata'][product]
+                # determine the target resolution based on minimum latitude
+                resolution = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
+        
+        # make sure all GETASSE30 tiles get an ENVI HDR file so that they are GDAL-readable
+        if dem_type == 'GETASSE30':
             for item in locals:
                 getasse30_hdr(item)
         
-        if product == 'dem':
-            nodata = self.config[demType]['nodata']
-        else:
-            nodata = 0
-        
         if vrt is not None:
+            if src_nodata is None:
+                src_nodata = self.config[dem_type]['nodata'][product]
+            if dst_nodata is None:
+                dst_nodata = 0 if product == 'dem' else None
+            
             self.__buildvrt(tiles=locals, vrtfile=vrt,
-                            pattern=self.config[demType]['pattern'][product],
-                            vsi=self.config[demType]['vsi'],
-                            extent=self.__commonextent(buffer),
-                            nodata=nodata)
-            return None
-        return locals
+                            pattern=self.config[dem_type]['pattern'][product],
+                            vsi=self.config[dem_type]['vsi'],
+                            extent=extent,
+                            src_nodata=src_nodata, dst_nodata=dst_nodata,
+                            hide_nodata=True,
+                            resolution=resolution,
+                            tap=tap, dst_datatype=datatype)
+        else:
+            return locals
     
-    def remote_ids(self, extent, demType, username=None, password=None):
+    def remote_ids(self, extent, dem_type, product='dem', username=None, password=None):
         """
         parse the names of the remote files overlapping with an area of interest
 
@@ -678,10 +1148,13 @@ class DEMHandler:
         ----------
         extent: dict
             the extent of the area of interest with keys xmin, xmax, ymin, ymax
-        demType: str
+        dem_type: str
             the type fo DEM to be used
+        product: str
+            the sub-product to extract from the DEM product. Only needed for DEM options 'Copernicus 30m Global DEM'
+            and 'Copernicus 90m Global DEM' and ignored otherwise.
         username: str or None
-            the download account user name
+            the download account username
         password: str or None
             the download account password
 
@@ -690,16 +1163,6 @@ class DEMHandler:
         str
             the sorted names of the remote files
         """
-        
-        # generate sequence of integer coordinates marking the tie points of the individual tiles
-        def intrange(extent, step):
-            lat = range(int(float(extent['ymin']) // step) * step,
-                        (int(float(extent['ymax']) // step) + 1) * step,
-                        step)
-            lon = range(int(float(extent['xmin']) // step) * step,
-                        (int(float(extent['xmax']) // step) + 1) * step,
-                        step)
-            return lat, lon
         
         def index(x=None, y=None, nx=3, ny=3, reverse=False):
             if reverse:
@@ -716,103 +1179,138 @@ class DEMHandler:
                 yf = ''
             return yf, xf
         
-        def cop_dem_remotes(extent, arcsecs):
-            lat, lon = intrange(extent, step=1)
+        def cop_dem_remotes(extent, arcsecs, product='dem'):
+            lat, lon = self.intrange(extent, step=1)
             indices = [index(x, y, nx=3, ny=2)
                        for x in lon for y in lat]
-            base = 'Copernicus_DSM_COG_{res}_{0}_00_{1}_00_DEM'
-            skeleton = '{base}/{base}.tif'.format(base=base)
-            remotes = [skeleton.format(res=arcsecs, *item) for item in indices]
+            base = 'Copernicus_DSM_COG_{res}_{0}_00_{1}_00'
+            skeleton = '{base}_DEM/{sub}{base}_{product}.tif'
+            sub = '' if product == 'dem' else 'AUXFILES/'
+            base = skeleton.format(base=base, sub=sub, product=product.upper())
+            candidates = [base.format(res=arcsecs, *item) for item in indices]
+            remotes = []
+            for candidate in candidates:
+                response = requests.get(self.config[dem_type]['url'],
+                                        params={'prefix': candidate})
+                xml = ET.fromstring(response.content)
+                content = xml.findall('.//Contents', namespaces=xml.nsmap)
+                if len(content) > 0:
+                    remotes.append(candidate)
             return remotes
         
-        if demType == 'SRTM 1Sec HGT':
-            lat, lon = intrange(extent, step=1)
+        if dem_type == 'SRTM 1Sec HGT':
+            lat, lon = self.intrange(extent, step=1)
             remotes = ['{0}{1}.SRTMGL1.hgt.zip'.format(*index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
         
-        elif demType == 'GETASSE30':
-            lat, lon = intrange(extent, step=15)
+        elif dem_type == 'GETASSE30':
+            lat, lon = self.intrange(extent, step=15)
             remotes = ['{0}{1}.zip'.format(*index(x, y, nx=3, ny=2, reverse=True))
                        for x in lon for y in lat]
         
-        elif demType == 'TDX90m':
-            lat, lon = intrange(extent, step=1)
+        elif dem_type == 'TDX90m':
+            lat, lon = self.intrange(extent, step=1)
             remotes = []
             for x in lon:
                 xr = abs(x) // 10 * 10
                 for y in lat:
                     yf, xf = index(x=x, y=y, nx=3, ny=2)
-                    remotes.append('90mdem/DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
+                    remotes.append('DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
                                    .format(x=xf, xr=xr, y=yf, hem=xf[0]))
         
-        elif demType == 'AW3D30':
+        elif dem_type == 'AW3D30':
             remotes = []
-            lat, lon = intrange(extent, step=1)
+            lat, lon = self.intrange(extent, step=1)
             for x in lon:
                 for y in lat:
                     remotes.append(
                         '{0}{1}/{2}{3}.tar.gz'.format(*index(x // 5 * 5, y // 5 * 5),
                                                       *index(x, y)))
         
-        elif demType == 'SRTM 3Sec':
+        elif dem_type == 'SRTM 3Sec':
             lat = range(int((60 - float(extent['ymin'])) // 5) + 1,
                         int((60 - float(extent['ymax'])) // 5) + 2)
             lon = range(int((float(extent['xmin']) + 180) // 5) + 1,
                         int((float(extent['xmax']) + 180) // 5) + 2)
             remotes = ['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in lon for y in lat]
         
-        elif demType in ['Copernicus 10m EEA DEM',
-                         'Copernicus 30m Global DEM II',
-                         'Copernicus 90m Global DEM II']:
-            lat, lon = intrange(extent, step=1)
+        elif dem_type in ['Copernicus 10m EEA DEM',
+                          'Copernicus 30m Global DEM II',
+                          'Copernicus 90m Global DEM II']:
+            lat, lon = self.intrange(extent, step=1)
             indices = [''.join(index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
             
-            ftp = ImplicitFTP_TLS()
-            parsed = urlparse(self.config[demType]['url'])
-            host = parsed.netloc
-            path = parsed.path
-            ftp.connect(host=host, port=self.config[demType]['port'])
-            ftp.login(username, password)
-            ftp.cwd(path)
+            outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
+            mapping = os.path.join(outdir, 'mapping.csv')
+            mapping2 = os.path.join(outdir, 'mapping_append.csv')
             
-            obj = io.BytesIO()
-            ftp.retrbinary('RETR mapping.csv', obj.write)
-            obj = obj.getvalue().decode('utf-8').splitlines()
-            
-            ids = []
-            stream = csv.reader(obj, delimiter=';')
-            for row in stream:
-                if row[1] + row[2] in indices:
-                    ids.append(row[0])
-            
-            remotes = []
-            remotes_base = []
-            
-            def ftp_search(target, files):
-                pattern = '|'.join(files)
+            def ftp_search(ftp, target):
+                out = []
                 if target.endswith('/'):
+                    print(target)
                     content = ftp.nlst(target)
                     for item in content:
-                        ftp_search(target + '/' + item, files)
+                        out.extend(ftp_search(ftp, target + item))
                 else:
-                    if target.endswith('.tar') and re.search(pattern, target):
-                        base = os.path.basename(target)
-                        if base not in remotes_base:
-                            remotes.append(target)
-                            remotes_base.append(base)
+                    if target.endswith('DEM.tar'):
+                        out.append(target.encode('latin-1').decode('utf-8'))
+                return out
             
-            ftp_search(path + '/', ids)
-            ftp.quit()
+            def ftp_connect(host, path, username, password, port=990):
+                ftp = ImplicitFTP_TLS()
+                ftp.connect(host=host, port=port)
+                ftp.login(username, password)
+                ftp.cwd(path)
+                return ftp
+            
+            if not os.path.isfile(mapping2):
+                parsed = urlparse(self.config[dem_type]['url'])
+                host = parsed.netloc
+                path = parsed.path
+                ftp = None
+                os.makedirs(outdir, exist_ok=True)
+                if not os.path.isfile(mapping):
+                    print('downloading mapping.csv')
+                    ftp = ftp_connect(host, path, username, password,
+                                      port=self.config[dem_type]['port'])
+                    with open(mapping, 'wb') as myfile:
+                        ftp.retrbinary('RETR mapping.csv', myfile.write)
+                print('searching FTP server')
+                if ftp is None:
+                    ftp = ftp_connect(host, path, username, password,
+                                      port=self.config[dem_type]['port'])
+                files = ftp_search(ftp, path + '/')
+                files_base = [os.path.basename(x) for x in files]
+                if ftp is not None:
+                    ftp.quit()
+                print('matching found files with mapping.csv')
+                with open(mapping) as obj:
+                    reader = csv.reader(obj, delimiter=';')
+                    with open(mapping2, 'w', newline='') as out:
+                        writer = csv.writer(out, delimiter=';')
+                        writer.writerow(next(reader))  # write header
+                        for row in reader:
+                            index = files_base.index(row[0])
+                            row.append(files[index])
+                            del files_base[index]
+                            del files[index]
+                            writer.writerow(row)
+            remotes = []
+            with open(mapping2) as obj:
+                stream = csv.reader(obj, delimiter=';')
+                for row in stream:
+                    if row[1] + row[2] in indices:
+                        remotes.append(row[-1])
         
-        elif demType == 'Copernicus 30m Global DEM':
-            remotes = cop_dem_remotes(extent, arcsecs=10)
+        elif dem_type == 'Copernicus 30m Global DEM':
+            remotes = cop_dem_remotes(extent=extent, arcsecs=10, product=product)
         
-        elif demType == 'Copernicus 90m Global DEM':
-            remotes = cop_dem_remotes(extent, arcsecs=30)
+        elif dem_type == 'Copernicus 90m Global DEM':
+            remotes = cop_dem_remotes(extent=extent, arcsecs=30, product=product)
         
         else:
-            raise ValueError('unknown demType: {}'.format(demType))
+            raise ValueError('unknown demType: {}'.format(dem_type))
         
         return sorted(remotes)
 
@@ -867,6 +1365,34 @@ def getasse30_hdr(fname):
                 zip.writestr(hdr, str(obj))
 
 
+def get_dem_options(require_auth=None):
+    """
+    Get the names of all supported DEM type options.
+    
+    Parameters
+    ----------
+    require_auth: bool or None
+        only return options that do/don't require authentication. Default None: return all options.
+
+    Returns
+    -------
+    list[str]
+        the names of the DEM options
+    """
+    out = []
+    # create a dummy vector geometry for initializing the DEMHandler
+    ext = {'xmin': -44, 'xmax': -43, 'ymin': 30, 'ymax': 31}
+    with bbox(coordinates=ext, crs=4326) as vec:
+        with DEMHandler(geometries=[vec]) as handler:
+            for key, properties in handler.config.items():
+                if require_auth is None:
+                    out.append(key)
+                else:
+                    if require_auth == properties['authentication']:
+                        out.append(key)
+            return sorted(out)
+
+
 def get_egm_lookup(geoid, software):
     """
     Download lookup tables for converting EGM geoid heights to WGS84 ellipsoid heights.
@@ -884,10 +1410,10 @@ def get_egm_lookup(geoid, software):
         - SNAP: default directory: ``~/.snap/auxdata/dem/egm96``; URL:
         
           * https://step.esa.int/auxdata/dem/egm96/ww15mgh_b.zip
-        - PROJ: requires ``PROJ_LIB`` environment variable to be set as download directory; URLs:
+        - PROJ: requires ``PROJ_DATA`` or ``PROJ_LIB`` environment variable to be set as download directory; URLs:
         
-          * https://download.osgeo.org/proj/vdatum/egm96_15/egm96_15.gtx
-          * https://download.osgeo.org/proj/vdatum/egm08_25/egm08_25.gtx
+          * https://cdn.proj.org/us_nga_egm96_15.tif
+          * https://cdn.proj.org/us_nga_egm08_25.tif
 
     Returns
     -------
@@ -907,25 +1433,33 @@ def get_egm_lookup(geoid, software):
             r.raise_for_status()
             with open(local, 'wb') as out:
                 out.write(r.content)
+            r.close()
     
     elif software == 'PROJ':
-        gtx_lookup = {'EGM96': 'egm96_15/egm96_15.gtx',
-                      'EGM2008': 'egm08_25/egm08_25.gtx'}
-        gtx_remote = 'https://download.osgeo.org/proj/vdatum/' + gtx_lookup[geoid]
+        lookup = {'EGM96': 'us_nga_egm96_15.tif',
+                  'EGM2008': 'us_nga_egm08_25.tif'}
+        remote = 'https://cdn.proj.org/' + lookup[geoid]
         
-        proj_lib = os.environ.get('PROJ_LIB')
-        if proj_lib is not None:
-            gtx_local = os.path.join(proj_lib, os.path.basename(gtx_remote))
-            if not os.path.isfile(gtx_local):
-                if not os.access(proj_lib, os.W_OK):
-                    raise OSError("cannot write to 'PROJ_LIB' path: {}".format(proj_lib))
-                log.info('{} <<-- {}'.format(gtx_local, gtx_remote))
-                r = requests.get(gtx_remote)
+        # starting with PROJ 9.1, the PROJ_DATA variable is used.
+        # Earlier versions make use of PROJ_LIB.
+        var = 'PROJ_DATA'
+        proj_dir = os.environ.get(var)
+        if proj_dir is None:
+            var = 'PROJ_LIB'
+            proj_dir = os.environ.get(var)
+        if proj_dir is not None:
+            local = os.path.join(proj_dir, os.path.basename(remote))
+            if not os.path.isfile(local):
+                if not os.access(proj_dir, os.W_OK):
+                    raise OSError("cannot write to '{0}' path: {1}".format(var, proj_dir))
+                log.info('{} <<-- {}'.format(local, remote))
+                r = requests.get(remote)
                 r.raise_for_status()
-                with open(gtx_local, 'wb') as out:
+                with open(local, 'wb') as out:
                     out.write(r.content)
+                r.close()
         else:
-            raise RuntimeError("environment variable 'PROJ_LIB' not set")
+            raise RuntimeError("Neither environment variable 'PROJ_DATA' nor 'PROJ_LIB' are set")
     else:
         raise TypeError("software must be either 'SNAP' or 'PROJ'")
 

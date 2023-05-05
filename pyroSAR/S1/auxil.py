@@ -96,7 +96,7 @@ class OSV(object):
     `requests timeouts <https://requests.readthedocs.io/en/master/user/advanced/#timeouts>`_
     """
     
-    def __init__(self, osvdir=None, timeout=20):
+    def __init__(self, osvdir=None, timeout=300):
         self.timeout = timeout
         if osvdir is None:
             try:
@@ -381,17 +381,17 @@ class OSV(object):
 
         Parameters
         ----------
-        sensor: str or list
+        sensor: str or list[str]
             The S1 mission(s):
             
              - 'S1A'
              - 'S1B'
              - ['S1A', 'S1B']
-        osvtype: {'POE', 'RES'}
+        osvtype: str or list[str]
             the type of orbit files required
-        start: str
+        start: str or None
             the date to start searching for files in format YYYYmmddTHHMMSS
-        stop: str
+        stop: str or None
             the date to stop searching for files in format YYYYmmddTHHMMSS
         url_option: int
             the URL to query for OSV files
@@ -401,7 +401,7 @@ class OSV(object):
 
         Returns
         -------
-        list
+        list[dict]
             the product dictionary of the remote OSV files, with href
         """
         
@@ -471,7 +471,7 @@ class OSV(object):
 
         Returns
         -------
-        list
+        list[str]
             a selection of local OSV files
         """
         directory = self._typeEvaluate(osvtype)
@@ -533,7 +533,7 @@ class OSV(object):
              - 'S1B'
         timestamp: str
             the time stamp in the format 'YYYmmddTHHMMSS'
-        osvtype: str or list
+        osvtype: str or list[str]
             the type of orbit files required; either 'POE', 'RES' or a list of both
 
         Returns
@@ -566,7 +566,7 @@ class OSV(object):
 
         Parameters
         ----------
-        files: list
+        products: list[dict]
             a list of remotely existing OSV product dictionaries as returned by method :meth:`catch`
         pbar: bool
             add a progressbar?
@@ -592,6 +592,8 @@ class OSV(object):
         log.info('downloading {} file{}'.format(len(downloads), '' if len(downloads) == 1 else 's'))
         if pbar:
             progress = pb.ProgressBar(max_value=len(downloads))
+        else:
+            progress = None
         i = 0
         for remote, local, basename, auth in downloads:
             response = requests.get(remote, auth=auth, timeout=self.timeout)
@@ -635,14 +637,14 @@ class OSV(object):
 
         Parameters
         ----------
-        files: list
+        files: list[str]
             some OSV files
         datetype: {'publish', 'start', 'stop'}
             one of three possible date types contained in the OSV filename
 
         Returns
         -------
-        list
+        list[str]
             the input OSV files sorted by the defined date
         """
         return sorted(files, key=lambda x: self.date(x, datetype))
@@ -684,7 +686,7 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
 
     Parameters
     ----------
-    scene: ~pyroSAR.drivers.SAFE
+    scene: pyroSAR.drivers.SAFE
         the Sentinel-1 scene object
     method: str
         the border noise removal method to be applied; one of the following:
