@@ -894,3 +894,43 @@ Auxiliary Data Handling
   + option to customize the output DEM via additional keyword arguments to be passed to :func:`spatialist.auxil.gdalwarp`
   + no longer require a nodata value
 
+0.21.0 | 2023-05-11
+===================
+
+Drivers
+-------
+- class :class:`pyroSAR.drivers.Archive`:
+
+  + improved PostgreSQL connection stability
+  + method :meth:`~pyroSAR.drivers.Archive.select`: the `vectorobject` geometry is now cloned before being reprojected to EPSG:4326 so that the source geometry remains unaltered
+
+GAMMA API
+---------
+- the `LAT` module is no longer needed: new pyroSAR-internal implementations can be used if the module is missing (concerns commands `product`, `ratio` and `linear_to_dB`)
+- improved backwards compatibility:
+
+  + use `multi_look_ScanSAR` if present and `multi_S1_TOPS` otherwise
+  + use `gc_map2` if possible (present and with all needed arguments) and `gc_map` otherwise
+  + addressed the case where `gc_map` does not have an argument `OFF_par`
+
+- function `gamma.pixel_area_wrap`: new argument `exist_ok` (this function will be made more visible in the documentation once matured)
+- bug fixes:
+
+  + :func:`pyroSAR.gamma.convert2gamma`: raise an error if `S1_bnr=True` but the GAMMA command does not support border noise removal
+  + :func:`pyroSAR.gamma.geocode`: removed unneeded underscore in HDR file naming
+  + `gamma.pixel_area_wrap`: fixed some issues with occasionally missing intermediate files, e.g. for computing ratios
+
+SNAP API
+--------
+- function :func:`pyroSAR.snap.util.geocode`: new argument `dem_oversampling_multiple` with default 2 to increase the DEM oversampling factor for terrain flattening
+- function :func:`pyroSAR.snap.auxil.erode_edges`:
+
+  + do not attempt to perform erosion if the image only contains nodata (this might happen if only parts of the image were geocoded)
+  + make sure that a backscatter image is used for erosion (auxiliary data like the local incidence angle often has a larger valid data extent and using such image for erosion would thus not properly erode edges of the backscatter images; additionally this has the effect that all images will have the same valid data extent after erosion)
+  + the written mask files (delineating valid data and nodata after erosion of the backscatter image and used for masking all other images) are now compressed (deflate) so that data volume is decreased significantly
+
+Auxiliary Data Handling
+-----------------------
+- function :func:`pyroSAR.auxdata.dem_create`:
+
+  + new argument `resampleAlg` to change the resampling algorithm
