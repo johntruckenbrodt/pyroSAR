@@ -1,7 +1,7 @@
 ###############################################################################
 # pyroSAR SNAP API tools
 
-# Copyright (c) 2017-2022, the pyroSAR Developers.
+# Copyright (c) 2017-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -1495,13 +1495,19 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
     write_intermediates = False  # this is intended for debugging
     
     def erosion(src, dst, structure, only_boundary, write_intermediates=False):
-        if not os.path.isfile(dst):
-            with Raster(src) as ref:
-                array = ref.array()
+        with Raster(src) as ref:
+            array = ref.array()
+            if not os.path.isfile(dst):
                 mask = array != 0
+                # do not perform erosion if data only contains nodata (mask == 1)
+                if len(mask[mask == 1]) == 0:
+                    ref.write(outname=dst, array=mask, dtype='Byte',
+                              options=['COMPRESS=DEFLATE'])
+                    return array, mask
                 if write_intermediates:
                     ref.write(dst.replace('.tif', '_init.tif'),
-                              array=mask, dtype='Byte')
+                              array=mask, dtype='Byte',
+                              options=['COMPRESS=DEFLATE'])
                 if only_boundary:
                     with vectorize(target=mask, reference=ref) as vec:
                         with boundary(vec, expression="value=1") as bounds:
@@ -1510,14 +1516,20 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
                                 if write_intermediates:
                                     vec.write(dst.replace('.tif', '_init_vectorized.gpkg'))
                                     bounds.write(dst.replace('.tif', '_boundary_vectorized.gpkg'))
-                                    new.write(outname=dst.replace('.tif', '_boundary.tif'), dtype='Byte')
+                                    new.write(outname=dst.replace('.tif', '_boundary.tif'),
+                                              dtype='Byte', options=['COMPRESS=DEFLATE'])
                 mask = binary_erosion(input=mask, structure=structure)
-                ref.write(outname=dst, array=mask, dtype='Byte')
-        else:
-            with Raster(dst) as ras:
-                mask = ras.array()
+                ref.write(outname=dst, array=mask, dtype='Byte',
+                          options=['COMPRESS=DEFLATE'])
+            else:
+                with Raster(dst) as ras:
+                    mask = ras.array()
         array[mask == 0] = 0
         return array, mask
+    
+    # make sure a backscatter image is used for creating the mask
+    backscatter = [x for x in images if re.search('^(?:Sig|Gam)ma0_', os.path.basename(x))]
+    images.insert(0, images.pop(images.index(backscatter[0])))
     
     mask = None
     for img in images:
@@ -1529,7 +1541,9 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
             with Raster(img) as ras:
                 array = ras.array()
             array[mask == 0] = 0
-        
+        # do not apply mask if it only contains 1 (valid data)
+        if len(mask[mask == 0]) == 0:
+            break
         ras = gdal.Open(img, GA_Update)
         band = ras.GetRasterBand(1)
         band.WriteArray(array)
