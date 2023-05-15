@@ -27,6 +27,6 @@ docs = ["sphinx", "sphinxcontrib-bibtex", "sphinxcontrib-svg2pdfconverter", "cai
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
-readme = { file = ["README.md"] }
+readme = { file = ["README.md"], content-type = "text/markdown" }
 
 [tool.setuptools_scm]
