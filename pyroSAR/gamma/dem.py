@@ -216,7 +216,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
     """
     
     basename = os.path.basename(outfile)
-    if len(os.path.splitext(basename)) > 1:
+    if len(os.path.splitext(basename)[1]) > 1:
         raise RuntimeError('please define a filename without extension')
     
     geometry = geometry.clone()
