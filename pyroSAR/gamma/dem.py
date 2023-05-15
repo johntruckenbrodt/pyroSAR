@@ -346,7 +346,7 @@ def dem_import(src, dst, geoid=None, logpath=None, outdir=None):
     else:
         # "No geoid offset correction, replace NODATA with a valid near-zero value."
         gflg = 0
-    if epsg == 4326 and geoid == 'EGM96':
+    if epsg == 4326 and geoid in ['EGM96', None]:
         # old approach for backwards compatibility
         diff.srtm2dem(SRTM_DEM=src,
                       DEM=dst,
@@ -531,12 +531,12 @@ def hgt(parfiles):
 
     Parameters
     ----------
-    parfiles: list of str or pyroSAR.ID
+    parfiles: list[str or pyroSAR.ID]
         a list of GAMMA parameter files or pyroSAR ID objects
 
     Returns
     -------
-    list
+    list[str]
         the names of hgt files overlapping with the supplied parameter files/objects
     """
     
@@ -581,7 +581,7 @@ def makeSRTM(scenes, srtmdir, outname):
 
     Parameters
     ----------
-    scenes: list of str or pyroSAR.ID
+    scenes: list[str or pyroSAR.ID]
         a list of Gamma parameter files or pyroSAR ID objects to read the DEM extent from
     srtmdir: str
         a directory containing the SRTM hgt tiles
@@ -634,7 +634,7 @@ def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
 
     Parameters
     ----------
-    parfiles: list of str or pyroSAR.ID
+    parfiles: list[str or pyroSAR.ID]
         a list of Gamma parameter files or pyroSAR ID objects
     outdir: str
         a target directory to download the tiles to
@@ -645,7 +645,7 @@ def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
 
     Returns
     -------
-    list
+    list[str]
         the names of all local hgt tiles overlapping with the parfiles
     """
     
