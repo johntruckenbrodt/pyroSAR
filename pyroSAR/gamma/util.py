@@ -33,7 +33,7 @@ from spatialist.ancillary import union, finder
 from ..S1 import OSV
 from ..drivers import ID, identify, identify_many
 from . import ISPPar, Namespace, par2hdr
-from ..ancillary import multilook_factors, hasarg, groupby
+from ..ancillary import multilook_factors, hasarg, groupby, find_datasets
 from pyroSAR.examine import ExamineSnap
 from .auxil import do_execute
 
@@ -156,7 +156,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True, S1_slc_swaths=None,
         only Sentinel-1 GRD: should border noise removal be applied to the image?
         This is available since version 20191203, for older versions this argument is ignored.
     basename_extensions: list[str] or None
-    S1_slc_swaths: list of str
+    S1_slc_swaths: list[str]
         the S1 SLC swaths to convert, e.g. `['IW1', 'IW2']`. At its default `None` all swaths are converted.
     basename_extensions: list[str] or None
         names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
@@ -480,7 +480,7 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
     outdir: str or None
         the directory to execute the command in
     shellscript: str or None
-        a file to write the GAMMA commands to in shell format
+        a file to write the GAMMA commands to in bash format
     
     Returns
     -------
@@ -528,8 +528,10 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
     except URLError:
         log.warning('..no internet access')
     
-    parfiles = finder(directory, ['*.par'])
-    parfiles = [x for x in parfiles if ISPPar(x).filetype == 'isp']
+    files = find_datasets(directory=directory, sensor=id.sensor, start=id.start,
+                          stop=id.stop, proc_steps=[id.product.lower()])
+    parfiles = [x + '.par' for x in files]
+    
     # read parameter file entries into object
     with ISPPar(parfiles[0]) as par:
         # extract acquisition time stamp
