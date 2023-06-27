@@ -53,7 +53,7 @@ calling the GPT command line tool:
 
     from pyroSAR.snap.auxil import gpt
 
-    gpt('outname_proc.xml')
+    gpt('outname_proc.xml', tmpdir='.')
 
 workflow splitting
 ==================
