@@ -224,7 +224,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
 
     >>> from pyroSAR.snap import geocode
     >>> filename = 'S1A_IW_GRDH_1SDV_20180829T170656_20180829T170721_023464_028DE0_F7BD.zip'
-    >>> geocode(infile=filename, outdir='outdir', tr=20, scaling='dB',
+    >>> geocode(infile=filename, outdir='outdir', spacing=20, scaling='dB',
     >>>         export_extra=['DEM', 'localIncidenceAngle'], t_srs=4326)
 
     See Also

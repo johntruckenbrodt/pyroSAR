@@ -309,9 +309,9 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
     
     Note
     ----
-    Depending on the parametrization this function might create two sub-directories in `tmpdir`,
-    carrying a suffix  \*_bnr for S1 GRD border noise removal and \*_sub for sub-workflows and their
-    intermediate outputs. Both are deleted if ``cleanup=True``. If `tmpdir` is empty afterwards, it is also deleted.
+    Depending on the parametrization this function might create two subdirectories in `tmpdir`,
+    bnr for S1 GRD border noise removal and sub for sub-workflows and their intermediate outputs.
+    Both are deleted if ``cleanup=True``. If `tmpdir` is empty afterward it is also deleted.
     
     Parameters
     ----------
@@ -320,15 +320,18 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
     tmpdir: str
         a temporary directory for storing intermediate files
     groups: list[list[str]] or None
-        a list of lists each containing IDs for individual nodes
+        a list of lists each containing IDs for individual nodes. If not None, the workflow is split into
+        sub-workflows executing the nodes in the respective group. These workflows and their output products
+        are stored into the subdirectory sub of `tmpdir`.
     cleanup: bool
-        should all files written to the temporary directory during function execution be deleted after processing?
+        should all temporary files be deleted after processing? First, the subdirectories bnr and sub of `tmpdir`
+        are deleted. If `tmpdir` is empty afterward it is also deleted.
     gpt_exceptions: dict or None
         a dictionary to override the configured GPT executable for certain operators;
         each (sub-)workflow containing this operator will be executed with the define executable;
         
          - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
-    gpt_args: list or None
+    gpt_args: list[str] or None
         a list of additional arguments to be passed to the gpt call
         
         - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
@@ -337,7 +340,9 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
         one of the following:
         
          - 'ESA': the pure implementation as described by ESA
-         - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
+         - 'pyroSAR': the ESA method plus the custom pyroSAR refinement. This is only applied if the IPF version is
+         < 2.9 where additional noise removal was necessary. The outpur of the additional noise removal is stored
+         in the subdirectory bnr of `tmpdir`.
     
     Returns
     -------
