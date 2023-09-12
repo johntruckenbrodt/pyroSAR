@@ -2289,7 +2289,7 @@ class Archive(object):
             self.driver = 'postgresql'
             if not self.__check_host(host, port):
                 sys.exit('Server not found!')
-
+        
         connect_args = {}
         
         # create dict, with which a URL to the db is created
@@ -2358,7 +2358,7 @@ class Archive(object):
                                  Column('acquisition_mode', String),
                                  Column('start', String),
                                  Column('stop', String),
-                                 Column('product', String),
+                                 Column('product', String, primary_key=True),
                                  Column('samples', Integer),
                                  Column('lines', Integer),
                                  Column('outname_base', String, primary_key=True),
@@ -2537,7 +2537,6 @@ class Archive(object):
         test: bool
             should the insertion only be tested or directly be committed to the database?
         """
-        length = len(scene_in) if isinstance(scene_in, list) else 1
         
         if isinstance(scene_in, (ID, str)):
             scene_in = [scene_in]
@@ -2568,12 +2567,11 @@ class Archive(object):
             progress = pb.ProgressBar(max_value=len(scenes))
         else:
             progress = None
-        basenames = []
         insertions = []
         session = self.Session()
         for i, id in enumerate(scenes):
             basename = id.outname_base()
-            if not self.is_registered(id) and basename not in basenames:
+            if not self.is_registered(id):
                 insertion = self.__prepare_insertion(id)
                 insertions.append(insertion)
                 counter_regulars += 1
@@ -2588,7 +2586,6 @@ class Archive(object):
             
             if progress is not None:
                 progress.update(i + 1)
-            basenames.append(basename)
         
         if progress is not None:
             progress.finish()
@@ -2625,8 +2622,8 @@ class Archive(object):
         """
         id = scene if isinstance(scene, ID) else identify(scene)
         # ORM query, where scene equals id.scene, return first
-        exists_data = self.Session().query(self.Data.outname_base).filter(
-            self.Data.outname_base == id.outname_base()).first()
+        exists_data = self.Session().query(self.Data.outname_base).filter_by(
+            outname_base=id.outname_base(), product=id.product).first()
         exists_duplicates = self.Session().query(self.Duplicates.outname_base).filter(
             self.Duplicates.outname_base == id.outname_base()).first()
         in_data = False
