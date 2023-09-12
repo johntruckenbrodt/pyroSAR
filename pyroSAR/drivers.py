@@ -223,6 +223,8 @@ class ID(object):
             value = getattr(self, item)
             if item == 'projection':
                 value = crsConvert(value, 'proj4')
+            if value == -1:
+                value = '<no global value per product>'
             line = '{0}: {1}'.format(item, value)
             lines.append(line)
         return '\n'.join(lines)
@@ -1665,7 +1667,7 @@ class SAFE(ID):
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
             raise RuntimeError('folder does not match S1 scene naming convention')
         
-        # scan the metadata XML files file and add selected attributes to a meta dictionary
+        # scan the metadata XML file and add selected attributes to a meta dictionary
         self.meta = self.scanMetadata()
         self.meta['projection'] = crsConvert(4326, 'wkt')
         
@@ -1890,9 +1892,17 @@ class SAFE(ID):
         tree = ET.fromstring(manifest)
         
         meta = dict()
-        acqmode = tree.find('.//s1sarl1:mode', namespaces).text
+        key = 's1sarl1'
+        obj_prod = tree.find('.//{}:productType'.format(key), namespaces)
+        if obj_prod == None:
+            key = 's1sarl2'
+            obj_prod = tree.find('.//{}:productType'.format(key), namespaces)
+        
+        meta['product'] = obj_prod.text
+        
+        acqmode = tree.find('.//{}:mode'.format(key), namespaces).text
         if acqmode == 'SM':
-            meta['acquisition_mode'] = tree.find('.//s1sarl1:swath', namespaces).text
+            meta['acquisition_mode'] = tree.find('.//{}:swath'.format(key), namespaces).text
         else:
             meta['acquisition_mode'] = acqmode
         meta['acquisition_time'] = dict(
@@ -1905,7 +1915,7 @@ class SAFE(ID):
         meta['orbitNumber_abs'] = int(tree.find('.//safe:orbitNumber[@type="start"]', namespaces).text)
         meta['orbitNumber_rel'] = int(tree.find('.//safe:relativeOrbitNumber[@type="start"]', namespaces).text)
         meta['cycleNumber'] = int(tree.find('.//safe:cycleNumber', namespaces).text)
-        meta['frameNumber'] = int(tree.find('.//s1sarl1:missionDataTakeID', namespaces).text)
+        meta['frameNumber'] = int(tree.find('.//{}:missionDataTakeID'.format(key), namespaces).text)
         
         meta['orbitNumbers_abs'] = dict(
             [(x, int(tree.find('.//safe:orbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in
@@ -1913,36 +1923,47 @@ class SAFE(ID):
         meta['orbitNumbers_rel'] = dict(
             [(x, int(tree.find('.//safe:relativeOrbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in
              ['start', 'stop']])
-        meta['polarizations'] = [x.text for x in tree.findall('.//s1sarl1:transmitterReceiverPolarisation', namespaces)]
-        meta['product'] = tree.find('.//s1sarl1:productType', namespaces).text
-        meta['category'] = tree.find('.//s1sarl1:productClass', namespaces).text
-        meta['sensor'] = tree.find('.//safe:familyName', namespaces).text.replace('ENTINEL-', '') + tree.find(
-            './/safe:number', namespaces).text
+        key_pol = './/{}:transmitterReceiverPolarisation'.format(key)
+        meta['polarizations'] = [x.text for x in tree.findall(key_pol, namespaces)]
+        meta['category'] = tree.find('.//{}:productClass'.format(key), namespaces).text
+        family = tree.find('.//safe:familyName', namespaces).text.replace('ENTINEL-', '')
+        number = tree.find('.//safe:number', namespaces).text
+        meta['sensor'] = family + number
         meta['IPF_version'] = float(tree.find('.//safe:software', namespaces).attrib['version'])
-        meta['sliceNumber'] = int(tree.find('.//s1sarl1:sliceNumber', namespaces).text)
-        meta['totalSlices'] = int(tree.find('.//s1sarl1:totalSlices', namespaces).text)
+        sliced = tree.find('.//{}:sliceProductFlag'.format(key), namespaces).text == 'true'
+        if sliced:
+            meta['sliceNumber'] = int(tree.find('.//{}:sliceNumber'.format(key), namespaces).text)
+            meta['totalSlices'] = int(tree.find('.//{}:totalSlices'.format(key), namespaces).text)
+        else:
+            meta['sliceNumber'] = None
+            meta['totalSlices'] = None
         
-        annotations = self.findfiles(self.pattern_ds)
-        key = lambda x: re.search('-[vh]{2}-', x).group()
-        groups = groupby(sorted(annotations, key=key), key=key)
-        annotations = [list(value) for key, value in groups][0]
-        ann_trees = []
-        for ann in annotations:
-            with self.getFileObj(ann) as ann_xml:
-                ann_trees.append(ET.fromstring(ann_xml.read()))
-        
-        sp_rg = [float(x.find('.//rangePixelSpacing').text) for x in ann_trees]
-        sp_az = [float(x.find('.//azimuthPixelSpacing').text) for x in ann_trees]
-        meta['spacing'] = (median(sp_rg), median(sp_az))
-        samples = [x.find('.//imageAnnotation/imageInformation/numberOfSamples').text for x in ann_trees]
-        meta['samples'] = sum([int(x) for x in samples])
-        lines = [x.find('.//imageAnnotation/imageInformation/numberOfLines').text for x in ann_trees]
-        meta['lines'] = sum([int(x) for x in lines])
-        heading = median(float(x.find('.//platformHeading').text) for x in ann_trees)
-        meta['heading'] = heading if heading > 0 else heading + 360
-        incidence = [float(x.find('.//incidenceAngleMidSwath').text) for x in ann_trees]
-        meta['incidence'] = median(incidence)
-        meta['image_geometry'] = ann_trees[0].find('.//projection').text.replace(' ', '_').upper()
+        if meta['product'] == 'OCN':
+            meta['spacing'] = -1
+            meta['samples'] = -1
+            meta['lines'] = -1
+        else:
+            annotations = self.findfiles(self.pattern_ds)
+            key = lambda x: re.search('-[vh]{2}-', x).group()
+            groups = groupby(sorted(annotations, key=key), key=key)
+            annotations = [list(value) for key, value in groups][0]
+            ann_trees = []
+            for ann in annotations:
+                with self.getFileObj(ann) as ann_xml:
+                    ann_trees.append(ET.fromstring(ann_xml.read()))
+            
+            sp_rg = [float(x.find('.//rangePixelSpacing').text) for x in ann_trees]
+            sp_az = [float(x.find('.//azimuthPixelSpacing').text) for x in ann_trees]
+            meta['spacing'] = (median(sp_rg), median(sp_az))
+            samples = [x.find('.//imageAnnotation/imageInformation/numberOfSamples').text for x in ann_trees]
+            meta['samples'] = sum([int(x) for x in samples])
+            lines = [x.find('.//imageAnnotation/imageInformation/numberOfLines').text for x in ann_trees]
+            meta['lines'] = sum([int(x) for x in lines])
+            heading = median(float(x.find('.//platformHeading').text) for x in ann_trees)
+            meta['heading'] = heading if heading > 0 else heading + 360
+            incidence = [float(x.find('.//incidenceAngleMidSwath').text) for x in ann_trees]
+            meta['incidence'] = median(incidence)
+            meta['image_geometry'] = ann_trees[0].find('.//projection').text.replace(' ', '_').upper()
         
         return meta
     
