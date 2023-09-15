@@ -631,7 +631,7 @@ class DEMHandler:
         """
         for key, val in self.config[dem_type]['resolution'].items():
             ymin, ymax = [int(y) for y in key.split('-')]
-            if ymin <= y <= ymax:
+            if ymin <= abs(y) <= ymax:
                 return val
     
     @staticmethod
