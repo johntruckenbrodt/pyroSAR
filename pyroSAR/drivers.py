@@ -2347,58 +2347,31 @@ class Archive(object):
         self.meta = MetaData(self.engine)
         self.custom_fields = custom_fields
         
-        # create tables as schema
-        self.data_schema = Table('data', self.meta,
-                                 Column('sensor', String),
-                                 Column('orbit', String),
-                                 Column('orbitNumber_abs', Integer),
-                                 Column('orbitNumber_rel', Integer),
-                                 Column('cycleNumber', Integer),
-                                 Column('frameNumber', Integer),
-                                 Column('acquisition_mode', String),
-                                 Column('start', String),
-                                 Column('stop', String),
-                                 Column('product', String, primary_key=True),
-                                 Column('samples', Integer),
-                                 Column('lines', Integer),
-                                 Column('outname_base', String, primary_key=True),
-                                 Column('scene', String),
-                                 Column('hh', Integer),
-                                 Column('vv', Integer),
-                                 Column('hv', Integer),
-                                 Column('vh', Integer),
-                                 Column('bbox', Geometry(geometry_type='POLYGON',
-                                                         management=True, srid=4326)))
+        # load or create tables
+        self.__init_data_table()
+        self.__init_duplicates_table()
         
-        # add custom fields
-        if self.custom_fields is not None:
-            for key, val in self.custom_fields.items():
-                if val in ['Integer', 'integer', 'int']:
-                    self.data_schema.append_column(Column(key, Integer))
-                elif val in ['String', 'string', 'str']:
-                    self.data_schema.append_column(Column(key, String))
-                else:
-                    log.info('Value in dict custom_fields must be "integer" or "string"!')
+        # update database with only one primary key
+        reinsert = None
+        pk = sql_inspect(self.data_schema).primary_key
+        if 'product' not in pk.columns.keys():
+            log.info('performing database update')
+            self.conn.execute('ALTER TABLE data RENAME TO data_old')
+            self.meta = MetaData(bind=self.engine)
+            self.__init_data_table()
+            self.conn.execute('INSERT INTO data SELECT * from data_old')
+            reinsert = self.select_duplicates(value='scene')
+            self.conn.execute('DELETE FROM duplicates')
+            self.conn.execute('DROP TABLE data_old')
         
-        # schema for duplicates
-        self.duplicates_schema = Table('duplicates', self.meta,
-                                       Column('outname_base', String, primary_key=True),
-                                       Column('scene', String, primary_key=True))
-        
-        # create tables if not existing
-        if not sql_inspect(self.engine).has_table('data'):
-            log.debug("creating DB table 'data'")
-            self.data_schema.create(self.engine)
-        if not sql_inspect(self.engine).has_table('duplicates'):
-            log.debug("creating DB table 'duplicates'")
-            self.duplicates_schema.create(self.engine)
-        
-        # reflect tables from (by now) existing db, make some variables available within self
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
         self.Data = self.Base.classes.data
         self.Duplicates = self.Base.classes.duplicates
         self.dbfile = dbfile
+        
+        if reinsert is not None:
+            self.insert(reinsert)
         
         if cleanup:
             log.info('checking for missing scenes')
@@ -2436,6 +2409,59 @@ class Archive(object):
         log.info('created table(s) {}.'.format(', '.join(created)))
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
+    
+    def __init_data_table(self):
+        if sql_inspect(self.engine).has_table('data'):
+            self.data_schema = Table('data', self.meta, autoload_with=self.engine)
+            return
+        
+        log.debug("creating DB table 'data'")
+        
+        self.data_schema = Table('data', self.meta,
+                                 Column('sensor', String),
+                                 Column('orbit', String),
+                                 Column('orbitNumber_abs', Integer),
+                                 Column('orbitNumber_rel', Integer),
+                                 Column('cycleNumber', Integer),
+                                 Column('frameNumber', Integer),
+                                 Column('acquisition_mode', String),
+                                 Column('start', String),
+                                 Column('stop', String),
+                                 Column('product', String, primary_key=True),
+                                 Column('samples', Integer),
+                                 Column('lines', Integer),
+                                 Column('outname_base', String, primary_key=True),
+                                 Column('scene', String),
+                                 Column('hh', Integer),
+                                 Column('vv', Integer),
+                                 Column('hv', Integer),
+                                 Column('vh', Integer),
+                                 Column('bbox', Geometry(geometry_type='POLYGON',
+                                                         management=True, srid=4326)))
+        # add custom fields
+        if self.custom_fields is not None:
+            for key, val in self.custom_fields.items():
+                if val in ['Integer', 'integer', 'int']:
+                    self.data_schema.append_column(Column(key, Integer))
+                elif val in ['String', 'string', 'str']:
+                    self.data_schema.append_column(Column(key, String))
+                else:
+                    log.info('Value in dict custom_fields must be "integer" or "string"!')
+        
+        self.data_schema.create(self.engine)
+    
+    def __init_duplicates_table(self):
+        # create tables if not existing
+        if sql_inspect(self.engine).has_table('duplicates'):
+            self.duplicates_schema = Table('duplicates', self.meta, autoload_with=self.engine)
+            return
+        
+        log.debug("creating DB table 'duplicates'")
+        
+        self.duplicates_schema = Table('duplicates', self.meta,
+                                       Column('outname_base', String, primary_key=True),
+                                       Column('scene', String, primary_key=True))
+        self.duplicates_schema.create(self.engine)
     
     @staticmethod
     def __load_spatialite(dbapi_conn, connection_record):
