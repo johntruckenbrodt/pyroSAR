@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2022, the pyroSAR Developers.
+# Copyright (c) 2016-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -1790,6 +1790,10 @@ class SAFE(ID):
         -------
 
         """
+        if self.product not in ['GRD', 'SLC']:
+            msg = 'this method has only been implemented for GRD and SLC, not {}'
+            raise RuntimeError(msg.format(self.product))
+        
         if format != 'kmz':
             raise RuntimeError('currently only kmz is supported as format')
         kml_name = self.findfiles('map-overlay.kml')[0]
@@ -1834,6 +1838,10 @@ class SAFE(ID):
         """
         if 'resolution' in self.meta.keys():
             return self.meta['resolution']
+        if self.product not in ['GRD', 'SLC']:
+            msg = 'this method has only been implemented for GRD and SLC, not {}'
+            raise RuntimeError(msg.format(self.product))
+        
         annotations = self.findfiles(self.pattern_ds)
         key = lambda x: re.search('-[vh]{2}-', x).group()
         groups = groupby(sorted(annotations, key=key), key=key)
