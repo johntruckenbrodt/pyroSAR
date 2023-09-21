@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2022, the pyroSAR Developers.
+# Copyright (c) 2016-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -2204,7 +2204,7 @@ class Archive(object):
     dbfile: str
         the filename for the SpatiaLite database. This might either point to an existing database or will be created otherwise.
         If postgres is set to True, this will be the name for the PostgreSQL database.
-    custom_fields: dict
+    custom_fields: dict or None
         a dictionary containing additional non-standard database column names and data types;
         the names must be attributes of the SAR scenes to be inserted (i.e. id.attr) or keys in their meta attribute
         (i.e. id.meta['attr'])
@@ -2390,7 +2390,7 @@ class Archive(object):
         
         Parameters
         ----------
-        tables: :class:`sqlalchemy.schema.Table` or :obj:`list` of :class:`sqlalchemy.schema.Table`
+        tables: :class:`sqlalchemy.schema.Table` or list[:class:`sqlalchemy.schema.Table`]
             The table(s) to be added to the database.
         """
         created = []
@@ -2473,7 +2473,7 @@ class Archive(object):
         dbapi_conn:
             db engine
         connection_record:
-            not sure what it does but it is needed by :func:`sqlalchemy.event.listen`
+            not sure what it does, but it is needed by :func:`sqlalchemy.event.listen`
         """
         dbapi_conn.enable_load_extension(True)
         # check which platform and use according mod_spatialite
@@ -2537,7 +2537,7 @@ class Archive(object):
 
         Returns
         -------
-        list
+        list[str]
             the names of all scenes, which are no longer stored in their registered location
         """
         if table == 'data':
@@ -2783,7 +2783,7 @@ class Archive(object):
 
         Returns
         -------
-        list
+        list[str]
             the column names of the chosen table
         """
         # get all columns of one table, but shows geometry columns not correctly
@@ -2804,7 +2804,7 @@ class Archive(object):
 
         Returns
         -------
-        list
+        list[str]
             the table names
         """
         #  TODO: make this dynamic
@@ -2843,12 +2843,12 @@ class Archive(object):
     
     def import_outdated(self, dbfile):
         """
-        import an older data base in csv format
+        import an older database in csv format
 
         Parameters
         ----------
         dbfile: str
-            the file name of the old data base
+            the file name of the old database
 
         Returns
         -------
@@ -2934,7 +2934,7 @@ class Archive(object):
 
         Parameters
         ----------
-        vectorobject: :class:`~spatialist.vector.Vector`
+        vectorobject: :class:`~spatialist.vector.Vector` or None
             a geometry with which the scenes need to overlap
         mindate: str or datetime.datetime or None
             the minimum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
@@ -2951,7 +2951,7 @@ class Archive(object):
             the selected scenes will be filtered to those that have not yet been processed. Default: None
         recursive: bool
             (only if `processdir` is not None) should also the subdirectories of the `processdir` be scanned?
-        polarizations: list[str]
+        polarizations: list[str] or None
             a list of polarization strings, e.g. ['HH', 'VV']
         **args:
             any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
@@ -3057,7 +3057,7 @@ class Archive(object):
 
         Returns
         -------
-        list
+        list[str]
             the selected scene(s)
         """
         if value == 'id':
@@ -3098,7 +3098,7 @@ class Archive(object):
 
         Returns
         -------
-        tuple
+        tuple[int]
             the number of scenes in (1) the main table and (2) the duplicates table
         """
         # ORM query
@@ -3130,7 +3130,7 @@ class Archive(object):
 
         Parameters
         ----------
-        scene: ID
+        scene: str
             a SAR scene
         with_duplicates: bool
             True: delete matching entry in duplicates table
@@ -3191,7 +3191,7 @@ class Archive(object):
         Parameters
         ----------
         table: str
-            tablename
+            the table name
 
         Returns
         -------
@@ -3221,7 +3221,7 @@ class Archive(object):
         ----------
         ip: str
             ip of the server
-        port: str
+        port: str or int
             port of the server
 
         Returns
