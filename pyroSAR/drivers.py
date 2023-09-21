@@ -3021,7 +3021,11 @@ class Archive(object):
             else:
                 log.info('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
         
-        query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
+        if len(arg_format) > 0:
+            subquery = ' WHERE {}'.format(' AND '.join(arg_format))
+        else:
+            subquery = ''
+        query = '''SELECT scene, outname_base FROM data{}'''.format(subquery)
         # the query gets assembled stepwise here
         for val in vals:
             query = query.replace('?', """'{0}'""", 1).format(val)
