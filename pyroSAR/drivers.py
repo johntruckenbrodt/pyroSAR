@@ -2220,7 +2220,9 @@ class Archive(object):
         required for postgres driver: port number to the database. Default: 5432
     cleanup: bool
         check whether all registered scenes exist and remove missing entries?
-
+    legacy: bool
+        open an outdated database in legacy mode to import into a new database.
+        Opening an outdated database without legacy mode will throw a RuntimeError.
 
     Examples
     ----------
@@ -2270,10 +2272,20 @@ class Archive(object):
     >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*\.zip'], regex=True, recursive=True)
     >>> with Archive(dbfile, driver='postgres', user='user', password='password', host='host', port=5432) as archive:
     >>>     archive.insert(scenes_s1)
+    
+    Importing an old database:
+    
+    >>> from pyroSAR import Archive
+    >>> db_new = 'scenes.db'
+    >>> db_old = 'scenes_old.db'
+    >>> with Archive(db_new) as db:
+    >>>     with Archive(db_old, legacy=True) as db_old:
+    >>>         db.import_outdated(db_old)
     """
     
     def __init__(self, dbfile, custom_fields=None, postgres=False, user='postgres',
-                 password='1234', host='localhost', port=5432, cleanup=True):
+                 password='1234', host='localhost', port=5432, cleanup=True,
+                 legacy=False):
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
@@ -2351,27 +2363,17 @@ class Archive(object):
         self.__init_data_table()
         self.__init_duplicates_table()
         
-        # update database with only one primary key
-        reinsert = None
         pk = sql_inspect(self.data_schema).primary_key
-        if 'product' not in pk.columns.keys():
-            log.info('performing database update')
-            self.conn.execute('ALTER TABLE data RENAME TO data_old')
-            self.meta = MetaData(bind=self.engine)
-            self.__init_data_table()
-            self.conn.execute('INSERT INTO data SELECT * from data_old')
-            reinsert = self.select_duplicates(value='scene')
-            self.conn.execute('DELETE FROM duplicates')
-            self.conn.execute('DROP TABLE data_old')
+        if 'product' not in pk.columns.keys() and not legacy:
+            raise RuntimeError("the 'data' table is missing a primary key 'product'. "
+                               "Please create a new database and import the old one "
+                               "opened in legacy mode using Archive.import_outdated.")
         
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
         self.Data = self.Base.classes.data
         self.Duplicates = self.Base.classes.duplicates
         self.dbfile = dbfile
-        
-        if reinsert is not None:
-            self.insert(reinsert)
         
         if cleanup:
             log.info('checking for missing scenes')
@@ -2843,26 +2845,40 @@ class Archive(object):
     
     def import_outdated(self, dbfile):
         """
-        import an older database in csv format
+        import an older database
 
         Parameters
         ----------
-        dbfile: str
-            the file name of the old database
+        dbfile: str or Archive
+            the old database. If this is a string, the name of a CSV file is expected.
 
         Returns
         -------
 
         """
-        with open(dbfile) as csvfile:
-            text = csvfile.read()
-            csvfile.seek(0)
-            dialect = csv.Sniffer().sniff(text)
-            reader = csv.DictReader(csvfile, dialect=dialect)
-            scenes = []
-            for row in reader:
-                scenes.append(row['scene'])
-            self.insert(scenes)
+        if isinstance(dbfile, str) and dbfile.endswith('csv'):
+            with open(dbfile) as csvfile:
+                text = csvfile.read()
+                csvfile.seek(0)
+                dialect = csv.Sniffer().sniff(text)
+                reader = csv.DictReader(csvfile, dialect=dialect)
+                scenes = []
+                for row in reader:
+                    scenes.append(row['scene'])
+                self.insert(scenes)
+        elif isinstance(dbfile, Archive):
+            select = dbfile.conn.execute('SELECT * from data')
+            columns = list(select.keys())
+            col_st = ', '.join(['[{}]'.format(col) for col in columns])
+            pl = ','.join(['?'] * len(columns))
+            st = 'INSERT INTO data ({0}) VALUES ({1})'.format(col_st, pl)
+            self.conn.execute(st, *select)
+            # duplicates in older databases may fit into the new data table
+            reinsert = dbfile.select_duplicates(value='scene')
+            if reinsert is not None:
+                self.insert(reinsert)
+        else:
+            raise RuntimeError("'dbfile' must either be a CSV file name or an Archive object")
     
     def move(self, scenelist, directory, pbar=False):
         """
