@@ -934,3 +934,20 @@ Auxiliary Data Handling
 - function :func:`pyroSAR.auxdata.dem_create`:
 
   + new argument `resampleAlg` to change the resampling algorithm
+
+0.22.0 | 2023-09-21
+===================
+
+Drivers
+-------
+- class :class:`pyroSAR.drivers.Archive`:
+
+  + allow multiple products with same `outname_base`, e.g. Sentinel-1 GRD and SLC; this required the introduction of a second primary key in the database
+  + method :meth:`~pyroSAR.drivers.Archive.import_outdated`: option to import data from an old database with only one primary key; this requires the old
+    database to be opened in legacy mode (new argument `legacy=True`)
+
+- class :class:`pyroSAR.drivers.SAFE`: support for handling Sentinel-1 OCN products (metadata reading and database handling)
+
+Auxiliary Data Handling
+-----------------------
+- class :class:`pyroSAR.auxdata.DEMHandler`: enabled handling of southern hemisphere geometries.

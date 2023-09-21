@@ -331,18 +331,20 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
         each (sub-)workflow containing this operator will be executed with the define executable;
         
          - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
+    
     gpt_args: list[str] or None
         a list of additional arguments to be passed to the gpt call
         
-        - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
+         - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
+    
     removeS1BorderNoiseMethod: str
         the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details;
         one of the following:
         
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement. This is only applied if the IPF version is
-         < 2.9 where additional noise removal was necessary. The outpur of the additional noise removal is stored
-         in the subdirectory bnr of `tmpdir`.
+           < 2.9 where additional noise removal was necessary. The output of the additional noise removal is stored
+           in the subdirectory bnr of `tmpdir`.
     
     Returns
     -------
