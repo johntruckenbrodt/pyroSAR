@@ -55,7 +55,7 @@ from .xml_util import getNamespaces
 from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder
 
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, insert
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
@@ -2868,11 +2868,7 @@ class Archive(object):
                 self.insert(scenes)
         elif isinstance(dbfile, Archive):
             select = dbfile.conn.execute('SELECT * from data')
-            columns = list(select.keys())
-            col_st = ', '.join(['[{}]'.format(col) for col in columns])
-            pl = ','.join(['?'] * len(columns))
-            st = 'INSERT INTO data ({0}) VALUES ({1})'.format(col_st, pl)
-            self.conn.execute(st, *select)
+            self.conn.execute(insert(self.Data).values(*select))
             # duplicates in older databases may fit into the new data table
             reinsert = dbfile.select_duplicates(value='scene')
             if reinsert is not None:
