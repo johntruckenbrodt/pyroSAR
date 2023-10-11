@@ -273,6 +273,8 @@ class ID(object):
         ~spatialist.vector.Vector or None
             the vector object if `outname` is None, None otherwise
         """
+        if 'coordinates' not in self.meta.keys():
+            raise NotImplementedError
         srs = crsConvert(self.projection, 'osr')
         ring = ogr.Geometry(ogr.wkbLinearRing)
         for coordinate in self.meta['coordinates']:
@@ -821,23 +823,21 @@ class BEAM_DIMAP(ID):
         else:
             self.meta['projection'] = crsConvert(4326, 'wkt')
         
-        longs = [
-            get_by_name('first_far_long', section=section),
-            get_by_name('first_near_long', section=section),
-            get_by_name('last_far_long', section=section),
-            get_by_name('last_near_long', section=section)
-        ]
-        lats = [
-            get_by_name('first_far_lat', section=section),
-            get_by_name('first_near_lat', section=section),
-            get_by_name('last_far_lat', section=section),
-            get_by_name('last_near_lat', section=section)
-        ]
-        # Convert to floats
-        longs = [float(lon) for lon in longs]
-        lats = [float(lat) for lat in lats]
+        keys = ['{}_{}_{}'.format(a, b, c)
+                for a in ['first', 'last']
+                for b in ['far', 'near']
+                for c in ['lat', 'long']]
+        coords = {key: float(get_by_name(key, section=section))
+                  for key in keys}
+        longs = [coords[x] for x in keys if x.endswith('long')]
+        lats = [coords[x] for x in keys if x.endswith('lat')]
+        
         self.meta['corners'] = {'xmin': min(longs), 'xmax': max(longs),
                                 'ymin': min(lats), 'ymax': max(lats)}
+        self.meta['coordinates'] = [(coords['first_near_long'], coords['first_near_lat']),
+                                    (coords['last_near_long'], coords['last_near_lat']),
+                                    (coords['last_far_long'], coords['last_far_lat']),
+                                    (coords['first_far_long'], coords['first_far_lat'])]
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
         raise RuntimeError('unpacking of BEAM-DIMAP products is not supported')
