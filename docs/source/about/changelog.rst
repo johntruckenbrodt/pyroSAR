@@ -951,3 +951,11 @@ Drivers
 Auxiliary Data Handling
 -----------------------
 - class :class:`pyroSAR.auxdata.DEMHandler`: enabled handling of southern hemisphere geometries.
+
+0.22.1 | 2023-10-11
+===================
+
+Drivers
+-------
+- class :class:`pyroSAR.drivers.BEAM_DIMAP`: enable calling inherited method :meth:`~pyroSAR.drivers.ID.geometry`
+
