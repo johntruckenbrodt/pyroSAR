@@ -471,8 +471,8 @@ def writer(xmlfile, outdir, basename_extensions=None,
         log.info(message.format('cleaning image edges and ' if clean_edges else ''))
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
-        
-        erode_edges(src=src, only_boundary=True, pixels=clean_edges_npixels)
+        if clean_edges:
+            erode_edges(src=src, only_boundary=True, pixels=clean_edges_npixels)
         
         if src_format == 'BEAM-DIMAP':
             src = src.replace('.dim', '.data')
@@ -1535,7 +1535,7 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
         return array, mask
     
     # make sure a backscatter image is used for creating the mask
-    backscatter = [x for x in images if re.search('^(?:Sig|Gam)ma0_', os.path.basename(x))]
+    backscatter = [x for x in images if re.search('^(?:Sigma0_|Gamma0_|C11|C22)', os.path.basename(x))]
     images.insert(0, images.pop(images.index(backscatter[0])))
     
     mask = None
