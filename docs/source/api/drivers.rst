@@ -19,6 +19,7 @@ Drivers
         ESA
         SAFE
         TSX
+        TDM
         Archive
 
     .. rubric:: functions
