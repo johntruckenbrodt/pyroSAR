@@ -393,7 +393,7 @@ class ExamineGamma(object):
                 setattr(self, 'home', home_sys)
             else:
                 raise RuntimeError('could not read GAMMA installation directory')
-        self.version = re.search('GAMMA_SOFTWARE-(?P<version>[0-9]{8})',
+        self.version = re.search('GAMMA_SOFTWARE[-/](?P<version>[0-9]{8})',
                                  getattr(self, 'home')).group('version')
         
         try:
