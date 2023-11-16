@@ -29,6 +29,7 @@ API Documentation
     api/auxdata
     api/datacube
     api/ancillary
+    api/examine
 
 About
 =====

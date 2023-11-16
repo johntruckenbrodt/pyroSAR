@@ -959,3 +959,18 @@ Drivers
 -------
 - class :class:`pyroSAR.drivers.BEAM_DIMAP`: enable calling inherited method :meth:`~pyroSAR.drivers.ID.geometry`
 
+0.22.2 | 2023-11-16
+===================
+
+SNAP API
+--------
+- function :func:`pyroSAR.snap.auxil.writer`: fixed bug in ignoring `erode_edges` argument
+- function :func:`pyroSAR.snap.auxil.erode_edges`: enable handling of polarimetric matrices
+
+Drivers
+-------
+- function :func:`pyroSAR.drivers.identify`: enable reading of :class:`~pyroSAR.drivers.TDM` products
+
+Misc
+----
+- class :class:`pyroSAR.examine.ExamineGamma`: enhanced flexibility in finding GAMMA installation
