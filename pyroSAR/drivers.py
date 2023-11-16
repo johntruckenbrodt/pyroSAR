@@ -117,7 +117,13 @@ def identify(scene):
     if not os.path.exists(scene):
         raise OSError("No such file or directory: '{}'".format(scene))
     
-    for handler in ID.__subclasses__():
+    def get_subclasses(c):
+        subclasses = c.__subclasses__()
+        for subclass in subclasses.copy():
+            subclasses.extend(get_subclasses(subclass))
+        return list(set(subclasses))
+    
+    for handler in get_subclasses(ID):
         try:
             return handler(scene)
         except (RuntimeError, KeyError, AttributeError):
