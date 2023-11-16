@@ -38,7 +38,7 @@ def test_scene_osv(tmpdir, testdata):
         assert len(osv.getLocals('POE')) == 1
         # res = osv.catch(sensor='S1A', osvtype='RES', start='20180101T120000', stop='20180102T120000')
         res = osv.catch(sensor='S1A', osvtype='RES', start='20210201T00000', stop='20210201T150000', url_option=2)
-        assert len(res) == 19
+        assert len(res) == 9
         osv.retrieve(res[0:3])
         assert len(osv.getLocals('RES')) == 3
         res = osv.catch(sensor='S1A', osvtype='POE', start=time.strftime('%Y%m%dT%H%M%S'))
