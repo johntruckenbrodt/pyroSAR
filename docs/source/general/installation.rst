@@ -130,3 +130,8 @@ To test `pysqlite2` you can import it as follows and then run the test above:
 
 Installing this package is likely to cause problems with the `sqlite3` library installed on the system.
 Thus, it is safer to build a static `sqlite3` library for it (see installation script).
+
+GAMMA
+-----
+GAMMA's home directory as environment variable 'GAMMA_HOME' is expected to end either as GAMMA_SOFTWARE-<VERSIONNUMBER> or GAMMA_SOFTWARE/<VERSIONNUMBER>. 
+If this differs in your install and cannot be changed, a workaround is adjusting the expected pattern in :class:`~pyroSAR.examine.ExamineGamma`.

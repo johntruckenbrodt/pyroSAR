@@ -705,6 +705,9 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
         VW-simplified result.
 
     """
+    if scene.product != 'GRD':
+        raise RuntimeError('this method is intended for GRD only')
+    
     if scene.compression is not None:
         raise RuntimeError('scene is not yet unpacked')
     

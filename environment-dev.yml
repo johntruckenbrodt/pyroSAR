@@ -5,13 +5,13 @@ channels:
 dependencies:
   - progressbar2
   - numpy
-  - spatialist>=0.12.0
+  - spatialist>=0.12.1
   - pyyaml
   - requests
   - psycopg2
   - sqlalchemy>=1.4,<2.0
   - sqlalchemy-utils>=0.37
-  - geoalchemy2
+  - geoalchemy2<0.14.0
   - gdal>=2.4
   - pillow
   - lxml
