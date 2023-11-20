@@ -408,8 +408,9 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
 
 class DEMHandler:
     """
-    | An interface to obtain DEM data for selected geometries.
-    | The files are downloaded into the ESA SNAP auxiliary data directory structure.
+    An interface to obtain DEM data for selected geometries.
+    The files are downloaded into the ESA SNAP auxiliary data directory structure.
+    This class is the foundation for the convenience function :func:`~pyroSAR.auxdata.dem_autoload`.
     
     Parameters
     ----------
@@ -631,7 +632,7 @@ class DEMHandler:
         """
         for key, val in self.config[dem_type]['resolution'].items():
             ymin, ymax = [int(y) for y in key.split('-')]
-            if ymin <= y <= ymax:
+            if ymin <= abs(y) <= ymax:
                 return val
     
     @staticmethod
