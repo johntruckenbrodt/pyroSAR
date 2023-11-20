@@ -2521,7 +2521,8 @@ class Archive(object):
                 except sqlite3.OperationalError:
                     continue
         elif platform.system() == 'Darwin':
-            for option in ['mod_spatialite.so', 'mod_spatialite.7.dylib']:  # , 'mod_spatialite.dylib']:
+            for option in ['mod_spatialite.so', 'mod_spatialite.7.dylib',
+                           'mod_spatialite.dylib']:
                 try:
                     dbapi_conn.load_extension(option)
                 except sqlite3.OperationalError:
