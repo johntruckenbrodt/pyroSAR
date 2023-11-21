@@ -1739,11 +1739,6 @@ class SAFE(ID):
         --------
         :class:`pyroSAR.S1.OSV`
         """
-        date = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
-        # create a time span with one day before and one after the acquisition
-        before = (date - timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
-        after = (date + timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
-        
         with S1.OSV(osvdir, timeout=timeout) as osv:
             if useLocal:
                 match = osv.match(sensor=self.sensor, timestamp=self.start,
@@ -1753,15 +1748,15 @@ class SAFE(ID):
             
             if osvType in ['POE', 'RES']:
                 files = osv.catch(sensor=self.sensor, osvtype=osvType,
-                                  start=before, stop=after,
+                                  start=self.start, stop=self.stop,
                                   url_option=url_option)
             elif sorted(osvType) == ['POE', 'RES']:
                 files = osv.catch(sensor=self.sensor, osvtype='POE',
-                                  start=before, stop=after,
+                                  start=self.start, stop=self.stop,
                                   url_option=url_option)
                 if len(files) == 0:
                     files = osv.catch(sensor=self.sensor, osvtype='RES',
-                                      start=before, stop=after,
+                                      start=self.start, stop=self.stop,
                                       url_option=url_option)
             else:
                 msg = "osvType must either be 'POE', 'RES' or a list of both"
