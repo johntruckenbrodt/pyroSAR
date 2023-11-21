@@ -438,7 +438,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
 
 
 def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
-               logpath=None, outdir=None, shellscript=None):
+               logpath=None, outdir=None, shellscript=None, url_option=1):
     """
     correct GAMMA parameter files with orbit state vector information from dedicated OSV files;
     OSV files are downloaded automatically to either the defined `osvdir` or relative to the
@@ -463,6 +463,8 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
         the directory to execute the command in
     shellscript: str or None
         a file to write the GAMMA commands to in shell format
+    url_option: int
+        the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch`
     
     Returns
     -------
@@ -506,7 +508,7 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
             auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
         osvdir = os.path.join(auxdatapath, 'Orbits', 'Sentinel-1')
     try:
-        id.getOSV(osvdir, osvType, timeout=timeout)
+        id.getOSV(osvdir, osvType, timeout=timeout, url_option=url_option)
     except URLError:
         log.warning('..no internet access')
     
