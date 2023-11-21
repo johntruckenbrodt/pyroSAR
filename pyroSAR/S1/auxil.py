@@ -32,6 +32,7 @@ import progressbar as pb
 from spatialist.ancillary import finder
 
 import logging
+
 log = logging.getLogger(__name__)
 
 try:
@@ -221,6 +222,9 @@ class OSV(object):
     def __catch_step_auxdata(self, sensor, start, stop, osvtype='POE'):
         url = 'https://step.esa.int/auxdata/orbits/Sentinel-1'
         skeleton = '{url}/{osvtype}ORB/{sensor}/{year}/{month:02d}/'
+        
+        if osvtype not in ['POE', 'RES']:
+            raise RuntimeError("osvtype must be either 'POE' or 'RES'")
         
         if isinstance(sensor, str):
             sensor = [sensor]
@@ -596,7 +600,7 @@ class OSV(object):
             response = requests.get(remote, auth=auth, timeout=self.timeout)
             response.raise_for_status()
             infile = response.content
-
+            
             # use a tempfile to allow atomic writes in the case of
             # parallel executions dependent on the same orbit files
             fd, tmp_path = tempfile.mkstemp(prefix=os.path.basename(local), dir=os.path.dirname(local))
@@ -620,7 +624,7 @@ class OSV(object):
             except Exception as e:
                 os.unlink(tmp_path)
                 raise
-
+            
             if pbar:
                 i += 1
                 progress.update(i)
