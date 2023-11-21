@@ -35,7 +35,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
             speckleFilter=False, refarea='gamma0', clean_edges=False, clean_edges_npixels=1,
-            rlks=None, azlks=None, dem_oversampling_multiple=2, osv_url_option=1):
+            rlks=None, azlks=None, dem_oversampling_multiple=2, s1_osv_url_option=1):
     """
     general function for geocoding of SAR backscatter images with SNAP.
     
@@ -203,7 +203,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         Used only for terrain flattening.
         The SNAP default of 1 has been found to be insufficient with stripe
         artifacts remaining in the image.
-    osv_url_option: int
+    s1_osv_url_option: int
         the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch`
     
     Returns
@@ -375,7 +375,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
     ############################################
     # Apply-Orbit-File node configuration
     orb = orb_parametrize(scene=id, formatName=formatName, allow_RES_OSV=allow_RES_OSV,
-                          url_option=osv_url_option)
+                          url_option=s1_osv_url_option)
     workflow.insert_node(orb, before=last.id)
     last = orb
     ############################################
