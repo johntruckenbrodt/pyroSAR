@@ -394,10 +394,9 @@ class OSV(object):
         stop: str or None
             the date to stop searching for files in format YYYYmmddTHHMMSS
         url_option: int
-            the URL to query for OSV files
+            the OSV download URL option
             
-             - 1: https://scihub.copernicus.eu/gnss
-             - 2: https://step.esa.int/auxdata/orbits/Sentinel-1
+             - 1: https://step.esa.int/auxdata/orbits/Sentinel-1
 
         Returns
         -------
@@ -418,11 +417,9 @@ class OSV(object):
             stop = datetime.now()
         
         if url_option == 1:
-            items = self.__catch_gnss(sensor, start, stop, osvtype)
-        elif url_option == 2:
             items = self.__catch_step_auxdata(sensor, start, stop, osvtype)
         else:
-            raise ValueError("'url_option' must be either 1 or 2")
+            raise ValueError("unknown URL option")
         
         if osvtype == 'RES' and self.maxdate('POE', 'stop') is not None:
             items = [x for x in items

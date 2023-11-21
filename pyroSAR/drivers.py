@@ -1728,10 +1728,7 @@ class SAFE(ID):
         timeout: int or tuple or None
             the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
         url_option: int
-            the URL to query for scenes
-            
-             - 1: https://scihub.copernicus.eu/gnss
-             - 2: https://step.esa.int/auxdata/orbits/Sentinel-1
+            the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch` for options
 
         Returns
         -------
