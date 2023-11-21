@@ -1619,7 +1619,7 @@ def mli_parametrize(scene, spacing=None, rlks=None, azlks=None, **kwargs):
         return ml
 
 
-def orb_parametrize(scene, formatName, allow_RES_OSV=True, **kwargs):
+def orb_parametrize(scene, formatName, allow_RES_OSV=True, url_option=1, **kwargs):
     """
     convenience function for parametrizing an `Apply-Orbit-File`.
     Required Sentinel-1 orbit files are directly downloaded.
@@ -1636,6 +1636,8 @@ def orb_parametrize(scene, formatName, allow_RES_OSV=True, **kwargs):
         the scene's data format
     allow_RES_OSV: bool
         (only applies to Sentinel-1) Also allow the less accurate RES orbit files to be used?
+    url_option: int
+        the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch`
     kwargs
         further keyword arguments for node parametrization. Known options:
         
@@ -1655,9 +1657,9 @@ def orb_parametrize(scene, formatName, allow_RES_OSV=True, **kwargs):
     
     if formatName == 'SENTINEL-1':
         osv_type = ['POE', 'RES'] if allow_RES_OSV else 'POE'
-        match = scene.getOSV(osvType=osv_type, returnMatch=True)
+        match = scene.getOSV(osvType=osv_type, returnMatch=True, url_option=url_option)
         if match is None and allow_RES_OSV:
-            scene.getOSV(osvType='RES')
+            scene.getOSV(osvType='RES', url_option=url_option)
             orbitType = 'Sentinel Restituted (Auto Download)'
     
     orb = parse_node('Apply-Orbit-File')
