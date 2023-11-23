@@ -974,3 +974,28 @@ Drivers
 Misc
 ----
 - class :class:`pyroSAR.examine.ExamineGamma`: enhanced flexibility in finding GAMMA installation
+
+0.23.0 | 2023-11-23
+===================
+
+Drivers
+-------
+- class :class:`pyroSAR.drivers.Archive`: fixed bug in loading spatialite on Darwin-based systems
+
+Auxiliary Data Handling
+-----------------------
+
+changes to Sentinel-1 OSV data handling:
+
+- method :meth:`pyroSAR.S1.OSV.catch`:
+
+  + removed `url_option` 1 (https://scihub.copernicus.eu/gnss)
+  + made option 2 the new default option 1 (https://step.esa.int/auxdata/orbits/Sentinel-1)
+
+- added new arguments to the following functions:
+
+  + :func:`pyroSAR.gamma.correctOSV`: `url_option`
+  + :func:`pyroSAR.gamma.geocode`: `s1_osv_url_option`
+  + :func:`pyroSAR.snap.auxil.orb_parametrize`: `url_option`
+  + :func:`pyroSAR.snap.util.geocode`: `s1_osv_url_option`
+  + :func:`pyroSAR.snap.util.noise_power`: `osv_url_option`
