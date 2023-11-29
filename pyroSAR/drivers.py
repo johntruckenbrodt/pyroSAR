@@ -3441,13 +3441,13 @@ def compare_vector_to_many_geometries_by_name(vector, filepaths):
         list containing the overlapping files' names
     """
     refined = []
-    results = identify_many(filepaths)
     with vector.clone() as vec:
         vec.reproject(4326)
         site_geom = vec.convert2wkt(set3D=False)[0]
         site_geom = ogr.CreateGeometryFromWkt(site_geom)
         
-        for s in results:
+        for s in filepaths:
+            s = identify(s)
             geometry = s.geometry()
             geometry.reproject(4326)
             geometry = geometry.convert2wkt(set3D=False)[0]
