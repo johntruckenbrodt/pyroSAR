@@ -2968,7 +2968,7 @@ class Archive(object):
             log.info('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
     
     def select(self, vectorobject=None, mindate=None, maxdate=None, date_strict=True,
-               processdir=None, recursive=False, polarizations=None, **args):
+               processdir=None, recursive=False, polarizations=None, by_geometry=False, **args):
         """
         select scenes from the database
 
@@ -3082,7 +3082,10 @@ class Archive(object):
         ret = []
         for x in scenes:
             ret.append(self.encode(x[0]))
-        
+
+        if vectorobject and by_geometry:
+            ret = compare_vector_to_many_geometries_by_name(vectorobject, ret)
+          
         return ret
     
     def select_duplicates(self, outname_base=None, scene=None, value='id'):
@@ -3418,3 +3421,39 @@ def parse_date(x):
         raise ValueError('unknown time format; check function parse_date')
     else:
         raise ValueError('input must be either a string or a datetime object')
+
+
+def compare_vector_to_many_geometries_by_name(vector, filepaths):
+    """
+    Checks if a given vector intersects with the geometries drawn from a list of filepaths via identify.geometry.
+    Returns only overlapping files.
+    
+    Parameters
+    ----------
+    vector: spatialist.Vector
+        the Vector to compare against
+    filepaths: list(str)
+        list of strings pointing to files readable by pyroSAR.drivers.identify_many
+
+    Returns
+    -------
+    list(str):
+        list containing the overlapping files' names
+    """
+    refined = []
+    results = identify_many(filepaths)
+    with vector.clone() as vec:
+        vec.reproject(4326)
+        site_geom = vec.convert2wkt(set3D=False)[0]
+        site_geom = ogr.CreateGeometryFromWkt(site_geom)
+        
+        for s in results:
+            geometry = s.geometry()
+            geometry.reproject(4326)
+            geometry = geometry.convert2wkt(set3D=False)[0]
+            geometry = ogr.CreateGeometryFromWkt(geometry)
+
+            intersects = site_geom.Intersects(geometry)
+            refined.append(intersects)
+        
+    return [filepath for filepath, condition in zip(filepaths, refined) if condition]
