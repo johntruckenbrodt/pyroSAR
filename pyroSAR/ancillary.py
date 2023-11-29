@@ -1,7 +1,7 @@
 ###############################################################################
 # ancillary routines for software pyroSAR
 
-# Copyright (c) 2014-2022, the pyroSAR Developers.
+# Copyright (c) 2014-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -19,7 +19,7 @@ import re
 from math import sin, radians
 import inspect
 from datetime import datetime
-from ._dev_config import product_pattern
+from . import patterns
 
 from spatialist.ancillary import finder
 
@@ -41,7 +41,7 @@ def groupby(images, attribute):
     list[list[str]]
         a list of sub-lists containing the grouped images
     """
-    images_sort = sorted(images, key=lambda x: re.search(product_pattern, x).group(attribute))
+    images_sort = sorted(images, key=lambda x: re.search(patterns.pyrosar, x).group(attribute))
     out_meta = [[parse_datasetname(images_sort.pop(0))]]
     while len(images_sort) > 0:
         filename = images_sort.pop(0)
@@ -180,7 +180,7 @@ def parse_datasetname(name, parse_date=False):
     
     filename = os.path.abspath(name) if os.path.isfile(name) else name
     
-    match = re.match(re.compile(product_pattern), filename)
+    match = re.match(re.compile(patterns.pyrosar), filename)
     if not match:
         return
     out = match.groupdict()
@@ -222,7 +222,7 @@ def find_datasets(directory, recursive=False, **kwargs):
     --------
     >>> selection = find_datasets('path/to/files', sensor=('S1A', 'S1B'), polarization='VV')
     """
-    files = finder(directory, [product_pattern], regex=True, recursive=recursive)
+    files = finder(directory, [patterns.pyrosar], regex=True, recursive=recursive)
     selection = []
     for file in files:
         meta = parse_datasetname(file)
