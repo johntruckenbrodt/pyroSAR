@@ -2,7 +2,7 @@
 ###############################################################################
 # pyroSAR configuration handling
 
-# Copyright (c) 2018-2021, the pyroSAR Developers.
+# Copyright (c) 2018-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -19,19 +19,6 @@ import configparser as ConfigParser
 
 __LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode',
              'start', 'stop', 'product', 'spacing', 'samples', 'lines']
-
-# a pattern to search for pyroSAR processing products and extract metadata attributes from the file name
-product_pattern = r'(?:.*[/\\]|)' \
-                  r'(?P<outname_base>' \
-                  r'(?P<sensor>[A-Z0-9]{1,4})_+' \
-                  r'(?P<acquisition_mode>[A-Z0-9]{1,4})_+' \
-                  r'(?P<orbit>[AD])_' \
-                  r'(?P<start>[0-9T]{15})' \
-                  r'(?:_(?P<extensions>\w*?)|)' \
-                  r')_*' \
-                  r'(?:(?P<polarization>[HV]{2})_' \
-                  r'(?P<proc_steps>[\w-]*)|)' \
-                  r'(?P<filetype>(?:.tif|.nc|))$'
 
 
 class Storage(dict):
