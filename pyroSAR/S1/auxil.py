@@ -1,7 +1,7 @@
 ###############################################################################
 # general utilities for Sentinel-1
 
-# Copyright (c) 2016-2021, the pyroSAR Developers.
+# Copyright (c) 2016-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -21,6 +21,7 @@ import zipfile as zf
 from io import BytesIO
 from datetime import datetime, timedelta
 from dateutil import parser as dateutil_parser
+from dateutil.relativedelta import relativedelta
 import xml.etree.ElementTree as ET
 import numpy as np
 from osgeo import gdal
@@ -234,6 +235,7 @@ class OSV(object):
             date_search = datetime(year=start.year,
                                    month=start.month,
                                    day=1)
+            date_search -= relativedelta(months=1)
             busy = True
             while busy:
                 url_sub = skeleton.format(url=url,
@@ -258,11 +260,9 @@ class OSV(object):
                                       'auth': None})
                     if start2 >= stop:
                         busy = False
-                if date_search.month < 12:
-                    date_search = date_search.replace(month=date_search.month + 1)
-                else:
-                    date_search = date_search.replace(year=date_search.year + 1, month=1)
-        
+                date_search += relativedelta(months=1)
+                if date_search > datetime.now():
+                    busy = False
         return files
     
     def __catch_gnss(self, sensor, start, stop, osvtype='POE'):
@@ -611,8 +611,8 @@ class OSV(object):
                         members = tmp.namelist()
                         target = [x for x in members if re.search(basename, x)][0]
                         with zf.ZipFile(tmp_path, 'w') as outfile:
-                            outfile.write(filename=tmp.extract(target),
-                                          arcname=basename)
+                            outfile.writestr(data=tmp.read(target),
+                                             zinfo_or_arcname=basename)
                 else:
                     with zf.ZipFile(file=tmp_path,
                                     mode='w',
