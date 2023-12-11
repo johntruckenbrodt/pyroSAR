@@ -611,8 +611,8 @@ class OSV(object):
                         members = tmp.namelist()
                         target = [x for x in members if re.search(basename, x)][0]
                         with zf.ZipFile(tmp_path, 'w') as outfile:
-                            outfile.write(filename=tmp.extract(target),
-                                          arcname=basename)
+                            outfile.writestr(data=tmp.read(target),
+                                             zinfo_or_arcname=basename)
                 else:
                     with zf.ZipFile(file=tmp_path,
                                     mode='w',
