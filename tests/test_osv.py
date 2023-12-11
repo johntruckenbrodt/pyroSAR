@@ -37,7 +37,12 @@ def test_scene_osv(tmpdir, testdata):
             os.remove(item)
         assert len(osv.getLocals('POE')) == 1
         res = osv.catch(sensor='S1A', osvtype='RES', start='20210201T00000', stop='20210201T150000', url_option=1)
-        assert len(res) == 9
+        assert len(res) == 11
         osv.retrieve(res[0:3])
         assert len(osv.getLocals('RES')) == 3
-        res = osv.catch(sensor='S1A', osvtype='POE', start=time.strftime('%Y%m%dT%H%M%S'))
+        # check retrieving files for the current day (e.g. to ensure that search is not extended to the future)
+        poe = osv.catch(sensor='S1A', osvtype='POE', start=time.strftime('%Y%m%dT%H%M%S'))
+        assert len(poe) == 0
+        # check retrieving files whose start is in the previous month of the search start
+        poe = osv.catch(sensor='S1A', osvtype='POE', start='20220201T163644', stop='20220201T163709')
+        assert len(poe) == 1
