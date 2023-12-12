@@ -236,11 +236,12 @@ class ID(object):
         return '\n'.join(lines)
     
     @staticmethod
-    def __reorder_coordinates(coords):
+    def __geometry_coordinates(coords):
         """
-        Reorder a list of coordinates to [lower left, upper left, upper right, lower right]
-        so that it can be used for creating a polygon object in :meth:`geometry`.
-        The coordinate position is determined by the distance to the bounding box coordinates.
+        Get the corner coordinates of the scene footprint as [lower left, upper left,
+        upper right, lower right] so that it can be used for creating a polygon object
+        in :meth:`geometry`.
+        The coordinate positions is determined by the distance to the bounding box coordinates.
         
         Parameters
         ----------
@@ -250,7 +251,7 @@ class ID(object):
         Returns
         -------
         list[tuple[float]]
-            the reordered list of coordinates
+            the corner coordinates of the footprint geometry
         """
         lat = [c[1] for c in coords]
         lon = [c[0] for c in coords]
@@ -316,7 +317,7 @@ class ID(object):
             raise NotImplementedError
         srs = crsConvert(self.projection, 'osr')
         ring = ogr.Geometry(ogr.wkbLinearRing)
-        coordinates = self.__reorder_coordinates(self.meta['coordinates'])
+        coordinates = self.__geometry_coordinates(self.meta['coordinates'])
         for coordinate in coordinates:
             ring.AddPoint(*coordinate)
         ring.CloseRings()
@@ -931,8 +932,9 @@ class CEOS_ERS(ID):
         super(CEOS_ERS, self).__init__(self.meta)
     
     def getCorners(self):
-        lat = [x[1][1] for x in self.meta['gcps']]
-        lon = [x[1][0] for x in self.meta['gcps']]
+        coordinates = self.meta['coordinates']
+        lat = [x[1] for x in coordinates]
+        lon = [x[0] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
@@ -979,6 +981,11 @@ class CEOS_ERS(ID):
         # text_subset = lea[re.search('FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]', lea).start() - 13:]
         # meta['k_db'] = -10*math.log(float(text_subset[663:679].strip()), 10)
         # meta['antenna_flag'] = int(text_subset[659:663].strip())
+        
+        lat = [x[1][1] for x in self.meta['gcps']]
+        lon = [x[1][0] for x in self.meta['gcps']]
+        meta['coordinates'] = list(zip(lon, lat))
+        
         return meta
         
         # def correctAntennaPattern(self):
