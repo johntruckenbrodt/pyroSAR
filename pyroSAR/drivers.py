@@ -807,8 +807,7 @@ class BEAM_DIMAP(ID):
         
         self.root = None
         self.scene = scene
-        self.meta = dict()
-        self.scanMetadata()
+        self.meta = self.scanMetadata()
         
         super(BEAM_DIMAP, self).__init__(self.meta)
     
@@ -816,6 +815,8 @@ class BEAM_DIMAP(ID):
         return self.meta['corners']
     
     def scanMetadata(self):
+        meta = dict()
+        
         self.root = ET.parse(self.scene).getroot()
         
         def get_by_name(attr, section='Abstracted_Metadata'):
@@ -827,42 +828,42 @@ class BEAM_DIMAP(ID):
             return out.text
         
         section = 'Abstracted_Metadata'
-        self.meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE', section=section)
-        self.meta['IPF_version'] = get_by_name('Processing_system_identifier', section=section)
-        self.meta['sensor'] = get_by_name('MISSION', section=section).replace('ENTINEL-', '')
-        self.meta['orbit'] = get_by_name('PASS', section=section)[0]
+        meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE', section=section)
+        meta['IPF_version'] = get_by_name('Processing_system_identifier', section=section)
+        meta['sensor'] = get_by_name('MISSION', section=section).replace('ENTINEL-', '')
+        meta['orbit'] = get_by_name('PASS', section=section)[0]
         pols = [x.text for x in self.root.findall('.//MDATTR[@desc="Polarization"]')]
-        self.meta['polarizations'] = list(set([x for x in pols if '-' not in x]))
-        self.meta['spacing'] = (round(float(get_by_name('range_spacing', section=section)), 6),
-                                round(float(get_by_name('azimuth_spacing', section=section)), 6))
-        self.meta['samples'] = int(self.root.find('.//BAND_RASTER_WIDTH').text)
-        self.meta['lines'] = int(self.root.find('.//BAND_RASTER_HEIGHT').text)
-        self.meta['bands'] = int(self.root.find('.//NBANDS').text)
-        self.meta['orbitNumber_abs'] = int(get_by_name('ABS_ORBIT', section=section))
-        self.meta['orbitNumber_rel'] = int(get_by_name('REL_ORBIT', section=section))
-        self.meta['cycleNumber'] = int(get_by_name('orbit_cycle', section=section))
-        self.meta['frameNumber'] = int(get_by_name('data_take_id', section=section))
-        self.meta['product'] = self.root.find('.//PRODUCT_TYPE').text
+        meta['polarizations'] = list(set([x for x in pols if '-' not in x]))
+        meta['spacing'] = (round(float(get_by_name('range_spacing', section=section)), 6),
+                           round(float(get_by_name('azimuth_spacing', section=section)), 6))
+        meta['samples'] = int(self.root.find('.//BAND_RASTER_WIDTH').text)
+        meta['lines'] = int(self.root.find('.//BAND_RASTER_HEIGHT').text)
+        meta['bands'] = int(self.root.find('.//NBANDS').text)
+        meta['orbitNumber_abs'] = int(get_by_name('ABS_ORBIT', section=section))
+        meta['orbitNumber_rel'] = int(get_by_name('REL_ORBIT', section=section))
+        meta['cycleNumber'] = int(get_by_name('orbit_cycle', section=section))
+        meta['frameNumber'] = int(get_by_name('data_take_id', section=section))
+        meta['product'] = self.root.find('.//PRODUCT_TYPE').text
         
         srgr = bool(int(get_by_name('srgr_flag', section=section)))
-        self.meta['image_geometry'] = 'GROUND_RANGE' if srgr else 'SLANT_RANGE'
+        meta['image_geometry'] = 'GROUND_RANGE' if srgr else 'SLANT_RANGE'
         
         inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
         incidence = [float(x.text) for x in inc_elements]
-        self.meta['incidence'] = median(incidence)
+        meta['incidence'] = median(incidence)
         
         # Metadata sections that need some parsing to match naming convention with SAFE format
         start = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_START_TIME').text,
                                   '%d-%b-%Y %H:%M:%S.%f')
-        self.meta['start'] = start.strftime('%Y%m%dT%H%M%S')
+        meta['start'] = start.strftime('%Y%m%dT%H%M%S')
         stop = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_STOP_TIME').text,
                                  '%d-%b-%Y %H:%M:%S.%f')
-        self.meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
+        meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
         
         if self.root.find('.//WKT') is not None:
-            self.meta['projection'] = self.root.find('.//WKT').text.lstrip()
+            meta['projection'] = self.root.find('.//WKT').text.lstrip()
         else:
-            self.meta['projection'] = crsConvert(4326, 'wkt')
+            meta['projection'] = crsConvert(4326, 'wkt')
         
         keys = ['{}_{}_{}'.format(a, b, c)
                 for a in ['first', 'last']
@@ -870,15 +871,12 @@ class BEAM_DIMAP(ID):
                 for c in ['lat', 'long']]
         coords = {key: float(get_by_name(key, section=section))
                   for key in keys}
-        longs = [coords[x] for x in keys if x.endswith('long')]
-        lats = [coords[x] for x in keys if x.endswith('lat')]
         
-        self.meta['corners'] = {'xmin': min(longs), 'xmax': max(longs),
-                                'ymin': min(lats), 'ymax': max(lats)}
-        self.meta['coordinates'] = [(coords['first_near_long'], coords['first_near_lat']),
-                                    (coords['last_near_long'], coords['last_near_lat']),
-                                    (coords['last_far_long'], coords['last_far_lat']),
-                                    (coords['first_far_long'], coords['first_far_lat'])]
+        meta['coordinates'] = [(coords['first_near_long'], coords['first_near_lat']),
+                               (coords['last_near_long'], coords['last_near_lat']),
+                               (coords['last_far_long'], coords['last_far_lat']),
+                               (coords['first_far_long'], coords['first_far_lat'])]
+        return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
         raise RuntimeError('unpacking of BEAM-DIMAP products is not supported')
