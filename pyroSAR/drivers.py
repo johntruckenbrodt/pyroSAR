@@ -228,7 +228,7 @@ class ID(object):
         for item in sorted(self.locals):
             value = getattr(self, item)
             if item == 'projection':
-                value = crsConvert(value, 'proj4')
+                value = crsConvert(value, 'proj4') if value is not None else None
             if value == -1:
                 value = '<no global value per product>'
             line = '{0}: {1}'.format(item, value)
@@ -1270,8 +1270,12 @@ class CEOS_PSR(ID):
             meta['projection'] = src_srs.ExportToWkt()
         
         else:
-            meta['coordinates'] = self._img_get_coordinates()
-            meta['projection'] = crsConvert(4326, 'wkt')
+            coordinates = self._img_get_coordinates()
+            if all([x == (0, 0) for x in coordinates]):
+                meta['projection'] = None
+            else:
+                meta['coordinates'] = coordinates
+                meta['projection'] = crsConvert(4326, 'wkt')
         ################################################################################################################
         # read data set summary record
         
