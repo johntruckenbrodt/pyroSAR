@@ -1303,11 +1303,17 @@ class CEOS_PSR(ID):
         try:
             meta['lines'] = int(dataSetSummary[324:332]) * 2
         except ValueError:
-            meta['lines'] = None
+            if 'Pdi_NoOfLines' in meta.keys():
+                meta['lines'] = meta['Pdi_NoOfLines']
+            else:
+                meta['lines'] = None
         try:
             meta['samples'] = int(dataSetSummary[332:340]) * 2
         except ValueError:
-            meta['samples'] = None
+            if 'Pdi_NoOfPixels' in meta.keys():
+                meta['samples'] = meta['Pdi_NoOfPixels']
+            else:
+                meta['samples'] = None
         meta['incidence'] = float(dataSetSummary[484:492])
         meta['wavelength'] = float(dataSetSummary[500:516]) * 100  # in cm
         meta['proc_facility'] = dataSetSummary[1046:1062].strip()
