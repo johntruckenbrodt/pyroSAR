@@ -1559,11 +1559,6 @@ class ESA(ID):
         
         self.meta = self.scanMetadata()
         
-        corners = self.getCorners()
-        self.meta['coordinates'] = [tuple([corners['xmin'], corners['ymin']]),
-                                    tuple([corners['xmin'], corners['ymax']]),
-                                    tuple([corners['xmax'], corners['ymin']]),
-                                    tuple([corners['xmax'], corners['ymax']])]
         self.meta['acquisition_mode'] = match2.group('image_mode')
         self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
         self.meta['frameNumber'] = int(match.group('counter'))
@@ -1587,8 +1582,9 @@ class ESA(ID):
         super(ESA, self).__init__(self.meta)
     
     def getCorners(self):
-        lon = [self.meta[x] for x in self.meta if re.search('LONG', x)]
-        lat = [self.meta[x] for x in self.meta if re.search('LAT', x)]
+        coordinates = self.meta['coordinates']
+        lat = [x[1] for x in coordinates]
+        lon = [x[0] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def scanMetadata(self):
@@ -1609,6 +1605,11 @@ class ESA(ID):
         meta['orbitNumber_abs'] = meta['MPH_ABS_ORBIT']
         meta['orbitNumber_rel'] = meta['MPH_REL_ORBIT']
         meta['cycleNumber'] = meta['MPH_CYCLE']
+        
+        lon = [v for k, v in meta.items() if re.search('LONG', k)]
+        lat = [v for k, v in meta.items() if re.search('LAT', k)]
+        meta['coordinates'] = list(zip(lon, lat))
+        
         return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
