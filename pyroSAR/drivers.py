@@ -235,6 +235,39 @@ class ID(object):
             lines.append(line)
         return '\n'.join(lines)
     
+    @staticmethod
+    def __reorder_coordinates(coords):
+        """
+        Reorder a list of coordinates to [lower left, upper left, upper right, lower right]
+        so that it can be used for creating a polygon object in :meth:`geometry`.
+        The coordinate position is determined by the distance to the bounding box coordinates.
+        
+        Parameters
+        ----------
+        coords: list[tuple[float]]
+            a list of coordinates as [(x, y), ...]
+
+        Returns
+        -------
+        list[tuple[float]]
+            the reordered list of coordinates
+        """
+        lat = [c[1] for c in coords]
+        lon = [c[0] for c in coords]
+        xmin = min(lon)
+        xmax = max(lon)
+        ymin = min(lat)
+        ymax = max(lat)
+        ll_dist = [math.hypot(c[0] - xmin, c[1] - ymin) for c in coords]
+        lr_dist = [math.hypot(c[0] - xmax, c[1] - ymin) for c in coords]
+        ul_dist = [math.hypot(c[0] - xmin, c[1] - ymax) for c in coords]
+        ur_dist = [math.hypot(c[0] - xmax, c[1] - ymax) for c in coords]
+        ll = coords[ll_dist.index(min(ll_dist))]
+        ul = coords[ul_dist.index(min(ul_dist))]
+        ur = coords[ur_dist.index(min(ur_dist))]
+        lr = coords[lr_dist.index(min(lr_dist))]
+        return ll, ul, ur, lr
+    
     def bbox(self, outname=None, driver=None, overwrite=True):
         """
         get the bounding box of a scene either as a vector object or written to a file
@@ -283,7 +316,8 @@ class ID(object):
             raise NotImplementedError
         srs = crsConvert(self.projection, 'osr')
         ring = ogr.Geometry(ogr.wkbLinearRing)
-        for coordinate in self.meta['coordinates']:
+        coordinates = self.__reorder_coordinates(self.meta['coordinates'])
+        for coordinate in coordinates:
             ring.AddPoint(*coordinate)
         ring.CloseRings()
         
@@ -1968,13 +2002,9 @@ class TSX(ID):
         super(TSX, self).__init__(self.meta)
     
     def getCorners(self):
-        geocs = self.getFileObj(self.findfiles('GEOREF.xml')[0]).getvalue()
-        tree = ET.fromstring(geocs)
-        pts = tree.findall('.//gridPoint')
-        lat = [float(x.find('lat').text) for x in pts]
-        lon = [float(x.find('lon').text) for x in pts]
-        # shift lon in case of west direction.
-        lon = [x - 360 if x > 180 else x for x in lon]
+        coordinates = self.meta['coordinates']
+        lat = [x[1] for x in coordinates]
+        lon = [x[0] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def scanMetadata(self):
@@ -2005,6 +2035,16 @@ class TSX(ID):
         azlks = float(tree.find('.//imageDataInfo/imageRaster/azimuthLooks', namespaces).text)
         meta['looks'] = (rlks, azlks)
         meta['incidence'] = float(tree.find('.//sceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
+        
+        geocs = self.getFileObj(self.findfiles('GEOREF.xml')[0]).getvalue()
+        tree = ET.fromstring(geocs)
+        pts = tree.findall('.//gridPoint')
+        lat = [float(x.find('lat').text) for x in pts]
+        lon = [float(x.find('lon').text) for x in pts]
+        # shift lon in case of west direction.
+        lon = [x - 360 if x > 180 else x for x in lon]
+        meta['coordinates'] = list(zip(lon, lat))
+        
         return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
@@ -2069,13 +2109,9 @@ class TDM(TSX):
         super(TDM, self).__init__(self.meta)
     
     def getCorners(self):
-        geocs = self.getFileObj(self.file).getvalue()
-        tree = ET.fromstring(geocs)
-        pts = tree.findall('.//sceneCornerCoord')
-        lat = [float(x.find('lat').text) for x in pts]
-        lon = [float(x.find('lon').text) for x in pts]
-        # shift lon in case of west direction.
-        lon = [x - 360 if x > 180 else x for x in lon]
+        coordinates = self.meta['coordinates']
+        lat = [x[1] for x in coordinates]
+        lon = [x[0] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def scanMetadata(self):
@@ -2140,6 +2176,13 @@ class TDM(TSX):
         meta['lines'] = meta[meta['inSARmasterID']]['lines']
         meta['looks'] = meta[meta['inSARmasterID']]['looks']
         meta['incidence'] = meta[meta['inSARmasterID']]['incidence']
+        
+        pts = tree.findall('.//sceneCornerCoord')
+        lat = [float(x.find('lat').text) for x in pts]
+        lon = [float(x.find('lon').text) for x in pts]
+        # shift lon in case of west direction.
+        lon = [x - 360 if x > 180 else x for x in lon]
+        meta['coordinates'] = list(zip(lon, lat))
         
         return meta
 
