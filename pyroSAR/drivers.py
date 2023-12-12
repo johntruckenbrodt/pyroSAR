@@ -490,17 +490,19 @@ class ID(object):
             meta[entry[0]] = entry[1]
         return meta
     
-    @abc.abstractmethod
     def getCorners(self):
         """
-        derive the corner coordinates from a SAR scene
+        Get the bounding box corner coordinates
 
         Returns
         -------
         dict
-            dictionary with keys `xmin`, `xmax`, `ymin` and `ymax`
+            the corner coordinates as a dictionary with keys 'xmin', 'ymin', 'xmax', 'ymax'
         """
-        raise NotImplementedError
+        coordinates = self.meta['coordinates']
+        lat = [x[1] for x in coordinates]
+        lon = [x[0] for x in coordinates]
+        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def getFileObj(self, filename):
         """
@@ -811,9 +813,6 @@ class BEAM_DIMAP(ID):
         
         super(BEAM_DIMAP, self).__init__(self.meta)
     
-    def getCorners(self):
-        return self.meta['corners']
-    
     def scanMetadata(self):
         meta = dict()
         
@@ -928,12 +927,6 @@ class CEOS_ERS(ID):
         
         # register the standardized meta attributes as object attributes
         super(CEOS_ERS, self).__init__(self.meta)
-    
-    def getCorners(self):
-        coordinates = self.meta['coordinates']
-        lat = [x[1] for x in coordinates]
-        lon = [x[0] for x in coordinates]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
         if self.sensor in ['ERS1', 'ERS2']:
@@ -1360,12 +1353,6 @@ class CEOS_PSR(ID):
     def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
-    
-    def getCorners(self):
-        coordinates = self.meta['coordinates']
-        lat = [x[1] for x in coordinates]
-        lon = [x[0] for x in coordinates]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
 
 
 class EORC_PSR(ID):
@@ -1517,12 +1504,6 @@ class EORC_PSR(ID):
     def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
-    
-    def getCorners(self):
-        coordinates = self.meta['coordinates']
-        lat = [x[1] for x in coordinates]
-        lon = [x[0] for x in coordinates]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
 
 
 class ESA(ID):
@@ -1578,12 +1559,6 @@ class ESA(ID):
         self.meta['incidence'] = median([self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax']])
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
-    
-    def getCorners(self):
-        coordinates = self.meta['coordinates']
-        lat = [x[1] for x in coordinates]
-        lon = [x[0] for x in coordinates]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def scanMetadata(self):
         meta = self.gdalinfo()
@@ -1682,12 +1657,6 @@ class SAFE(ID):
         :func:`~pyroSAR.S1.removeGRDBorderNoise`
         """
         S1.removeGRDBorderNoise(self, method=method)
-    
-    def getCorners(self):
-        coordinates = self.meta['coordinates']
-        lat = [x[1] for x in coordinates]
-        lon = [x[0] for x in coordinates]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=300, url_option=1):
         """
@@ -2011,12 +1980,6 @@ class TSX(ID):
         
         super(TSX, self).__init__(self.meta)
     
-    def getCorners(self):
-        coordinates = self.meta['coordinates']
-        lat = [x[1] for x in coordinates]
-        lon = [x[0] for x in coordinates]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-    
     def scanMetadata(self):
         annotation = self.getFileObj(self.file).getvalue()
         namespaces = getNamespaces(annotation)
@@ -2117,12 +2080,6 @@ class TDM(TSX):
         self.meta['projection'] = crsConvert(4326, 'wkt')
         
         super(TDM, self).__init__(self.meta)
-    
-    def getCorners(self):
-        coordinates = self.meta['coordinates']
-        lat = [x[1] for x in coordinates]
-        lon = [x[0] for x in coordinates]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def scanMetadata(self):
         annotation = self.getFileObj(self.file).getvalue()
