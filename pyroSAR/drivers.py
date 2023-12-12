@@ -1407,6 +1407,31 @@ class EORC_PSR(ID):
         head_obj.close()
         return head
     
+    def _img_get_coordinates(self):
+        img_filename = self.findfiles('IMG')[0]
+        img_obj = self.getFileObj(img_filename)
+        imageFileDescriptor = img_obj.read(720)
+        
+        lineRecordLength = int(imageFileDescriptor[186:192])  # bytes per line + 412
+        numberOfRecords = int(imageFileDescriptor[180:186])
+        
+        signalDataDescriptor1 = img_obj.read(412)
+        img_obj.seek(720 + lineRecordLength * (numberOfRecords - 1))
+        signalDataDescriptor2 = img_obj.read()
+        
+        img_obj.close()
+        
+        lat = [signalDataDescriptor1[192:196], signalDataDescriptor1[200:204],
+               signalDataDescriptor2[192:196], signalDataDescriptor2[200:204]]
+        
+        lon = [signalDataDescriptor1[204:208], signalDataDescriptor1[212:216],
+               signalDataDescriptor2[204:208], signalDataDescriptor2[212:216]]
+        
+        lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
+        lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
+        
+        return list(zip(lon, lat))
+    
     def _parseFacter_m(self):
         try:
             facter_file = self.findfiles('facter_m.dat')[0]
@@ -1460,7 +1485,10 @@ class EORC_PSR(ID):
         lat = list(map(float, [header[33], header[35], header[37], header[39]]))
         lon = list(map(float, [header[34], header[36], header[38], header[40]]))
         
-        meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+        if len(lat) == 0 or len(lon) == 0:
+            meta['coordinates'] = self._img_get_coordinates()
+        else:
+            meta['coordinates'] = list(zip(lon, lat))
         
         meta['projection'] = crsConvert(4918, 'wkt')  # EPSG: 4918: ITRF97, GRS80
         ################################################################################################################
@@ -1493,35 +1521,10 @@ class EORC_PSR(ID):
         self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
     
     def getCorners(self):
-        if 'corners' not in self.meta.keys():
-            lat = [y for x, y in self.meta.items() if 'Latitude' in x]
-            lon = [y for x, y in self.meta.items() if 'Longitude' in x]
-            if len(lat) == 0 or len(lon) == 0:
-                img_filename = self.findfiles('IMG')[0]
-                img_obj = self.getFileObj(img_filename)
-                imageFileDescriptor = img_obj.read(720)
-                
-                lineRecordLength = int(imageFileDescriptor[186:192])  # bytes per line + 412
-                numberOfRecords = int(imageFileDescriptor[180:186])
-                
-                signalDataDescriptor1 = img_obj.read(412)
-                img_obj.seek(720 + lineRecordLength * (numberOfRecords - 1))
-                signalDataDescriptor2 = img_obj.read()
-                
-                img_obj.close()
-                
-                lat = [signalDataDescriptor1[192:196], signalDataDescriptor1[200:204],
-                       signalDataDescriptor2[192:196], signalDataDescriptor2[200:204]]
-                
-                lon = [signalDataDescriptor1[204:208], signalDataDescriptor1[212:216],
-                       signalDataDescriptor2[204:208], signalDataDescriptor2[212:216]]
-                
-                lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
-                lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
-            
-            self.meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-        
-        return self.meta['corners']
+        coordinates = self.meta['coordinates']
+        lat = [x[1] for x in coordinates]
+        lon = [x[0] for x in coordinates]
+        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
 
 
 class ESA(ID):
