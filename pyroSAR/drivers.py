@@ -276,17 +276,21 @@ class ID(object):
         Parameters
         ----------
         outname: str
-            the name of the shapefile to be written
+            the name of the vector file to be written
         driver: str
             the output file format; needs to be defined if the format cannot
             be auto-detected from the filename extension
         overwrite: bool
-            overwrite an existing shapefile?
+            overwrite an existing vector file?
 
         Returns
         -------
         ~spatialist.vector.Vector or None
-            the vector object if `outname` is None, None otherwise
+            the vector object if `outname` is None and None otherwise
+        
+        See Also
+        --------
+        spatialist.vector.Vector.bbox
         """
         if outname is None:
             return bbox(self.getCorners(), self.projection)
@@ -301,17 +305,21 @@ class ID(object):
         Parameters
         ----------
         outname: str
-            the name of the shapefile to be written
+            the name of the vector file to be written
         driver: str
             the output file format; needs to be defined if the format cannot
             be auto-detected from the filename extension
         overwrite: bool
-            overwrite an existing shapefile?
+            overwrite an existing vector file?
 
         Returns
         -------
         ~spatialist.vector.Vector or None
             the vector object if `outname` is None, None otherwise
+        
+        See also
+        --------
+        spatialist.vector.Vector.write
         """
         if 'coordinates' not in self.meta.keys():
             raise NotImplementedError
@@ -358,7 +366,7 @@ class ID(object):
     
     def export2dict(self):
         """
-        Return the uuid and the metadata that is defined in self.locals as a dictionary
+        Return the uuid and the metadata that is defined in `self.locals` as a dictionary
         """
         metadata = {item: self.meta[item] for item in self.locals}
         sq_file = os.path.basename(self.file)
@@ -497,7 +505,7 @@ class ID(object):
         Returns
         -------
         dict
-            the corner coordinates as a dictionary with keys 'xmin', 'ymin', 'xmax', 'ymax'
+            the corner coordinates as a dictionary with keys `xmin`, `ymin`, `xmax`, `ymax`
         """
         coordinates = self.meta['coordinates']
         lat = [x[1] for x in coordinates]
@@ -515,7 +523,7 @@ class ID(object):
 
         Returns
         -------
-        ~io.BytesIO
+        io.BytesIO
             a file pointer object
         """
         return getFileObj(self.scene, filename)
@@ -531,7 +539,7 @@ class ID(object):
 
         Returns
         -------
-        list
+        list[str]
             the file names of the images processed by GAMMA
 
         Raises
@@ -553,7 +561,7 @@ class ID(object):
 
         Returns
         -------
-        list
+        list[str]
             names of the SRTM HGT tiles
         """
         
@@ -597,12 +605,12 @@ class ID(object):
     def outname_base(self, extensions=None):
         """
         parse a string containing basic information about the scene in standardized format.
-        Currently this id contains the sensor (4 digits), acquisition mode (4 digits), orbit (1 digit)
-        and acquisition start time (15 digits)., e.g. `S1A__IW___A_20150523T122350`
+        Currently, this id contains the sensor (4 digits), acquisition mode (4 digits), orbit (1 digit)
+        and acquisition start time (15 digits)., e.g. `S1A__IW___A_20150523T122350`.
         
         Parameters
         ----------
-        extensions: list of str
+        extensions: list[str]
             the names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
         Returns
         -------
