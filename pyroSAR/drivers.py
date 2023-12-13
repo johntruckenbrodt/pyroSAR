@@ -241,7 +241,7 @@ class ID(object):
         Get the corner coordinates of the scene footprint as [lower left, upper left,
         upper right, lower right] so that it can be used for creating a polygon object
         in :meth:`geometry`.
-        The coordinate positions is determined by the distance to the bounding box coordinates.
+        The coordinate positions are determined by the distance to the bounding box coordinates.
         
         Parameters
         ----------
