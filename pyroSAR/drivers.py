@@ -235,40 +235,6 @@ class ID(object):
             lines.append(line)
         return '\n'.join(lines)
     
-    @staticmethod
-    def __geometry_coordinates(coords):
-        """
-        Get the corner coordinates of the scene footprint as [lower left, upper left,
-        upper right, lower right] so that it can be used for creating a polygon object
-        in :meth:`geometry`.
-        The coordinate positions are determined by the distance to the bounding box coordinates.
-        
-        Parameters
-        ----------
-        coords: list[tuple[float]]
-            a list of coordinates as [(x, y), ...]
-
-        Returns
-        -------
-        list[tuple[float]]
-            the corner coordinates of the footprint geometry
-        """
-        lat = [c[1] for c in coords]
-        lon = [c[0] for c in coords]
-        xmin = min(lon)
-        xmax = max(lon)
-        ymin = min(lat)
-        ymax = max(lat)
-        ll_dist = [math.hypot(c[0] - xmin, c[1] - ymin) for c in coords]
-        lr_dist = [math.hypot(c[0] - xmax, c[1] - ymin) for c in coords]
-        ul_dist = [math.hypot(c[0] - xmin, c[1] - ymax) for c in coords]
-        ur_dist = [math.hypot(c[0] - xmax, c[1] - ymax) for c in coords]
-        ll = coords[ll_dist.index(min(ll_dist))]
-        ul = coords[ul_dist.index(min(ul_dist))]
-        ur = coords[ur_dist.index(min(ur_dist))]
-        lr = coords[lr_dist.index(min(lr_dist))]
-        return ll, ul, ur, lr
-    
     def bbox(self, outname=None, driver=None, overwrite=True):
         """
         get the bounding box of a scene either as a vector object or written to a file
@@ -324,14 +290,13 @@ class ID(object):
         if 'coordinates' not in self.meta.keys():
             raise NotImplementedError
         srs = crsConvert(self.projection, 'osr')
-        ring = ogr.Geometry(ogr.wkbLinearRing)
-        coordinates = self.__geometry_coordinates(self.meta['coordinates'])
-        for coordinate in coordinates:
-            ring.AddPoint(*coordinate)
-        ring.CloseRings()
-        
-        geom = ogr.Geometry(ogr.wkbPolygon)
-        geom.AddGeometry(ring)
+        points = ogr.Geometry(ogr.wkbMultiPoint)
+        for lon, lat in self.meta['coordinates']:
+            point = ogr.Geometry(ogr.wkbPoint)
+            point.AddPoint(lon, lat)
+            points.AddGeometry(point)
+        geom = points.ConvexHull()
+        point = points = None
         
         geom.FlattenTo2D()
         
