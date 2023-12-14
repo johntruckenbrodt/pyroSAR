@@ -38,7 +38,7 @@ import operator
 import tarfile as tf
 import xml.etree.ElementTree as ET
 import zipfile as zf
-from datetime import datetime, timedelta
+from datetime import datetime
 from time import strptime, strftime
 from statistics import median
 from itertools import groupby
