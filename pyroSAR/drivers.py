@@ -38,7 +38,7 @@ import operator
 import tarfile as tf
 import xml.etree.ElementTree as ET
 import zipfile as zf
-from datetime import datetime, timedelta
+from datetime import datetime
 from time import strptime, strftime
 from statistics import median
 from itertools import groupby
@@ -126,7 +126,7 @@ def identify(scene):
     for handler in get_subclasses(ID):
         try:
             return handler(scene)
-        except (RuntimeError, KeyError, AttributeError):
+        except Exception:
             pass
     raise RuntimeError('data format not supported')
 
@@ -228,7 +228,7 @@ class ID(object):
         for item in sorted(self.locals):
             value = getattr(self, item)
             if item == 'projection':
-                value = crsConvert(value, 'proj4')
+                value = crsConvert(value, 'proj4') if value is not None else None
             if value == -1:
                 value = '<no global value per product>'
             line = '{0}: {1}'.format(item, value)
@@ -242,17 +242,21 @@ class ID(object):
         Parameters
         ----------
         outname: str
-            the name of the shapefile to be written
+            the name of the vector file to be written
         driver: str
             the output file format; needs to be defined if the format cannot
             be auto-detected from the filename extension
         overwrite: bool
-            overwrite an existing shapefile?
+            overwrite an existing vector file?
 
         Returns
         -------
         ~spatialist.vector.Vector or None
-            the vector object if `outname` is None, None otherwise
+            the vector object if `outname` is None and None otherwise
+        
+        See Also
+        --------
+        spatialist.vector.Vector.bbox
         """
         if outname is None:
             return bbox(self.getCorners(), self.projection)
@@ -267,28 +271,32 @@ class ID(object):
         Parameters
         ----------
         outname: str
-            the name of the shapefile to be written
+            the name of the vector file to be written
         driver: str
             the output file format; needs to be defined if the format cannot
             be auto-detected from the filename extension
         overwrite: bool
-            overwrite an existing shapefile?
+            overwrite an existing vector file?
 
         Returns
         -------
         ~spatialist.vector.Vector or None
             the vector object if `outname` is None, None otherwise
+        
+        See also
+        --------
+        spatialist.vector.Vector.write
         """
         if 'coordinates' not in self.meta.keys():
             raise NotImplementedError
         srs = crsConvert(self.projection, 'osr')
-        ring = ogr.Geometry(ogr.wkbLinearRing)
-        for coordinate in self.meta['coordinates']:
-            ring.AddPoint(*coordinate)
-        ring.CloseRings()
-        
-        geom = ogr.Geometry(ogr.wkbPolygon)
-        geom.AddGeometry(ring)
+        points = ogr.Geometry(ogr.wkbMultiPoint)
+        for lon, lat in self.meta['coordinates']:
+            point = ogr.Geometry(ogr.wkbPoint)
+            point.AddPoint(lon, lat)
+            points.AddGeometry(point)
+        geom = points.ConvexHull()
+        point = points = None
         
         geom.FlattenTo2D()
         
@@ -323,7 +331,7 @@ class ID(object):
     
     def export2dict(self):
         """
-        Return the uuid and the metadata that is defined in self.locals as a dictionary
+        Return the uuid and the metadata that is defined in `self.locals` as a dictionary
         """
         metadata = {item: self.meta[item] for item in self.locals}
         sq_file = os.path.basename(self.file)
@@ -455,17 +463,21 @@ class ID(object):
             meta[entry[0]] = entry[1]
         return meta
     
-    @abc.abstractmethod
     def getCorners(self):
         """
-        derive the corner coordinates from a SAR scene
+        Get the bounding box corner coordinates
 
         Returns
         -------
         dict
-            dictionary with keys `xmin`, `xmax`, `ymin` and `ymax`
+            the corner coordinates as a dictionary with keys `xmin`, `ymin`, `xmax`, `ymax`
         """
-        raise NotImplementedError
+        if 'coordinates' not in self.meta.keys():
+            raise NotImplementedError
+        coordinates = self.meta['coordinates']
+        lat = [x[1] for x in coordinates]
+        lon = [x[0] for x in coordinates]
+        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def getFileObj(self, filename):
         """
@@ -478,7 +490,7 @@ class ID(object):
 
         Returns
         -------
-        ~io.BytesIO
+        io.BytesIO
             a file pointer object
         """
         return getFileObj(self.scene, filename)
@@ -494,7 +506,7 @@ class ID(object):
 
         Returns
         -------
-        list
+        list[str]
             the file names of the images processed by GAMMA
 
         Raises
@@ -516,7 +528,7 @@ class ID(object):
 
         Returns
         -------
-        list
+        list[str]
             names of the SRTM HGT tiles
         """
         
@@ -560,12 +572,12 @@ class ID(object):
     def outname_base(self, extensions=None):
         """
         parse a string containing basic information about the scene in standardized format.
-        Currently this id contains the sensor (4 digits), acquisition mode (4 digits), orbit (1 digit)
-        and acquisition start time (15 digits)., e.g. `S1A__IW___A_20150523T122350`
+        Currently, this id contains the sensor (4 digits), acquisition mode (4 digits), orbit (1 digit)
+        and acquisition start time (15 digits)., e.g. `S1A__IW___A_20150523T122350`.
         
         Parameters
         ----------
-        extensions: list of str
+        extensions: list[str]
             the names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
         Returns
         -------
@@ -772,15 +784,13 @@ class BEAM_DIMAP(ID):
         
         self.root = None
         self.scene = scene
-        self.meta = dict()
-        self.scanMetadata()
+        self.meta = self.scanMetadata()
         
         super(BEAM_DIMAP, self).__init__(self.meta)
     
-    def getCorners(self):
-        return self.meta['corners']
-    
     def scanMetadata(self):
+        meta = dict()
+        
         self.root = ET.parse(self.scene).getroot()
         
         def get_by_name(attr, section='Abstracted_Metadata'):
@@ -792,42 +802,42 @@ class BEAM_DIMAP(ID):
             return out.text
         
         section = 'Abstracted_Metadata'
-        self.meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE', section=section)
-        self.meta['IPF_version'] = get_by_name('Processing_system_identifier', section=section)
-        self.meta['sensor'] = get_by_name('MISSION', section=section).replace('ENTINEL-', '')
-        self.meta['orbit'] = get_by_name('PASS', section=section)[0]
+        meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE', section=section)
+        meta['IPF_version'] = get_by_name('Processing_system_identifier', section=section)
+        meta['sensor'] = get_by_name('MISSION', section=section).replace('ENTINEL-', '')
+        meta['orbit'] = get_by_name('PASS', section=section)[0]
         pols = [x.text for x in self.root.findall('.//MDATTR[@desc="Polarization"]')]
-        self.meta['polarizations'] = list(set([x for x in pols if '-' not in x]))
-        self.meta['spacing'] = (round(float(get_by_name('range_spacing', section=section)), 6),
-                                round(float(get_by_name('azimuth_spacing', section=section)), 6))
-        self.meta['samples'] = int(self.root.find('.//BAND_RASTER_WIDTH').text)
-        self.meta['lines'] = int(self.root.find('.//BAND_RASTER_HEIGHT').text)
-        self.meta['bands'] = int(self.root.find('.//NBANDS').text)
-        self.meta['orbitNumber_abs'] = int(get_by_name('ABS_ORBIT', section=section))
-        self.meta['orbitNumber_rel'] = int(get_by_name('REL_ORBIT', section=section))
-        self.meta['cycleNumber'] = int(get_by_name('orbit_cycle', section=section))
-        self.meta['frameNumber'] = int(get_by_name('data_take_id', section=section))
-        self.meta['product'] = self.root.find('.//PRODUCT_TYPE').text
+        meta['polarizations'] = list(set([x for x in pols if '-' not in x]))
+        meta['spacing'] = (round(float(get_by_name('range_spacing', section=section)), 6),
+                           round(float(get_by_name('azimuth_spacing', section=section)), 6))
+        meta['samples'] = int(self.root.find('.//BAND_RASTER_WIDTH').text)
+        meta['lines'] = int(self.root.find('.//BAND_RASTER_HEIGHT').text)
+        meta['bands'] = int(self.root.find('.//NBANDS').text)
+        meta['orbitNumber_abs'] = int(get_by_name('ABS_ORBIT', section=section))
+        meta['orbitNumber_rel'] = int(get_by_name('REL_ORBIT', section=section))
+        meta['cycleNumber'] = int(get_by_name('orbit_cycle', section=section))
+        meta['frameNumber'] = int(get_by_name('data_take_id', section=section))
+        meta['product'] = self.root.find('.//PRODUCT_TYPE').text
         
         srgr = bool(int(get_by_name('srgr_flag', section=section)))
-        self.meta['image_geometry'] = 'GROUND_RANGE' if srgr else 'SLANT_RANGE'
+        meta['image_geometry'] = 'GROUND_RANGE' if srgr else 'SLANT_RANGE'
         
         inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
         incidence = [float(x.text) for x in inc_elements]
-        self.meta['incidence'] = median(incidence)
+        meta['incidence'] = median(incidence)
         
         # Metadata sections that need some parsing to match naming convention with SAFE format
         start = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_START_TIME').text,
                                   '%d-%b-%Y %H:%M:%S.%f')
-        self.meta['start'] = start.strftime('%Y%m%dT%H%M%S')
+        meta['start'] = start.strftime('%Y%m%dT%H%M%S')
         stop = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_STOP_TIME').text,
                                  '%d-%b-%Y %H:%M:%S.%f')
-        self.meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
+        meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
         
         if self.root.find('.//WKT') is not None:
-            self.meta['projection'] = self.root.find('.//WKT').text.lstrip()
+            meta['projection'] = self.root.find('.//WKT').text.lstrip()
         else:
-            self.meta['projection'] = crsConvert(4326, 'wkt')
+            meta['projection'] = crsConvert(4326, 'wkt')
         
         keys = ['{}_{}_{}'.format(a, b, c)
                 for a in ['first', 'last']
@@ -835,15 +845,12 @@ class BEAM_DIMAP(ID):
                 for c in ['lat', 'long']]
         coords = {key: float(get_by_name(key, section=section))
                   for key in keys}
-        longs = [coords[x] for x in keys if x.endswith('long')]
-        lats = [coords[x] for x in keys if x.endswith('lat')]
         
-        self.meta['corners'] = {'xmin': min(longs), 'xmax': max(longs),
-                                'ymin': min(lats), 'ymax': max(lats)}
-        self.meta['coordinates'] = [(coords['first_near_long'], coords['first_near_lat']),
-                                    (coords['last_near_long'], coords['last_near_lat']),
-                                    (coords['last_far_long'], coords['last_far_lat']),
-                                    (coords['first_far_long'], coords['first_far_lat'])]
+        meta['coordinates'] = [(coords['first_near_long'], coords['first_near_lat']),
+                               (coords['last_near_long'], coords['last_near_lat']),
+                               (coords['last_far_long'], coords['last_far_lat']),
+                               (coords['first_far_long'], coords['first_far_lat'])]
+        return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
         raise RuntimeError('unpacking of BEAM-DIMAP products is not supported')
@@ -896,11 +903,6 @@ class CEOS_ERS(ID):
         # register the standardized meta attributes as object attributes
         super(CEOS_ERS, self).__init__(self.meta)
     
-    def getCorners(self):
-        lat = [x[1][1] for x in self.meta['gcps']]
-        lon = [x[1][0] for x in self.meta['gcps']]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-    
     def unpack(self, directory, overwrite=False, exist_ok=False):
         if self.sensor in ['ERS1', 'ERS2']:
             base_file = re.sub(r'\.PS$', '', os.path.basename(self.file))
@@ -918,7 +920,7 @@ class CEOS_ERS(ID):
         lea_obj.close()
         meta = dict()
         offset = 720
-        meta['sensor'] = lea[(offset + 396):(offset + 412)].strip()
+        meta['sensor'] = lea[(offset + 396):(offset + 412)].strip().decode()
         meta['start'] = self.parse_date(str(lea[(offset + 1814):(offset + 1838)].decode('utf-8')))
         meta['stop'] = self.parse_date(str(lea[(offset + 1862):(offset + 1886)].decode('utf-8')))
         
@@ -939,12 +941,17 @@ class CEOS_ERS(ID):
         # spacing_range = float(lea[(offset+1702):(offset+1718)])
         # meta['spacing'] = (spacing_range, spacing_azimuth)
         # meta['incidence_angle'] = float(lea[(offset+484):(offset+492)])
-        meta['proc_facility'] = lea[(offset + 1045):(offset + 1061)].strip()
-        meta['proc_system'] = lea[(offset + 1061):(offset + 1069)].strip()
-        meta['proc_version'] = lea[(offset + 1069):(offset + 1077)].strip()
+        meta['proc_facility'] = lea[(offset + 1045):(offset + 1061)].strip().decode()
+        meta['proc_system'] = lea[(offset + 1061):(offset + 1069)].strip().decode()
+        meta['proc_version'] = lea[(offset + 1069):(offset + 1077)].strip().decode()
         # text_subset = lea[re.search('FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]', lea).start() - 13:]
         # meta['k_db'] = -10*math.log(float(text_subset[663:679].strip()), 10)
         # meta['antenna_flag'] = int(text_subset[659:663].strip())
+        
+        lat = [x[1][1] for x in self.meta['gcps']]
+        lon = [x[1][0] for x in self.meta['gcps']]
+        meta['coordinates'] = list(zip(lon, lat))
+        
         return meta
         
         # def correctAntennaPattern(self):
@@ -1051,6 +1058,31 @@ class CEOS_PSR(ID):
         led = led_obj.read()
         led_obj.close()
         return led
+    
+    def _img_get_coordinates(self):
+        img_filename = self.findfiles('IMG')[0]
+        img_obj = self.getFileObj(img_filename)
+        imageFileDescriptor = img_obj.read(720)
+        
+        lineRecordLength = int(imageFileDescriptor[186:192])  # bytes per line + 412
+        numberOfRecords = int(imageFileDescriptor[180:186])
+        
+        signalDataDescriptor1 = img_obj.read(412)
+        img_obj.seek(720 + lineRecordLength * (numberOfRecords - 1))
+        signalDataDescriptor2 = img_obj.read()
+        
+        img_obj.close()
+        
+        lat = [signalDataDescriptor1[192:196], signalDataDescriptor1[200:204],
+               signalDataDescriptor2[192:196], signalDataDescriptor2[200:204]]
+        
+        lon = [signalDataDescriptor1[204:208], signalDataDescriptor1[212:216],
+               signalDataDescriptor2[204:208], signalDataDescriptor2[212:216]]
+        
+        lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
+        lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
+        
+        return list(zip(lon, lat))
     
     def _parseSummary(self):
         try:
@@ -1174,7 +1206,7 @@ class CEOS_PSR(ID):
                                    mapProjectionData[1120:1136],
                                    mapProjectionData[1152:1168],
                                    mapProjectionData[1184:1200]]))
-            meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+            meta['coordinates'] = list(zip(lon, lat))
             
             # https://github.com/datalyze-solutions/LandsatProcessingPlugin/blob/master/src/metageta/formats/alos.py
             
@@ -1213,7 +1245,12 @@ class CEOS_PSR(ID):
             meta['projection'] = src_srs.ExportToWkt()
         
         else:
-            meta['projection'] = crsConvert(4326, 'wkt')
+            coordinates = self._img_get_coordinates()
+            if all([x == (0, 0) for x in coordinates]):
+                meta['projection'] = None
+            else:
+                meta['coordinates'] = coordinates
+                meta['projection'] = crsConvert(4326, 'wkt')
         ################################################################################################################
         # read data set summary record
         
@@ -1245,11 +1282,17 @@ class CEOS_PSR(ID):
         try:
             meta['lines'] = int(dataSetSummary[324:332]) * 2
         except ValueError:
-            meta['lines'] = None
+            if 'Pdi_NoOfLines' in meta.keys():
+                meta['lines'] = meta['Pdi_NoOfLines']
+            else:
+                meta['lines'] = None
         try:
             meta['samples'] = int(dataSetSummary[332:340]) * 2
         except ValueError:
-            meta['samples'] = None
+            if 'Pdi_NoOfPixels' in meta.keys():
+                meta['samples'] = meta['Pdi_NoOfPixels']
+            else:
+                meta['samples'] = None
         meta['incidence'] = float(dataSetSummary[484:492])
         meta['wavelength'] = float(dataSetSummary[500:516]) * 100  # in cm
         meta['proc_facility'] = dataSetSummary[1046:1062].strip()
@@ -1295,37 +1338,6 @@ class CEOS_PSR(ID):
     def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
-    
-    def getCorners(self):
-        if 'corners' not in self.meta.keys():
-            lat = [y for x, y in self.meta.items() if 'Latitude' in x]
-            lon = [y for x, y in self.meta.items() if 'Longitude' in x]
-            if len(lat) == 0 or len(lon) == 0:
-                img_filename = self.findfiles('IMG')[0]
-                img_obj = self.getFileObj(img_filename)
-                imageFileDescriptor = img_obj.read(720)
-                
-                lineRecordLength = int(imageFileDescriptor[186:192])  # bytes per line + 412
-                numberOfRecords = int(imageFileDescriptor[180:186])
-                
-                signalDataDescriptor1 = img_obj.read(412)
-                img_obj.seek(720 + lineRecordLength * (numberOfRecords - 1))
-                signalDataDescriptor2 = img_obj.read()
-                
-                img_obj.close()
-                
-                lat = [signalDataDescriptor1[192:196], signalDataDescriptor1[200:204],
-                       signalDataDescriptor2[192:196], signalDataDescriptor2[200:204]]
-                
-                lon = [signalDataDescriptor1[204:208], signalDataDescriptor1[212:216],
-                       signalDataDescriptor2[204:208], signalDataDescriptor2[212:216]]
-                
-                lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
-                lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
-            
-            self.meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-        
-        return self.meta['corners']
 
 
 class EORC_PSR(ID):
@@ -1364,6 +1376,31 @@ class EORC_PSR(ID):
         head = list(head.split('\n'))
         head_obj.close()
         return head
+    
+    def _img_get_coordinates(self):
+        img_filename = self.findfiles('IMG')[0]
+        img_obj = self.getFileObj(img_filename)
+        imageFileDescriptor = img_obj.read(720)
+        
+        lineRecordLength = int(imageFileDescriptor[186:192])  # bytes per line + 412
+        numberOfRecords = int(imageFileDescriptor[180:186])
+        
+        signalDataDescriptor1 = img_obj.read(412)
+        img_obj.seek(720 + lineRecordLength * (numberOfRecords - 1))
+        signalDataDescriptor2 = img_obj.read()
+        
+        img_obj.close()
+        
+        lat = [signalDataDescriptor1[192:196], signalDataDescriptor1[200:204],
+               signalDataDescriptor2[192:196], signalDataDescriptor2[200:204]]
+        
+        lon = [signalDataDescriptor1[204:208], signalDataDescriptor1[212:216],
+               signalDataDescriptor2[204:208], signalDataDescriptor2[212:216]]
+        
+        lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
+        lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
+        
+        return list(zip(lon, lat))
     
     def _parseFacter_m(self):
         try:
@@ -1412,13 +1449,16 @@ class EORC_PSR(ID):
         ################################################################################################################
         # read leader file name information
         meta['acquisition_mode'] = header[12]
-        # ###############################################################################################################
+        # ##############################################################################################################
         # read map projection data 
         
         lat = list(map(float, [header[33], header[35], header[37], header[39]]))
         lon = list(map(float, [header[34], header[36], header[38], header[40]]))
         
-        meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+        if len(lat) == 0 or len(lon) == 0:
+            meta['coordinates'] = self._img_get_coordinates()
+        else:
+            meta['coordinates'] = list(zip(lon, lat))
         
         meta['projection'] = crsConvert(4918, 'wkt')  # EPSG: 4918: ITRF97, GRS80
         ################################################################################################################
@@ -1449,37 +1489,6 @@ class EORC_PSR(ID):
     def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
-    
-    def getCorners(self):
-        if 'corners' not in self.meta.keys():
-            lat = [y for x, y in self.meta.items() if 'Latitude' in x]
-            lon = [y for x, y in self.meta.items() if 'Longitude' in x]
-            if len(lat) == 0 or len(lon) == 0:
-                img_filename = self.findfiles('IMG')[0]
-                img_obj = self.getFileObj(img_filename)
-                imageFileDescriptor = img_obj.read(720)
-                
-                lineRecordLength = int(imageFileDescriptor[186:192])  # bytes per line + 412
-                numberOfRecords = int(imageFileDescriptor[180:186])
-                
-                signalDataDescriptor1 = img_obj.read(412)
-                img_obj.seek(720 + lineRecordLength * (numberOfRecords - 1))
-                signalDataDescriptor2 = img_obj.read()
-                
-                img_obj.close()
-                
-                lat = [signalDataDescriptor1[192:196], signalDataDescriptor1[200:204],
-                       signalDataDescriptor2[192:196], signalDataDescriptor2[200:204]]
-                
-                lon = [signalDataDescriptor1[204:208], signalDataDescriptor1[212:216],
-                       signalDataDescriptor2[204:208], signalDataDescriptor2[212:216]]
-                
-                lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
-                lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
-            
-            self.meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-        
-        return self.meta['corners']
 
 
 class ESA(ID):
@@ -1514,11 +1523,6 @@ class ESA(ID):
         
         self.meta = self.scanMetadata()
         
-        corners = self.getCorners()
-        self.meta['coordinates'] = [tuple([corners['xmin'], corners['ymin']]),
-                                    tuple([corners['xmin'], corners['ymax']]),
-                                    tuple([corners['xmax'], corners['ymin']]),
-                                    tuple([corners['xmax'], corners['ymax']])]
         self.meta['acquisition_mode'] = match2.group('image_mode')
         self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
         self.meta['frameNumber'] = int(match.group('counter'))
@@ -1541,11 +1545,6 @@ class ESA(ID):
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
     
-    def getCorners(self):
-        lon = [self.meta[x] for x in self.meta if re.search('LONG', x)]
-        lat = [self.meta[x] for x in self.meta if re.search('LAT', x)]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-    
     def scanMetadata(self):
         meta = self.gdalinfo()
         
@@ -1564,6 +1563,11 @@ class ESA(ID):
         meta['orbitNumber_abs'] = meta['MPH_ABS_ORBIT']
         meta['orbitNumber_rel'] = meta['MPH_REL_ORBIT']
         meta['cycleNumber'] = meta['MPH_CYCLE']
+        
+        lon = [v for k, v in meta.items() if re.search('LONG', k)]
+        lat = [v for k, v in meta.items() if re.search('LAT', k)]
+        meta['coordinates'] = list(zip(lon, lat))
+        
         return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
@@ -1638,12 +1642,6 @@ class SAFE(ID):
         :func:`~pyroSAR.S1.removeGRDBorderNoise`
         """
         S1.removeGRDBorderNoise(self, method=method)
-    
-    def getCorners(self):
-        coordinates = self.meta['coordinates']
-        lat = [x[1] for x in coordinates]
-        lon = [x[0] for x in coordinates]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=300, url_option=1):
         """
@@ -1967,16 +1965,6 @@ class TSX(ID):
         
         super(TSX, self).__init__(self.meta)
     
-    def getCorners(self):
-        geocs = self.getFileObj(self.findfiles('GEOREF.xml')[0]).getvalue()
-        tree = ET.fromstring(geocs)
-        pts = tree.findall('.//gridPoint')
-        lat = [float(x.find('lat').text) for x in pts]
-        lon = [float(x.find('lon').text) for x in pts]
-        # shift lon in case of west direction.
-        lon = [x - 360 if x > 180 else x for x in lon]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-    
     def scanMetadata(self):
         annotation = self.getFileObj(self.file).getvalue()
         namespaces = getNamespaces(annotation)
@@ -2005,6 +1993,16 @@ class TSX(ID):
         azlks = float(tree.find('.//imageDataInfo/imageRaster/azimuthLooks', namespaces).text)
         meta['looks'] = (rlks, azlks)
         meta['incidence'] = float(tree.find('.//sceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
+        
+        geocs = self.getFileObj(self.findfiles('GEOREF.xml')[0]).getvalue()
+        tree = ET.fromstring(geocs)
+        pts = tree.findall('.//gridPoint')
+        lat = [float(x.find('lat').text) for x in pts]
+        lon = [float(x.find('lon').text) for x in pts]
+        # shift lon in case of west direction.
+        lon = [x - 360 if x > 180 else x for x in lon]
+        meta['coordinates'] = list(zip(lon, lat))
+        
         return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
@@ -2068,16 +2066,6 @@ class TDM(TSX):
         
         super(TDM, self).__init__(self.meta)
     
-    def getCorners(self):
-        geocs = self.getFileObj(self.file).getvalue()
-        tree = ET.fromstring(geocs)
-        pts = tree.findall('.//sceneCornerCoord')
-        lat = [float(x.find('lat').text) for x in pts]
-        lon = [float(x.find('lon').text) for x in pts]
-        # shift lon in case of west direction.
-        lon = [x - 360 if x > 180 else x for x in lon]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-    
     def scanMetadata(self):
         annotation = self.getFileObj(self.file).getvalue()
         namespaces = getNamespaces(annotation)
@@ -2140,6 +2128,13 @@ class TDM(TSX):
         meta['lines'] = meta[meta['inSARmasterID']]['lines']
         meta['looks'] = meta[meta['inSARmasterID']]['looks']
         meta['incidence'] = meta[meta['inSARmasterID']]['incidence']
+        
+        pts = tree.findall('.//sceneCornerCoord')
+        lat = [float(x.find('lat').text) for x in pts]
+        lon = [float(x.find('lon').text) for x in pts]
+        # shift lon in case of west direction.
+        lon = [x - 360 if x > 180 else x for x in lon]
+        meta['coordinates'] = list(zip(lon, lat))
         
         return meta
 

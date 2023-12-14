@@ -152,6 +152,9 @@ def test_scene(tmpdir, testdata):
     with pytest.raises(RuntimeError):
         id.getGammaImages()
     assert id.getGammaImages(id.scene) == []
+    id = pyroSAR.identify(testdata['psr2'])
+    assert id.getCorners() == {'xmax': -62.1629744, 'xmin': -62.9005207,
+                               'ymax': -10.6783401, 'ymin': -11.4233051}
 
 
 def test_archive(tmpdir, testdata):
@@ -194,7 +197,7 @@ def test_archive2(tmpdir, testdata):
         assert db.size == (1, 0)
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
-
+    
     os.remove(dbfile)
     assert not os.path.isfile(dbfile)
     assert Vector(shp).nfeatures == 1

@@ -106,7 +106,7 @@ def passdb_query(satellite, acqtime, dbname=None):
     elif satellite == 'ERS2':
         sat = 'ERS2'
     else:
-        raise ValueError("satellite must be either 'ERS1' or 'ERS2'")
+        raise ValueError("satellite must be either 'ERS1' or 'ERS2', was '{}'".format(satellite))
     
     if dbname is None:
         dbname = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'erspasses.db')
