@@ -953,7 +953,7 @@ class CEOS_ERS(ID):
         lea_obj.close()
         meta = dict()
         offset = 720
-        meta['sensor'] = lea[(offset + 396):(offset + 412)].strip()
+        meta['sensor'] = lea[(offset + 396):(offset + 412)].strip().decode()
         meta['start'] = self.parse_date(str(lea[(offset + 1814):(offset + 1838)].decode('utf-8')))
         meta['stop'] = self.parse_date(str(lea[(offset + 1862):(offset + 1886)].decode('utf-8')))
         
@@ -974,9 +974,9 @@ class CEOS_ERS(ID):
         # spacing_range = float(lea[(offset+1702):(offset+1718)])
         # meta['spacing'] = (spacing_range, spacing_azimuth)
         # meta['incidence_angle'] = float(lea[(offset+484):(offset+492)])
-        meta['proc_facility'] = lea[(offset + 1045):(offset + 1061)].strip()
-        meta['proc_system'] = lea[(offset + 1061):(offset + 1069)].strip()
-        meta['proc_version'] = lea[(offset + 1069):(offset + 1077)].strip()
+        meta['proc_facility'] = lea[(offset + 1045):(offset + 1061)].strip().decode()
+        meta['proc_system'] = lea[(offset + 1061):(offset + 1069)].strip().decode()
+        meta['proc_version'] = lea[(offset + 1069):(offset + 1077)].strip().decode()
         # text_subset = lea[re.search('FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]', lea).start() - 13:]
         # meta['k_db'] = -10*math.log(float(text_subset[663:679].strip()), 10)
         # meta['antenna_flag'] = int(text_subset[659:663].strip())
