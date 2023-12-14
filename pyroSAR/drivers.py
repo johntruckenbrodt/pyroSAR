@@ -126,7 +126,7 @@ def identify(scene):
     for handler in get_subclasses(ID):
         try:
             return handler(scene)
-        except (RuntimeError, KeyError, AttributeError):
+        except Exception:
             pass
     raise RuntimeError('data format not supported')
 
