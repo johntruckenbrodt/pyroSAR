@@ -472,6 +472,8 @@ class ID(object):
         dict
             the corner coordinates as a dictionary with keys `xmin`, `ymin`, `xmax`, `ymax`
         """
+        if 'coordinates' not in self.meta.keys():
+            raise NotImplementedError
         coordinates = self.meta['coordinates']
         lat = [x[1] for x in coordinates]
         lon = [x[0] for x in coordinates]
