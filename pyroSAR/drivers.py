@@ -72,8 +72,10 @@ import logging
 
 log = logging.getLogger(__name__)
 
-__LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
-             'spacing', 'samples', 'lines', 'orbitNumber_abs', 'orbitNumber_rel', 'cycleNumber', 'frameNumber']
+__LOCAL__ = ['acquisition_mode', 'coordinates', 'cycleNumber', 'frameNumber',
+             'lines', 'orbit', 'orbitNumber_abs', 'orbitNumber_rel',
+             'polarizations', 'product', 'projection', 'samples',
+             'sensor', 'spacing', 'start', 'stop']
 
 
 def identify(scene):
