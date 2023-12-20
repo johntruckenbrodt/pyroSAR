@@ -1539,7 +1539,7 @@ class ESA(ID):
         elif self.meta['acquisition_mode'] == 'IMP' or self.meta['acquisition_mode'] == 'APP':
             self.meta['image_geometry'] = 'GROUND_RANGE'
         else:
-            raise RuntimeError("unsupported adquisition mode: {}".format(self.meta['acquisition_mode']))
+            raise RuntimeError(f"unsupported acquisition mode: '{self.meta['acquisition_mode']}'")
         
         self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax'], \
             self.meta['rangeResolution'], self.meta['azimuthResolution'], \
