@@ -999,3 +999,18 @@ changes to Sentinel-1 OSV data handling:
   + :func:`pyroSAR.snap.auxil.orb_parametrize`: `url_option`
   + :func:`pyroSAR.snap.util.geocode`: `s1_osv_url_option`
   + :func:`pyroSAR.snap.util.noise_power`: `osv_url_option`
+
+0.24.0 | 2024-01-10
+===================
+
+Drivers
+-------
+- new base attribute `coordinates`
+- enable method :meth:`~pyroSAR.drivers.ID.geometry` for all driver classes
+- classes :class:`~pyroSAR.drivers.ESA` and :class:`~pyroSAR.drivers.CEOS_ERS`: removed call to `gdalinfo`
+  (for increased test capability and speed)
+- outsourced regular expressions for product identification into separate module `patterns`
+
+Auxiliary Data Handling
+-----------------------
+- method :meth:`pyroSAR.S1.OSV.catch`: fixed bug in finding files starting in previous month
