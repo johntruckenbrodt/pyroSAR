@@ -252,3 +252,13 @@ def test_archive_postgres(tmpdir, testdata):
     with pytest.raises(SystemExit) as pytest_wrapped_e:
         pyroSAR.Archive('test', postgres=True, user='hello_world', port=7080)
     assert pytest_wrapped_e.type == SystemExit
+
+
+datasets = ['asar', 'ers1_esa', 'ers1_ceos', 'psr2', 's1']
+
+
+@pytest.mark.parametrize('dataset', datasets)
+def test_geometry(testdata, dataset):
+    scene = pyroSAR.identify(testdata[dataset])
+    with scene.geometry() as geom:
+        assert isinstance(geom, Vector)
