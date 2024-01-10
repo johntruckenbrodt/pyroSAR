@@ -1520,58 +1520,108 @@ class ESA(ID):
         else:
             self.examine()
         
+        self.meta = self.scanMetadata()
+        
+        # register the standardized meta attributes as object attributes
+        super(ESA, self).__init__(self.meta)
+    
+    def scanMetadata(self):
         match = re.match(re.compile(self.pattern), os.path.basename(self.file))
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
         
         if re.search('IM__0', match.group('product_id')):
             raise RuntimeError('product level 0 not supported (yet)')
         
-        self.meta = self.scanMetadata()
+        meta = dict()
+        sensor_lookup = {'N1': 'ASAR', 'E1': 'ERS1', 'E2': 'ERS2'}
+        meta['sensor'] = sensor_lookup[match.group('satellite_ID')]
+        meta['acquisition_mode'] = match2.group('image_mode')
+        meta['product'] = 'SLC' if meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
+        meta['frameNumber'] = int(match.group('counter'))
         
-        self.meta['acquisition_mode'] = match2.group('image_mode')
-        self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
-        self.meta['frameNumber'] = int(match.group('counter'))
-        
-        if self.meta['acquisition_mode'] == 'IMS' \
-                or self.meta['acquisition_mode'] == 'APS' \
-                or self.meta['acquisition_mode'] == 'WSM':
-            self.meta['image_geometry'] = 'SLANT_RANGE'
-        elif self.meta['acquisition_mode'] == 'IMP' or self.meta['acquisition_mode'] == 'APP':
-            self.meta['image_geometry'] = 'GROUND_RANGE'
+        if meta['acquisition_mode'] in ['APS', 'IMS', 'WSM']:
+            meta['image_geometry'] = 'SLANT_RANGE'
+        elif meta['acquisition_mode'] in ['APP', 'IMP']:
+            meta['image_geometry'] = 'GROUND_RANGE'
         else:
-            raise RuntimeError(f"unsupported acquisition mode: '{self.meta['acquisition_mode']}'")
+            raise RuntimeError(f"unsupported acquisition mode: '{meta['acquisition_mode']}'")
         
-        self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax'], \
-            self.meta['rangeResolution'], self.meta['azimuthResolution'], \
-            self.meta['neszNear'], self.meta['neszFar'] = \
-            get_angles_resolution(self.meta['sensor'], self.meta['acquisition_mode'],
-                                  self.meta['SPH_SWATH'], self.meta['start'])
-        self.meta['incidence'] = median([self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax']])
-        # register the standardized meta attributes as object attributes
-        super(ESA, self).__init__(self.meta)
-    
-    def scanMetadata(self):
-        meta = self.gdalinfo()
+        with self.getFileObj(self.file) as obj:
+            mph = obj.read(1247).decode('ascii')
+            sph = obj.read(1059).decode('ascii')
+            dsd = obj.read(5040).decode('ascii')
+            
+            pattern = r'(?P<key>[A-Z0-9_]+)\=(")?(?P<value>.*?)("|<|$)'
+            origin = dict()
+            header = mph + sph
+            lines = header.split('\n')
+            for line in lines:
+                match = re.match(pattern, line)
+                if match:
+                    matchdict = match.groupdict()
+                    origin[matchdict['key']] = str(matchdict['value']).strip()
+            
+            raw = []
+            lines = dsd.split('\n')
+            for line in lines:
+                match = re.match(pattern, line)
+                if match:
+                    matchdict = match.groupdict()
+                    raw.append((matchdict['key'], str(matchdict['value']).strip()))
+            raw = [raw[i:i + 7] for i in range(0, len(raw), 7)]
+            datasets = {x.pop(0)[1]: {y[0]: y[1] for y in x} for x in raw}
+            
+            offset = 0
+            for key in datasets.keys():
+                size = int(datasets[key]['DSR_SIZE'])
+                n = int(datasets[key]['NUM_DSR'])
+                if key == 'GEOLOCATION GRID ADS':
+                    break
+                offset += size * n
+            
+            obj.seek(offset, 1)
+            gcps = obj.read(size * n)
+        
+        lat = gcps[157:(157 + 44)] + gcps[411:(411 + 44)]
+        lon = gcps[201:(201 + 44)] + gcps[455:(455 + 44)]
+        
+        lat = [lat[i:i + 4] for i in range(0, len(lat), 4)]
+        lon = [lon[i:i + 4] for i in range(0, len(lon), 4)]
+        
+        lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
+        lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
+        
+        meta['coordinates'] = list(zip(lon, lat))
         
         if meta['sensor'] == 'ASAR':
-            meta['polarizations'] = sorted([y.replace('/', '') for x, y in meta.items() if
-                                            'TX_RX_POLAR' in x and len(y) == 3])
+            pols = [y for x, y in origin.items() if 'TX_RX_POLAR' in x]
+            pols = [x.replace('/', '') for x in pols if len(x) == 3]
+            meta['polarizations'] = sorted(pols)
         elif meta['sensor'] in ['ERS1', 'ERS2']:
             meta['polarizations'] = ['VV']
         
-        meta['orbit'] = meta['SPH_PASS'][0]
-        meta['start'] = meta['MPH_SENSING_START']
-        meta['stop'] = meta['MPH_SENSING_STOP']
-        meta['spacing'] = (meta['SPH_RANGE_SPACING'], meta['SPH_AZIMUTH_SPACING'])
-        meta['looks'] = (meta['SPH_RANGE_LOOKS'], meta['SPH_AZIMUTH_LOOKS'])
+        meta['orbit'] = origin['PASS'][0]
+        start = datetime.strptime(origin['SENSING_START'], '%d-%b-%Y %H:%M:%S.%f')
+        meta['start'] = start.strftime('%Y%m%dT%H%M%S')
+        stop = datetime.strptime(origin['SENSING_STOP'], '%d-%b-%Y %H:%M:%S.%f')
+        meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
+        meta['spacing'] = (float(origin['RANGE_SPACING']), float(origin['AZIMUTH_SPACING']))
+        meta['looks'] = (float(origin['RANGE_LOOKS']), float(origin['AZIMUTH_LOOKS']))
+        meta['samples'] = int(origin['LINE_LENGTH'])
+        meta['lines'] = int(datasets['MDS1']['NUM_DSR'])
         
-        meta['orbitNumber_abs'] = meta['MPH_ABS_ORBIT']
-        meta['orbitNumber_rel'] = meta['MPH_REL_ORBIT']
-        meta['cycleNumber'] = meta['MPH_CYCLE']
+        meta['orbitNumber_abs'] = int(origin['ABS_ORBIT'])
+        meta['orbitNumber_rel'] = int(origin['REL_ORBIT'])
+        meta['cycleNumber'] = int(origin['CYCLE'])
         
-        lon = [v for k, v in meta.items() if re.search('LONG', k)]
-        lat = [v for k, v in meta.items() if re.search('LAT', k)]
-        meta['coordinates'] = list(zip(lon, lat))
+        meta['incidenceAngleMin'], meta['incidenceAngleMax'], \
+            meta['rangeResolution'], meta['azimuthResolution'], \
+            meta['neszNear'], meta['neszFar'] = \
+            get_angles_resolution(meta['sensor'], meta['acquisition_mode'],
+                                  origin['SWATH'], meta['start'])
+        meta['incidence'] = median([meta['incidenceAngleMin'], meta['incidenceAngleMax']])
+        
+        meta['projection'] = crsConvert(4326, 'wkt')
         
         return meta
     
@@ -3288,6 +3338,13 @@ def getFileObj(scene, filename):
         raise RuntimeError('scene does not exist')
     
     if os.path.isdir(scene):
+        obj = BytesIO()
+        with open(filename, 'rb') as infile:
+            obj.write(infile.read())
+        obj.seek(0)
+    
+    # the scene consists of a single file
+    elif os.path.isfile(scene) and scene == filename:
         obj = BytesIO()
         with open(filename, 'rb') as infile:
             obj.write(infile.read())
