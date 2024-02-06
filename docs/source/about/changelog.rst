@@ -934,3 +934,83 @@ Auxiliary Data Handling
 - function :func:`pyroSAR.auxdata.dem_create`:
 
   + new argument `resampleAlg` to change the resampling algorithm
+
+0.22.0 | 2023-09-21
+===================
+
+Drivers
+-------
+- class :class:`pyroSAR.drivers.Archive`:
+
+  + allow multiple products with same `outname_base`, e.g. Sentinel-1 GRD and SLC; this required the introduction of a second primary key in the database
+  + method :meth:`~pyroSAR.drivers.Archive.import_outdated`: option to import data from an old database with only one primary key; this requires the old
+    database to be opened in legacy mode (new argument `legacy=True`)
+
+- class :class:`pyroSAR.drivers.SAFE`: support for handling Sentinel-1 OCN products (metadata reading and database handling)
+
+Auxiliary Data Handling
+-----------------------
+- class :class:`pyroSAR.auxdata.DEMHandler`: enabled handling of southern hemisphere geometries.
+
+0.22.1 | 2023-10-11
+===================
+
+Drivers
+-------
+- class :class:`pyroSAR.drivers.BEAM_DIMAP`: enable calling inherited method :meth:`~pyroSAR.drivers.ID.geometry`
+
+0.22.2 | 2023-11-16
+===================
+
+SNAP API
+--------
+- function :func:`pyroSAR.snap.auxil.writer`: fixed bug in ignoring `erode_edges` argument
+- function :func:`pyroSAR.snap.auxil.erode_edges`: enable handling of polarimetric matrices
+
+Drivers
+-------
+- function :func:`pyroSAR.drivers.identify`: enable reading of :class:`~pyroSAR.drivers.TDM` products
+
+Misc
+----
+- class :class:`pyroSAR.examine.ExamineGamma`: enhanced flexibility in finding GAMMA installation
+
+0.23.0 | 2023-11-23
+===================
+
+Drivers
+-------
+- class :class:`pyroSAR.drivers.Archive`: fixed bug in loading spatialite on Darwin-based systems
+
+Auxiliary Data Handling
+-----------------------
+
+changes to Sentinel-1 OSV data handling:
+
+- method :meth:`pyroSAR.S1.OSV.catch`:
+
+  + removed `url_option` 1 (https://scihub.copernicus.eu/gnss)
+  + made option 2 the new default option 1 (https://step.esa.int/auxdata/orbits/Sentinel-1)
+
+- added new arguments to the following functions:
+
+  + :func:`pyroSAR.gamma.correctOSV`: `url_option`
+  + :func:`pyroSAR.gamma.geocode`: `s1_osv_url_option`
+  + :func:`pyroSAR.snap.auxil.orb_parametrize`: `url_option`
+  + :func:`pyroSAR.snap.util.geocode`: `s1_osv_url_option`
+  + :func:`pyroSAR.snap.util.noise_power`: `osv_url_option`
+
+0.24.0 | 2024-01-10
+===================
+
+Drivers
+-------
+- new base attribute `coordinates`
+- enable method :meth:`~pyroSAR.drivers.ID.geometry` for all driver classes
+- classes :class:`~pyroSAR.drivers.ESA` and :class:`~pyroSAR.drivers.CEOS_ERS`: removed call to `gdalinfo`
+  (for increased test capability and speed)
+- outsourced regular expressions for product identification into separate module `patterns`
+
+Auxiliary Data Handling
+-----------------------
+- method :meth:`pyroSAR.S1.OSV.catch`: fixed bug in finding files starting in previous month

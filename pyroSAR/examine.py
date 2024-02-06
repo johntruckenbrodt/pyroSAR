@@ -370,6 +370,17 @@ class ExamineSnap(object):
 
 
 class ExamineGamma(object):
+    """
+    Class to check if GAMMA is installed.
+    
+    Examples
+    --------
+    >>> from pyroSAR.examine import ExamineGamma
+    >>> config = ExamineGamma()
+    >>> print(config.home)
+    >>> print(config.version)
+    
+    """
     def __init__(self):
         home_sys = os.environ.get('GAMMA_HOME')
         if home_sys is not None and not os.path.isdir(home_sys):
@@ -393,7 +404,7 @@ class ExamineGamma(object):
                 setattr(self, 'home', home_sys)
             else:
                 raise RuntimeError('could not read GAMMA installation directory')
-        self.version = re.search('GAMMA_SOFTWARE-(?P<version>[0-9]{8})',
+        self.version = re.search('GAMMA_SOFTWARE[-/](?P<version>[0-9]{8})',
                                  getattr(self, 'home')).group('version')
         
         try:

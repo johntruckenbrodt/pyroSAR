@@ -35,7 +35,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
             demResamplingMethod='BILINEAR_INTERPOLATION', imgResamplingMethod='BILINEAR_INTERPOLATION',
             alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0,
             speckleFilter=False, refarea='gamma0', clean_edges=False, clean_edges_npixels=1,
-            rlks=None, azlks=None, dem_oversampling_multiple=2):
+            rlks=None, azlks=None, dem_oversampling_multiple=2, s1_osv_url_option=1):
     """
     general function for geocoding of SAR backscatter images with SNAP.
     
@@ -203,6 +203,8 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         Used only for terrain flattening.
         The SNAP default of 1 has been found to be insufficient with stripe
         artifacts remaining in the image.
+    s1_osv_url_option: int
+        the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch`
     
     Returns
     -------
@@ -372,7 +374,8 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = deb
     ############################################
     # Apply-Orbit-File node configuration
-    orb = orb_parametrize(scene=id, formatName=formatName, allow_RES_OSV=allow_RES_OSV)
+    orb = orb_parametrize(scene=id, formatName=formatName, allow_RES_OSV=allow_RES_OSV,
+                          url_option=s1_osv_url_option)
     workflow.insert_node(orb, before=last.id)
     last = orb
     ############################################
@@ -654,7 +657,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
 def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0', tmpdir=None, test=False, cleanup=True,
                 demName='SRTM 1Sec HGT', externalDEMFile=None, externalDEMNoDataValue=None, externalDEMApplyEGM=True,
                 alignToStandardGrid=False, standardGridOriginX=0, standardGridOriginY=0, groupsize=1,
-                clean_edges=False, clean_edges_npixels=1, rlks=None, azlks=None):
+                clean_edges=False, clean_edges_npixels=1, rlks=None, azlks=None, osv_url_option=1):
     """
     Generate Sentinel-1 noise power images for each polarization, calibrated to either beta, sigma or gamma nought.
     The written GeoTIFF files will carry the suffix NEBZ, NESZ or NEGZ respectively.
@@ -720,6 +723,8 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
         :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
     azlks: int or None
         the number of azimuth looks. Like `rlks`.
+    osv_url_option: int
+        the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch`
     
     Returns
     -------
@@ -750,7 +755,8 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     wf.insert_node(read)
     ############################################
     orb = orb_parametrize(scene=id, workflow=wf, before=read.id,
-                          formatName='SENTINEL-1', allow_RES_OSV=True)
+                          formatName='SENTINEL-1', allow_RES_OSV=True,
+                          url_option=osv_url_option)
     ############################################
     cal = parse_node('Calibration')
     wf.insert_node(cal, before=orb.id)

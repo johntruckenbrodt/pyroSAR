@@ -331,18 +331,20 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
         each (sub-)workflow containing this operator will be executed with the define executable;
         
          - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
+    
     gpt_args: list[str] or None
         a list of additional arguments to be passed to the gpt call
         
-        - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
+         - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
+    
     removeS1BorderNoiseMethod: str
         the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details;
         one of the following:
         
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement. This is only applied if the IPF version is
-         < 2.9 where additional noise removal was necessary. The outpur of the additional noise removal is stored
-         in the subdirectory bnr of `tmpdir`.
+           < 2.9 where additional noise removal was necessary. The output of the additional noise removal is stored
+           in the subdirectory bnr of `tmpdir`.
     
     Returns
     -------
@@ -469,8 +471,8 @@ def writer(xmlfile, outdir, basename_extensions=None,
         log.info(message.format('cleaning image edges and ' if clean_edges else ''))
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
-        
-        erode_edges(src=src, only_boundary=True, pixels=clean_edges_npixels)
+        if clean_edges:
+            erode_edges(src=src, only_boundary=True, pixels=clean_edges_npixels)
         
         if src_format == 'BEAM-DIMAP':
             src = src.replace('.dim', '.data')
@@ -1533,7 +1535,7 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
         return array, mask
     
     # make sure a backscatter image is used for creating the mask
-    backscatter = [x for x in images if re.search('^(?:Sig|Gam)ma0_', os.path.basename(x))]
+    backscatter = [x for x in images if re.search('^(?:Sigma0_|Gamma0_|C11|C22)', os.path.basename(x))]
     images.insert(0, images.pop(images.index(backscatter[0])))
     
     mask = None
@@ -1617,7 +1619,7 @@ def mli_parametrize(scene, spacing=None, rlks=None, azlks=None, **kwargs):
         return ml
 
 
-def orb_parametrize(scene, formatName, allow_RES_OSV=True, **kwargs):
+def orb_parametrize(scene, formatName, allow_RES_OSV=True, url_option=1, **kwargs):
     """
     convenience function for parametrizing an `Apply-Orbit-File`.
     Required Sentinel-1 orbit files are directly downloaded.
@@ -1634,6 +1636,8 @@ def orb_parametrize(scene, formatName, allow_RES_OSV=True, **kwargs):
         the scene's data format
     allow_RES_OSV: bool
         (only applies to Sentinel-1) Also allow the less accurate RES orbit files to be used?
+    url_option: int
+        the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch`
     kwargs
         further keyword arguments for node parametrization. Known options:
         
@@ -1653,9 +1657,9 @@ def orb_parametrize(scene, formatName, allow_RES_OSV=True, **kwargs):
     
     if formatName == 'SENTINEL-1':
         osv_type = ['POE', 'RES'] if allow_RES_OSV else 'POE'
-        match = scene.getOSV(osvType=osv_type, returnMatch=True)
+        match = scene.getOSV(osvType=osv_type, returnMatch=True, url_option=url_option)
         if match is None and allow_RES_OSV:
-            scene.getOSV(osvType='RES')
+            scene.getOSV(osvType='RES', url_option=url_option)
             orbitType = 'Sentinel Restituted (Auto Download)'
     
     orb = parse_node('Apply-Orbit-File')

@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2022, the pyroSAR Developers.
+# Copyright (c) 2016-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -38,7 +38,7 @@ import operator
 import tarfile as tf
 import xml.etree.ElementTree as ET
 import zipfile as zf
-from datetime import datetime, timedelta
+from datetime import datetime
 from time import strptime, strftime
 from statistics import median
 from itertools import groupby
@@ -48,14 +48,14 @@ import progressbar as pb
 from osgeo import gdal, osr, ogr
 from osgeo.gdalconst import GA_ReadOnly
 
-from . import S1
+from . import S1, patterns
 from .ERS import passdb_query, get_angles_resolution
 from .xml_util import getNamespaces
 
 from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder
 
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, insert
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
@@ -72,8 +72,10 @@ import logging
 
 log = logging.getLogger(__name__)
 
-__LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode', 'start', 'stop', 'product',
-             'spacing', 'samples', 'lines', 'orbitNumber_abs', 'orbitNumber_rel', 'cycleNumber', 'frameNumber']
+__LOCAL__ = ['acquisition_mode', 'coordinates', 'cycleNumber', 'frameNumber',
+             'lines', 'orbit', 'orbitNumber_abs', 'orbitNumber_rel',
+             'polarizations', 'product', 'projection', 'samples',
+             'sensor', 'spacing', 'start', 'stop']
 
 
 def identify(scene):
@@ -117,10 +119,16 @@ def identify(scene):
     if not os.path.exists(scene):
         raise OSError("No such file or directory: '{}'".format(scene))
     
-    for handler in ID.__subclasses__():
+    def get_subclasses(c):
+        subclasses = c.__subclasses__()
+        for subclass in subclasses.copy():
+            subclasses.extend(get_subclasses(subclass))
+        return list(set(subclasses))
+    
+    for handler in get_subclasses(ID):
         try:
             return handler(scene)
-        except (RuntimeError, KeyError, AttributeError):
+        except Exception:
             pass
     raise RuntimeError('data format not supported')
 
@@ -222,7 +230,9 @@ class ID(object):
         for item in sorted(self.locals):
             value = getattr(self, item)
             if item == 'projection':
-                value = crsConvert(value, 'proj4')
+                value = crsConvert(value, 'proj4') if value is not None else None
+            if value == -1:
+                value = '<no global value per product>'
             line = '{0}: {1}'.format(item, value)
             lines.append(line)
         return '\n'.join(lines)
@@ -234,17 +244,21 @@ class ID(object):
         Parameters
         ----------
         outname: str
-            the name of the shapefile to be written
+            the name of the vector file to be written
         driver: str
             the output file format; needs to be defined if the format cannot
             be auto-detected from the filename extension
         overwrite: bool
-            overwrite an existing shapefile?
+            overwrite an existing vector file?
 
         Returns
         -------
         ~spatialist.vector.Vector or None
-            the vector object if `outname` is None, None otherwise
+            the vector object if `outname` is None and None otherwise
+        
+        See Also
+        --------
+        spatialist.vector.Vector.bbox
         """
         if outname is None:
             return bbox(self.getCorners(), self.projection)
@@ -259,26 +273,32 @@ class ID(object):
         Parameters
         ----------
         outname: str
-            the name of the shapefile to be written
+            the name of the vector file to be written
         driver: str
             the output file format; needs to be defined if the format cannot
             be auto-detected from the filename extension
         overwrite: bool
-            overwrite an existing shapefile?
+            overwrite an existing vector file?
 
         Returns
         -------
         ~spatialist.vector.Vector or None
             the vector object if `outname` is None, None otherwise
-        """
-        srs = crsConvert(self.projection, 'osr')
-        ring = ogr.Geometry(ogr.wkbLinearRing)
-        for coordinate in self.meta['coordinates']:
-            ring.AddPoint(*coordinate)
-        ring.CloseRings()
         
-        geom = ogr.Geometry(ogr.wkbPolygon)
-        geom.AddGeometry(ring)
+        See also
+        --------
+        spatialist.vector.Vector.write
+        """
+        if 'coordinates' not in self.meta.keys():
+            raise NotImplementedError
+        srs = crsConvert(self.projection, 'osr')
+        points = ogr.Geometry(ogr.wkbMultiPoint)
+        for lon, lat in self.meta['coordinates']:
+            point = ogr.Geometry(ogr.wkbPoint)
+            point.AddPoint(lon, lat)
+            points.AddGeometry(point)
+        geom = points.ConvexHull()
+        point = points = None
         
         geom.FlattenTo2D()
         
@@ -313,7 +333,7 @@ class ID(object):
     
     def export2dict(self):
         """
-        Return the uuid and the metadata that is defined in self.locals as a dictionary
+        Return the uuid and the metadata that is defined in `self.locals` as a dictionary
         """
         metadata = {item: self.meta[item] for item in self.locals}
         sq_file = os.path.basename(self.file)
@@ -445,17 +465,21 @@ class ID(object):
             meta[entry[0]] = entry[1]
         return meta
     
-    @abc.abstractmethod
     def getCorners(self):
         """
-        derive the corner coordinates from a SAR scene
+        Get the bounding box corner coordinates
 
         Returns
         -------
         dict
-            dictionary with keys `xmin`, `xmax`, `ymin` and `ymax`
+            the corner coordinates as a dictionary with keys `xmin`, `ymin`, `xmax`, `ymax`
         """
-        raise NotImplementedError
+        if 'coordinates' not in self.meta.keys():
+            raise NotImplementedError
+        coordinates = self.meta['coordinates']
+        lat = [x[1] for x in coordinates]
+        lon = [x[0] for x in coordinates]
+        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def getFileObj(self, filename):
         """
@@ -468,7 +492,7 @@ class ID(object):
 
         Returns
         -------
-        ~io.BytesIO
+        io.BytesIO
             a file pointer object
         """
         return getFileObj(self.scene, filename)
@@ -484,7 +508,7 @@ class ID(object):
 
         Returns
         -------
-        list
+        list[str]
             the file names of the images processed by GAMMA
 
         Raises
@@ -506,7 +530,7 @@ class ID(object):
 
         Returns
         -------
-        list
+        list[str]
             names of the SRTM HGT tiles
         """
         
@@ -550,12 +574,12 @@ class ID(object):
     def outname_base(self, extensions=None):
         """
         parse a string containing basic information about the scene in standardized format.
-        Currently this id contains the sensor (4 digits), acquisition mode (4 digits), orbit (1 digit)
-        and acquisition start time (15 digits)., e.g. `S1A__IW___A_20150523T122350`
+        Currently, this id contains the sensor (4 digits), acquisition mode (4 digits), orbit (1 digit)
+        and acquisition start time (15 digits)., e.g. `S1A__IW___A_20150523T122350`.
         
         Parameters
         ----------
-        extensions: list of str
+        extensions: list[str]
             the names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
         Returns
         -------
@@ -762,15 +786,13 @@ class BEAM_DIMAP(ID):
         
         self.root = None
         self.scene = scene
-        self.meta = dict()
-        self.scanMetadata()
+        self.meta = self.scanMetadata()
         
         super(BEAM_DIMAP, self).__init__(self.meta)
     
-    def getCorners(self):
-        return self.meta['corners']
-    
     def scanMetadata(self):
+        meta = dict()
+        
         self.root = ET.parse(self.scene).getroot()
         
         def get_by_name(attr, section='Abstracted_Metadata'):
@@ -782,60 +804,55 @@ class BEAM_DIMAP(ID):
             return out.text
         
         section = 'Abstracted_Metadata'
-        self.meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE', section=section)
-        self.meta['IPF_version'] = get_by_name('Processing_system_identifier', section=section)
-        self.meta['sensor'] = get_by_name('MISSION', section=section).replace('ENTINEL-', '')
-        self.meta['orbit'] = get_by_name('PASS', section=section)[0]
+        meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE', section=section)
+        meta['IPF_version'] = get_by_name('Processing_system_identifier', section=section)
+        meta['sensor'] = get_by_name('MISSION', section=section).replace('ENTINEL-', '')
+        meta['orbit'] = get_by_name('PASS', section=section)[0]
         pols = [x.text for x in self.root.findall('.//MDATTR[@desc="Polarization"]')]
-        self.meta['polarizations'] = list(set([x for x in pols if '-' not in x]))
-        self.meta['spacing'] = (round(float(get_by_name('range_spacing', section=section)), 6),
-                                round(float(get_by_name('azimuth_spacing', section=section)), 6))
-        self.meta['samples'] = int(self.root.find('.//BAND_RASTER_WIDTH').text)
-        self.meta['lines'] = int(self.root.find('.//BAND_RASTER_HEIGHT').text)
-        self.meta['bands'] = int(self.root.find('.//NBANDS').text)
-        self.meta['orbitNumber_abs'] = int(get_by_name('ABS_ORBIT', section=section))
-        self.meta['orbitNumber_rel'] = int(get_by_name('REL_ORBIT', section=section))
-        self.meta['cycleNumber'] = int(get_by_name('orbit_cycle', section=section))
-        self.meta['frameNumber'] = int(get_by_name('data_take_id', section=section))
-        self.meta['product'] = self.root.find('.//PRODUCT_TYPE').text
+        meta['polarizations'] = list(set([x for x in pols if '-' not in x]))
+        meta['spacing'] = (round(float(get_by_name('range_spacing', section=section)), 6),
+                           round(float(get_by_name('azimuth_spacing', section=section)), 6))
+        meta['samples'] = int(self.root.find('.//BAND_RASTER_WIDTH').text)
+        meta['lines'] = int(self.root.find('.//BAND_RASTER_HEIGHT').text)
+        meta['bands'] = int(self.root.find('.//NBANDS').text)
+        meta['orbitNumber_abs'] = int(get_by_name('ABS_ORBIT', section=section))
+        meta['orbitNumber_rel'] = int(get_by_name('REL_ORBIT', section=section))
+        meta['cycleNumber'] = int(get_by_name('orbit_cycle', section=section))
+        meta['frameNumber'] = int(get_by_name('data_take_id', section=section))
+        meta['product'] = self.root.find('.//PRODUCT_TYPE').text
         
         srgr = bool(int(get_by_name('srgr_flag', section=section)))
-        self.meta['image_geometry'] = 'GROUND_RANGE' if srgr else 'SLANT_RANGE'
+        meta['image_geometry'] = 'GROUND_RANGE' if srgr else 'SLANT_RANGE'
         
         inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
         incidence = [float(x.text) for x in inc_elements]
-        self.meta['incidence'] = median(incidence)
+        meta['incidence'] = median(incidence)
         
         # Metadata sections that need some parsing to match naming convention with SAFE format
         start = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_START_TIME').text,
                                   '%d-%b-%Y %H:%M:%S.%f')
-        self.meta['start'] = start.strftime('%Y%m%dT%H%M%S')
+        meta['start'] = start.strftime('%Y%m%dT%H%M%S')
         stop = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_STOP_TIME').text,
                                  '%d-%b-%Y %H:%M:%S.%f')
-        self.meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
+        meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
         
         if self.root.find('.//WKT') is not None:
-            self.meta['projection'] = self.root.find('.//WKT').text.lstrip()
+            meta['projection'] = self.root.find('.//WKT').text.lstrip()
         else:
-            self.meta['projection'] = crsConvert(4326, 'wkt')
+            meta['projection'] = crsConvert(4326, 'wkt')
         
-        longs = [
-            get_by_name('first_far_long', section=section),
-            get_by_name('first_near_long', section=section),
-            get_by_name('last_far_long', section=section),
-            get_by_name('last_near_long', section=section)
-        ]
-        lats = [
-            get_by_name('first_far_lat', section=section),
-            get_by_name('first_near_lat', section=section),
-            get_by_name('last_far_lat', section=section),
-            get_by_name('last_near_lat', section=section)
-        ]
-        # Convert to floats
-        longs = [float(lon) for lon in longs]
-        lats = [float(lat) for lat in lats]
-        self.meta['corners'] = {'xmin': min(longs), 'xmax': max(longs),
-                                'ymin': min(lats), 'ymax': max(lats)}
+        keys = ['{}_{}_{}'.format(a, b, c)
+                for a in ['first', 'last']
+                for b in ['far', 'near']
+                for c in ['lat', 'long']]
+        coords = {key: float(get_by_name(key, section=section))
+                  for key in keys}
+        
+        meta['coordinates'] = [(coords['first_near_long'], coords['first_near_lat']),
+                               (coords['last_near_long'], coords['last_near_lat']),
+                               (coords['last_far_long'], coords['last_far_lat']),
+                               (coords['first_far_long'], coords['first_far_lat'])]
+        return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
         raise RuntimeError('unpacking of BEAM-DIMAP products is not supported')
@@ -855,19 +872,7 @@ class CEOS_ERS(ID):
     """
     
     def __init__(self, scene):
-        self.pattern = r'(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_))_[012B][CP])' \
-                       r'(?P<processing_stage_flag>[A-Z])' \
-                       r'(?P<originator_ID>[A-Z\-]{3})' \
-                       r'(?P<start_day>[0-9]{8})_' \
-                       r'(?P<start_time>[0-9]{6})_' \
-                       r'(?P<duration>[0-9]{8})' \
-                       r'(?P<phase>[0-9A-Z]{1})' \
-                       r'(?P<cycle>[0-9]{3})_' \
-                       r'(?P<relative_orbit>[0-9]{5})_' \
-                       r'(?P<absolute_orbit>[0-9]{5})_' \
-                       r'(?P<counter>[0-9]{4,})\.' \
-                       r'(?P<satellite_ID>[EN][12])' \
-                       r'(?P<extension>(?:\.zip|\.tar\.gz|\.PS|))$'
+        self.pattern = patterns.ceos_ers
         
         self.pattern_pid = r'(?P<sat_id>(?:SAR|ASA))_' \
                            r'(?P<image_mode>(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_)))_' \
@@ -877,33 +882,10 @@ class CEOS_ERS(ID):
         
         self.examine()
         
-        match = re.match(re.compile(self.pattern), os.path.basename(self.file))
-        match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
-        
-        if re.search('IM__0', match.group('product_id')):
-            raise RuntimeError('product level 0 not supported (yet)')
-        
-        self.meta = self.gdalinfo()
-        
-        self.meta['acquisition_mode'] = match2.group('image_mode')
-        self.meta['polarizations'] = ['VV']
-        self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
-        self.meta['spacing'] = (self.meta['CEOS_PIXEL_SPACING_METERS'], self.meta['CEOS_LINE_SPACING_METERS'])
-        self.meta['sensor'] = self.meta['CEOS_MISSION_ID']
-        self.meta['incidence_angle'] = self.meta['CEOS_INC_ANGLE']
-        self.meta['k_db'] = -10 * math.log(float(self.meta['CEOS_CALIBRATION_CONSTANT_K']), 10)
-        self.meta['sc_db'] = {'ERS1': 59.61, 'ERS2': 60}[self.meta['sensor']]
-        
-        # acquire additional metadata from the file LEA_01.001
-        self.meta.update(self.scanMetadata())
+        self.meta = self.scanMetadata()
         
         # register the standardized meta attributes as object attributes
         super(CEOS_ERS, self).__init__(self.meta)
-    
-    def getCorners(self):
-        lat = [x[1][1] for x in self.meta['gcps']]
-        lon = [x[1][0] for x in self.meta['gcps']]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
         if self.sensor in ['ERS1', 'ERS2']:
@@ -917,38 +899,64 @@ class CEOS_ERS(ID):
             raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
     
     def scanMetadata(self):
+        meta = dict()
+        
+        match = re.match(re.compile(self.pattern), os.path.basename(self.file))
+        match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
+        
+        if re.search('IM__0', match.group('product_id')):
+            raise RuntimeError('product level 0 not supported (yet)')
+        
+        meta['acquisition_mode'] = match2.group('image_mode')
+        meta['product'] = 'SLC' if meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
+        
         lea_obj = self.getFileObj(self.findfiles('LEA_01.001')[0])
         lea = lea_obj.read()
         lea_obj.close()
-        meta = dict()
-        offset = 720
-        meta['sensor'] = lea[(offset + 396):(offset + 412)].strip()
-        meta['start'] = self.parse_date(str(lea[(offset + 1814):(offset + 1838)].decode('utf-8')))
-        meta['stop'] = self.parse_date(str(lea[(offset + 1862):(offset + 1886)].decode('utf-8')))
+        fdr = lea[0:720]  # file descriptor record
+        dss = lea[720:(720 + 1886)]  # data set summary record
+        mpd = lea[(720 + 1886):(720 + 1886 + 1620)]  # map projection data record
+        ppd_start = 720 + 1886 + 1620
+        ppd_length = struct.unpack('>i', lea[ppd_start + 8: ppd_start + 12])[0]
+        ppd = lea[ppd_start:ppd_length]  # platform position data record
+        frd_start = 720 + 1886 + 1620 + ppd_length
+        frd = lea[frd_start:(frd_start + 12288)]  # facility related data record
         
-        looks_range = float(lea[(offset + 1174):(offset + 1190)])
-        looks_azimuth = float(lea[(offset + 1190):(offset + 1206)])
+        meta['sensor'] = dss[396:412].strip().decode()
+        meta['start'] = self.parse_date(str(dss[1814:1838].decode('utf-8')))
+        meta['stop'] = self.parse_date(str(dss[1862:1886].decode('utf-8')))
+        meta['polarizations'] = ['VV']
+        looks_range = float(dss[1174:1190])
+        looks_azimuth = float(dss[1190:1206])
         meta['looks'] = (looks_range, looks_azimuth)
-        
-        meta['heading'] = float(lea[(offset + 468):(offset + 476)])
+        meta['heading'] = float(dss[468:476])
         meta['orbit'] = 'D' if meta['heading'] > 180 else 'A'
-        orbitNumber, frameNumber = map(int, re.findall('[0-9]+', lea[(offset + 36):(offset + 68)].decode('utf-8')))
+        orbitNumber, frameNumber = map(int, re.findall('[0-9]+', dss[36:68].decode('utf-8')))
         meta['orbitNumber_abs'] = orbitNumber
         meta['frameNumber'] = frameNumber
         orbitInfo = passdb_query(meta['sensor'], datetime.strptime(meta['start'], '%Y%m%dT%H%M%S'))
         meta['cycleNumber'] = orbitInfo['cycleNumber']
         meta['orbitNumber_rel'] = orbitInfo['orbitNumber_rel']
-        # the following parameters are already read by gdalinfo
-        # spacing_azimuth = float(lea[(offset+1686):(offset+1702)])
-        # spacing_range = float(lea[(offset+1702):(offset+1718)])
-        # meta['spacing'] = (spacing_range, spacing_azimuth)
-        # meta['incidence_angle'] = float(lea[(offset+484):(offset+492)])
-        meta['proc_facility'] = lea[(offset + 1045):(offset + 1061)].strip()
-        meta['proc_system'] = lea[(offset + 1061):(offset + 1069)].strip()
-        meta['proc_version'] = lea[(offset + 1069):(offset + 1077)].strip()
-        # text_subset = lea[re.search('FACILITY RELATED DATA RECORD \[ESA GENERAL TYPE\]', lea).start() - 13:]
-        # meta['k_db'] = -10*math.log(float(text_subset[663:679].strip()), 10)
-        # meta['antenna_flag'] = int(text_subset[659:663].strip())
+        spacing_azimuth = float(dss[1686:1702])
+        spacing_range = float(dss[1702:1718])
+        meta['spacing'] = (spacing_range, spacing_azimuth)
+        meta['incidence_angle'] = float(dss[484:492])
+        meta['proc_facility'] = dss[1045:1061].strip().decode()
+        meta['proc_system'] = dss[1061:1069].strip().decode()
+        meta['proc_version'] = dss[1069:1077].strip().decode()
+        
+        meta['antenna_flag'] = int(frd[658:662])
+        meta['k_db'] = -10 * math.log(float(frd[662:678]), 10)
+        meta['sc_db'] = {'ERS1': 59.61, 'ERS2': 60}[meta['sensor']]
+        
+        meta['samples'] = int(mpd[60:76])
+        meta['lines'] = int(mpd[76:92])
+        ul = (float(mpd[1088:1104]), float(mpd[1072:1088]))
+        ur = (float(mpd[1120:1136]), float(mpd[1104:1120]))
+        lr = (float(mpd[1152:1168]), float(mpd[1136:1152]))
+        ll = (float(mpd[1184:1200]), float(mpd[1168:1184]))
+        meta['coordinates'] = [ul, ur, lr, ll]
+        meta['projection'] = crsConvert(4326, 'wkt')
         return meta
         
         # def correctAntennaPattern(self):
@@ -1034,33 +1042,15 @@ class CEOS_PSR(ID):
         
         self.scene = os.path.realpath(scene)
         
-        patterns = [r'^LED-ALPSR'
-                    r'(?P<sub>P|S)'
-                    r'(?P<orbit>[0-9]{5})'
-                    r'(?P<frame>[0-9]{4})-'
-                    r'(?P<mode>[HWDPC])'
-                    r'(?P<level>1\.[015])'
-                    r'(?P<proc>G|_)'
-                    r'(?P<proj>[UPML_])'
-                    r'(?P<orbit_dir>A|D)$',
-                    r'^LED-ALOS2'
-                    r'(?P<orbit>[0-9]{5})'
-                    r'(?P<frame>[0-9]{4})-'
-                    r'(?P<date>[0-9]{6})-'
-                    r'(?P<mode>SBS|UBS|UBD|HBS|HBD|HBQ|FBS|FBD|FBQ|WBS|WBD|WWS|WWD|VBS|VBD)'
-                    r'(?P<look_dir>L|R)'
-                    r'(?P<level>1\.0|1\.1|1\.5|2\.1|3\.1)'
-                    r'(?P<proc>[GR_])'
-                    r'(?P<proj>[UPML_])'
-                    r'(?P<orbit_dir>A|D)$']
+        candidates = [patterns.ceos_psr1, patterns.ceos_psr2]
         
-        for i, pattern in enumerate(patterns):
+        for i, pattern in enumerate(candidates):
             self.pattern = pattern
             try:
                 self.examine()
                 break
             except RuntimeError as e:
-                if i + 1 == len(patterns):
+                if i + 1 == len(candidates):
                     raise e
         
         self.meta = self.scanMetadata()
@@ -1073,6 +1063,31 @@ class CEOS_PSR(ID):
         led = led_obj.read()
         led_obj.close()
         return led
+    
+    def _img_get_coordinates(self):
+        img_filename = self.findfiles('IMG')[0]
+        img_obj = self.getFileObj(img_filename)
+        imageFileDescriptor = img_obj.read(720)
+        
+        lineRecordLength = int(imageFileDescriptor[186:192])  # bytes per line + 412
+        numberOfRecords = int(imageFileDescriptor[180:186])
+        
+        signalDataDescriptor1 = img_obj.read(412)
+        img_obj.seek(720 + lineRecordLength * (numberOfRecords - 1))
+        signalDataDescriptor2 = img_obj.read()
+        
+        img_obj.close()
+        
+        lat = [signalDataDescriptor1[192:196], signalDataDescriptor1[200:204],
+               signalDataDescriptor2[192:196], signalDataDescriptor2[200:204]]
+        
+        lon = [signalDataDescriptor1[204:208], signalDataDescriptor1[212:216],
+               signalDataDescriptor2[204:208], signalDataDescriptor2[212:216]]
+        
+        lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
+        lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
+        
+        return list(zip(lon, lat))
     
     def _parseSummary(self):
         try:
@@ -1196,7 +1211,7 @@ class CEOS_PSR(ID):
                                    mapProjectionData[1120:1136],
                                    mapProjectionData[1152:1168],
                                    mapProjectionData[1184:1200]]))
-            meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+            meta['coordinates'] = list(zip(lon, lat))
             
             # https://github.com/datalyze-solutions/LandsatProcessingPlugin/blob/master/src/metageta/formats/alos.py
             
@@ -1235,7 +1250,12 @@ class CEOS_PSR(ID):
             meta['projection'] = src_srs.ExportToWkt()
         
         else:
-            meta['projection'] = crsConvert(4326, 'wkt')
+            coordinates = self._img_get_coordinates()
+            if all([x == (0, 0) for x in coordinates]):
+                meta['projection'] = None
+            else:
+                meta['coordinates'] = coordinates
+                meta['projection'] = crsConvert(4326, 'wkt')
         ################################################################################################################
         # read data set summary record
         
@@ -1267,11 +1287,17 @@ class CEOS_PSR(ID):
         try:
             meta['lines'] = int(dataSetSummary[324:332]) * 2
         except ValueError:
-            meta['lines'] = None
+            if 'Pdi_NoOfLines' in meta.keys():
+                meta['lines'] = meta['Pdi_NoOfLines']
+            else:
+                meta['lines'] = None
         try:
             meta['samples'] = int(dataSetSummary[332:340]) * 2
         except ValueError:
-            meta['samples'] = None
+            if 'Pdi_NoOfPixels' in meta.keys():
+                meta['samples'] = meta['Pdi_NoOfPixels']
+            else:
+                meta['samples'] = None
         meta['incidence'] = float(dataSetSummary[484:492])
         meta['wavelength'] = float(dataSetSummary[500:516]) * 100  # in cm
         meta['proc_facility'] = dataSetSummary[1046:1062].strip()
@@ -1317,37 +1343,6 @@ class CEOS_PSR(ID):
     def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
-    
-    def getCorners(self):
-        if 'corners' not in self.meta.keys():
-            lat = [y for x, y in self.meta.items() if 'Latitude' in x]
-            lon = [y for x, y in self.meta.items() if 'Longitude' in x]
-            if len(lat) == 0 or len(lon) == 0:
-                img_filename = self.findfiles('IMG')[0]
-                img_obj = self.getFileObj(img_filename)
-                imageFileDescriptor = img_obj.read(720)
-                
-                lineRecordLength = int(imageFileDescriptor[186:192])  # bytes per line + 412
-                numberOfRecords = int(imageFileDescriptor[180:186])
-                
-                signalDataDescriptor1 = img_obj.read(412)
-                img_obj.seek(720 + lineRecordLength * (numberOfRecords - 1))
-                signalDataDescriptor2 = img_obj.read()
-                
-                img_obj.close()
-                
-                lat = [signalDataDescriptor1[192:196], signalDataDescriptor1[200:204],
-                       signalDataDescriptor2[192:196], signalDataDescriptor2[200:204]]
-                
-                lon = [signalDataDescriptor1[204:208], signalDataDescriptor1[212:216],
-                       signalDataDescriptor2[204:208], signalDataDescriptor2[212:216]]
-                
-                lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
-                lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
-            
-            self.meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-        
-        return self.meta['corners']
 
 
 class EORC_PSR(ID):
@@ -1371,18 +1366,7 @@ class EORC_PSR(ID):
         
         self.scene = os.path.realpath(scene)
         
-        self.pattern = r'^PSR2-' \
-                       r'(?P<prodlevel>SLTR)_' \
-                       r'(?P<pathnr>RSP[0-9]{3})_' \
-                       r'(?P<date>[0-9]{8})' \
-                       r'(?P<mode>FBD|WBD)' \
-                       r'(?P<beam>[0-9]{2})' \
-                       r'(?P<orbit_dir>A|D)' \
-                       r'(?P<look_dir>L|R)_' \
-                       r'(?P<replay_id1>[0-9A-Z]{16})-' \
-                       r'(?P<replay_id2>[0-9A-Z]{5})_' \
-                       r'(?P<internal>[0-9]{3})_' \
-                       r'HDR$'
+        self.pattern = patterns.eorc_psr
         
         self.examine()
         
@@ -1397,6 +1381,31 @@ class EORC_PSR(ID):
         head = list(head.split('\n'))
         head_obj.close()
         return head
+    
+    def _img_get_coordinates(self):
+        img_filename = self.findfiles('IMG')[0]
+        img_obj = self.getFileObj(img_filename)
+        imageFileDescriptor = img_obj.read(720)
+        
+        lineRecordLength = int(imageFileDescriptor[186:192])  # bytes per line + 412
+        numberOfRecords = int(imageFileDescriptor[180:186])
+        
+        signalDataDescriptor1 = img_obj.read(412)
+        img_obj.seek(720 + lineRecordLength * (numberOfRecords - 1))
+        signalDataDescriptor2 = img_obj.read()
+        
+        img_obj.close()
+        
+        lat = [signalDataDescriptor1[192:196], signalDataDescriptor1[200:204],
+               signalDataDescriptor2[192:196], signalDataDescriptor2[200:204]]
+        
+        lon = [signalDataDescriptor1[204:208], signalDataDescriptor1[212:216],
+               signalDataDescriptor2[204:208], signalDataDescriptor2[212:216]]
+        
+        lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
+        lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
+        
+        return list(zip(lon, lat))
     
     def _parseFacter_m(self):
         try:
@@ -1445,13 +1454,16 @@ class EORC_PSR(ID):
         ################################################################################################################
         # read leader file name information
         meta['acquisition_mode'] = header[12]
-        # ###############################################################################################################
+        # ##############################################################################################################
         # read map projection data 
         
         lat = list(map(float, [header[33], header[35], header[37], header[39]]))
         lon = list(map(float, [header[34], header[36], header[38], header[40]]))
         
-        meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+        if len(lat) == 0 or len(lon) == 0:
+            meta['coordinates'] = self._img_get_coordinates()
+        else:
+            meta['coordinates'] = list(zip(lon, lat))
         
         meta['projection'] = crsConvert(4918, 'wkt')  # EPSG: 4918: ITRF97, GRS80
         ################################################################################################################
@@ -1482,37 +1494,6 @@ class EORC_PSR(ID):
     def unpack(self, directory, overwrite=False, exist_ok=False):
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
-    
-    def getCorners(self):
-        if 'corners' not in self.meta.keys():
-            lat = [y for x, y in self.meta.items() if 'Latitude' in x]
-            lon = [y for x, y in self.meta.items() if 'Longitude' in x]
-            if len(lat) == 0 or len(lon) == 0:
-                img_filename = self.findfiles('IMG')[0]
-                img_obj = self.getFileObj(img_filename)
-                imageFileDescriptor = img_obj.read(720)
-                
-                lineRecordLength = int(imageFileDescriptor[186:192])  # bytes per line + 412
-                numberOfRecords = int(imageFileDescriptor[180:186])
-                
-                signalDataDescriptor1 = img_obj.read(412)
-                img_obj.seek(720 + lineRecordLength * (numberOfRecords - 1))
-                signalDataDescriptor2 = img_obj.read()
-                
-                img_obj.close()
-                
-                lat = [signalDataDescriptor1[192:196], signalDataDescriptor1[200:204],
-                       signalDataDescriptor2[192:196], signalDataDescriptor2[200:204]]
-                
-                lon = [signalDataDescriptor1[204:208], signalDataDescriptor1[212:216],
-                       signalDataDescriptor2[204:208], signalDataDescriptor2[212:216]]
-                
-                lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
-                lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
-            
-            self.meta['corners'] = {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-        
-        return self.meta['corners']
 
 
 class ESA(ID):
@@ -1527,18 +1508,7 @@ class ESA(ID):
     
     def __init__(self, scene):
         
-        self.pattern = r'(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_))_[012B][CP])' \
-                       r'(?P<processing_stage_flag>[A-Z])' \
-                       r'(?P<originator_ID>[A-Z\-]{3})' \
-                       r'(?P<start_day>[0-9]{8})_' \
-                       r'(?P<start_time>[0-9]{6})_' \
-                       r'(?P<duration>[0-9]{8})' \
-                       r'(?P<phase>[0-9A-Z]{1})' \
-                       r'(?P<cycle>[0-9]{3})_' \
-                       r'(?P<relative_orbit>[0-9]{5})_' \
-                       r'(?P<absolute_orbit>[0-9]{5})_' \
-                       r'(?P<counter>[0-9]{4,})\.' \
-                       r'(?P<satellite_ID>[EN][12])'
+        self.pattern = patterns.esa
         self.pattern_pid = r'(?P<sat_id>(?:SAR|ASA))_' \
                            r'(?P<image_mode>(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W|_)|WS(?:M|S|_)))_' \
                            r'(?P<processing_level>[012B][CP])'
@@ -1550,64 +1520,109 @@ class ESA(ID):
         else:
             self.examine()
         
+        self.meta = self.scanMetadata()
+        
+        # register the standardized meta attributes as object attributes
+        super(ESA, self).__init__(self.meta)
+    
+    def scanMetadata(self):
         match = re.match(re.compile(self.pattern), os.path.basename(self.file))
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
         
         if re.search('IM__0', match.group('product_id')):
             raise RuntimeError('product level 0 not supported (yet)')
         
-        self.meta = self.scanMetadata()
+        meta = dict()
+        sensor_lookup = {'N1': 'ASAR', 'E1': 'ERS1', 'E2': 'ERS2'}
+        meta['sensor'] = sensor_lookup[match.group('satellite_ID')]
+        meta['acquisition_mode'] = match2.group('image_mode')
+        meta['product'] = 'SLC' if meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
+        meta['frameNumber'] = int(match.group('counter'))
         
-        corners = self.getCorners()
-        self.meta['coordinates'] = [tuple([corners['xmin'], corners['ymin']]),
-                                    tuple([corners['xmin'], corners['ymax']]),
-                                    tuple([corners['xmax'], corners['ymin']]),
-                                    tuple([corners['xmax'], corners['ymax']])]
-        self.meta['acquisition_mode'] = match2.group('image_mode')
-        self.meta['product'] = 'SLC' if self.meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
-        self.meta['frameNumber'] = int(match.group('counter'))
-        
-        if self.meta['acquisition_mode'] == 'IMS' \
-                or self.meta['acquisition_mode'] == 'APS' \
-                or self.meta['acquisition_mode'] == 'WSM':
-            self.meta['image_geometry'] = 'SLANT_RANGE'
-        elif self.meta['acquisition_mode'] == 'IMP' or self.meta['acquisition_mode'] == 'APP':
-            self.meta['image_geometry'] = 'GROUND_RANGE'
+        if meta['acquisition_mode'] in ['APS', 'IMS', 'WSM']:
+            meta['image_geometry'] = 'SLANT_RANGE'
+        elif meta['acquisition_mode'] in ['APP', 'IMP']:
+            meta['image_geometry'] = 'GROUND_RANGE'
         else:
-            raise RuntimeError("unsupported adquisition mode: {}".format(self.meta['acquisition_mode']))
+            raise RuntimeError(f"unsupported acquisition mode: '{meta['acquisition_mode']}'")
         
-        self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax'], \
-            self.meta['rangeResolution'], self.meta['azimuthResolution'], \
-            self.meta['neszNear'], self.meta['neszFar'] = \
-            get_angles_resolution(self.meta['sensor'], self.meta['acquisition_mode'],
-                                  self.meta['SPH_SWATH'], self.meta['start'])
-        self.meta['incidence'] = median([self.meta['incidenceAngleMin'], self.meta['incidenceAngleMax']])
-        # register the standardized meta attributes as object attributes
-        super(ESA, self).__init__(self.meta)
-    
-    def getCorners(self):
-        lon = [self.meta[x] for x in self.meta if re.search('LONG', x)]
-        lat = [self.meta[x] for x in self.meta if re.search('LAT', x)]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-    
-    def scanMetadata(self):
-        meta = self.gdalinfo()
+        with self.getFileObj(self.file) as obj:
+            mph = obj.read(1247).decode('ascii')
+            sph = obj.read(1059).decode('ascii')
+            dsd = obj.read(5040).decode('ascii')
+            
+            pattern = r'(?P<key>[A-Z0-9_]+)\=(")?(?P<value>.*?)("|<|$)'
+            origin = dict()
+            header = mph + sph
+            lines = header.split('\n')
+            for line in lines:
+                match = re.match(pattern, line)
+                if match:
+                    matchdict = match.groupdict()
+                    origin[matchdict['key']] = str(matchdict['value']).strip()
+            
+            raw = []
+            lines = dsd.split('\n')
+            for line in lines:
+                match = re.match(pattern, line)
+                if match:
+                    matchdict = match.groupdict()
+                    raw.append((matchdict['key'], str(matchdict['value']).strip()))
+            raw = [raw[i:i + 7] for i in range(0, len(raw), 7)]
+            datasets = {x.pop(0)[1]: {y[0]: y[1] for y in x} for x in raw}
+            
+            offset = 0
+            for key in datasets.keys():
+                size = int(datasets[key]['DSR_SIZE'])
+                n = int(datasets[key]['NUM_DSR'])
+                if key == 'GEOLOCATION GRID ADS':
+                    break
+                offset += size * n
+            
+            obj.seek(offset, 1)
+            gcps = obj.read(size * n)
+        
+        lat = gcps[157:(157 + 44)] + gcps[411:(411 + 44)]
+        lon = gcps[201:(201 + 44)] + gcps[455:(455 + 44)]
+        
+        lat = [lat[i:i + 4] for i in range(0, len(lat), 4)]
+        lon = [lon[i:i + 4] for i in range(0, len(lon), 4)]
+        
+        lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
+        lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
+        
+        meta['coordinates'] = list(zip(lon, lat))
         
         if meta['sensor'] == 'ASAR':
-            meta['polarizations'] = sorted([y.replace('/', '') for x, y in meta.items() if
-                                            'TX_RX_POLAR' in x and len(y) == 3])
+            pols = [y for x, y in origin.items() if 'TX_RX_POLAR' in x]
+            pols = [x.replace('/', '') for x in pols if len(x) == 3]
+            meta['polarizations'] = sorted(pols)
         elif meta['sensor'] in ['ERS1', 'ERS2']:
             meta['polarizations'] = ['VV']
         
-        meta['orbit'] = meta['SPH_PASS'][0]
-        meta['start'] = meta['MPH_SENSING_START']
-        meta['stop'] = meta['MPH_SENSING_STOP']
-        meta['spacing'] = (meta['SPH_RANGE_SPACING'], meta['SPH_AZIMUTH_SPACING'])
-        meta['looks'] = (meta['SPH_RANGE_LOOKS'], meta['SPH_AZIMUTH_LOOKS'])
+        meta['orbit'] = origin['PASS'][0]
+        start = datetime.strptime(origin['SENSING_START'], '%d-%b-%Y %H:%M:%S.%f')
+        meta['start'] = start.strftime('%Y%m%dT%H%M%S')
+        stop = datetime.strptime(origin['SENSING_STOP'], '%d-%b-%Y %H:%M:%S.%f')
+        meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
+        meta['spacing'] = (float(origin['RANGE_SPACING']), float(origin['AZIMUTH_SPACING']))
+        meta['looks'] = (float(origin['RANGE_LOOKS']), float(origin['AZIMUTH_LOOKS']))
+        meta['samples'] = int(origin['LINE_LENGTH'])
+        meta['lines'] = int(datasets['MDS1']['NUM_DSR'])
         
-        meta['orbitNumber_abs'] = meta['MPH_ABS_ORBIT']
-        meta['orbitNumber_rel'] = meta['MPH_REL_ORBIT']
-        meta['cycleNumber'] = meta['MPH_CYCLE']
+        meta['orbitNumber_abs'] = int(origin['ABS_ORBIT'])
+        meta['orbitNumber_rel'] = int(origin['REL_ORBIT'])
+        meta['cycleNumber'] = int(origin['CYCLE'])
+        
+        meta['incidenceAngleMin'], meta['incidenceAngleMax'], \
+            meta['rangeResolution'], meta['azimuthResolution'], \
+            meta['neszNear'], meta['neszFar'] = \
+            get_angles_resolution(meta['sensor'], meta['acquisition_mode'],
+                                  origin['SWATH'], meta['start'])
+        meta['incidence'] = median([meta['incidenceAngleMin'], meta['incidenceAngleMax']])
+        
+        meta['projection'] = crsConvert(4326, 'wkt')
+        
         return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
@@ -1636,19 +1651,7 @@ class SAFE(ID):
         
         self.scene = os.path.realpath(scene)
         
-        self.pattern = r'^(?P<sensor>S1[AB])_' \
-                       r'(?P<beam>S1|S2|S3|S4|S5|S6|IW|EW|WV|EN|N1|N2|N3|N4|N5|N6|IM)_' \
-                       r'(?P<product>SLC|GRD|OCN)' \
-                       r'(?P<resolution>F|H|M|_)_' \
-                       r'(?P<processingLevel>1|2)' \
-                       r'(?P<category>S|A)' \
-                       r'(?P<pols>SH|SV|DH|DV|VV|HH|HV|VH)_' \
-                       r'(?P<start>[0-9]{8}T[0-9]{6})_' \
-                       r'(?P<stop>[0-9]{8}T[0-9]{6})_' \
-                       r'(?P<orbitNumber>[0-9]{6})_' \
-                       r'(?P<dataTakeID>[0-9A-F]{6})_' \
-                       r'(?P<productIdentifier>[0-9A-F]{4})' \
-                       r'\.SAFE$'
+        self.pattern = patterns.safe
         
         self.pattern_ds = r'^s1[ab]-' \
                           r'(?P<swath>s[1-6]|iw[1-3]?|ew[1-5]?|wv[1-2]|n[1-6])-' \
@@ -1665,7 +1668,7 @@ class SAFE(ID):
         if not re.match(re.compile(self.pattern), os.path.basename(self.file)):
             raise RuntimeError('folder does not match S1 scene naming convention')
         
-        # scan the metadata XML files file and add selected attributes to a meta dictionary
+        # scan the metadata XML file and add selected attributes to a meta dictionary
         self.meta = self.scanMetadata()
         self.meta['projection'] = crsConvert(4326, 'wkt')
         
@@ -1695,12 +1698,6 @@ class SAFE(ID):
         """
         S1.removeGRDBorderNoise(self, method=method)
     
-    def getCorners(self):
-        coordinates = self.meta['coordinates']
-        lat = [x[1] for x in coordinates]
-        lon = [x[0] for x in coordinates]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
-    
     def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=300, url_option=1):
         """
         download Orbit State Vector files for the scene
@@ -1720,10 +1717,7 @@ class SAFE(ID):
         timeout: int or tuple or None
             the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
         url_option: int
-            the URL to query for scenes
-            
-             - 1: https://scihub.copernicus.eu/gnss
-             - 2: https://step.esa.int/auxdata/orbits/Sentinel-1
+            the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch` for options
 
         Returns
         -------
@@ -1734,11 +1728,6 @@ class SAFE(ID):
         --------
         :class:`pyroSAR.S1.OSV`
         """
-        date = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
-        # create a time span with one day before and one after the acquisition
-        before = (date - timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
-        after = (date + timedelta(days=1)).strftime('%Y%m%dT%H%M%S')
-        
         with S1.OSV(osvdir, timeout=timeout) as osv:
             if useLocal:
                 match = osv.match(sensor=self.sensor, timestamp=self.start,
@@ -1748,15 +1737,15 @@ class SAFE(ID):
             
             if osvType in ['POE', 'RES']:
                 files = osv.catch(sensor=self.sensor, osvtype=osvType,
-                                  start=before, stop=after,
+                                  start=self.start, stop=self.stop,
                                   url_option=url_option)
             elif sorted(osvType) == ['POE', 'RES']:
                 files = osv.catch(sensor=self.sensor, osvtype='POE',
-                                  start=before, stop=after,
+                                  start=self.start, stop=self.stop,
                                   url_option=url_option)
                 if len(files) == 0:
                     files = osv.catch(sensor=self.sensor, osvtype='RES',
-                                      start=before, stop=after,
+                                      start=self.start, stop=self.stop,
                                       url_option=url_option)
             else:
                 msg = "osvType must either be 'POE', 'RES' or a list of both"
@@ -1788,6 +1777,10 @@ class SAFE(ID):
         -------
 
         """
+        if self.product not in ['GRD', 'SLC']:
+            msg = 'this method has only been implemented for GRD and SLC, not {}'
+            raise RuntimeError(msg.format(self.product))
+        
         if format != 'kmz':
             raise RuntimeError('currently only kmz is supported as format')
         kml_name = self.findfiles('map-overlay.kml')[0]
@@ -1832,6 +1825,10 @@ class SAFE(ID):
         """
         if 'resolution' in self.meta.keys():
             return self.meta['resolution']
+        if self.product not in ['GRD', 'SLC']:
+            msg = 'this method has only been implemented for GRD and SLC, not {}'
+            raise RuntimeError(msg.format(self.product))
+        
         annotations = self.findfiles(self.pattern_ds)
         key = lambda x: re.search('-[vh]{2}-', x).group()
         groups = groupby(sorted(annotations, key=key), key=key)
@@ -1890,9 +1887,17 @@ class SAFE(ID):
         tree = ET.fromstring(manifest)
         
         meta = dict()
-        acqmode = tree.find('.//s1sarl1:mode', namespaces).text
+        key = 's1sarl1'
+        obj_prod = tree.find('.//{}:productType'.format(key), namespaces)
+        if obj_prod == None:
+            key = 's1sarl2'
+            obj_prod = tree.find('.//{}:productType'.format(key), namespaces)
+        
+        meta['product'] = obj_prod.text
+        
+        acqmode = tree.find('.//{}:mode'.format(key), namespaces).text
         if acqmode == 'SM':
-            meta['acquisition_mode'] = tree.find('.//s1sarl1:swath', namespaces).text
+            meta['acquisition_mode'] = tree.find('.//{}:swath'.format(key), namespaces).text
         else:
             meta['acquisition_mode'] = acqmode
         meta['acquisition_time'] = dict(
@@ -1905,7 +1910,7 @@ class SAFE(ID):
         meta['orbitNumber_abs'] = int(tree.find('.//safe:orbitNumber[@type="start"]', namespaces).text)
         meta['orbitNumber_rel'] = int(tree.find('.//safe:relativeOrbitNumber[@type="start"]', namespaces).text)
         meta['cycleNumber'] = int(tree.find('.//safe:cycleNumber', namespaces).text)
-        meta['frameNumber'] = int(tree.find('.//s1sarl1:missionDataTakeID', namespaces).text)
+        meta['frameNumber'] = int(tree.find('.//{}:missionDataTakeID'.format(key), namespaces).text)
         
         meta['orbitNumbers_abs'] = dict(
             [(x, int(tree.find('.//safe:orbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in
@@ -1913,36 +1918,47 @@ class SAFE(ID):
         meta['orbitNumbers_rel'] = dict(
             [(x, int(tree.find('.//safe:relativeOrbitNumber[@type="{0}"]'.format(x), namespaces).text)) for x in
              ['start', 'stop']])
-        meta['polarizations'] = [x.text for x in tree.findall('.//s1sarl1:transmitterReceiverPolarisation', namespaces)]
-        meta['product'] = tree.find('.//s1sarl1:productType', namespaces).text
-        meta['category'] = tree.find('.//s1sarl1:productClass', namespaces).text
-        meta['sensor'] = tree.find('.//safe:familyName', namespaces).text.replace('ENTINEL-', '') + tree.find(
-            './/safe:number', namespaces).text
+        key_pol = './/{}:transmitterReceiverPolarisation'.format(key)
+        meta['polarizations'] = [x.text for x in tree.findall(key_pol, namespaces)]
+        meta['category'] = tree.find('.//{}:productClass'.format(key), namespaces).text
+        family = tree.find('.//safe:familyName', namespaces).text.replace('ENTINEL-', '')
+        number = tree.find('.//safe:number', namespaces).text
+        meta['sensor'] = family + number
         meta['IPF_version'] = float(tree.find('.//safe:software', namespaces).attrib['version'])
-        meta['sliceNumber'] = int(tree.find('.//s1sarl1:sliceNumber', namespaces).text)
-        meta['totalSlices'] = int(tree.find('.//s1sarl1:totalSlices', namespaces).text)
+        sliced = tree.find('.//{}:sliceProductFlag'.format(key), namespaces).text == 'true'
+        if sliced:
+            meta['sliceNumber'] = int(tree.find('.//{}:sliceNumber'.format(key), namespaces).text)
+            meta['totalSlices'] = int(tree.find('.//{}:totalSlices'.format(key), namespaces).text)
+        else:
+            meta['sliceNumber'] = None
+            meta['totalSlices'] = None
         
-        annotations = self.findfiles(self.pattern_ds)
-        key = lambda x: re.search('-[vh]{2}-', x).group()
-        groups = groupby(sorted(annotations, key=key), key=key)
-        annotations = [list(value) for key, value in groups][0]
-        ann_trees = []
-        for ann in annotations:
-            with self.getFileObj(ann) as ann_xml:
-                ann_trees.append(ET.fromstring(ann_xml.read()))
-        
-        sp_rg = [float(x.find('.//rangePixelSpacing').text) for x in ann_trees]
-        sp_az = [float(x.find('.//azimuthPixelSpacing').text) for x in ann_trees]
-        meta['spacing'] = (median(sp_rg), median(sp_az))
-        samples = [x.find('.//imageAnnotation/imageInformation/numberOfSamples').text for x in ann_trees]
-        meta['samples'] = sum([int(x) for x in samples])
-        lines = [x.find('.//imageAnnotation/imageInformation/numberOfLines').text for x in ann_trees]
-        meta['lines'] = sum([int(x) for x in lines])
-        heading = median(float(x.find('.//platformHeading').text) for x in ann_trees)
-        meta['heading'] = heading if heading > 0 else heading + 360
-        incidence = [float(x.find('.//incidenceAngleMidSwath').text) for x in ann_trees]
-        meta['incidence'] = median(incidence)
-        meta['image_geometry'] = ann_trees[0].find('.//projection').text.replace(' ', '_').upper()
+        if meta['product'] == 'OCN':
+            meta['spacing'] = -1
+            meta['samples'] = -1
+            meta['lines'] = -1
+        else:
+            annotations = self.findfiles(self.pattern_ds)
+            key = lambda x: re.search('-[vh]{2}-', x).group()
+            groups = groupby(sorted(annotations, key=key), key=key)
+            annotations = [list(value) for key, value in groups][0]
+            ann_trees = []
+            for ann in annotations:
+                with self.getFileObj(ann) as ann_xml:
+                    ann_trees.append(ET.fromstring(ann_xml.read()))
+            
+            sp_rg = [float(x.find('.//rangePixelSpacing').text) for x in ann_trees]
+            sp_az = [float(x.find('.//azimuthPixelSpacing').text) for x in ann_trees]
+            meta['spacing'] = (median(sp_rg), median(sp_az))
+            samples = [x.find('.//imageAnnotation/imageInformation/numberOfSamples').text for x in ann_trees]
+            meta['samples'] = sum([int(x) for x in samples])
+            lines = [x.find('.//imageAnnotation/imageInformation/numberOfLines').text for x in ann_trees]
+            meta['lines'] = sum([int(x) for x in lines])
+            heading = median(float(x.find('.//platformHeading').text) for x in ann_trees)
+            meta['heading'] = heading if heading > 0 else heading + 360
+            incidence = [float(x.find('.//incidenceAngleMidSwath').text) for x in ann_trees]
+            meta['incidence'] = median(incidence)
+            meta['image_geometry'] = ann_trees[0].find('.//projection').text.replace(' ', '_').upper()
         
         return meta
     
@@ -1991,14 +2007,7 @@ class TSX(ID):
         if isinstance(scene, str):
             self.scene = os.path.realpath(scene)
             
-            self.pattern = r'^(?P<sat>T[DS]X1)_SAR__' \
-                           r'(?P<prod>SSC|MGD|GEC|EEC)_' \
-                           r'(?P<var>____|SE__|RE__|MON1|MON2|BTX1|BRX2)_' \
-                           r'(?P<mode>SM|SL|HS|HS300|ST|SC)_' \
-                           r'(?P<pols>[SDTQ])_' \
-                           r'(?:SRA|DRA)_' \
-                           r'(?P<start>[0-9]{8}T[0-9]{6})_' \
-                           r'(?P<stop>[0-9]{8}T[0-9]{6})(?:\.xml|)$'
+            self.pattern = patterns.tsx
             
             self.pattern_ds = r'^IMAGE_(?P<pol>HH|HV|VH|VV)_(?:SRA|FWD|AFT)_(?P<beam>[^\.]+)\.(cos|tif)$'
             self.examine(include_folders=False)
@@ -2010,16 +2019,6 @@ class TSX(ID):
             self.meta['projection'] = crsConvert(4326, 'wkt')
         
         super(TSX, self).__init__(self.meta)
-    
-    def getCorners(self):
-        geocs = self.getFileObj(self.findfiles('GEOREF.xml')[0]).getvalue()
-        tree = ET.fromstring(geocs)
-        pts = tree.findall('.//gridPoint')
-        lat = [float(x.find('lat').text) for x in pts]
-        lon = [float(x.find('lon').text) for x in pts]
-        # shift lon in case of west direction.
-        lon = [x - 360 if x > 180 else x for x in lon]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def scanMetadata(self):
         annotation = self.getFileObj(self.file).getvalue()
@@ -2049,6 +2048,16 @@ class TSX(ID):
         azlks = float(tree.find('.//imageDataInfo/imageRaster/azimuthLooks', namespaces).text)
         meta['looks'] = (rlks, azlks)
         meta['incidence'] = float(tree.find('.//sceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
+        
+        geocs = self.getFileObj(self.findfiles('GEOREF.xml')[0]).getvalue()
+        tree = ET.fromstring(geocs)
+        pts = tree.findall('.//gridPoint')
+        lat = [float(x.find('lat').text) for x in pts]
+        lon = [float(x.find('lon').text) for x in pts]
+        # shift lon in case of west direction.
+        lon = [x - 360 if x > 180 else x for x in lon]
+        meta['coordinates'] = list(zip(lon, lat))
+        
         return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
@@ -2099,14 +2108,7 @@ class TDM(TSX):
     def __init__(self, scene):
         self.scene = os.path.realpath(scene)
         
-        self.pattern = r'^(?P<sat>T[D]M1)_SAR__' \
-                       r'(?P<prod>COS)_' \
-                       r'(?P<var>____|MONO|BIST|ALT1|ALT2)_' \
-                       r'(?P<mode>SM|SL|HS)_' \
-                       r'(?P<pols>[SDQ])_' \
-                       r'(?:SRA|DRA)_' \
-                       r'(?P<start>[0-9]{8}T[0-9]{6})_' \
-                       r'(?P<stop>[0-9]{8}T[0-9]{6})(?:\.xml|)$'
+        self.pattern = patterns.tdm
         
         self.pattern_ds = r'^IMAGE_(?P<pol>HH|HV|VH|VV)_(?:SRA|FWD|AFT)_(?P<beam>[^\.]+)\.(cos|tif)$'
         self.examine(include_folders=False)
@@ -2118,16 +2120,6 @@ class TDM(TSX):
         self.meta['projection'] = crsConvert(4326, 'wkt')
         
         super(TDM, self).__init__(self.meta)
-    
-    def getCorners(self):
-        geocs = self.getFileObj(self.file).getvalue()
-        tree = ET.fromstring(geocs)
-        pts = tree.findall('.//sceneCornerCoord')
-        lat = [float(x.find('lat').text) for x in pts]
-        lon = [float(x.find('lon').text) for x in pts]
-        # shift lon in case of west direction.
-        lon = [x - 360 if x > 180 else x for x in lon]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
     def scanMetadata(self):
         annotation = self.getFileObj(self.file).getvalue()
@@ -2192,6 +2184,13 @@ class TDM(TSX):
         meta['looks'] = meta[meta['inSARmasterID']]['looks']
         meta['incidence'] = meta[meta['inSARmasterID']]['incidence']
         
+        pts = tree.findall('.//sceneCornerCoord')
+        lat = [float(x.find('lat').text) for x in pts]
+        lon = [float(x.find('lon').text) for x in pts]
+        # shift lon in case of west direction.
+        lon = [x - 360 if x > 180 else x for x in lon]
+        meta['coordinates'] = list(zip(lon, lat))
+        
         return meta
 
 
@@ -2204,7 +2203,7 @@ class Archive(object):
     dbfile: str
         the filename for the SpatiaLite database. This might either point to an existing database or will be created otherwise.
         If postgres is set to True, this will be the name for the PostgreSQL database.
-    custom_fields: dict
+    custom_fields: dict or None
         a dictionary containing additional non-standard database column names and data types;
         the names must be attributes of the SAR scenes to be inserted (i.e. id.attr) or keys in their meta attribute
         (i.e. id.meta['attr'])
@@ -2220,7 +2219,9 @@ class Archive(object):
         required for postgres driver: port number to the database. Default: 5432
     cleanup: bool
         check whether all registered scenes exist and remove missing entries?
-
+    legacy: bool
+        open an outdated database in legacy mode to import into a new database.
+        Opening an outdated database without legacy mode will throw a RuntimeError.
 
     Examples
     ----------
@@ -2270,10 +2271,20 @@ class Archive(object):
     >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*\.zip'], regex=True, recursive=True)
     >>> with Archive(dbfile, driver='postgres', user='user', password='password', host='host', port=5432) as archive:
     >>>     archive.insert(scenes_s1)
+    
+    Importing an old database:
+    
+    >>> from pyroSAR import Archive
+    >>> db_new = 'scenes.db'
+    >>> db_old = 'scenes_old.db'
+    >>> with Archive(db_new) as db:
+    >>>     with Archive(db_old, legacy=True) as db_old:
+    >>>         db.import_outdated(db_old)
     """
     
     def __init__(self, dbfile, custom_fields=None, postgres=False, user='postgres',
-                 password='1234', host='localhost', port=5432, cleanup=True):
+                 password='1234', host='localhost', port=5432, cleanup=True,
+                 legacy=False):
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
@@ -2289,7 +2300,7 @@ class Archive(object):
             self.driver = 'postgresql'
             if not self.__check_host(host, port):
                 sys.exit('Server not found!')
-
+        
         connect_args = {}
         
         # create dict, with which a URL to the db is created
@@ -2347,53 +2358,16 @@ class Archive(object):
         self.meta = MetaData(self.engine)
         self.custom_fields = custom_fields
         
-        # create tables as schema
-        self.data_schema = Table('data', self.meta,
-                                 Column('sensor', String),
-                                 Column('orbit', String),
-                                 Column('orbitNumber_abs', Integer),
-                                 Column('orbitNumber_rel', Integer),
-                                 Column('cycleNumber', Integer),
-                                 Column('frameNumber', Integer),
-                                 Column('acquisition_mode', String),
-                                 Column('start', String),
-                                 Column('stop', String),
-                                 Column('product', String),
-                                 Column('samples', Integer),
-                                 Column('lines', Integer),
-                                 Column('outname_base', String, primary_key=True),
-                                 Column('scene', String),
-                                 Column('hh', Integer),
-                                 Column('vv', Integer),
-                                 Column('hv', Integer),
-                                 Column('vh', Integer),
-                                 Column('bbox', Geometry(geometry_type='POLYGON',
-                                                         management=True, srid=4326)))
+        # load or create tables
+        self.__init_data_table()
+        self.__init_duplicates_table()
         
-        # add custom fields
-        if self.custom_fields is not None:
-            for key, val in self.custom_fields.items():
-                if val in ['Integer', 'integer', 'int']:
-                    self.data_schema.append_column(Column(key, Integer))
-                elif val in ['String', 'string', 'str']:
-                    self.data_schema.append_column(Column(key, String))
-                else:
-                    log.info('Value in dict custom_fields must be "integer" or "string"!')
+        pk = sql_inspect(self.data_schema).primary_key
+        if 'product' not in pk.columns.keys() and not legacy:
+            raise RuntimeError("the 'data' table is missing a primary key 'product'. "
+                               "Please create a new database and import the old one "
+                               "opened in legacy mode using Archive.import_outdated.")
         
-        # schema for duplicates
-        self.duplicates_schema = Table('duplicates', self.meta,
-                                       Column('outname_base', String, primary_key=True),
-                                       Column('scene', String, primary_key=True))
-        
-        # create tables if not existing
-        if not sql_inspect(self.engine).has_table('data'):
-            log.debug("creating DB table 'data'")
-            self.data_schema.create(self.engine)
-        if not sql_inspect(self.engine).has_table('duplicates'):
-            log.debug("creating DB table 'duplicates'")
-            self.duplicates_schema.create(self.engine)
-        
-        # reflect tables from (by now) existing db, make some variables available within self
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
         self.Data = self.Base.classes.data
@@ -2417,7 +2391,7 @@ class Archive(object):
         
         Parameters
         ----------
-        tables: :class:`sqlalchemy.schema.Table` or :obj:`list` of :class:`sqlalchemy.schema.Table`
+        tables: :class:`sqlalchemy.schema.Table` or list[:class:`sqlalchemy.schema.Table`]
             The table(s) to be added to the database.
         """
         created = []
@@ -2437,6 +2411,59 @@ class Archive(object):
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
     
+    def __init_data_table(self):
+        if sql_inspect(self.engine).has_table('data'):
+            self.data_schema = Table('data', self.meta, autoload_with=self.engine)
+            return
+        
+        log.debug("creating DB table 'data'")
+        
+        self.data_schema = Table('data', self.meta,
+                                 Column('sensor', String),
+                                 Column('orbit', String),
+                                 Column('orbitNumber_abs', Integer),
+                                 Column('orbitNumber_rel', Integer),
+                                 Column('cycleNumber', Integer),
+                                 Column('frameNumber', Integer),
+                                 Column('acquisition_mode', String),
+                                 Column('start', String),
+                                 Column('stop', String),
+                                 Column('product', String, primary_key=True),
+                                 Column('samples', Integer),
+                                 Column('lines', Integer),
+                                 Column('outname_base', String, primary_key=True),
+                                 Column('scene', String),
+                                 Column('hh', Integer),
+                                 Column('vv', Integer),
+                                 Column('hv', Integer),
+                                 Column('vh', Integer),
+                                 Column('bbox', Geometry(geometry_type='POLYGON',
+                                                         management=True, srid=4326)))
+        # add custom fields
+        if self.custom_fields is not None:
+            for key, val in self.custom_fields.items():
+                if val in ['Integer', 'integer', 'int']:
+                    self.data_schema.append_column(Column(key, Integer))
+                elif val in ['String', 'string', 'str']:
+                    self.data_schema.append_column(Column(key, String))
+                else:
+                    log.info('Value in dict custom_fields must be "integer" or "string"!')
+        
+        self.data_schema.create(self.engine)
+    
+    def __init_duplicates_table(self):
+        # create tables if not existing
+        if sql_inspect(self.engine).has_table('duplicates'):
+            self.duplicates_schema = Table('duplicates', self.meta, autoload_with=self.engine)
+            return
+        
+        log.debug("creating DB table 'duplicates'")
+        
+        self.duplicates_schema = Table('duplicates', self.meta,
+                                       Column('outname_base', String, primary_key=True),
+                                       Column('scene', String, primary_key=True))
+        self.duplicates_schema.create(self.engine)
+    
     @staticmethod
     def __load_spatialite(dbapi_conn, connection_record):
         """
@@ -2447,7 +2474,7 @@ class Archive(object):
         dbapi_conn:
             db engine
         connection_record:
-            not sure what it does but it is needed by :func:`sqlalchemy.event.listen`
+            not sure what it does, but it is needed by :func:`sqlalchemy.event.listen`
         """
         dbapi_conn.enable_load_extension(True)
         # check which platform and use according mod_spatialite
@@ -2458,7 +2485,8 @@ class Archive(object):
                 except sqlite3.OperationalError:
                     continue
         elif platform.system() == 'Darwin':
-            for option in ['mod_spatialite.so', 'mod_spatialite.7.dylib']:  # , 'mod_spatialite.dylib']:
+            for option in ['mod_spatialite.so', 'mod_spatialite.7.dylib',
+                           'mod_spatialite.dylib']:
                 try:
                     dbapi_conn.load_extension(option)
                 except sqlite3.OperationalError:
@@ -2511,7 +2539,7 @@ class Archive(object):
 
         Returns
         -------
-        list
+        list[str]
             the names of all scenes, which are no longer stored in their registered location
         """
         if table == 'data':
@@ -2537,7 +2565,6 @@ class Archive(object):
         test: bool
             should the insertion only be tested or directly be committed to the database?
         """
-        length = len(scene_in) if isinstance(scene_in, list) else 1
         
         if isinstance(scene_in, (ID, str)):
             scene_in = [scene_in]
@@ -2568,12 +2595,11 @@ class Archive(object):
             progress = pb.ProgressBar(max_value=len(scenes))
         else:
             progress = None
-        basenames = []
         insertions = []
         session = self.Session()
         for i, id in enumerate(scenes):
             basename = id.outname_base()
-            if not self.is_registered(id) and basename not in basenames:
+            if not self.is_registered(id):
                 insertion = self.__prepare_insertion(id)
                 insertions.append(insertion)
                 counter_regulars += 1
@@ -2588,7 +2614,6 @@ class Archive(object):
             
             if progress is not None:
                 progress.update(i + 1)
-            basenames.append(basename)
         
         if progress is not None:
             progress.finish()
@@ -2625,8 +2650,8 @@ class Archive(object):
         """
         id = scene if isinstance(scene, ID) else identify(scene)
         # ORM query, where scene equals id.scene, return first
-        exists_data = self.Session().query(self.Data.outname_base).filter(
-            self.Data.outname_base == id.outname_base()).first()
+        exists_data = self.Session().query(self.Data.outname_base).filter_by(
+            outname_base=id.outname_base(), product=id.product).first()
         exists_duplicates = self.Session().query(self.Duplicates.outname_base).filter(
             self.Duplicates.outname_base == id.outname_base()).first()
         in_data = False
@@ -2760,7 +2785,7 @@ class Archive(object):
 
         Returns
         -------
-        list
+        list[str]
             the column names of the chosen table
         """
         # get all columns of one table, but shows geometry columns not correctly
@@ -2781,7 +2806,7 @@ class Archive(object):
 
         Returns
         -------
-        list
+        list[str]
             the table names
         """
         #  TODO: make this dynamic
@@ -2820,26 +2845,36 @@ class Archive(object):
     
     def import_outdated(self, dbfile):
         """
-        import an older data base in csv format
+        import an older database
 
         Parameters
         ----------
-        dbfile: str
-            the file name of the old data base
+        dbfile: str or Archive
+            the old database. If this is a string, the name of a CSV file is expected.
 
         Returns
         -------
 
         """
-        with open(dbfile) as csvfile:
-            text = csvfile.read()
-            csvfile.seek(0)
-            dialect = csv.Sniffer().sniff(text)
-            reader = csv.DictReader(csvfile, dialect=dialect)
-            scenes = []
-            for row in reader:
-                scenes.append(row['scene'])
-            self.insert(scenes)
+        if isinstance(dbfile, str) and dbfile.endswith('csv'):
+            with open(dbfile) as csvfile:
+                text = csvfile.read()
+                csvfile.seek(0)
+                dialect = csv.Sniffer().sniff(text)
+                reader = csv.DictReader(csvfile, dialect=dialect)
+                scenes = []
+                for row in reader:
+                    scenes.append(row['scene'])
+                self.insert(scenes)
+        elif isinstance(dbfile, Archive):
+            select = dbfile.conn.execute('SELECT * from data')
+            self.conn.execute(insert(self.Data).values(*select))
+            # duplicates in older databases may fit into the new data table
+            reinsert = dbfile.select_duplicates(value='scene')
+            if reinsert is not None:
+                self.insert(reinsert)
+        else:
+            raise RuntimeError("'dbfile' must either be a CSV file name or an Archive object")
     
     def move(self, scenelist, directory, pbar=False):
         """
@@ -2911,7 +2946,7 @@ class Archive(object):
 
         Parameters
         ----------
-        vectorobject: :class:`~spatialist.vector.Vector`
+        vectorobject: :class:`~spatialist.vector.Vector` or None
             a geometry with which the scenes need to overlap
         mindate: str or datetime.datetime or None
             the minimum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
@@ -2928,7 +2963,7 @@ class Archive(object):
             the selected scenes will be filtered to those that have not yet been processed. Default: None
         recursive: bool
             (only if `processdir` is not None) should also the subdirectories of the `processdir` be scanned?
-        polarizations: list[str]
+        polarizations: list[str] or None
             a list of polarization strings, e.g. ['HH', 'VV']
         **args:
             any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
@@ -2998,7 +3033,11 @@ class Archive(object):
             else:
                 log.info('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
         
-        query = '''SELECT scene, outname_base FROM data WHERE {}'''.format(' AND '.join(arg_format))
+        if len(arg_format) > 0:
+            subquery = ' WHERE {}'.format(' AND '.join(arg_format))
+        else:
+            subquery = ''
+        query = '''SELECT scene, outname_base FROM data{}'''.format(subquery)
         # the query gets assembled stepwise here
         for val in vals:
             query = query.replace('?', """'{0}'""", 1).format(val)
@@ -3034,7 +3073,7 @@ class Archive(object):
 
         Returns
         -------
-        list
+        list[str]
             the selected scene(s)
         """
         if value == 'id':
@@ -3075,7 +3114,7 @@ class Archive(object):
 
         Returns
         -------
-        tuple
+        tuple[int]
             the number of scenes in (1) the main table and (2) the duplicates table
         """
         # ORM query
@@ -3107,7 +3146,7 @@ class Archive(object):
 
         Parameters
         ----------
-        scene: ID
+        scene: str
             a SAR scene
         with_duplicates: bool
             True: delete matching entry in duplicates table
@@ -3168,7 +3207,7 @@ class Archive(object):
         Parameters
         ----------
         table: str
-            tablename
+            the table name
 
         Returns
         -------
@@ -3198,7 +3237,7 @@ class Archive(object):
         ----------
         ip: str
             ip of the server
-        port: str
+        port: str or int
             port of the server
 
         Returns
@@ -3299,6 +3338,13 @@ def getFileObj(scene, filename):
         raise RuntimeError('scene does not exist')
     
     if os.path.isdir(scene):
+        obj = BytesIO()
+        with open(filename, 'rb') as infile:
+            obj.write(infile.read())
+        obj.seek(0)
+    
+    # the scene consists of a single file
+    elif os.path.isfile(scene) and scene == filename:
         obj = BytesIO()
         with open(filename, 'rb') as infile:
             obj.write(infile.read())

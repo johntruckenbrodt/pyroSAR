@@ -456,7 +456,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True, S1_slc_swaths=None,
 
 
 def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
-               logpath=None, outdir=None, shellscript=None):
+               logpath=None, outdir=None, shellscript=None, url_option=1):
     """
     correct GAMMA parameter files with orbit state vector information from dedicated OSV files;
     OSV files are downloaded automatically to either the defined `osvdir` or relative to the
@@ -481,6 +481,8 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
         the directory to execute the command in
     shellscript: str or None
         a file to write the GAMMA commands to in bash format
+    url_option: int
+        the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch`
     
     Returns
     -------
@@ -524,7 +526,7 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
             auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
         osvdir = os.path.join(auxdatapath, 'Orbits', 'Sentinel-1')
     try:
-        id.getOSV(osvdir, osvType, timeout=timeout)
+        id.getOSV(osvdir, osvType, timeout=timeout, url_option=url_option)
     except URLError:
         log.warning('..no internet access')
     
@@ -563,7 +565,8 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
 def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=1,
             nodata=(0, -99), update_osv=True, osvdir=None, allow_RES_OSV=False,
             cleanup=True, export_extra=None, basename_extensions=None,
-            removeS1BorderNoiseMethod='gamma', refine_lut=False, rlks=None, azlks=None):
+            removeS1BorderNoiseMethod='gamma', refine_lut=False, rlks=None, azlks=None,
+            s1_osv_url_option=1):
     """
     general function for radiometric terrain correction (RTC) and geocoding of SAR backscatter images with GAMMA.
     Applies the RTC method by :cite:t:`Small2011` to retrieve gamma nought RTC backscatter.
@@ -639,6 +642,8 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
     azlks: int or None
         the number of azimuth looks. Like `rlks`.
+    s1_osv_url_option: int
+        the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch`
     
     Returns
     -------
@@ -780,6 +785,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
                     osvtype = 'POE'
                 try:
                     correctOSV(id=scene, directory=tmpdir, osvdir=osvdir, osvType=osvtype,
+                               url_option=s1_osv_url_option,
                                logpath=path_log, outdir=tmpdir, shellscript=shellscript)
                 except RuntimeError:
                     msg = 'orbit state vector correction failed for scene {}'

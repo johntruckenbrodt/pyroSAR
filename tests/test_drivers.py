@@ -152,6 +152,9 @@ def test_scene(tmpdir, testdata):
     with pytest.raises(RuntimeError):
         id.getGammaImages()
     assert id.getGammaImages(id.scene) == []
+    id = pyroSAR.identify(testdata['psr2'])
+    assert id.getCorners() == {'xmax': -62.1629744, 'xmin': -62.9005207,
+                               'ymax': -10.6783401, 'ymin': -11.4233051}
 
 
 def test_archive(tmpdir, testdata):
@@ -194,7 +197,7 @@ def test_archive2(tmpdir, testdata):
         assert db.size == (1, 0)
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
-
+    
     os.remove(dbfile)
     assert not os.path.isfile(dbfile)
     assert Vector(shp).nfeatures == 1
@@ -249,3 +252,13 @@ def test_archive_postgres(tmpdir, testdata):
     with pytest.raises(SystemExit) as pytest_wrapped_e:
         pyroSAR.Archive('test', postgres=True, user='hello_world', port=7080)
     assert pytest_wrapped_e.type == SystemExit
+
+
+datasets = ['asar', 'ers1_esa', 'ers1_ceos', 'psr2', 's1']
+
+
+@pytest.mark.parametrize('dataset', datasets)
+def test_geometry(testdata, dataset):
+    scene = pyroSAR.identify(testdata[dataset])
+    with scene.geometry() as geom:
+        assert isinstance(geom, Vector)
