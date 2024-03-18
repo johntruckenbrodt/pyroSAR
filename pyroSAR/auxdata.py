@@ -1,7 +1,7 @@
 ###############################################################################
 # tools for handling auxiliary data in software pyroSAR
 
-# Copyright (c) 2019-2023, the pyroSAR Developers.
+# Copyright (c) 2019-2024, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -393,13 +393,15 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
             raise RuntimeError(msg.format(key))
     
     try:
-        message = 'creating mosaic'
-        crs = gdalwarp_args['dstSRS']
-        if crs != 'EPSG:4326':
-            message += ' and reprojecting to {}'.format(crs)
-        message += ': {}'.format(dst)
-        log.info(message)
-        gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
+        if not os.path.isfile(dst):
+            message = 'creating mosaic'
+            crs = gdalwarp_args['dstSRS']
+            if crs != 'EPSG:4326':
+                message += ' and reprojecting to {}'.format(crs)
+            log.info(f'{message}: {dst}')
+            gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
+        else:
+            log.info(f'mosaic already exists: {dst}')
     except Exception:
         if os.path.isfile(dst):
             os.remove(dst)
