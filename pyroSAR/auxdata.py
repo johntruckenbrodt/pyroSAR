@@ -22,6 +22,7 @@ import requests
 import zipfile as zf
 from lxml import etree
 from math import ceil, floor
+from filelock import FileLock
 from urllib.parse import urlparse
 from lxml import etree as ET
 from packaging import version
@@ -246,7 +247,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
 
 def dem_create(src, dst, t_srs=None, tr=None, threads=None,
                geoid_convert=False, geoid='EGM96', nodata=None,
-               resampleAlg='bilinear', dtype=None, pbar=False, **kwargs):
+               resampleAlg='bilinear', dtype=None, pbar=False,
+               lock_timeout=600, **kwargs):
     """
     Create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid.
     This is basically a convenience wrapper around :func:`osgeo.gdal.Warp` via :func:`spatialist.auxil.gdalwarp`.
@@ -298,6 +300,8 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
         See :class:`spatialist.raster.Dtype`.
     pbar: bool
         add a progressbar?
+    lock_timeout: int
+        how long to wait to acquire a lock on `dst`?
     **kwargs
         additional keyword arguments to be passed to :func:`spatialist.auxil.gdalwarp`.
         See :func:`osgeo.gdal.WarpOptions` for options. The following arguments cannot
@@ -392,6 +396,8 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
             msg = "argument '{}' cannot be set via kwargs as it is set internally."
             raise RuntimeError(msg.format(key))
     
+    lock = FileLock(dst + '.lock', timeout=lock_timeout)
+    lock.acquire()
     try:
         if not os.path.isfile(dst):
             message = 'creating mosaic'
@@ -407,6 +413,7 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
             os.remove(dst)
         raise
     finally:
+        lock.release()
         gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
 
 
