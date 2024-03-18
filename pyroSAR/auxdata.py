@@ -314,6 +314,8 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
 
     """
     
+    vrt_check_sources(src)
+    
     with Raster(src) as ras:
         if nodata is None:
             nodata = ras.nodata
@@ -1486,3 +1488,26 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
         if value is not None and not isinstance(value, ssl.SSLSocket):
             value = self.context.wrap_socket(value)
         self._sock = value
+
+
+def vrt_check_sources(fname):
+    """
+    check the sanity of all source files of a given VRT
+    
+    Parameters
+    ----------
+    fname: str
+        the VRT file name
+
+    Returns
+    -------
+    
+    Raises
+    ------
+    RuntimeError
+    """
+    tree = etree.parse(fname)
+    sources = [x.text for x in tree.findall('.//SourceFilename')]
+    for source in sources:
+        if not os.path.isfile(source):
+            raise RuntimeError(f'missing VRT source file: {source}')
