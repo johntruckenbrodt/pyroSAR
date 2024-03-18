@@ -647,7 +647,7 @@ class DEMHandler:
                 return val
     
     @staticmethod
-    def __retrieve(url, filenames, outdir):
+    def __retrieve(url, filenames, outdir, lock_timeout):
         # check that base URL is reachable
         url_parse = urlparse(url)
         url_base = url_parse.scheme + '://' + url_parse.netloc
@@ -662,27 +662,30 @@ class DEMHandler:
         for i, file in enumerate(files):
             remote = '{}/{}'.format(url, file)
             local = os.path.join(outdir, os.path.basename(file))
-            if not os.path.isfile(local):
-                r = requests.get(remote)
-                # a tile might not exist over ocean
-                if r.status_code == 404:
+            lock = FileLock(local + '.lock', timeout=lock_timeout)
+            with lock:
+                if not os.path.isfile(local):
+                    r = requests.get(remote)
+                    # a tile might not exist over ocean
+                    if r.status_code == 404:
+                        r.close()
+                        continue
+                    msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
+                    log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local, r=remote))
+                    r.raise_for_status()
+                    with open(local, 'wb') as output:
+                        output.write(r.content)
                     r.close()
-                    continue
-                msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
-                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local, r=remote))
-                r.raise_for_status()
-                with open(local, 'wb') as output:
-                    output.write(r.content)
-                r.close()
-            else:
-                msg = '[{i: >{w}}/{n}] found local file: {l}'
-                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local))
+                else:
+                    msg = '[{i: >{w}}/{n}] found local file: {l}'
+                    log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local))
             if os.path.isfile(local):
                 locals.append(local)
         return sorted(locals)
     
     @staticmethod
-    def __retrieve_ftp(url, filenames, outdir, username, password, port=0, offline=False):
+    def __retrieve_ftp(url, filenames, outdir, username, password,
+                       port=0, offline=False, lock_timeout):
         files = list(set(filenames))
         os.makedirs(outdir, exist_ok=True)
         
@@ -709,25 +712,27 @@ class DEMHandler:
             ftp = None
         locals = []
         n = len(files)
-        for i, product_remote in enumerate(files):
-            product_local = os.path.join(outdir, os.path.basename(product_remote))
-            if not os.path.isfile(product_local) and not offline:
-                try:
-                    targetlist = ftp.nlst(product_remote)
-                except ftplib.error_temp:
-                    continue
-                address = '{}://{}/{}{}'.format(parsed.scheme, parsed.netloc,
-                                                parsed.path + '/' if parsed.path != '' else '',
-                                                product_remote)
-                msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
-                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=product_local, r=address))
-                with open(product_local, 'wb') as myfile:
-                    ftp.retrbinary('RETR {}'.format(product_remote), myfile.write)
-            else:
-                msg = '[{i: >{w}}/{n}] found local file: {l}'
-                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=product_local))
-            if os.path.isfile(product_local):
-                locals.append(product_local)
+        for i, remote in enumerate(files):
+            local = os.path.join(outdir, os.path.basename(remote))
+            lock = FileLock(local + '.lock', timeout=lock_timeout)
+            with lock:
+                if not os.path.isfile(local) and not offline:
+                    try:
+                        targetlist = ftp.nlst(remote)
+                    except ftplib.error_temp:
+                        continue
+                    address = '{}://{}/{}{}'.format(parsed.scheme, parsed.netloc,
+                                                    parsed.path + '/' if parsed.path != '' else '',
+                                                    remote)
+                    msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
+                    log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local, r=address))
+                    with open(local, 'wb') as myfile:
+                        ftp.retrbinary('RETR {}'.format(remote), myfile.write)
+                else:
+                    msg = '[{i: >{w}}/{n}] found local file: {l}'
+                    log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local))
+            if os.path.isfile(local):
+                locals.append(local)
         if ftp is not None:
             ftp.close()
         return sorted(locals)
@@ -960,7 +965,7 @@ class DEMHandler:
         }
     
     def load(self, dem_type, vrt=None, buffer=None, username=None,
-             password=None, product='dem', crop=True):
+             password=None, product='dem', crop=True, lock_timeout=600):
         """
         obtain DEM tiles for the given geometries and either return the file names in a list
         or combine them into a VRT mosaic. The VRT is cropped to the combined extent of the geometries
@@ -1055,6 +1060,8 @@ class DEMHandler:
             or return the full extent of the DEM tiles? In the latter case, the common
             bounding box of the geometries is expanded so that the coordinates are
             multiples of the tile size of the respective DEM option.
+        lock_timeout: int
+            how long to wait to acquire a lock on downloaded files?
         
         Returns
         -------
@@ -1088,10 +1095,12 @@ class DEMHandler:
             locals = self.__retrieve_ftp(url=self.config[dem_type]['url'],
                                          filenames=candidates,
                                          outdir=outdir, username=username,
-                                         password=password, port=port)
+                                         password=password, port=port,
+                                         lock_timeout=lock_timeout)
         else:
             locals = self.__retrieve(url=self.config[dem_type]['url'],
-                                     filenames=candidates, outdir=outdir)
+                                     filenames=candidates, outdir=outdir,
+                                     lock_timeout=lock_timeout)
         
         resolution = None
         datatype = None
