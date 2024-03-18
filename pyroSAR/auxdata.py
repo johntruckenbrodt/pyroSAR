@@ -647,7 +647,7 @@ class DEMHandler:
                 return val
     
     @staticmethod
-    def __retrieve(url, filenames, outdir, lock_timeout):
+    def __retrieve(url, filenames, outdir, lock_timeout=600):
         # check that base URL is reachable
         url_parse = urlparse(url)
         url_base = url_parse.scheme + '://' + url_parse.netloc
@@ -685,7 +685,7 @@ class DEMHandler:
     
     @staticmethod
     def __retrieve_ftp(url, filenames, outdir, username, password,
-                       port=0, offline=False, lock_timeout):
+                       port=0, offline=False, lock_timeout=600):
         files = list(set(filenames))
         os.makedirs(outdir, exist_ok=True)
         
