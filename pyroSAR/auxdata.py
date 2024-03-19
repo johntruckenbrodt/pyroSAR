@@ -1510,7 +1510,8 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
 
 def vrt_check_sources(fname):
     """
-    check the sanity of all source files of a given VRT
+    check the sanity of all source files of a given VRT.
+    Currently does not check in-memory VRTs.
     
     Parameters
     ----------
@@ -1524,8 +1525,9 @@ def vrt_check_sources(fname):
     ------
     RuntimeError
     """
-    tree = etree.parse(fname)
-    sources = [x.text for x in tree.findall('.//SourceFilename')]
-    for source in sources:
-        if not os.path.isfile(source):
-            raise RuntimeError(f'missing VRT source file: {source}')
+    if os.path.isfile(fname):
+        tree = etree.parse(fname)
+        sources = [x.text for x in tree.findall('.//SourceFilename')]
+        for source in sources:
+            if not os.path.isfile(source):
+                raise RuntimeError(f'missing VRT source file: {source}')
