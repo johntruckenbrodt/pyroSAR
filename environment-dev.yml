@@ -17,6 +17,7 @@ dependencies:
   - pillow
   - lxml
   - packaging
+  - filelock
   - coveralls
   - coverage
   - pytest

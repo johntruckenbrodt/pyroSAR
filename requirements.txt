@@ -10,3 +10,4 @@ GeoAlchemy2<0.14.0
 Pillow
 lxml
 packaging
+filelock
