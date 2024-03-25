@@ -17,3 +17,5 @@ Ancillary Functions
         multilook_factors
         parse_datasetname
         seconds
+        Lock
+        LockCollection

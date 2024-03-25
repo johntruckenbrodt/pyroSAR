@@ -1,7 +1,7 @@
 ###############################################################################
 # ancillary routines for software pyroSAR
 
-# Copyright (c) 2014-2023, the pyroSAR Developers.
+# Copyright (c) 2014-2024, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -16,6 +16,9 @@ This module gathers central functions and classes for general pyroSAR applicatio
 """
 import os
 import re
+import time
+import uuid
+from pathlib import Path
 from math import sin, radians
 import inspect
 from datetime import datetime
@@ -302,3 +305,140 @@ def windows_fileprefix(func, path, exc_info):
     >>> shutil.rmtree('/path', onerror=windows_fileprefix)
     """
     func(u'\\\\?\\' + path)
+
+
+class Lock(object):
+    """
+    File and folder locking mechanism.
+    This mechanism creates lock files indicating whether a file/folder
+    
+     1. is being modified (`target`.lock),
+     2. is being used/read (`target`.used_<uuid.uuid4>) or
+     3. was damaged during modification (`target`.error).
+    
+    Although these files will not prevent locking by other mechanisms (UNIX
+    locks are generally only advisory), this mechanism is respected across
+    any running instances. I.e., if such a lock file exists, no process
+    trying to acquire a lock using this class will succeed if a lock file
+    intending to prevent it exists. This was implemented because other existing
+    solutions like `filelock <https://github.com/tox-dev/filelock>`_ or
+    `fcntl <https://docs.python.org/3/library/fcntl.html>`_ do not implement
+    effective solutions for parallel jobs in HPC systems.
+    
+    Hard locks prevent any usage of the data. Damage/error locks work like hard
+    locks except that `timeout` is ignored and a `RuntimeError` is raised immediately.
+    Error locks are created if an error occurs whilst a hard lock is acquired and
+    `target` exists (by renaming the hard lock file).
+    Infinite usage locks may exist, each with a different random UUID. No hard
+    lock may be acquired whilst usage locks exist. On error usage locks are simply
+    deleted.
+    
+    It may happen that lock files remain when a process is killed by HPC schedulers
+    like Slurm because in this case the process is not ended by Python. Optimally,
+    hard locks should be renamed to error lock files and usage lock files should be
+    deleted. This has to be done separately.
+    
+    Examples
+    --------
+    >>> from pyroSAR.ancillary import Lock
+    >>> target = 'test.txt'
+    >>> with Lock(target=target):
+    >>>     with open(target, 'w') as f:
+    >>>         f.write('Hello World!')
+
+    Parameters
+    ----------
+    target: str
+        the file/folder to lock
+    soft: bool
+        lock the file/folder only for reading (and not for modification)?
+    timeout: int
+        the time in seconds to retry acquiring a lock
+    """
+    def __init__(self, target, soft=False, timeout=7200):
+        if os.path.isdir(target) and not os.path.exists(target):
+            raise OSError('target does not exist: {}'.format(target))
+        self.target = target
+        used_id = str(uuid.uuid4())
+        self.lock = self.target + '.lock'
+        self.error = self.target + '.error'
+        self.used = self.target + f'.used_{used_id}'
+        self.soft = soft
+        if os.path.isfile(self.error):
+            msg = 'cannot acquire lock on damaged target: {}'
+            raise RuntimeError(msg.format(self.target))
+        end = time.time() + timeout
+        while True:
+            if time.time() > end:
+                msg = 'could not acquire lock due to timeout: {}'
+                raise RuntimeError(msg.format(self.target))
+            try:
+                if self.soft and not os.path.isfile(self.lock):
+                    Path(self.used).touch(exist_ok=False)
+                    break
+                if not self.soft and not self.is_used():
+                    Path(self.lock).touch(exist_ok=False)
+                    break
+            except FileExistsError:
+                pass
+            time.sleep(1)
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        if not self.soft and exc_type is not None:
+            if os.path.exists(self.target):
+                os.rename(self.lock, self.error)
+        else:
+            self.remove()
+    
+    def is_used(self):
+        """
+        Does any usage lock exist?
+        
+        Returns
+        -------
+        bool
+        """
+        base = os.path.basename(self.target)
+        folder = os.path.dirname(self.target)
+        files = list(Path(folder).glob(base + '.used*'))
+        return len(files) > 0
+    
+    def remove(self):
+        """
+        Remove the acquired soft/hard lock
+        
+        Returns
+        -------
+
+        """
+        if self.soft:
+            os.remove(self.used)
+        else:
+            os.remove(self.lock)
+
+
+class LockCollection(object):
+    """
+    Like :class:`Lock` but for multiple files/folders.
+
+    Parameters
+    ----------
+    targets: list[str]
+        the files/folders to lock
+    soft: bool
+        lock the files/folders only for reading (and not for modification)?
+    timeout: int
+        the time in seconds to retry acquiring a lock
+    """
+    def __init__(self, targets, soft=False, timeout=7200):
+        self.locks = [Lock(x, soft=soft, timeout=timeout) for x in targets]
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        for lock in self.locks:
+            lock.remove()
