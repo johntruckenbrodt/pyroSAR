@@ -22,11 +22,11 @@ import requests
 import zipfile as zf
 from lxml import etree
 from math import ceil, floor
-from filelock import FileLock
 from urllib.parse import urlparse
 from lxml import etree as ET
 from packaging import version
 from pyroSAR.examine import ExamineSnap
+from pyroSAR.ancillary import Lock
 from spatialist.raster import Raster, Dtype
 from spatialist.vector import bbox
 from spatialist.ancillary import dissolve, finder
@@ -396,25 +396,23 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
             msg = "argument '{}' cannot be set via kwargs as it is set internally."
             raise RuntimeError(msg.format(key))
     
-    lock = FileLock(dst + '.lock', timeout=lock_timeout)
-    lock.acquire()
-    try:
-        if not os.path.isfile(dst):
-            message = 'creating mosaic'
-            crs = gdalwarp_args['dstSRS']
-            if crs != 'EPSG:4326':
-                message += ' and reprojecting to {}'.format(crs)
-            log.info(f'{message}: {dst}')
-            gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
-        else:
-            log.info(f'mosaic already exists: {dst}')
-    except Exception:
-        if os.path.isfile(dst):
-            os.remove(dst)
-        raise
-    finally:
-        lock.release()
-        gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
+    with Lock(dst, timeout=lock_timeout):
+        try:
+            if not os.path.isfile(dst):
+                message = 'creating mosaic'
+                crs = gdalwarp_args['dstSRS']
+                if crs != 'EPSG:4326':
+                    message += ' and reprojecting to {}'.format(crs)
+                log.info(f'{message}: {dst}')
+                gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
+            else:
+                log.info(f'mosaic already exists: {dst}')
+        except Exception:
+            if os.path.isfile(dst):
+                os.remove(dst)
+            raise
+        finally:
+            gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
 
 
 class DEMHandler:
@@ -662,8 +660,7 @@ class DEMHandler:
         for i, file in enumerate(files):
             remote = '{}/{}'.format(url, file)
             local = os.path.join(outdir, os.path.basename(file))
-            lock = FileLock(local + '.lock', timeout=lock_timeout)
-            with lock:
+            with Lock(local, timeout=lock_timeout):
                 if not os.path.isfile(local):
                     r = requests.get(remote)
                     # a tile might not exist over ocean
@@ -714,8 +711,7 @@ class DEMHandler:
         n = len(files)
         for i, remote in enumerate(files):
             local = os.path.join(outdir, os.path.basename(remote))
-            lock = FileLock(local + '.lock', timeout=lock_timeout)
-            with lock:
+            with Lock(local, timeout=lock_timeout):
                 if not os.path.isfile(local) and not offline:
                     try:
                         targetlist = ftp.nlst(remote)

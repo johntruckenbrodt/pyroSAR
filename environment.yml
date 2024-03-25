@@ -17,4 +17,3 @@ dependencies:
   - pillow
   - lxml
   - packaging
-  - filelock
