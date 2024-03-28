@@ -2740,12 +2740,12 @@ class Archive(object):
                          'cycleNumber': 'cycleNr',
                          'frameNumber': 'frameNr',
                          'outname_base': 'outname'}
-        
-        sel_tables = ', '.join([f'{s} as {launder_names[s]}' if s in launder_names else s
-                                for s in self.get_colnames(table)])
 
         if self.driver == 'sqlite':
-            gdal.VectorTranslate(destNameOrDestDS=path, srcDS=self.dbfile, 
+            sel_tables = ', '.join([f'{s} as {launder_names[s]}' if s in launder_names else s
+                                    for s in self.get_colnames(table)])
+            
+            gdal.VectorTranslate(destNameOrDestDS=path, srcDS=self.dbfile,
                                  options=f'-f "ESRI Shapefile" -sql "SELECT {sel_tables} FROM {table}"')
         
         if self.driver == 'postgresql':
@@ -2757,7 +2757,9 @@ class Archive(object):
                                                                        self.url_dict['password'])
             # subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
             #                  db_connection, table])
-            gdal.VectorTranslate(destNameOrDestDS=path, srcDS=db_connection, 
+            sel_tables = ', '.join([f'data.{s} as {launder_names[s]}' if s in launder_names else s
+                                    for s in self.get_colnames(table)])
+            gdal.VectorTranslate(destNameOrDestDS=path, srcDS=db_connection,
                                  options=f'-f "ESRI Shapefile" -sql "SELECT {sel_tables} FROM {table}"')
     
     def filter_scenelist(self, scenelist):
