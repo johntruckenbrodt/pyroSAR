@@ -2722,7 +2722,7 @@ class Archive(object):
         Returns
         -------
         """
-        if table not in ['data', 'duplicates']:
+        if table not in self.get_tablenames():
             log.warning('Only data and duplicates can be exported!')
             return
         
@@ -2734,11 +2734,19 @@ class Archive(object):
         dirname = os.path.dirname(path)
         os.makedirs(dirname, exist_ok=True)
         
-        # uses spatialist.ogr2ogr to write shps with given path (or db connection)
+        launder_names = {'acquisition_mode': 'acq_mode',
+                         'orbitNumber_abs': 'orbit_abs',
+                         'orbitNumber_rel': 'orbit_rel',
+                         'cycleNumber': 'cycleNr',
+                         'frameNumber': 'frameNr',
+                         'outname_base': 'outname'}
+        
+        sel_tables = ', '.join([f'{s} as {launder_names[s]}' if s in launder_names else s
+                                for s in self.get_colnames(table)])
+
         if self.driver == 'sqlite':
-            # ogr2ogr(self.dbfile, path, options={'format': 'ESRI Shapefile'})
-            subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
-                             self.dbfile, table])
+            gdal.VectorTranslate(destNameOrDestDS=path, srcDS=self.dbfile, 
+                                 options=f'-f "ESRI Shapefile" -sql "SELECT {sel_tables} FROM {table}"')
         
         if self.driver == 'postgresql':
             db_connection = """PG:host={0} port={1} user={2}
@@ -2747,9 +2755,10 @@ class Archive(object):
                                                                        self.url_dict['username'],
                                                                        self.url_dict['database'],
                                                                        self.url_dict['password'])
-            # ogr2ogr(db_connection, path, options={'format': 'ESRI Shapefile'})
-            subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
-                             db_connection, table])
+            # subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
+            #                  db_connection, table])
+            gdal.VectorTranslate(destNameOrDestDS=path, srcDS=db_connection, 
+                                 options=f'-f "ESRI Shapefile" -sql "SELECT {sel_tables} FROM {table}"')
     
     def filter_scenelist(self, scenelist):
         """
