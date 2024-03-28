@@ -40,6 +40,8 @@ def testdata(testdir):
         's1_orbit': os.path.join(testdir, 'S1A_IW_GRDH_1SDV_20210119T031653_20210119T031718_036201_043ED0_8255.zip'),
         'tif': os.path.join(testdir, 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'),
         'archive_old': os.path.join(testdir, 'archive_outdated.csv'),
+        'archive_old_db': os.path.join(testdir, 'archive_outdated.db'),
+        'archive_new_db': os.path.join(testdir, 'archive_with_geometry.db'),
         'dempar': os.path.join(testdir, 'dem.par'),
         'mlipar': os.path.join(testdir, 'mli.par')
     }

@@ -204,7 +204,24 @@ def test_archive2(tmpdir, testdata):
     with pytest.raises(OSError):
         with pyroSAR.Archive(dbfile) as db:
             db.import_outdated(testdata['archive_old'])
-
+            
+    with pyroSAR.Archive(dbfile) as db:
+        with pyroSAR.Archive(testdata['archive_old_db'], legacy=True) as db_old:
+            db.import_outdated(db_old)
+    
+    # currently not working,
+    # sqlalchemy.exc.ArgumentError:
+    # Only a single dictionary/tuple or list of dictionaries/tuples is accepted positionally.
+    # fix could be to re-insert all scenes as in the test above
+    # with pyroSAR.Archive(dbfile) as db:
+    #     with pyroSAR.Archive(testdata['archive_new_db'], legacy=True) as db_new:
+    #         db.import_outdated(db_new)
+    
+    with pytest.raises(RuntimeError):
+        db = pyroSAR.Archive(testdata['archive_old'])
+    with pytest.raises(RuntimeError):
+        db = pyroSAR.Archive(testdata['archive_old_db'])
+    db = pyroSAR.Archive(testdata['archive_new_db'])
 
 def test_archive_postgres(tmpdir, testdata):
     pguser = os.environ.get('PGUSER')
@@ -247,6 +264,16 @@ def test_archive_postgres(tmpdir, testdata):
     with pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword) as db:
         with pytest.raises(OSError):
             db.import_outdated(testdata['archive_old'])
+        pyroSAR.drop_archive(db)
+    
+    with pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword) as db:
+        with pyroSAR.Archive(testdata['archive_old_db'], legacy=True) as db_old:
+            db.import_outdated(db_old)
+        pyroSAR.drop_archive(db)
+        
+    with pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword) as db:
+        with pyroSAR.Archive(testdata['archive_new_db'], legacy=True) as db_new:
+            db.import_outdated(db_new)
         pyroSAR.drop_archive(db)
     
     with pytest.raises(SystemExit) as pytest_wrapped_e:

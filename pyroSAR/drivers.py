@@ -2285,6 +2285,10 @@ class Archive(object):
     def __init__(self, dbfile, custom_fields=None, postgres=False, user='postgres',
                  password='1234', host='localhost', port=5432, cleanup=True,
                  legacy=False):
+        
+        if dbfile.endswith('.csv'):
+            raise RuntimeError("Please create a new Archive database and import the"
+                               "csv-file using db.import_outdated('<file>.csv').")
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
@@ -2368,6 +2372,11 @@ class Archive(object):
                                "Please create a new database and import the old one "
                                "opened in legacy mode using Archive.import_outdated.")
         
+        if 'geometry' not in self.get_colnames() and not legacy:
+            raise RuntimeError("the 'data' table is missing the 'geometry' column. "
+                               "Please create a new database and import the old one "
+                               "opened in legacy mode using Archive.import_outdated.")
+        
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
         self.Data = self.Base.classes.data
@@ -2387,7 +2396,7 @@ class Archive(object):
         .. note::
         
             Columns using Geometry must have setting management=True for SQLite,
-            for example: ``bbox = Column(Geometry('POLYGON', management=True, srid=4326))``
+            for example: ``geometry = Column(Geometry('POLYGON', management=True, srid=4326))``
         
         Parameters
         ----------
@@ -2437,7 +2446,7 @@ class Archive(object):
                                  Column('vv', Integer),
                                  Column('hv', Integer),
                                  Column('vh', Integer),
-                                 Column('bbox', Geometry(geometry_type='POLYGON',
+                                 Column('geometry', Geometry(geometry_type='POLYGON',
                                                          management=True, srid=4326)))
         # add custom fields
         if self.custom_fields is not None:
@@ -2513,13 +2522,13 @@ class Archive(object):
         insertion = self.Data()
         colnames = self.get_colnames()
         for attribute in colnames:
-            if attribute == 'bbox':
-                geom = id.bbox()
+            if attribute == 'geometry':
+                geom = id.geometry()
                 geom.reproject(4326)
                 geom = geom.convert2wkt(set3D=False)[0]
                 geom = 'SRID=4326;' + str(geom)
                 # set attributes of the Data object according to input
-                setattr(insertion, 'bbox', geom)
+                setattr(insertion, 'geometry', geom)
             elif attribute in ['hh', 'vv', 'hv', 'vh']:
                 setattr(insertion, attribute, int(attribute in pols))
             else:
@@ -2856,7 +2865,9 @@ class Archive(object):
         -------
 
         """
+        print('importing outdated database')
         if isinstance(dbfile, str) and dbfile.endswith('csv'):
+            print('importing CSV file')
             with open(dbfile) as csvfile:
                 text = csvfile.read()
                 csvfile.seek(0)
@@ -2867,8 +2878,15 @@ class Archive(object):
                     scenes.append(row['scene'])
                 self.insert(scenes)
         elif isinstance(dbfile, Archive):
-            select = dbfile.conn.execute('SELECT * from data')
-            self.conn.execute(insert(self.Data).values(*select))
+            print('importing Archive object')
+            if not 'geometry' in dbfile.get_colnames():
+                scenes = dbfile.conn.execute('SELECT scene from data')
+                scenes = [s.scene for s in scenes]
+                self.insert(scenes)
+            else:
+                select = dbfile.conn.execute('SELECT * from data')
+                #print(select.first())
+                self.conn.execute(insert(self.Data).values(*select))
             # duplicates in older databases may fit into the new data table
             reinsert = dbfile.select_duplicates(value='scene')
             if reinsert is not None:
@@ -3024,11 +3042,11 @@ class Archive(object):
                     site_geom = vec.convert2wkt(set3D=False)[0]
                 # postgres has a different way to store geometries
                 if self.driver == 'postgresql':
-                    arg_format.append("st_intersects(bbox, 'SRID=4326; {}')".format(
+                    arg_format.append("st_intersects(geometry, 'SRID=4326; {}')".format(
                         site_geom
                     ))
                 else:
-                    arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
+                    arg_format.append('st_intersects(GeomFromText(?, 4326), geometry) = 1')
                     vals.append(site_geom)
             else:
                 log.info('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
