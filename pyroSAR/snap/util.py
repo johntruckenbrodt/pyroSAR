@@ -75,8 +75,12 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         The polarizations to be processed; can be a string for a single polarization, e.g. 'VV', or a list of several
         polarizations, e.g. ['VV', 'VH']. With the special value 'all' (default) all available polarizations are
         processed.
-    shapefile: str or :py:class:`~spatialist.vector.Vector` or dict, optional
-        A vector geometry for subsetting the SAR scene to a test site. Default is None.
+    shapefile: str or :class:`~spatialist.vector.Vector` or dict, optional
+        A vector geometry for geographic subsetting:
+        
+         - :class:`~spatialist.vector.Vector`: a vector object in arbitrary CRS
+         - :class:`str`: a name of a file that can be read with :class:`~spatialist.vector.Vector` in arbitrary CRS
+         - :class:`dict`: a dictionary with keys `xmin`, `xmax`, `ymin`, `ymax` in EPSG:4326 coordinates
     scaling: {'dB', 'db', 'linear'}, optional
         Should the output be in linear or decibel scaling? Default is 'dB'.
     geocoding_type: {'Range-Doppler', 'SAR simulation cross correlation'}, optional
