@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2023, the pyroSAR Developers.
+# Copyright (c) 2016-2024, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -2747,12 +2747,8 @@ class Archive(object):
         if self.driver == 'sqlite':
             srcDS = self.dbfile
         elif self.driver == 'postgresql':
-            srcDS = """PG:host={0} port={1} user={2}
-                dbname={3} password={4} active_schema=public""".format(self.url_dict['host'],
-                                                                       self.url_dict['port'],
-                                                                       self.url_dict['username'],
-                                                                       self.url_dict['database'],
-                                                                       self.url_dict['password'])
+            srcDS = """PG:host={host} port={port} user={username}
+            dbname={database} password={password} active_schema=public""".format(**self.url_dict)
         else:
             raise RuntimeError('unknown archive driver')
         
