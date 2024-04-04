@@ -2740,27 +2740,26 @@ class Archive(object):
                          'cycleNumber': 'cycleNr',
                          'frameNumber': 'frameNr',
                          'outname_base': 'outname'}
-
-        if self.driver == 'sqlite':
-            sel_tables = ', '.join([f'{s} as {launder_names[s]}' if s in launder_names else s
-                                    for s in self.get_colnames(table)])
-            
-            gdal.VectorTranslate(destNameOrDestDS=path, srcDS=self.dbfile,
-                                 options=f'-f "ESRI Shapefile" -sql "SELECT {sel_tables} FROM {table}"')
         
-        if self.driver == 'postgresql':
-            db_connection = """PG:host={0} port={1} user={2}
+        sel_tables = ', '.join([f'"{s}" as {launder_names[s]}' if s in launder_names else s
+                                for s in self.get_colnames(table)])
+        
+        if self.driver == 'sqlite':
+            srcDS = self.dbfile
+        elif self.driver == 'postgresql':
+            srcDS = """PG:host={0} port={1} user={2}
                 dbname={3} password={4} active_schema=public""".format(self.url_dict['host'],
                                                                        self.url_dict['port'],
                                                                        self.url_dict['username'],
                                                                        self.url_dict['database'],
                                                                        self.url_dict['password'])
-            # subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
-            #                  db_connection, table])
-            sel_tables = ', '.join([f'data.{s} as {launder_names[s]}' if s in launder_names else s
-                                    for s in self.get_colnames(table)])
-            gdal.VectorTranslate(destNameOrDestDS=path, srcDS=db_connection,
-                                 options=f'-f "ESRI Shapefile" -sql "SELECT {sel_tables} FROM {table}"')
+        else:
+            raise RuntimeError('unknown archive driver')
+        
+        gdal.VectorTranslate(destNameOrDestDS=path, srcDS=srcDS,
+                             format='ESRI Shapefile',
+                             SQLStatement=f'SELECT {sel_tables} FROM {table}',
+                             SQLDialect=self.driver)
     
     def filter_scenelist(self, scenelist):
         """
