@@ -201,22 +201,14 @@ def test_archive2(tmpdir, testdata):
     os.remove(dbfile)
     assert not os.path.isfile(dbfile)
     assert Vector(shp).nfeatures == 1
+    
     with pytest.raises(OSError):
         with pyroSAR.Archive(dbfile) as db:
             db.import_outdated(testdata['archive_old'])
-            
     with pyroSAR.Archive(dbfile) as db:
         with pyroSAR.Archive(testdata['archive_old_db'], legacy=True) as db_old:
             db.import_outdated(db_old)
-    
-    # currently not working,
-    # sqlalchemy.exc.ArgumentError:
-    # Only a single dictionary/tuple or list of dictionaries/tuples is accepted positionally.
-    # fix could be to re-insert all scenes as in the test above
-    # with pyroSAR.Archive(dbfile) as db:
-    #     with pyroSAR.Archive(testdata['archive_new_db'], legacy=True) as db_new:
-    #         db.import_outdated(db_new)
-    
+            
     with pytest.raises(RuntimeError):
         db = pyroSAR.Archive(testdata['archive_old'])
     with pytest.raises(RuntimeError):

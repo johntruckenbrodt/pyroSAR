@@ -2876,14 +2876,9 @@ class Archive(object):
                     scenes.append(row['scene'])
                 self.insert(scenes)
         elif isinstance(dbfile, Archive):
-            #if not 'geometry' in dbfile.get_colnames():
             scenes = dbfile.conn.execute('SELECT scene from data')
             scenes = [s.scene for s in scenes]
             self.insert(scenes)
-            #else:  # todo: see error in tests
-            #    select = dbfile.conn.execute('SELECT * from data')
-            #    self.conn.execute(insert(self.Data).values(*select))
-            # duplicates in older databases may fit into the new data table
             reinsert = dbfile.select_duplicates(value='scene')
             if reinsert is not None:
                 self.insert(reinsert)
