@@ -11,7 +11,7 @@ external DEM file via parameters `externalDEMFile`, `externalDEMNoDataValue` and
 
 GAMMA does not provide ways to automatically download DEMs for processing and the user thus also needs to provide an
 external DEM file in GAMMA's own format. However, several commands are available to prepare these DEMs including
-conversion from EGM96 geoid heights to WGS84 ellipsoid heights.
+conversion from geoid heights to WGS84 ellipsoid heights.
 
 pyroSAR offers several convenience functions to automatically prepare DEM mosaics from different
 sources to use them in either SNAP or GAMMA.
@@ -39,7 +39,7 @@ This function internally makes use of the function :func:`spatialist.auxil.gdalb
 
 The tiles, which are delivered in compressed archives, are directly connected to a virtual mosaic using GDAL's VRT
 format, making it easier to work with them by treating them as a single file.
-For downloading TanDEM-X tiles (DEM type `TDX90m`), an account needs to be created and the user credentials be passed to
+For downloading tiles of some DEM types, e.g. `TDX90m`, an account needs to be created and the user credentials be passed to
 function :func:`~pyroSAR.auxdata.dem_autoload`. See the function's documentation for further details.
 
 The files are stored in SNAP's location for auxiliary data, which per default is `$HOME/.snap/auxdata/dem`.
@@ -77,35 +77,3 @@ executes GAMMA commands for format conversion.
 It offers the same parameters as these two functions and a user can additionally decide whether geoid-ellipsoid
 conversion is done in GDAL or in GAMMA via parameter `geoid_mode`. The output is a file in GAMMA format, which can
 directly be used for processing by e.g. function :func:`pyroSAR.gamma.geocode`.
-
-.. _extrapolation of water masks:
-
-Extrapolation of Water Masks
-============================
-
-Most DEMs do not offer tiles over ocean areas. If a consistent water mask is to be created, the ocean areas
-thus have to be extrapolated. This can be achieved with the combination of :func:`~pyroSAR.auxdata.dem_autoload` and
-:func:`~pyroSAR.auxdata.dem_create` with a modification of no data values.
-
-For this example we extract the water mask of the `AW3D30` DEM over La Palma. The mask file has a suffix `MSK` and water is
-encoded with the value 3. We set this value as ``nodata`` so that it is extrapolated to areas outside the tile bounds.
-Next we hide this no data value on the VRT level by setting ``hide_nodata=True``.
-
-.. code-block:: python
-
-    from spatialist import bbox
-    from pyroSAR.auxdata import dem_autoload
-
-    extent = {'xmin': -19, 'xmax': -17, 'ymin': 28, 'ymax': 30}
-    vrt = 'msk.vrt'
-
-    with bbox(extent, crs=4326) as geom:
-        dem_autoload([geom], demType='AW3D30', product='msk',
-                     nodata=3, hide_nodata=True, vrt=vrt)
-
-Next we can create a new file using :func:`~pyroSAR.auxdata.dem_create` using mode resampling.
-
-.. code-block:: python
-
-    msk = 'msk.tif'
-    dem_create(src=vrt, dst=msk, resampling_method='mode')

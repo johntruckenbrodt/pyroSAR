@@ -1,7 +1,7 @@
 ###############################################################################
 # pyroSAR SNAP API tools
 
-# Copyright (c) 2017-2022, the pyroSAR Developers.
+# Copyright (c) 2017-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -21,10 +21,11 @@ import xml.etree.ElementTree as ET
 
 from pyroSAR import identify
 from pyroSAR.examine import ExamineSnap
-from pyroSAR.ancillary import windows_fileprefix
+from pyroSAR.ancillary import windows_fileprefix, multilook_factors
+from pyroSAR.auxdata import get_egm_lookup
 
-from spatialist import Raster, vectorize, rasterize, boundary
-from spatialist.auxil import gdal_translate
+from spatialist import Vector, Raster, vectorize, rasterize, boundary, intersect, bbox
+from spatialist.auxil import gdal_translate, crsConvert
 from spatialist.ancillary import finder, run
 
 from osgeo import gdal
@@ -308,9 +309,9 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
     
     Note
     ----
-    Depending on the parametrization this function might create two sub-directories in `tmpdir`,
-    carrying a suffix  \*_bnr for S1 GRD border noise removal and \*_sub for sub-workflows and their
-    intermediate outputs. Both are deleted if ``cleanup=True``. If `tmpdir` is empty afterwards, it is also deleted.
+    Depending on the parametrization this function might create two subdirectories in `tmpdir`,
+    bnr for S1 GRD border noise removal and sub for sub-workflows and their intermediate outputs.
+    Both are deleted if ``cleanup=True``. If `tmpdir` is empty afterward it is also deleted.
     
     Parameters
     ----------
@@ -319,24 +320,31 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
     tmpdir: str
         a temporary directory for storing intermediate files
     groups: list[list[str]] or None
-        a list of lists each containing IDs for individual nodes
+        a list of lists each containing IDs for individual nodes. If not None, the workflow is split into
+        sub-workflows executing the nodes in the respective group. These workflows and their output products
+        are stored into the subdirectory sub of `tmpdir`.
     cleanup: bool
-        should all files written to the temporary directory during function execution be deleted after processing?
+        should all temporary files be deleted after processing? First, the subdirectories bnr and sub of `tmpdir`
+        are deleted. If `tmpdir` is empty afterward it is also deleted.
     gpt_exceptions: dict or None
         a dictionary to override the configured GPT executable for certain operators;
         each (sub-)workflow containing this operator will be executed with the define executable;
         
          - e.g. ``{'Terrain-Flattening': '/home/user/snap/bin/gpt'}``
-    gpt_args: list or None
+    
+    gpt_args: list[str] or None
         a list of additional arguments to be passed to the gpt call
         
-        - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
+         - e.g. ``['-x', '-c', '2048M']`` for increased tile cache size and intermediate clearing
+    
     removeS1BorderNoiseMethod: str
         the border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details;
         one of the following:
         
          - 'ESA': the pure implementation as described by ESA
-         - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
+         - 'pyroSAR': the ESA method plus the custom pyroSAR refinement. This is only applied if the IPF version is
+           < 2.9 where additional noise removal was necessary. The output of the additional noise removal is stored
+           in the subdirectory bnr of `tmpdir`.
     
     Returns
     -------
@@ -455,9 +463,6 @@ def writer(xmlfile, outdir, basename_extensions=None,
             if dem_name in dem_nodata_lookup.keys():
                 dem_nodata = dem_nodata_lookup[dem_name]
     
-    if src_format == 'BEAM-DIMAP':
-        src = src.replace('.dim', '.data')
-    
     src_base = os.path.splitext(os.path.basename(src))[0]
     outname_base = os.path.join(outdir, src_base)
     
@@ -466,6 +471,11 @@ def writer(xmlfile, outdir, basename_extensions=None,
         log.info(message.format('cleaning image edges and ' if clean_edges else ''))
         translateoptions = {'options': ['-q', '-co', 'INTERLEAVE=BAND', '-co', 'TILED=YES'],
                             'format': 'GTiff'}
+        if clean_edges:
+            erode_edges(src=src, only_boundary=True, pixels=clean_edges_npixels)
+        
+        if src_format == 'BEAM-DIMAP':
+            src = src.replace('.dim', '.data')
         for item in finder(src, ['*.img'], recursive=False):
             pattern = '(?P<refarea>(?:Sig|Gam)ma0)_(?P<pol>[HV]{2})'
             basename = os.path.basename(item)
@@ -501,9 +511,7 @@ def writer(xmlfile, outdir, basename_extensions=None,
             else:
                 nodata = 0
             translateoptions['noData'] = nodata
-            if clean_edges and 'layoverShadowMask' not in basename:
-                erode_edges(item, only_boundary=True, pixels=clean_edges_npixels)
-            gdal_translate(item, name_new, translateoptions)
+            gdal_translate(src=item, dst=name_new, **translateoptions)
     else:
         raise RuntimeError('The output file format must be ENVI or BEAM-DIMAP.')
     ###########################################################################
@@ -930,13 +938,13 @@ class Workflow(object):
     
     def insert_node(self, node, before=None, after=None, resetSuccessorSource=True, void=True):
         """
-        insert a node into the workflow including setting its source to its predecessor
-        and setting its ID as source of the successor.
+        insert one or multiple node(s) into the workflow including setting the source to the predecessor
+        and setting the ID as source of the successor.
         
         Parameters
         ----------
-        node: Node
-            the node to be inserted
+        node: Node or list[Node]
+            the node(s) to be inserted
         before: Node, str or list
             a Node object; the ID(s) of the node(s) before the newly inserted node; a list of node IDs is intended for
             nodes that require multiple sources, e.g. sliceAssembly
@@ -949,59 +957,66 @@ class Workflow(object):
 
         Returns
         -------
-        Node or None
-            the new node or None, depending on arguement `void`
+        Node or list[Node] or None
+            the new node, a list of nodes, or None, depending on the `node` input and argument `void`
         """
-        ncopies = [x.operator for x in self.nodes()].count(node.operator)
-        if ncopies > 0:
-            node.id = '{0} ({1})'.format(node.operator, ncopies + 1)
+        if isinstance(node, list):
+            self.insert_node(node=node[0], before=before, after=after,
+                             resetSuccessorSource=resetSuccessorSource, void=True)
+            for i, item in enumerate(node[1:]):
+                self.insert_node(node=item, before=node[i].id,
+                                 resetSuccessorSource=resetSuccessorSource, void=True)
         else:
-            node.id = node.operator
-        
-        if isinstance(before, Node):
-            before = before.id
-        if isinstance(after, Node):
-            after = after.id
-        
-        if before is None and after is None and len(self) > 0:
-            before = self[len(self) - 1].id
-        if before and not after:
-            if isinstance(before, list):
-                indices = [self.index(self[x]) for x in before]
-                predecessor = self[before[indices.index(max(indices))]]
+            ncopies = [x.operator for x in self.nodes()].count(node.operator)
+            if ncopies > 0:
+                node.id = '{0} ({1})'.format(node.operator, ncopies + 1)
             else:
-                predecessor = self[before]
-            log.debug('inserting node {} after {}'.format(node.id, predecessor.id))
-            position = self.index(predecessor) + 1
-            self.tree.insert(position, node.element)
-            newnode = Node(self.tree[position])
-            ####################################################
-            # set the source product for the new node
-            if newnode.operator != 'Read':
-                newnode.source = before
-            ####################################################
-            # set the source product for the node after the new node
-            if resetSuccessorSource:
-                self.__reset_successor_source(newnode.id)
-        ########################################################
-        elif after and not before:
-            successor = self[after]
-            log.debug('inserting node {} before {}'.format(node.id, successor.id))
-            position = self.index(successor)
-            self.tree.insert(position, node.element)
-            newnode = Node(self.tree[position])
-            ####################################################
-            # set the source product for the new node
-            if newnode.operator != 'Read':
-                source = successor.source
-                newnode.source = source
-            ####################################################
-            # set the source product for the node after the new node
-            if resetSuccessorSource:
-                self[after].source = newnode.id
-        else:
-            log.debug('inserting node {}'.format(node.id))
-            self.tree.insert(len(self.tree) - 1, node.element)
+                node.id = node.operator
+            
+            if isinstance(before, Node):
+                before = before.id
+            if isinstance(after, Node):
+                after = after.id
+            
+            if before is None and after is None and len(self) > 0:
+                before = self[len(self) - 1].id
+            if before and not after:
+                if isinstance(before, list):
+                    indices = [self.index(self[x]) for x in before]
+                    predecessor = self[before[indices.index(max(indices))]]
+                else:
+                    predecessor = self[before]
+                log.debug('inserting node {} after {}'.format(node.id, predecessor.id))
+                position = self.index(predecessor) + 1
+                self.tree.insert(position, node.element)
+                newnode = Node(self.tree[position])
+                ####################################################
+                # set the source product for the new node
+                if newnode.operator != 'Read':
+                    newnode.source = before
+                ####################################################
+                # set the source product for the node after the new node
+                if resetSuccessorSource:
+                    self.__reset_successor_source(newnode.id)
+            ########################################################
+            elif after and not before:
+                successor = self[after]
+                log.debug('inserting node {} before {}'.format(node.id, successor.id))
+                position = self.index(successor)
+                self.tree.insert(position, node.element)
+                newnode = Node(self.tree[position])
+                ####################################################
+                # set the source product for the new node
+                if newnode.operator != 'Read':
+                    source = successor.source
+                    newnode.source = source
+                ####################################################
+                # set the source product for the node after the new node
+                if resetSuccessorSource:
+                    self[after].source = newnode.id
+            else:
+                log.debug('inserting node {}'.format(node.id))
+                self.tree.insert(len(self.tree) - 1, node.element)
         if not void:
             return node
     
@@ -1197,9 +1212,9 @@ class Node(object):
         """
         params = self.element.find('.//parameters')
         if self.operator == 'BandMaths':
-            return Par_BandMath(params)
+            return Par_BandMath(operator=self.operator, element=params)
         else:
-            return Par(params)
+            return Par(operator=self.operator, element=params)
     
     @property
     def source(self):
@@ -1261,11 +1276,14 @@ class Par(object):
     
     Parameters
     ----------
+    operator: str
+        the name of the SNAP Node operator
     element: ~xml.etree.ElementTree.Element
         the node parameter XML element
     """
     
-    def __init__(self, element):
+    def __init__(self, operator, element):
+        self.operator = operator
         self.__element = element
     
     def __delitem__(self, key):
@@ -1289,7 +1307,7 @@ class Par(object):
     
     def __setitem__(self, key, value):
         if key not in self.keys():
-            raise KeyError('key {} does not exist'.format(key))
+            raise KeyError("unknown key for node '{}': '{}'".format(self.operator, key))
         strval = value2str(value)
         self.__element.find('.//{}'.format(key)).text = strval
     
@@ -1346,15 +1364,17 @@ class Par_BandMath(Par):
     element: ~xml.etree.ElementTree.Element
         the node parameter XML element
     """
-    def __init__(self, element):
+    
+    def __init__(self, operator, element):
+        self.operator = operator
         self.__element = element
-        super(Par_BandMath, self).__init__(element)
+        super(Par_BandMath, self).__init__(operator, element)
     
     def __getitem__(self, item):
         if item in ['variables', 'targetBands']:
             out = []
             for x in self.__element.findall('.//{}'.format(item[:-1])):
-                out.append(Par(x))
+                out.append(Par(self.operator, x))
             return out
         else:
             raise ValueError("can only get items 'variables' and 'targetBands'")
@@ -1412,7 +1432,7 @@ def value2str(value):
     return strval
 
 
-def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
+def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
     """
     Erode noisy edge pixels in SNAP-processed images.
     It was discovered that images contain border pixel artifacts after `Terrain-Correction`.
@@ -1424,12 +1444,13 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
         :align: center
         
         VV gamma0 RTC backscatter image visualizing the noisy border (left) and the cleaned result (right).
-        The area covers approx. 2.3 * 2.3 km². Pixel spacing is 20 m. connectedness 4, 1 pixel.
+        The area covers approx. 2.3 x 2.3 km². Pixel spacing is 20 m. connectedness 4, 1 pixel.
     
     Parameters
     ----------
-    infile: str
-        a single-layer file to modify in-place. 0 is assumed as no data value.
+    src: str
+        a processed SAR image in BEAM-DIMAP format (.dim), a single .img file (ENVI format) or a
+        directory with .img files. 0 is assumed as no data value.
     only_boundary: bool
         only erode edges at the image boundary (or also at data gaps caused by e.g. masking during Terrain-Flattening)?
     connectedness: int
@@ -1443,6 +1464,24 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
     -------
 
     """
+    images = None
+    if src.endswith('.dim'):
+        workdir = src.replace('.dim', '.data')
+    elif src.endswith('.img'):
+        images = [src]
+        workdir = None
+    elif os.path.isdir(src):
+        workdir = src
+    else:
+        raise RuntimeError("'src' must be either a file in BEAM-DIMAP format (extension '.dim'), "
+                           "an ENVI file with extension *.img, or a directory.")
+    
+    if images is None:
+        images = [x for x in finder(workdir, ['*.img'], recursive=False)
+                  if 'layoverShadowMask' not in x]
+    if len(images) == 0:
+        raise RuntimeError("could not find any files with extension '.img'")
+    
     from scipy.ndimage import binary_erosion, generate_binary_structure, iterate_structure
     
     if connectedness == 4:
@@ -1456,47 +1495,133 @@ def erode_edges(infile, only_boundary=False, connectedness=4, pixels=1):
     if pixels > 1:
         structure = iterate_structure(structure=structure, iterations=pixels)
     
-    workdir = os.path.dirname(infile)
-    fname_mask = os.path.join(workdir, 'datamask_eroded.tif')
+    if workdir is not None:
+        fname_mask = os.path.join(workdir, 'datamask.tif')
+    else:
+        fname_mask = os.path.join(os.path.dirname(src), 'datamask.tif')
     write_intermediates = False  # this is intended for debugging
     
-    if not os.path.isfile(fname_mask):
-        with Raster(infile) as ref:
+    def erosion(src, dst, structure, only_boundary, write_intermediates=False):
+        with Raster(src) as ref:
             array = ref.array()
-            mask1 = array != 0
-            if write_intermediates:
-                ref.write(fname_mask.replace('eroded', 'original'),
-                          array=mask1, dtype='Byte')
-            if only_boundary:
-                with vectorize(target=mask1, reference=ref) as vec:
-                    with boundary(vec, expression="value=1") as bounds:
-                        with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
-                            mask2 = new.array()
-                            if write_intermediates:
-                                vec.write(fname_mask.replace('eroded.tif', 'original_vectorized.gpkg'))
-                                bounds.write(fname_mask.replace('eroded.tif', 'boundary_vectorized.gpkg'))
-                                new.write(outname=fname_mask.replace('eroded', 'boundary'), dtype='Byte')
-            mask3 = binary_erosion(input=mask2, structure=structure)
-            ref.write(outname=fname_mask, array=mask3, dtype='Byte')
-    else:
-        with Raster(infile) as ref:
-            array = ref.array()
-        with Raster(fname_mask) as ras:
-            mask3 = ras.array()
+            if not os.path.isfile(dst):
+                mask = array != 0
+                # do not perform erosion if data only contains nodata (mask == 1)
+                if len(mask[mask == 1]) == 0:
+                    ref.write(outname=dst, array=mask, dtype='Byte',
+                              options=['COMPRESS=DEFLATE'])
+                    return array, mask
+                if write_intermediates:
+                    ref.write(dst.replace('.tif', '_init.tif'),
+                              array=mask, dtype='Byte',
+                              options=['COMPRESS=DEFLATE'])
+                if only_boundary:
+                    with vectorize(target=mask, reference=ref) as vec:
+                        with boundary(vec, expression="value=1") as bounds:
+                            with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
+                                mask = new.array()
+                                if write_intermediates:
+                                    vec.write(dst.replace('.tif', '_init_vectorized.gpkg'))
+                                    bounds.write(dst.replace('.tif', '_boundary_vectorized.gpkg'))
+                                    new.write(outname=dst.replace('.tif', '_boundary.tif'),
+                                              dtype='Byte', options=['COMPRESS=DEFLATE'])
+                mask = binary_erosion(input=mask, structure=structure)
+                ref.write(outname=dst, array=mask, dtype='Byte',
+                          options=['COMPRESS=DEFLATE'])
+            else:
+                with Raster(dst) as ras:
+                    mask = ras.array()
+        array[mask == 0] = 0
+        return array, mask
     
-    array[mask3 == 0] = 0
+    # make sure a backscatter image is used for creating the mask
+    backscatter = [x for x in images if re.search('^(?:Sigma0_|Gamma0_|C11|C22)', os.path.basename(x))]
+    images.insert(0, images.pop(images.index(backscatter[0])))
     
-    ras = gdal.Open(infile, GA_Update)
-    band = ras.GetRasterBand(1)
-    band.WriteArray(array)
-    band.FlushCache()
-    band = None
-    ras = None
+    mask = None
+    for img in images:
+        if mask is None:
+            array, mask = erosion(src=img, dst=fname_mask,
+                                  structure=structure, only_boundary=only_boundary,
+                                  write_intermediates=write_intermediates)
+        else:
+            with Raster(img) as ras:
+                array = ras.array()
+            array[mask == 0] = 0
+        # do not apply mask if it only contains 1 (valid data)
+        if len(mask[mask == 0]) == 0:
+            break
+        ras = gdal.Open(img, GA_Update)
+        band = ras.GetRasterBand(1)
+        band.WriteArray(array)
+        band.FlushCache()
+        band = None
+        ras = None
 
 
-def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, continueOnFail=False):
+def mli_parametrize(scene, spacing=None, rlks=None, azlks=None, **kwargs):
     """
-    convenience function for parametrizing an `Apply-Orbit-File` node and inserting it into a workflow.
+    Convenience function for parametrizing a `Multilook` node.
+    
+    Parameters
+    ----------
+    scene: pyroSAR.drivers.ID
+        The SAR scene to be processed
+    spacing: int or float or None
+        the target pixel spacing for automatic determination of looks using function
+        :func:`~pyroSAR.ancillary.multilook_factors`. Overridden by arguments `rlks` and `azlks` if they are not None.
+    rlks: int or None
+        the number of range looks
+    azlks: int or None
+        the number of azimuth looks
+    bands: list[str] or None
+        an optional list of bands names
+    kwargs
+        further keyword arguments for node parametrization. Known options:
+        
+         - grSquarePixel
+         - outputIntensity
+         - sourceBands
+    
+    Returns
+    -------
+    Node or None
+        either a `Node` object if multilooking is necessary (either `rlks` or `azlks` are greater than 1) or None.
+    
+    See Also
+    --------
+    pyroSAR.ancillary.multilook_factors
+    """
+    try:
+        image_geometry = scene.meta['image_geometry']
+        incidence = scene.meta['incidence']
+    except KeyError:
+        msg = 'This function does not yet support {} products in {} format'
+        raise RuntimeError(msg.format(scene.sensor, scene.__class__.__name__))
+    
+    if rlks is None and azlks is None:
+        if spacing is None:
+            raise RuntimeError("either 'spacing' or 'rlks' and 'azlks' must set to numeric values")
+        rlks, azlks = multilook_factors(source_rg=scene.spacing[0],
+                                        source_az=scene.spacing[1],
+                                        target=spacing,
+                                        geometry=image_geometry,
+                                        incidence=incidence)
+    if [rlks, azlks].count(None) > 0:
+        raise RuntimeError("'rlks' and 'azlks' must either both be integers or None")
+    
+    if azlks > 1 or rlks > 1 or scene.sensor in ['ERS1', 'ERS2', 'ASAR']:
+        ml = parse_node('Multilook')
+        ml.parameters['nAzLooks'] = azlks
+        ml.parameters['nRgLooks'] = rlks
+        for key, val in kwargs.items():
+            ml.parameters[key] = val
+        return ml
+
+
+def orb_parametrize(scene, formatName, allow_RES_OSV=True, url_option=1, **kwargs):
+    """
+    convenience function for parametrizing an `Apply-Orbit-File`.
     Required Sentinel-1 orbit files are directly downloaded.
     
     Parameters
@@ -1511,28 +1636,374 @@ def orb_parametrize(scene, workflow, before, formatName, allow_RES_OSV=True, con
         the scene's data format
     allow_RES_OSV: bool
         (only applies to Sentinel-1) Also allow the less accurate RES orbit files to be used?
-    continueOnFail: bool
-        continue SNAP processing if orbit correction fails?
+    url_option: int
+        the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch`
+    kwargs
+        further keyword arguments for node parametrization. Known options:
         
+         - continueOnFail
+         - polyDegree
+    
     Returns
     -------
     Node
-        the node object
+        the Apply-Orbit-File node object
     """
-    orbit_lookup = {'ENVISAT': 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)',
+    orbit_lookup = {'ENVISAT': 'PRARE Precise (ERS1&2) (Auto Download)',
                     'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
     orbitType = orbit_lookup[formatName]
-    if formatName == 'ENVISAT' and scene.acquisition_mode == 'WSM':
+    if formatName == 'ENVISAT' and scene.sensor == 'ASAR':
         orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
     
     if formatName == 'SENTINEL-1':
-        match = scene.getOSV(osvType='POE', returnMatch=True)
+        osv_type = ['POE', 'RES'] if allow_RES_OSV else 'POE'
+        match = scene.getOSV(osvType=osv_type, returnMatch=True, url_option=url_option)
         if match is None and allow_RES_OSV:
-            scene.getOSV(osvType='RES')
+            scene.getOSV(osvType='RES', url_option=url_option)
             orbitType = 'Sentinel Restituted (Auto Download)'
     
     orb = parse_node('Apply-Orbit-File')
-    workflow.insert_node(orb, before=before)
     orb.parameters['orbitType'] = orbitType
-    orb.parameters['continueOnFail'] = continueOnFail
+    for key, val in kwargs.items():
+        orb.parameters[key] = val
     return orb
+
+
+def sub_parametrize(scene, geometry=None, offset=None, buffer=0.01, copyMetadata=True, **kwargs):
+    """
+    convenience function for parametrizing an `Subset` node.
+    
+    Parameters
+    ----------
+    scene: pyroSAR.drivers.ID
+        The SAR scene to be processed
+    geometry: dict or spatialist.vector.Vector or str or None
+        A vector geometry for geographic subsetting (node parameter geoRegion):
+        
+         - :class:`~spatialist.vector.Vector`: a vector object in arbitrary CRS
+         - :class:`str`: a name of a file that can be read with :class:`~spatialist.vector.Vector` in arbitrary CRS
+         - :class:`dict`: a dictionary with keys `xmin`, `xmax`, `ymin`, `ymax` in LatLon coordinates
+    offset: tuple or None
+        a tuple with pixel coordinates as (left, right, top, bottom)
+    buffer: int or float
+        an additional buffer in degrees to add around the `geometry`
+    copyMetadata: bool
+        copy the metadata of the source product?
+    kwargs
+        further keyword arguments for node parametrization. Known options:
+        
+         - fullSwath
+         - referenceBand
+         - sourceBands
+         - subSamplingX
+         - subSamplingY
+         - tiePointGrids
+
+    Returns
+    -------
+    Node
+        the Subset node object
+    """
+    subset = parse_node('Subset')
+    if geometry:
+        if isinstance(geometry, dict):
+            ext = geometry
+        else:
+            if isinstance(geometry, Vector):
+                shp = geometry.clone()
+            elif isinstance(geometry, str):
+                shp = Vector(geometry)
+            else:
+                raise TypeError("argument 'geometry' must be either a dictionary, a Vector object or a filename.")
+            # reproject the geometry to WGS 84 latlon
+            shp.reproject(4326)
+            ext = shp.extent
+            shp.close()
+        # add an extra buffer
+        ext['xmin'] -= buffer
+        ext['ymin'] -= buffer
+        ext['xmax'] += buffer
+        ext['ymax'] += buffer
+        with bbox(ext, 4326) as bounds:
+            inter = intersect(scene.bbox(), bounds)
+            if not inter:
+                raise RuntimeError('no bounding box intersection between shapefile and scene')
+            inter.close()
+            wkt = bounds.convert2wkt()[0]
+        subset.parameters['region'] = [0, 0, scene.samples, scene.lines]
+        subset.parameters['geoRegion'] = wkt
+    #######################
+    # (optionally) configure Subset node for pixel offsets
+    elif offset and not geometry:
+        # left, right, top and bottom offset in pixels
+        l, r, t, b = offset
+        
+        subset_values = [l, t, scene.samples - l - r, scene.lines - t - b]
+        subset.parameters['region'] = subset_values
+        subset.parameters['geoRegion'] = ''
+    else:
+        raise RuntimeError("one of 'geometry' and 'offset' must be set")
+    
+    subset.parameters['copyMetadata'] = copyMetadata
+    for key, val in kwargs.items():
+        subset.parameters[key] = val
+    return subset
+
+
+def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
+                    sourceBands=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
+                    externalDEMNoDataValue=None, externalDEMApplyEGM=True,
+                    alignToStandardGrid=False, standardGridAreaOrPoint='point',
+                    standardGridOriginX=0, standardGridOriginY=0,
+                    nodataValueAtSea=False, export_extra=None,
+                    demResamplingMethod='BILINEAR_INTERPOLATION',
+                    imgResamplingMethod='BILINEAR_INTERPOLATION',
+                    **kwargs):
+    """
+    convenience function for parametrizing geocoding nodes.
+    
+    Parameters
+    ----------
+    workflow: Workflow
+        the SNAP workflow object
+    before: str
+        the ID of the node after which the terrain correction node will be inserted
+    tc_method: str
+        the terrain correction method. Supported options:
+        
+         - Range-Doppler (SNAP node `Terrain-Correction`)
+         - SAR simulation cross correlation
+           (SNAP nodes `SAR-Simulation`->`Cross-Correlation`->`SARSim-Terrain-Correction`)
+    
+    sourceBands: list[str] or None
+        the image band names to geocode; default None: geocode all incoming bands.
+    spacing: int or float
+        The target pixel spacing in meters.
+    t_srs: int or str or osgeo.osr.SpatialReference
+        A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
+        See function :func:`spatialist.auxil.crsConvert()` for details.
+    demName: str
+        The name of the auto-download DEM. Default is 'SRTM 1Sec HGT'. Is ignored when `externalDEMFile` is not None.
+        Supported options:
+        
+         - ACE2_5Min
+         - ACE30
+         - ASTER 1sec GDEM
+         - CDEM
+         - Copernicus 30m Global DEM
+         - Copernicus 90m Global DEM
+         - GETASSE30
+         - SRTM 1Sec Grid
+         - SRTM 1Sec HGT
+         - SRTM 3Sec
+    externalDEMFile: str or None, optional
+        The absolute path to an external DEM file. Default is None. Overrides `demName`.
+    externalDEMNoDataValue: int, float or None, optional
+        The no data value of the external DEM. If not specified (default) the function will try to read it from the
+        specified external DEM.
+    externalDEMApplyEGM: bool, optional
+        Apply Earth Gravitational Model to external DEM? Default is True.
+    alignToStandardGrid: bool
+        Align all processed images to a common grid?
+    standardGridAreaOrPoint: str
+        treat alignment coordinate as pixel center ('point', SNAP default) or upper left ('area').
+    standardGridOriginX: int or float
+        The x origin value for grid alignment
+    standardGridOriginY: int or float
+        The y origin value for grid alignment
+    nodataValueAtSea:bool
+        mask values over sea?
+    export_extra: list[str] or None
+        a list of ancillary layers to write. Supported options:
+        
+         - DEM
+         - latLon
+         - incidenceAngleFromEllipsoid (Range-Doppler only)
+         - layoverShadowMask
+         - localIncidenceAngle
+         - projectedLocalIncidenceAngle
+         - selectedSourceBand
+    demResamplingMethod: str
+        the DEM resampling method
+    imgResamplingMethod: str
+        the image resampling method
+    kwargs
+        further keyword arguments for node parametrization. Known options:
+        
+         - outputComplex
+         - applyRadiometricNormalization
+         - saveSigmaNought
+         - saveGammaNought
+         - saveBetaNought
+         - incidenceAngleForSigma0
+         - incidenceAngleForGamma0
+         - auxFile
+         - externalAuxFile
+         - openShiftsFile (SAR simulation cross correlation only)
+         - openResidualsFile (SAR simulation cross correlation only)
+    
+    Returns
+    -------
+    Node or list[Node]
+        the Terrain-Correction node object or a list containing the objects for SAR-Simulation,
+        Cross-Correlation and SARSim-Terrain-Correction.
+    """
+    if tc_method == 'Range-Doppler':
+        tc = parse_node('Terrain-Correction')
+        tc.parameters['sourceBands'] = sourceBands
+        tc.parameters['nodataValueAtSea'] = nodataValueAtSea
+        sarsim = None
+        dem_node = out = tc
+    elif tc_method == 'SAR simulation cross correlation':
+        sarsim = parse_node('SAR-Simulation')
+        sarsim.parameters['sourceBands'] = sourceBands
+        cc = parse_node('Cross-Correlation')
+        tc = parse_node('SARSim-Terrain-Correction')
+        dem_node = sarsim
+        out = [sarsim, cc, tc]
+    else:
+        raise RuntimeError('tc_method not recognized')
+    
+    tc.parameters['imgResamplingMethod'] = imgResamplingMethod
+    
+    if standardGridAreaOrPoint == 'area':
+        standardGridOriginX -= spacing / 2
+        standardGridOriginY += spacing / 2
+    tc.parameters['alignToStandardGrid'] = alignToStandardGrid
+    tc.parameters['standardGridOriginX'] = standardGridOriginX
+    tc.parameters['standardGridOriginY'] = standardGridOriginY
+    
+    # specify spatial resolution and coordinate reference system of the output dataset
+    tc.parameters['pixelSpacingInMeter'] = spacing
+    
+    try:
+        # try to convert the CRS into EPSG code (for readability in the workflow XML)
+        t_srs = crsConvert(t_srs, 'epsg')
+    except TypeError:
+        raise RuntimeError("format of parameter 't_srs' not recognized")
+    except RuntimeError:
+        # This error can occur when the CRS does not have a corresponding EPSG code.
+        # In this case the original CRS representation is written to the workflow.
+        pass
+    
+    # The EPSG code 4326 is not supported by SNAP and thus the WKT string has to be defined.
+    # In all other cases defining EPSG:{code} will do.
+    if t_srs == 4326:
+        t_srs = 'GEOGCS["WGS84(DD)",' \
+                'DATUM["WGS84",' \
+                'SPHEROID["WGS84", 6378137.0, 298.257223563]],' \
+                'PRIMEM["Greenwich", 0.0],' \
+                'UNIT["degree", 0.017453292519943295],' \
+                'AXIS["Geodetic longitude", EAST],' \
+                'AXIS["Geodetic latitude", NORTH]]'
+    
+    if isinstance(t_srs, int):
+        t_srs = 'EPSG:{}'.format(t_srs)
+    
+    tc.parameters['mapProjection'] = t_srs
+    
+    export_extra_options = \
+        ['DEM', 'latLon',
+         'incidenceAngleFromEllipsoid',
+         'layoverShadowMask',
+         'localIncidenceAngle',
+         'projectedLocalIncidenceAngle',
+         'selectedSourceBand']
+    if export_extra is not None:
+        for item in export_extra:
+            if item in export_extra_options:
+                key = f'save{item[0].upper()}{item[1:]}'
+                if tc.operator == 'SARSim-Terrain-Correction':
+                    if item == 'layoverShadowMask':
+                        sarsim.parameters[key] = True
+                else:
+                    tc.parameters[key] = True
+    
+    dem_parametrize(node=dem_node, demName=demName,
+                    externalDEMFile=externalDEMFile,
+                    externalDEMNoDataValue=externalDEMNoDataValue,
+                    externalDEMApplyEGM=externalDEMApplyEGM,
+                    demResamplingMethod=demResamplingMethod)
+    
+    for key, val in kwargs.items():
+        tc.parameters[key] = val
+    return out
+
+
+def dem_parametrize(workflow=None, node=None, demName='SRTM 1Sec HGT', externalDEMFile=None,
+                    externalDEMNoDataValue=None, externalDEMApplyEGM=False,
+                    demResamplingMethod='BILINEAR_INTERPOLATION'):
+    """
+    DEM parametrization for a full workflow or a single node. In the former case, all nodes with the
+    DEM-relevant parameters can be modified at once, e.g. `Terrain-Flattening` and `Terrain-Correction`.
+    
+    Parameters
+    ----------
+    workflow: Workflow or None
+        a SNAP workflow object
+    node: Node or None
+        a SNAP node object
+    demName: str
+        The name of the auto-download DEM. Default is 'SRTM 1Sec HGT'. Is ignored when `externalDEMFile` is not None.
+        Supported options:
+        
+         - ACE2_5Min
+         - ACE30
+         - ASTER 1sec GDEM
+         - CDEM
+         - Copernicus 30m Global DEM
+         - Copernicus 90m Global DEM
+         - GETASSE30
+         - SRTM 1Sec Grid
+         - SRTM 1Sec HGT
+         - SRTM 3Sec
+    externalDEMFile: str or None, optional
+        The absolute path to an external DEM file. Default is None. Overrides `demName`.
+    externalDEMNoDataValue: int, float or None, optional
+        The no data value of the external DEM. If not specified (default) the function will try to read it from the
+        specified external DEM.
+    externalDEMApplyEGM: bool, optional
+        Apply Earth Gravitational Model to external DEM? Default is True.
+    demResamplingMethod: str
+        the DEM resampling method
+
+    Returns
+    -------
+
+    """
+    # select DEM type
+    dempar = {'externalDEMFile': externalDEMFile,
+              'externalDEMApplyEGM': externalDEMApplyEGM,
+              'demResamplingMethod': demResamplingMethod}
+    if externalDEMFile is not None:
+        if os.path.isfile(externalDEMFile):
+            if externalDEMNoDataValue is None:
+                with Raster(externalDEMFile) as dem:
+                    dempar['externalDEMNoDataValue'] = dem.nodata
+                if dempar['externalDEMNoDataValue'] is None:
+                    raise RuntimeError('Cannot read NoData value from DEM file. '
+                                       'Please specify externalDEMNoDataValue')
+            else:
+                dempar['externalDEMNoDataValue'] = externalDEMNoDataValue
+            dempar['reGridMethod'] = False
+        else:
+            raise RuntimeError('specified externalDEMFile does not exist')
+        dempar['demName'] = 'External DEM'
+    else:
+        dempar['demName'] = demName
+        dempar['externalDEMFile'] = None
+        dempar['externalDEMNoDataValue'] = 0
+    
+    if workflow is not None:
+        for key, value in dempar.items():
+            workflow.set_par(key, value)
+    elif node is not None:
+        for key, value in dempar.items():
+            if key in node.parameters.keys():
+                node.parameters[key] = value
+    else:
+        raise RuntimeError("either 'workflow' or 'node must be defined'")
+    
+    # download the EGM lookup table if necessary
+    if dempar['externalDEMApplyEGM']:
+        get_egm_lookup(geoid='EGM96', software='SNAP')

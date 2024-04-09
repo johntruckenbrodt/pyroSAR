@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2", "wheel"]
+
+[project]
+name = "pyroSAR"
+description = "a framework for large-scale SAR satellite data processing"
+requires-python = ">=3.6,<3.11"
+license = { file = "LICENSE.txt" }
+maintainers = [
+    { name = "John Truckenbrodt", email = "john.truckenbrodt@dlr.de" }
+]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3"
+]
+dynamic = ["version", "readme", "dependencies"]
+
+[project.urls]
+repository = "https://github.com/johntruckenbrodt/pyroSAR"
+documentation = "https://pyrosar.readthedocs.io/en/latest/"
+
+[project.optional-dependencies]
+test = ["pytest"]
+docs = ["sphinx", "sphinxcontrib-bibtex", "sphinxcontrib-svg2pdfconverter", "cairosvg"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+readme = { file = ["README.md"], content-type = "text/markdown" }
+
+[tool.setuptools_scm]

@@ -1,6 +1,6 @@
 ###############################################################################
 # Examination of SAR processing software
-# Copyright (c) 2019-2021, the pyroSAR Developers.
+# Copyright (c) 2019-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -16,12 +16,13 @@ import os
 import shutil
 import platform
 import re
+import subprocess
 import warnings
 import subprocess as sp
 import pkg_resources
 
 from pyroSAR._dev_config import ConfigHandler
-from spatialist.ancillary import finder
+from spatialist.ancillary import finder, run
 
 import logging
 
@@ -369,6 +370,17 @@ class ExamineSnap(object):
 
 
 class ExamineGamma(object):
+    """
+    Class to check if GAMMA is installed.
+    
+    Examples
+    --------
+    >>> from pyroSAR.examine import ExamineGamma
+    >>> config = ExamineGamma()
+    >>> print(config.home)
+    >>> print(config.version)
+    
+    """
     def __init__(self):
         home_sys = os.environ.get('GAMMA_HOME')
         if home_sys is not None and not os.path.isdir(home_sys):
@@ -392,15 +404,15 @@ class ExamineGamma(object):
                 setattr(self, 'home', home_sys)
             else:
                 raise RuntimeError('could not read GAMMA installation directory')
-        self.version = re.search('GAMMA_SOFTWARE-(?P<version>[0-9]{8})',
+        self.version = re.search('GAMMA_SOFTWARE[-/](?P<version>[0-9]{8})',
                                  getattr(self, 'home')).group('version')
         
-        if not hasattr(self, 'gdal_config'):
-            gdal_config = '/usr/bin/gdal-config'
-            if not os.path.isfile(gdal_config):
-                warnings.warn('could not find GDAL system installation under {}\n'
-                              'please modify the pyroSAR configuration: {}'.format(gdal_config, self.fname))
+        try:
+            out, err = run(['which', 'gdal-config'], void=False)
+            gdal_config = out.strip('\n')
             self.gdal_config = gdal_config
+        except subprocess.CalledProcessError:
+            raise RuntimeError('could not find command gdal-config.')
         self.__update_config()
     
     def __read_config(self):
@@ -414,7 +426,7 @@ class ExamineGamma(object):
         if 'GAMMA' not in config.sections:
             config.add_section('GAMMA')
         
-        for attr in ['home', 'version', 'gdal_config']:
+        for attr in ['home', 'version']:
             self.__update_config_attr(attr, getattr(self, attr), 'GAMMA')
     
     @staticmethod

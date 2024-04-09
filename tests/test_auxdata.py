@@ -9,7 +9,7 @@ def test_handler(auxdata_dem_cases):
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51.1, 'ymax': 51.5}, crs=4326) as box:
         with DEMHandler([box]) as handler:
             for demType, reference in auxdata_dem_cases:
-                result = handler.remote_ids(demType=demType, extent=box.extent)
+                result = handler.remote_ids(dem_type=demType, extent=box.extent)
                 assert result == reference
     
     with bbox({'xmin': -11.9, 'xmax': -11.5, 'ymin': -51.5, 'ymax': -51.1}, crs=4326) as box:
@@ -17,9 +17,9 @@ def test_handler(auxdata_dem_cases):
             cases = [('AW3D30', ['S055W015/S052W012.tar.gz']),
                      ('SRTM 1Sec HGT', ['S52W012.SRTMGL1.hgt.zip']),
                      ('SRTM 3Sec', ['srtm_34_23.zip']),
-                     ('TDX90m', ['90mdem/DEM/S52/W010/TDM1_DEM__30_S52W012.zip'])]
+                     ('TDX90m', ['DEM/S52/W010/TDM1_DEM__30_S52W012.zip'])]
             for demType, reference in cases:
-                result = handler.remote_ids(demType=demType, extent=box.extent)
+                result = handler.remote_ids(dem_type=demType, extent=box.extent)
                 assert result == reference
     with pytest.raises(RuntimeError):
         test = DEMHandler('foobar')
@@ -63,7 +63,7 @@ def test_dem_create(tmpdir):
         vrt = '/vsimem/test.vrt'
         dem_autoload([box], 'SRTM 3Sec', vrt=vrt)
     out = os.path.join(str(tmpdir), 'srtm.tif')
-    dem_create(src=vrt, dst=out, t_srs=32632, tr=(90, 90))
+    dem_create(src=vrt, dst=out, t_srs=32632, tr=(90, 90), nodata=-32767)
     assert os.path.isfile(out)
 
 
