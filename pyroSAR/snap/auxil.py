@@ -378,7 +378,7 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
         del workflow['Remove-GRD-Border-Noise']
         # remove the node name from the groups
         i = 0
-        while i < len(groups) - 1:
+        while i < len(groups):
             if 'Remove-GRD-Border-Noise' in groups[i]:
                 del groups[i][groups[i].index('Remove-GRD-Border-Noise')]
             if len(groups[i]) == 0:
