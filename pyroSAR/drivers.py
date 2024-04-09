@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2023, the pyroSAR Developers.
+# Copyright (c) 2016-2024, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -2722,7 +2722,7 @@ class Archive(object):
         Returns
         -------
         """
-        if table not in ['data', 'duplicates']:
+        if table not in self.get_tablenames():
             log.warning('Only data and duplicates can be exported!')
             return
         
@@ -2734,22 +2734,28 @@ class Archive(object):
         dirname = os.path.dirname(path)
         os.makedirs(dirname, exist_ok=True)
         
-        # uses spatialist.ogr2ogr to write shps with given path (or db connection)
-        if self.driver == 'sqlite':
-            # ogr2ogr(self.dbfile, path, options={'format': 'ESRI Shapefile'})
-            subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
-                             self.dbfile, table])
+        launder_names = {'acquisition_mode': 'acq_mode',
+                         'orbitNumber_abs': 'orbit_abs',
+                         'orbitNumber_rel': 'orbit_rel',
+                         'cycleNumber': 'cycleNr',
+                         'frameNumber': 'frameNr',
+                         'outname_base': 'outname'}
         
-        if self.driver == 'postgresql':
-            db_connection = """PG:host={0} port={1} user={2}
-                dbname={3} password={4} active_schema=public""".format(self.url_dict['host'],
-                                                                       self.url_dict['port'],
-                                                                       self.url_dict['username'],
-                                                                       self.url_dict['database'],
-                                                                       self.url_dict['password'])
-            # ogr2ogr(db_connection, path, options={'format': 'ESRI Shapefile'})
-            subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
-                             db_connection, table])
+        sel_tables = ', '.join([f'"{s}" as {launder_names[s]}' if s in launder_names else s
+                                for s in self.get_colnames(table)])
+        
+        if self.driver == 'sqlite':
+            srcDS = self.dbfile
+        elif self.driver == 'postgresql':
+            srcDS = """PG:host={host} port={port} user={username}
+            dbname={database} password={password} active_schema=public""".format(**self.url_dict)
+        else:
+            raise RuntimeError('unknown archive driver')
+        
+        gdal.VectorTranslate(destNameOrDestDS=path, srcDS=srcDS,
+                             format='ESRI Shapefile',
+                             SQLStatement=f'SELECT {sel_tables} FROM {table}',
+                             SQLDialect=self.driver)
     
     def filter_scenelist(self, scenelist):
         """
