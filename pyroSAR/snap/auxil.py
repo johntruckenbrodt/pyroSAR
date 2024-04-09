@@ -15,6 +15,7 @@ import os
 import re
 import copy
 import shutil
+import traceback
 import subprocess as sp
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
@@ -408,6 +409,8 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
         else:
             execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
     except Exception:
+        tb = traceback.format_exc()
+        log.info(tb)
         log.info('failed: {}'.format(xmlfile))
         raise
     finally:
