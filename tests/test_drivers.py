@@ -210,7 +210,8 @@ def test_archive2(tmpdir, testdata):
     # so that it can be reimported into the new database. The working directory
     # is changed temporarily so that the scene can be found.
     cwd = os.getcwd()
-    os.chdir('data')
+    folder = os.path.dirname(os.path.realpath(__file__))
+    os.chdir(os.path.join(folder, 'data'))
     with pyroSAR.Archive(dbfile) as db:
         with pyroSAR.Archive(testdata['archive_old_bbox'], legacy=True) as db_old:
             db.import_outdated(db_old)
@@ -253,14 +254,16 @@ def test_archive_postgres(tmpdir, testdata):
     with pytest.raises(TypeError):
         db.filter_scenelist([1])
     db.close()
-    with pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword) as db:
+    with pyroSAR.Archive('test', postgres=True, port=pgport,
+                         user=pguser, password=pgpassword) as db:
         assert db.size == (1, 0)
         shp = os.path.join(str(tmpdir), 'db.shp')
         db.export2shp(shp)
         pyroSAR.drop_archive(db)
     assert Vector(shp).nfeatures == 1
     
-    with pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword) as db:
+    with pyroSAR.Archive('test', postgres=True, port=pgport,
+                         user=pguser, password=pgpassword) as db:
         with pytest.raises(OSError):
             db.import_outdated(testdata['archive_old_csv'])
         pyroSAR.drop_archive(db)
@@ -269,7 +272,8 @@ def test_archive_postgres(tmpdir, testdata):
     # so that it can be reimported into the new database. The working directory
     # is changed temporarily so that the scene can be found.
     cwd = os.getcwd()
-    os.chdir('data')
+    folder = os.path.dirname(os.path.realpath(__file__))
+    os.chdir(os.path.join(folder, 'data'))
     with pyroSAR.Archive('test', postgres=True, port=pgport,
                          user=pguser, password=pgpassword) as db:
         with pyroSAR.Archive(testdata['archive_old_bbox'], legacy=True) as db_old:
