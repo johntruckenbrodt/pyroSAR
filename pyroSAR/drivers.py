@@ -2288,7 +2288,7 @@ class Archive(object):
         
         if dbfile.endswith('.csv'):
             raise RuntimeError("Please create a new Archive database and import the"
-                               "csv-file using db.import_outdated('<file>.csv').")
+                               "CSV file using db.import_outdated('<file>.csv').")
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
@@ -2332,7 +2332,7 @@ class Archive(object):
         self.engine = create_engine(url=self.url, echo=False,
                                     connect_args=connect_args)
         
-        # call to ____load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
+        # call to __load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
             log.debug('loading spatialite extension')
             listen(target=self.engine, identifier='connect', fn=self.__load_spatialite)
@@ -2366,16 +2366,15 @@ class Archive(object):
         self.__init_data_table()
         self.__init_duplicates_table()
         
+        msg = ("the 'data' table is missing {}. Please create a new database "
+               "and import the old one opened in legacy mode using "
+               "Archive.import_outdated.")
         pk = sql_inspect(self.data_schema).primary_key
         if 'product' not in pk.columns.keys() and not legacy:
-            raise RuntimeError("the 'data' table is missing a primary key 'product'. "
-                               "Please create a new database and import the old one "
-                               "opened in legacy mode using Archive.import_outdated.")
+            raise RuntimeError(msg.format("a primary key 'product'"))
         
         if 'geometry' not in self.get_colnames() and not legacy:
-            raise RuntimeError("the 'data' table is missing the 'geometry' column. "
-                               "Please create a new database and import the old one "
-                               "opened in legacy mode using Archive.import_outdated.")
+            raise RuntimeError(msg.format("the 'geometry' column"))
         
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
@@ -2447,7 +2446,7 @@ class Archive(object):
                                  Column('hv', Integer),
                                  Column('vh', Integer),
                                  Column('geometry', Geometry(geometry_type='POLYGON',
-                                                         management=True, srid=4326)))
+                                                             management=True, srid=4326)))
         # add custom fields
         if self.custom_fields is not None:
             for key, val in self.custom_fields.items():
