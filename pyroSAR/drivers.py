@@ -2292,7 +2292,7 @@ class Archive(object):
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
-            dirname = os.path.dirname(dbfile)
+            dirname = os.path.dirname(os.path.abspath(dbfile))
             w_ok = os.access(dirname, os.W_OK)
             if not w_ok:
                 raise RuntimeError('cannot write to directory {}'.format(dirname))
