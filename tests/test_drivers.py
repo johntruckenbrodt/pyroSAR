@@ -265,10 +265,17 @@ def test_archive_postgres(tmpdir, testdata):
             db.import_outdated(testdata['archive_old_csv'])
         pyroSAR.drop_archive(db)
     
-    with pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword) as db:
+    # the archive_old_bbox database contains a relative file name for the scene
+    # so that it can be reimported into the new database. The working directory
+    # is changed temporarily so that the scene can be found.
+    cwd = os.getcwd()
+    os.chdir('data')
+    with pyroSAR.Archive('test', postgres=True, port=pgport,
+                         user=pguser, password=pgpassword) as db:
         with pyroSAR.Archive(testdata['archive_old_bbox'], legacy=True) as db_old:
             db.import_outdated(db_old)
         pyroSAR.drop_archive(db)
+    os.chdir(cwd)
     
     dbfile = os.path.join(str(tmpdir), 'scenes.db')
     with pyroSAR.Archive('test', postgres=True, port=pgport,
