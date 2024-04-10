@@ -204,16 +204,17 @@ def test_archive2(tmpdir, testdata):
     
     with pytest.raises(OSError):
         with pyroSAR.Archive(dbfile) as db:
-            db.import_outdated(testdata['archive_old'])
+            db.import_outdated(testdata['archive_old_csv'])
     with pyroSAR.Archive(dbfile) as db:
-        with pyroSAR.Archive(testdata['archive_old_db'], legacy=True) as db_old:
+        with pyroSAR.Archive(testdata['archive_old_bbox'], legacy=True) as db_old:
             db.import_outdated(db_old)
-            
+    
     with pytest.raises(RuntimeError):
-        db = pyroSAR.Archive(testdata['archive_old'])
+        db = pyroSAR.Archive(testdata['archive_old_csv'])
     with pytest.raises(RuntimeError):
-        db = pyroSAR.Archive(testdata['archive_old_db'])
-    db = pyroSAR.Archive(testdata['archive_new_db'])
+        db = pyroSAR.Archive(testdata['archive_old_bbox'])
+    db = pyroSAR.Archive(testdata['archive'])
+
 
 def test_archive_postgres(tmpdir, testdata):
     pguser = os.environ.get('PGUSER')
@@ -255,16 +256,16 @@ def test_archive_postgres(tmpdir, testdata):
     
     with pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword) as db:
         with pytest.raises(OSError):
-            db.import_outdated(testdata['archive_old'])
+            db.import_outdated(testdata['archive_old_csv'])
         pyroSAR.drop_archive(db)
     
     with pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword) as db:
-        with pyroSAR.Archive(testdata['archive_old_db'], legacy=True) as db_old:
+        with pyroSAR.Archive(testdata['archive_old_bbox'], legacy=True) as db_old:
             db.import_outdated(db_old)
         pyroSAR.drop_archive(db)
-        
+    
     with pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword) as db:
-        with pyroSAR.Archive(testdata['archive_new_db'], legacy=True) as db_new:
+        with pyroSAR.Archive(testdata['archive'], legacy=True) as db_new:
             db.import_outdated(db_new)
         pyroSAR.drop_archive(db)
     
