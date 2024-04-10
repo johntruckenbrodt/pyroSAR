@@ -205,9 +205,16 @@ def test_archive2(tmpdir, testdata):
     with pytest.raises(OSError):
         with pyroSAR.Archive(dbfile) as db:
             db.import_outdated(testdata['archive_old_csv'])
+    
+    # the archive_old_bbox database contains a relative file name for the scene
+    # so that it can be reimported into the new database. The working directory
+    # is changed temporarily so that the scene can be found.
+    cwd = os.getcwd()
+    os.chdir('data')
     with pyroSAR.Archive(dbfile) as db:
         with pyroSAR.Archive(testdata['archive_old_bbox'], legacy=True) as db_old:
             db.import_outdated(db_old)
+    os.chdir(cwd)
     
     with pytest.raises(RuntimeError):
         db = pyroSAR.Archive(testdata['archive_old_csv'])
