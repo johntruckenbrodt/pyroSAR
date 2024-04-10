@@ -220,7 +220,6 @@ def test_archive2(tmpdir, testdata):
         db = pyroSAR.Archive(testdata['archive_old_csv'])
     with pytest.raises(RuntimeError):
         db = pyroSAR.Archive(testdata['archive_old_bbox'])
-    db = pyroSAR.Archive(testdata['archive'])
 
 
 def test_archive_postgres(tmpdir, testdata):
@@ -271,9 +270,11 @@ def test_archive_postgres(tmpdir, testdata):
             db.import_outdated(db_old)
         pyroSAR.drop_archive(db)
     
-    with pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword) as db:
-        with pyroSAR.Archive(testdata['archive'], legacy=True) as db_new:
-            db.import_outdated(db_new)
+    dbfile = os.path.join(str(tmpdir), 'scenes.db')
+    with pyroSAR.Archive('test', postgres=True, port=pgport,
+                         user=pguser, password=pgpassword) as db:
+        with pyroSAR.Archive(dbfile, legacy=True) as db_sqlite:
+            db.import_outdated(db_sqlite)
         pyroSAR.drop_archive(db)
     
     with pytest.raises(SystemExit) as pytest_wrapped_e:
