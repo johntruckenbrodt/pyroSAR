@@ -17,3 +17,4 @@ dependencies:
   - pillow
   - lxml
   - packaging
+  - libspatialite>=5.1.0
