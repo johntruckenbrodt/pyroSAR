@@ -14,6 +14,7 @@
 import os
 import re
 import shutil
+import traceback
 from ..drivers import identify, identify_many, ID
 from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, \
     windows_fileprefix, orb_parametrize, geo_parametrize, sub_parametrize, \
@@ -641,10 +642,10 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
                 removeS1BorderNoiseMethod=removeS1BorderNoiseMethod)
             writer(xmlfile=wf_name, outdir=outdir, basename_extensions=basename_extensions,
                    clean_edges=clean_edges, clean_edges_npixels=clean_edges_npixels)
-        except Exception as e:
-            log.info(str(e))
+        except:
+            tb = traceback.format_exc()
             with open(wf_name.replace('_proc.xml', '_error.log'), 'w') as logfile:
-                logfile.write(str(e))
+                logfile.write(tb)
         finally:
             if cleanup and os.path.isdir(outname):
                 log.info('deleting temporary files')
