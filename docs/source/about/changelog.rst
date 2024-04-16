@@ -1014,3 +1014,33 @@ Drivers
 Auxiliary Data Handling
 -----------------------
 - method :meth:`pyroSAR.S1.OSV.catch`: fixed bug in finding files starting in previous month
+
+0.25.0 | 2024-04-16
+===================
+
+Drivers
+-------
+- class :class:`pyroSAR.drivers.Archive`:
+
+  + replaced column `bbox` with `geometry`; requires database migration
+  + method :meth:`~pyroSAR.drivers.Archive.export2shp`: improved column name laundering
+
+SNAP API
+--------
+- function :func:`pyroSAR.snap.auxil.gpt`: fixed bug that occurred during removal of BNR node
+
+Ancillary Tools
+---------------
+- new classes :class:`pyroSAR.ancillary.Lock` and :class:`pyroSAR.ancillary.LockCollection`
+  for custom file/folder locking
+
+Auxiliary Data Handling
+-----------------------
+
+changes to Sentinel-1 OSV data handling:
+
+- function :meth:`pyroSAR.auxdata.dem_create`:
+
+  + make use of new classes :class:`~pyroSAR.ancillary.Lock` and :class:`~pyroSAR.ancillary.LockCollection`
+    for DEM download and mosaic creation (new argument `lock_timeout`)
+  + check whether all VRT source files exist
