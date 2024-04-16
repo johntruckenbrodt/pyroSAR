@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2023, the pyroSAR Developers.
+# Copyright (c) 2016-2024, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -2285,10 +2285,14 @@ class Archive(object):
     def __init__(self, dbfile, custom_fields=None, postgres=False, user='postgres',
                  password='1234', host='localhost', port=5432, cleanup=True,
                  legacy=False):
+        
+        if dbfile.endswith('.csv'):
+            raise RuntimeError("Please create a new Archive database and import the"
+                               "CSV file using db.import_outdated('<file>.csv').")
         # check for driver, if postgres then check if server is reachable
         if not postgres:
             self.driver = 'sqlite'
-            dirname = os.path.dirname(dbfile)
+            dirname = os.path.dirname(os.path.abspath(dbfile))
             w_ok = os.access(dirname, os.W_OK)
             if not w_ok:
                 raise RuntimeError('cannot write to directory {}'.format(dirname))
@@ -2328,7 +2332,7 @@ class Archive(object):
         self.engine = create_engine(url=self.url, echo=False,
                                     connect_args=connect_args)
         
-        # call to ____load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
+        # call to __load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
             log.debug('loading spatialite extension')
             listen(target=self.engine, identifier='connect', fn=self.__load_spatialite)
@@ -2362,11 +2366,15 @@ class Archive(object):
         self.__init_data_table()
         self.__init_duplicates_table()
         
+        msg = ("the 'data' table is missing {}. Please create a new database "
+               "and import the old one opened in legacy mode using "
+               "Archive.import_outdated.")
         pk = sql_inspect(self.data_schema).primary_key
         if 'product' not in pk.columns.keys() and not legacy:
-            raise RuntimeError("the 'data' table is missing a primary key 'product'. "
-                               "Please create a new database and import the old one "
-                               "opened in legacy mode using Archive.import_outdated.")
+            raise RuntimeError(msg.format("a primary key 'product'"))
+        
+        if 'geometry' not in self.get_colnames() and not legacy:
+            raise RuntimeError(msg.format("the 'geometry' column"))
         
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
@@ -2387,7 +2395,7 @@ class Archive(object):
         .. note::
         
             Columns using Geometry must have setting management=True for SQLite,
-            for example: ``bbox = Column(Geometry('POLYGON', management=True, srid=4326))``
+            for example: ``geometry = Column(Geometry('POLYGON', management=True, srid=4326))``
         
         Parameters
         ----------
@@ -2437,8 +2445,8 @@ class Archive(object):
                                  Column('vv', Integer),
                                  Column('hv', Integer),
                                  Column('vh', Integer),
-                                 Column('bbox', Geometry(geometry_type='POLYGON',
-                                                         management=True, srid=4326)))
+                                 Column('geometry', Geometry(geometry_type='POLYGON',
+                                                             management=True, srid=4326)))
         # add custom fields
         if self.custom_fields is not None:
             for key, val in self.custom_fields.items():
@@ -2513,13 +2521,13 @@ class Archive(object):
         insertion = self.Data()
         colnames = self.get_colnames()
         for attribute in colnames:
-            if attribute == 'bbox':
-                geom = id.bbox()
+            if attribute == 'geometry':
+                geom = id.geometry()
                 geom.reproject(4326)
                 geom = geom.convert2wkt(set3D=False)[0]
                 geom = 'SRID=4326;' + str(geom)
                 # set attributes of the Data object according to input
-                setattr(insertion, 'bbox', geom)
+                setattr(insertion, 'geometry', geom)
             elif attribute in ['hh', 'vv', 'hv', 'vh']:
                 setattr(insertion, attribute, int(attribute in pols))
             else:
@@ -2722,7 +2730,7 @@ class Archive(object):
         Returns
         -------
         """
-        if table not in ['data', 'duplicates']:
+        if table not in self.get_tablenames():
             log.warning('Only data and duplicates can be exported!')
             return
         
@@ -2734,22 +2742,28 @@ class Archive(object):
         dirname = os.path.dirname(path)
         os.makedirs(dirname, exist_ok=True)
         
-        # uses spatialist.ogr2ogr to write shps with given path (or db connection)
-        if self.driver == 'sqlite':
-            # ogr2ogr(self.dbfile, path, options={'format': 'ESRI Shapefile'})
-            subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
-                             self.dbfile, table])
+        launder_names = {'acquisition_mode': 'acq_mode',
+                         'orbitNumber_abs': 'orbit_abs',
+                         'orbitNumber_rel': 'orbit_rel',
+                         'cycleNumber': 'cycleNr',
+                         'frameNumber': 'frameNr',
+                         'outname_base': 'outname'}
         
-        if self.driver == 'postgresql':
-            db_connection = """PG:host={0} port={1} user={2}
-                dbname={3} password={4} active_schema=public""".format(self.url_dict['host'],
-                                                                       self.url_dict['port'],
-                                                                       self.url_dict['username'],
-                                                                       self.url_dict['database'],
-                                                                       self.url_dict['password'])
-            # ogr2ogr(db_connection, path, options={'format': 'ESRI Shapefile'})
-            subprocess.call(['ogr2ogr', '-f', 'ESRI Shapefile', path,
-                             db_connection, table])
+        sel_tables = ', '.join([f'"{s}" as {launder_names[s]}' if s in launder_names else s
+                                for s in self.get_colnames(table)])
+        
+        if self.driver == 'sqlite':
+            srcDS = self.dbfile
+        elif self.driver == 'postgresql':
+            srcDS = """PG:host={host} port={port} user={username}
+            dbname={database} password={password} active_schema=public""".format(**self.url_dict)
+        else:
+            raise RuntimeError('unknown archive driver')
+        
+        gdal.VectorTranslate(destNameOrDestDS=path, srcDS=srcDS,
+                             format='ESRI Shapefile',
+                             SQLStatement=f'SELECT {sel_tables} FROM {table}',
+                             SQLDialect=self.driver)
     
     def filter_scenelist(self, scenelist):
         """
@@ -2867,9 +2881,9 @@ class Archive(object):
                     scenes.append(row['scene'])
                 self.insert(scenes)
         elif isinstance(dbfile, Archive):
-            select = dbfile.conn.execute('SELECT * from data')
-            self.conn.execute(insert(self.Data).values(*select))
-            # duplicates in older databases may fit into the new data table
+            scenes = dbfile.conn.execute('SELECT scene from data')
+            scenes = [s.scene for s in scenes]
+            self.insert(scenes)
             reinsert = dbfile.select_duplicates(value='scene')
             if reinsert is not None:
                 self.insert(reinsert)
@@ -3024,11 +3038,11 @@ class Archive(object):
                     site_geom = vec.convert2wkt(set3D=False)[0]
                 # postgres has a different way to store geometries
                 if self.driver == 'postgresql':
-                    arg_format.append("st_intersects(bbox, 'SRID=4326; {}')".format(
+                    arg_format.append("st_intersects(geometry, 'SRID=4326; {}')".format(
                         site_geom
                     ))
                 else:
-                    arg_format.append('st_intersects(GeomFromText(?, 4326), bbox) = 1')
+                    arg_format.append('st_intersects(GeomFromText(?, 4326), geometry) = 1')
                     vals.append(site_geom)
             else:
                 log.info('WARNING: argument vectorobject is ignored, must be of type spatialist.vector.Vector')
