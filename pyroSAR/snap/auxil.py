@@ -1685,7 +1685,7 @@ def sub_parametrize(scene, geometry=None, offset=None, buffer=0.01, copyMetadata
         
          - :class:`~spatialist.vector.Vector`: a vector object in arbitrary CRS
          - :class:`str`: a name of a file that can be read with :class:`~spatialist.vector.Vector` in arbitrary CRS
-         - :class:`dict`: a dictionary with keys `xmin`, `xmax`, `ymin`, `ymax` in LatLon coordinates
+         - :class:`dict`: a dictionary with keys `xmin`, `xmax`, `ymin`, `ymax` in EPSG:4326 coordinates
     offset: tuple or None
         a tuple with pixel coordinates as (left, right, top, bottom)
     buffer: int or float
