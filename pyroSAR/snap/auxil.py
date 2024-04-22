@@ -1,7 +1,7 @@
 ###############################################################################
 # pyroSAR SNAP API tools
 
-# Copyright (c) 2017-2023, the pyroSAR Developers.
+# Copyright (c) 2017-2024, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -89,7 +89,7 @@ def parse_node(name, use_existing=True):
     {'selectedPolarisations': None, 'removeThermalNoise': 'true', 'reIntroduceThermalNoise': 'false'}
     """
     snap = ExamineSnap()
-    version = snap.get_version('s1tbx')['version']
+    version = snap.get_version('microwavetbx')['version']
     name = name if name.endswith('.xml') else name + '.xml'
     operator = os.path.splitext(name)[0]
     nodepath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')

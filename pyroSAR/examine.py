@@ -312,10 +312,9 @@ class ExamineSnap(object):
             
             - core
             - desktop
-            - rstbx
-            - s1tbx
-            - s2tbx
-            - s3tbx
+            - rstb
+            - opttbx
+            - microwavetbx
 
         Returns
         -------
@@ -326,9 +325,8 @@ class ExamineSnap(object):
         patterns = {'core': r'org\.esa\.snap\.snap\.core',
                     'desktop': r'org\.esa\.snap\.snap\.ui',
                     'rstb': r'org\.csa\.rstb\.rstb\.kit',
-                    's1tbx': r'org\.esa\.s1tbx\.s1tbx\.kit',
-                    's2tbx': r'org\.esa\.s2tbx\.s2tbx\.kit',
-                    's3tbx': r'org\.esa\.s3tbx\.s3tbx\.kit'}
+                    'opttbx': r'eu\.esa\.opt\.opttbx\.kit',
+                    'microwavetbx': r'eu\.esa\.microwavetbx\.microwavetbx\.kit'}
         
         if module in patterns.keys():
             pattern = patterns[module]
