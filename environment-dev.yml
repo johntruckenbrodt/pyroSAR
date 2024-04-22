@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python>=3.6,<3.11
+  - python>=3.8,<3.11
   - progressbar2
   - numpy
   - spatialist>=0.12.1
