@@ -1,4 +1,4 @@
-from pyroSAR._dev_config import Storage, LOOKUP, URL, STORAGE, ConfigHandler
+from pyroSAR.config import Storage, LOOKUP, URL, STORAGE, ConfigHandler
 import os
 import pytest
 

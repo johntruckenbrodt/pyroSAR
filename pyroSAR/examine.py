@@ -21,7 +21,7 @@ import warnings
 import subprocess as sp
 import importlib.resources
 
-from pyroSAR._dev_config import ConfigHandler
+from pyroSAR.config import ConfigHandler
 from spatialist.ancillary import finder, run
 
 import logging
@@ -353,7 +353,7 @@ class ExamineSnap(object):
         if not os.path.isfile(fname):
             try:
                 # This will start SNAP and immediately stop it because of the invalid argument.
-                # Currently this seems to be the only way to create the messages.log file if it does not exist.
+                # Currently, this seems to be the only way to create the messages.log file if it does not exist.
                 sp.check_call([self.path, '--nosplash', '--dummytest', '--console', 'suppress'])
             except sp.CalledProcessError:
                 pass
