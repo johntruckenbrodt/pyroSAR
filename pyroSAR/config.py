@@ -17,8 +17,10 @@ import json
 
 import configparser as ConfigParser
 
-__LOCAL__ = ['sensor', 'projection', 'orbit', 'polarizations', 'acquisition_mode',
-             'start', 'stop', 'product', 'spacing', 'samples', 'lines']
+__LOCAL__ = ['acquisition_mode', 'coordinates', 'cycleNumber', 'frameNumber',
+             'lines', 'orbit', 'orbitNumber_abs', 'orbitNumber_rel',
+             'polarizations', 'product', 'projection', 'samples',
+             'sensor', 'spacing', 'start', 'stop']
 
 
 class Singleton(type):
