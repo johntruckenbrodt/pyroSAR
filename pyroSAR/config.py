@@ -116,13 +116,10 @@ class ConfigHandler(metaclass=Singleton):
                              .format(options,
                                      self.parser.get(section, options),
                                      str(type(options))))
-        out = 'Class    : Config\n' \
-              'Path     : {0}\n' \
-              'Sections : {1}\n' \
-              'Contents : \n{2}' \
-            .format(self.__GLOBAL['config'],
-                    len(self.parser.sections()),
-                    ''.join(items))
+        out = f'Class    : {self.__class__.__name__}\n' \
+              f'Path     : {self.__GLOBAL["config"]}\n' \
+              f'Sections : {len(self.parser.sections())}\n' \
+              f'Contents : \n{"".join(items)}'
         
         return out
     
@@ -153,7 +150,8 @@ class ConfigHandler(metaclass=Singleton):
     
     def open(self):
         """
-        Open the config.ini file. This method will open the config.ini file in a external standard app (text editor).
+        Open the config.ini file. This method will open the config.ini
+        file in an external standard app (text editor).
 
         Returns
         -------

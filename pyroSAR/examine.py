@@ -170,14 +170,15 @@ class ExamineSnap(object):
     def __read_config(self):
         """
         This method reads the config.ini to examine the snap paths.
-        If the snap paths are not in the config.ini or the paths are wrong they will be automatically created.
+        If the snap paths are not in the config.ini or the paths are
+        wrong they will be automatically created.
 
         Returns
         -------
 
         """
         for attr in self.identifiers + ['auxdatapath', 'properties']:
-            self.__read_config_attr(attr, 'SNAP')
+            self.__read_config_attr(attr, section='SNAP')
         
         snap_properties = {}
         if 'OUTPUT' in config.sections:
