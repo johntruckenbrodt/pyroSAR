@@ -1,7 +1,7 @@
 ###############################################################################
 # Convenience functions for SAR image batch processing with ESA SNAP
 
-# Copyright (c) 2016-2022, the pyroSAR Developers.
+# Copyright (c) 2016-2024, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -417,7 +417,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
                 tf.parameters['outputSigma0'] = True
             except KeyError:
                 raise RuntimeError("The Terrain-Flattening node does not accept "
-                                   "parameter 'outputSigma0'. Please update S1TBX.")
+                                   "parameter 'outputSigma0'. Please update SNAP.")
         last = tf
     ############################################
     # merge bands to pass them to Terrain-Correction
