@@ -1,6 +1,6 @@
 ###############################################################################
 # Examination of SAR processing software
-# Copyright (c) 2019-2023, the pyroSAR Developers.
+# Copyright (c) 2019-2024, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -19,7 +19,7 @@ import re
 import subprocess
 import warnings
 import subprocess as sp
-import pkg_resources
+import importlib.resources
 
 from pyroSAR._dev_config import ConfigHandler
 from spatialist.ancillary import finder, run
@@ -71,14 +71,14 @@ class ExamineSnap(object):
         # point it to the default file delivered with pyroSAR
         if not hasattr(self, 'properties'):
             # log.info('using default properties file..')
-            template = os.path.join('snap', 'data', 'snap.auxdata.properties')
-            self.properties = pkg_resources.resource_filename(__name__, template)
+            dir_data = importlib.resources.files('pyroSAR') / 'snap' / 'data'
+            self.properties = str(dir_data / 'snap.auxdata.properties')
         
         # if the SNAP suffices attribute was not yet identified,
         # point it to the default file delivered with pyroSAR
         if not hasattr(self, 'suffices'):
-            template = os.path.join('snap', 'data', 'snap.suffices.properties')
-            fname_suffices = pkg_resources.resource_filename(__name__, template)
+            dir_data = importlib.resources.files('pyroSAR') / 'snap' / 'data'
+            fname_suffices = str(dir_data / 'snap.suffices.properties')
             with open(fname_suffices, 'r') as infile:
                 content = infile.read().split('\n')
             self.__suffices = {k: v for k, v in [x.split('=') for x in content]}
@@ -381,6 +381,7 @@ class ExamineGamma(object):
     >>> print(config.version)
     
     """
+    
     def __init__(self):
         home_sys = os.environ.get('GAMMA_HOME')
         if home_sys is not None and not os.path.isdir(home_sys):
