@@ -1,7 +1,7 @@
 ##############################################################
 # SNAP source code scan for retrieving operator suffices
 
-# Copyright (c) 2020-2021, the pyroSAR Developers.
+# Copyright (c) 2020-2024, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -38,19 +38,19 @@ def main():
     outfile = 'snap.suffices.properties'
     
     # clone all relevant toolboxes
-    for tbx in ['snap-engine', 'snap-desktop', 's1tbx']:
+    for tbx in ['snap-engine', 'snap-desktop', 'microwave-toolbox']:
         print(tbx)
         target = os.path.join(workdir, tbx)
         if not os.path.isdir(target):
             url = 'https://github.com/senbox-org/{}'.format(tbx)
-            sp.check_call(['git', 'clone', url], cwd=workdir)
+            sp.check_call(['git', 'clone', '--depth', '1', url], cwd=workdir)
         else:
-            sp.check_call(['git', 'pull'], cwd=target)
+            sp.check_call(['git', 'pull', '--depth', '1'], cwd=target)
     
     # search patterns for relevant files
-    # Usually files containing operator classes are named <operator>Op.java but with out dashes
+    # Usually files containing operator classes are named <operator>Op.java but without dashes
     # e.g. TerrainFlatteningOp.java for the Terrain-Flattening operator
-    # One exception is Calibration for which there is a sub-class for each SAR sensor
+    # One exception is Calibration for which there is a subclass for each SAR sensor
     operators = finder(workdir, ['*Op.java', 'BaseCalibrator.java'])
     
     # a list for collection the suffices
@@ -70,7 +70,7 @@ def main():
             suffix = ''
         
         # the name of the operator as available in the UI
-        pattern = 'alias = \"([a-zA-Z-]*)\"'
+        pattern = r'\@OperatorMetadata\(alias = \"([a-zA-Z-]*)\"'
         match = re.search(pattern, content)
         if match:
             alias = match.groups()[0]
