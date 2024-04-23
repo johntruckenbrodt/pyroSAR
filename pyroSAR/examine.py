@@ -436,3 +436,133 @@ class ExamineGamma(object):
         
         if attr not in config[section].keys() or config[section][attr] != value:
             config.set(section, key=attr, value=value, overwrite=True)
+
+
+class SnapProperties(object):
+    """
+    SNAP configuration interface. This class enables reading and modifying
+    SNAP configuration in properties files. Modified properties are directly
+    written to the files.
+    Currently, the files `snap.properties` and `snap.auxdata.properties` are
+    supported. These files can be found in two locations:
+    
+    - `<SNAP installation directory>/etc`
+    - `<user directory>/.snap/etc`
+    
+    Configuration in the latter has higher priority and modified properties will
+    always be written there so that the installation directory is not modified.
+
+    Parameters
+    ----------
+    path: str
+        SNAP installation directory path
+    
+    Examples
+    --------
+    >>> from pyroSAR.examine import SnapProperties
+    >>> config = SnapProperties()
+    >>> config['snap.userdir'] = '/path/to/snap/auxdata'
+    """
+    
+    def __init__(self, path):
+        self.properties_path = os.path.join(path, 'etc', 'snap.properties')
+        self.auxdata_properties_path = os.path.join(path, 'etc', 'snap.auxdata.properties')
+        userpath = os.path.join(os.path.expanduser('~'), '.snap', 'etc')
+        self.properties_path_user = os.path.join(userpath, 'snap.properties')
+        self.auxdata_properties_path_user = os.path.join(userpath, 'snap.auxdata.properties')
+        self.pattern = r'^(?P<comment>#?)(?P<key>[\w\.]*)\s*=\s*(?P<value>.*)\n'
+        
+        self.properties = self._to_dict(self.properties_path)
+        self.properties.update(self._to_dict(self.properties_path_user))
+        self.auxdata_properties = self._to_dict(self.auxdata_properties_path)
+        self.auxdata_properties.update(self._to_dict(self.auxdata_properties_path_user))
+        self._dicts = [self.properties, self.auxdata_properties]
+    
+    def __getitem__(self, key):
+        """
+        
+        Parameters
+        ----------
+        key: str
+        
+
+        Returns
+        -------
+
+        """
+        for section in self._dicts:
+            if key in section:
+                return section[key]
+    
+    def __setitem__(self, key, value):
+        """
+        
+        Parameters
+        ----------
+        key: str
+        value: Any
+
+        Returns
+        -------
+
+        """
+        if value is not None:
+            value = str(value)
+        if value == self[key]:
+            return
+        if key in self.properties:
+            path = self.properties_path_user
+        elif key in self.auxdata_properties:
+            path = self.auxdata_properties_path_user
+        else:
+            raise KeyError(f'unknown key {key}')
+        if os.path.isfile(path):
+            with open(path, 'r') as f:
+                content = f.read()
+        else:
+            content = ''
+        pattern = r'#?{}[ ]*=[ ]*(?P<value>.*)'.format(key)
+        match = re.search(pattern, content)
+        if match:
+            repl = f'#{key} =' if value is None else f'#{key} {value}'
+            content = content.replace(match.group(), repl)
+        else:
+            content += f'\n{key} = {value}'
+        
+        with open(path, 'w') as f:
+            f.write(content)
+        self.properties[key] = value
+    
+    def _to_dict(self, path):
+        """
+        
+        Parameters
+        ----------
+        path: str
+
+        Returns
+        -------
+        dict
+        """
+        out = {}
+        if os.path.isfile(path):
+            with open(path, 'r') as f:
+                for line in f:
+                    if re.search(self.pattern, line):
+                        match = re.match(re.compile(self.pattern), line)
+                        comment, key, value = match.groups()
+                        out[key] = value if comment == '' else None
+        return out
+    
+    def keys(self):
+        """
+        
+        Returns
+        -------
+        list[str]
+            all known SNAP property keys
+        """
+        keys = []
+        for item in self._dicts:
+            keys.extend(list(item.keys()))
+        return sorted(keys)
