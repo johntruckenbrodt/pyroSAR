@@ -10,7 +10,6 @@
 # copied, modified, propagated, or distributed except according
 # to the terms contained in the LICENSE.txt file.
 ###############################################################################
-import ast
 import json
 import os
 import shutil
@@ -49,30 +48,19 @@ class ExamineSnap(object):
     def __init__(self):
         
         # define some attributes which identify SNAP
-        self.identifiers = ['path', 'gpt', 'etc', 'auxdata']
+        self.identifiers = ['path', 'gpt', 'etc']
         
         # a list of relevant sections
-        self.sections = ['SNAP', 'OUTPUT', 'SNAP_SUFFIX']
+        self.sections = ['SNAP', 'SNAP_SUFFIX']
         
-        # try reading all necessary attributes from the config file
+        # set attributes path, gpt, etc, __suffices
         self.__read_config()
         
         # if SNAP could not be identified from the config attributes, do a system search for it
+        # sets attributes path, gpt, etc
         if not self.__is_identified():
             log.debug('identifying SNAP')
             self.__identify_snap()
-        
-        # if the auxdatapath attribute was not yet set, create a default directory
-        if not hasattr(self, 'auxdatapath'):
-            self.auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
-            os.makedirs(self.auxdatapath, exist_ok=True)
-        
-        # if the SNAP auxdata properties attribute was not yet identified,
-        # point it to the default file delivered with pyroSAR
-        if not hasattr(self, 'properties'):
-            # log.info('using default properties file..')
-            dir_data = importlib.resources.files('pyroSAR') / 'snap' / 'data'
-            self.properties = str(dir_data / 'snap.auxdata.properties')
         
         # if the SNAP suffices attribute was not yet identified,
         # point it to the default file delivered with pyroSAR
@@ -83,9 +71,8 @@ class ExamineSnap(object):
                 content = infile.read().split('\n')
             self.__suffices = {k: v for k, v in [x.split('=') for x in content]}
         
-        # update the snap properties; this reads the 'properties' file and looks for any changes,
-        # which are then updated for the object
-        self.__update_snap_properties()
+        # SNAP property read/modification interface
+        self.snap_properties = SnapProperties(path=os.path.dirname(self.etc))
         
         # update the config file: this scans for config changes and re-writes the config file if any are found
         self.__update_config()
@@ -128,7 +115,7 @@ class ExamineSnap(object):
             log.debug("could not detect any potential 'snap' executables")
         
         # for each possible SNAP executable, check whether additional files and directories exist relative to it
-        # to confirm whether it actually is a ESA SNAP installation or something else like e.g. the Ubuntu App Manager
+        # to confirm whether it actually is an ESA SNAP installation or something else like e.g. the Ubuntu App Manager
         for path in executables:
             log.debug('checking candidate {}'.format(path))
             if os.path.islink(path):
@@ -141,12 +128,13 @@ class ExamineSnap(object):
                 continue
             
             # check the content of the etc directory
-            auxdata = os.listdir(etc)
-            if 'snap.auxdata.properties' not in auxdata:
-                log.debug("could not find the 'snap.auxdata.properties' file")
-                continue
-            else:
-                auxdata_properties = os.path.join(etc, 'snap.auxdata.properties')
+            config_files = os.listdir(etc)
+            expected = ['snap.auxdata.properties', 'snap.clusters',
+                        'snap.conf', 'snap.properties']
+            for name in expected:
+                if name not in config_files:
+                    log.debug("could not find the 'snap.auxdata.properties' file")
+                    continue
             
             # identify the gpt executable
             gpt_candidates = finder(os.path.dirname(path), ['gpt', 'gpt.exe'])
@@ -159,8 +147,6 @@ class ExamineSnap(object):
             self.path = path
             self.etc = etc
             self.gpt = gpt
-            self.auxdata = auxdata
-            self.properties = auxdata_properties
             return
         
         log.warning('SNAP could not be identified. If you have installed it please add the path to the SNAP '
@@ -177,14 +163,8 @@ class ExamineSnap(object):
         -------
 
         """
-        for attr in self.identifiers + ['auxdatapath', 'properties']:
+        for attr in self.identifiers:
             self.__read_config_attr(attr, section='SNAP')
-        
-        snap_properties = {}
-        if 'OUTPUT' in config.sections:
-            snap_properties = config['OUTPUT']
-        if len(snap_properties.keys()) > 0:
-            self.snap_properties = snap_properties
         
         suffices = {}
         if 'SNAP_SUFFIX' in config.sections:
@@ -210,14 +190,7 @@ class ExamineSnap(object):
         if section in config.sections:
             if attr in config[section].keys():
                 val = config[section][attr]
-                if attr in ['path', 'gpt', 'properties']:
-                    exist = os.path.isfile(val)
-                elif attr == 'auxdata':
-                    val = ast.literal_eval(val)
-                    exist = isinstance(val, list)
-                else:
-                    exist = os.path.isdir(val)
-                if exist:
+                if os.path.exists(val):
                     # log.info('setting attribute {}'.format(attr))
                     setattr(self, attr, val)
     
@@ -227,12 +200,9 @@ class ExamineSnap(object):
                 # log.info('creating section {}..'.format(section))
                 config.add_section(section)
         
-        for key in self.identifiers + ['auxdatapath', 'properties']:
+        for key in self.identifiers:
             if hasattr(self, key):
                 self.__update_config_attr(key, getattr(self, key), 'SNAP')
-        
-        for key, value in self.snap_properties.items():
-            self.__update_config_attr(key, value, 'OUTPUT')
         
         for key in sorted(self.__suffices.keys()):
             self.__update_config_attr(key, self.__suffices[key], 'SNAP_SUFFIX')
@@ -247,34 +217,6 @@ class ExamineSnap(object):
             # log.info('  {0} -> {1}'.format(repr(config[section][attr]), repr(value)))
             config.set(section, key=attr, value=value, overwrite=True)
     
-    def __update_snap_properties(self):
-        """
-        Read the snap.auxdata.properties file entries to object attributes
-
-        Returns
-        -------
-
-        """
-        pattern = r'^(?P<key>[\w\.]*)\s*=\s*(?P<value>.*)\n'
-        
-        if not hasattr(self, 'snap_properties'):
-            self.snap_properties = {}
-        
-        demPath = os.path.join(self.auxdatapath, 'dem')
-        landCoverPath = os.path.join(self.auxdatapath, 'LandCover')
-        
-        with open(self.properties, 'r') as prop:
-            for line in prop:
-                if re.search(pattern, line):
-                    key, value = re.match(re.compile(pattern), line).groups()
-                    value = value \
-                        .replace('${AuxDataPath}', self.auxdatapath) \
-                        .replace('${demPath}', demPath) \
-                        .replace('${landCoverPath}', landCoverPath) \
-                        .replace('\\', '/')
-                    if key not in self.snap_properties.keys() or self.snap_properties[key] != value:
-                        self.snap_properties[key] = value
-    
     def get_suffix(self, operator):
         """
         get the file name suffix for an operator
@@ -286,8 +228,8 @@ class ExamineSnap(object):
 
         Returns
         -------
-        str
-            the file suffix
+        str or None
+            the file suffix or None if unknown
         
         Examples
         --------
@@ -366,6 +308,20 @@ class ExamineSnap(object):
         if match is None:
             raise RuntimeError('cannot read version information from {}.\nPlease restart SNAP.'.format(fname))
         return match.groupdict()
+    
+    @property
+    def auxdatapath(self):
+        out = self.snap_properties['AuxDataPath']
+        if out is None:
+            out = os.path.join(self.userdir, 'auxdata')
+        return out
+    
+    @property
+    def userdir(self):
+        out = self.snap_properties['snap.userdir']
+        if out is None:
+            out = os.path.join(os.path.expanduser('~'), '.snap')
+        return out
 
 
 class ExamineGamma(object):
