@@ -313,11 +313,11 @@ class ExamineSnap(object):
     def auxdatapath(self):
         out = self.snap_properties['AuxDataPath']
         if out is None:
-            out = os.path.join(self.userdir, 'auxdata')
+            out = os.path.join(self.userpath, 'auxdata')
         return out
     
     @property
-    def userdir(self):
+    def userpath(self):
         out = self.snap_properties['snap.userdir']
         if out is None:
             out = os.path.join(os.path.expanduser('~'), '.snap')
@@ -517,7 +517,8 @@ class SnapProperties(object):
                         out[key] = value if comment == '' else None
         return out
     
-    def _string_convert(self, string):
+    @staticmethod
+    def _string_convert(string):
         if string.lower() == 'none':
             return None
         elif string.lower() == 'true':
