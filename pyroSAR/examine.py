@@ -15,7 +15,6 @@ import os
 import shutil
 import platform
 import re
-import subprocess
 import warnings
 import subprocess as sp
 import importlib.resources
@@ -372,7 +371,7 @@ class ExamineGamma(object):
             out, err = run(['which', 'gdal-config'], void=False)
             gdal_config = out.strip('\n')
             self.gdal_config = gdal_config
-        except subprocess.CalledProcessError:
+        except sp.CalledProcessError:
             raise RuntimeError('could not find command gdal-config.')
         self.__update_config()
     
