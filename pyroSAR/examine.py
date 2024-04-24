@@ -421,17 +421,18 @@ class SnapProperties(object):
     """
     
     def __init__(self, path):
+        self.pattern = r'^(?P<comment>#?)(?P<key>[\w\.]*)[ ]*=[ ]*(?P<value>.*)\n*'
         self.properties_path = os.path.join(path, 'etc', 'snap.properties')
         self.auxdata_properties_path = os.path.join(path, 'etc', 'snap.auxdata.properties')
-        userpath = os.path.join(os.path.expanduser('~'), '.snap', 'etc')
-        self.properties_path_user = os.path.join(userpath, 'snap.properties')
-        self.auxdata_properties_path_user = os.path.join(userpath, 'snap.auxdata.properties')
-        self.pattern = r'^(?P<comment>#?)(?P<key>[\w\.]*)\s*=\s*(?P<value>.*)\n'
         
         self.properties = self._to_dict(self.properties_path)
-        self.properties.update(self._to_dict(self.properties_path_user))
         self.auxdata_properties = self._to_dict(self.auxdata_properties_path)
-        self.auxdata_properties.update(self._to_dict(self.auxdata_properties_path_user))
+        
+        if self.userpath is None:
+            self.userpath = os.path.join(os.path.expanduser('~'), '.snap')
+        self.properties.update(self._to_dict(self.userpath_properties))
+        self.auxdata_properties.update(self._to_dict(self.userpath_auxdata_properties))
+        
         self._dicts = [self.properties, self.auxdata_properties]
     
     def __getitem__(self, key):
@@ -449,6 +450,7 @@ class SnapProperties(object):
         for section in self._dicts:
             if key in section:
                 return section[key]
+        raise KeyError(f'could not find key {key}')
     
     def __setitem__(self, key, value):
         """
@@ -467,9 +469,9 @@ class SnapProperties(object):
         if value == self[key]:
             return
         if key in self.properties:
-            path = self.properties_path_user
+            path = self.userpath_properties
         elif key in self.auxdata_properties:
-            path = self.auxdata_properties_path_user
+            path = self.userpath_auxdata_properties
         else:
             raise KeyError(f'unknown key {key}')
         if os.path.isfile(path):
@@ -480,14 +482,18 @@ class SnapProperties(object):
         pattern = r'#?{}[ ]*=[ ]*(?P<value>.*)'.format(key)
         match = re.search(pattern, content)
         if match:
-            repl = f'#{key} =' if value is None else f'#{key} {value}'
+            repl = f'#{key} =' if value is None else f'{key} = {value}'
             content = content.replace(match.group(), repl)
         else:
             content += f'\n{key} = {value}'
         
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'w') as f:
             f.write(content)
-        self.properties[key] = value
+        if isinstance(value, str):
+            self.properties[key] = self._string_convert(value)
+        else:
+            self.properties[key] = value
     
     def _to_dict(self, path):
         """
@@ -507,8 +513,25 @@ class SnapProperties(object):
                     if re.search(self.pattern, line):
                         match = re.match(re.compile(self.pattern), line)
                         comment, key, value = match.groups()
+                        value = self._string_convert(value)
                         out[key] = value if comment == '' else None
         return out
+    
+    def _string_convert(self, string):
+        if string.lower() == 'none':
+            return None
+        elif string.lower() == 'true':
+            return True
+        elif string.lower() == 'false':
+            return False
+        else:
+            try:
+                return int(string)
+            except ValueError:
+                try:
+                    return float(string)
+                except ValueError:
+                    return string
     
     def keys(self):
         """
@@ -522,3 +545,19 @@ class SnapProperties(object):
         for item in self._dicts:
             keys.extend(list(item.keys()))
         return sorted(keys)
+    
+    @property
+    def userpath(self):
+        return self.properties['snap.userdir']
+    
+    @userpath.setter
+    def userpath(self, value):
+        self.properties['snap.userdir'] = value
+    
+    @property
+    def userpath_auxdata_properties(self):
+        return os.path.join(self.userpath, 'etc', 'snap.auxdata.properties')
+    
+    @property
+    def userpath_properties(self):
+        return os.path.join(self.userpath, 'etc', 'snap.properties')
