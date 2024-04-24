@@ -6,7 +6,8 @@ from pyroSAR.examine import ExamineSnap, SnapProperties
 def test_snap_config(tmpdir):
     conf_snap = ExamineSnap()
     conf = SnapProperties(path=os.path.dirname(conf_snap.etc))
-    tmp = conf.userpath
+    tmp_userpath = conf.userpath
+    tmp_tilecache = conf['snap.jai.tileCacheSize']
     conf.userpath = tmpdir
     assert conf.userpath == tmpdir
     with pytest.raises(KeyError):
@@ -39,4 +40,5 @@ def test_snap_config(tmpdir):
     conf = SnapProperties(path=os.path.dirname(conf_snap.etc))
     assert conf['snap.jai.tileCacheSize'] is True
     
-    conf.userpath = tmp
+    conf.userpath = tmp_userpath
+    conf['snap.jai.tileCacheSize'] = tmp_tilecache
