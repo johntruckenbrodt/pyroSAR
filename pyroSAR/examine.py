@@ -45,6 +45,12 @@ class ExamineSnap(object):
     """
     
     def __init__(self):
+        # update legacy config files
+        if 'OUTPUT' in config.sections:
+            config.remove_section('OUTPUT')
+        for key in ['auxdata', 'auxdatapath', 'properties']:
+            if key in config.keys('SNAP'):
+                config.remove_option('SNAP', key)
         
         # define some attributes which identify SNAP
         self.identifiers = ['path', 'gpt', 'etc']
