@@ -478,7 +478,10 @@ class SnapProperties(object):
         """
         if value == self[key] and isinstance(value, type(self[key])):
             return
-        self.properties[key] = value
+        if key in self.properties:
+            self.properties[key] = value
+        else:
+            self.auxdata_properties[key] = value
         if value is not None:
             value = str(value).encode('unicode-escape').decode()
         if key in ['snap.home', 'snap.userdir']:
