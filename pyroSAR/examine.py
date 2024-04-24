@@ -316,6 +316,10 @@ class ExamineSnap(object):
             out = os.path.join(self.userpath, 'auxdata')
         return out
     
+    @auxdatapath.setter
+    def auxdatapath(self, value):
+        self.snap_properties['AuxDataPath'] = value
+    
     @property
     def userpath(self):
         return self.snap_properties.userpath
