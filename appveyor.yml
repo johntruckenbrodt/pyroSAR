@@ -2,9 +2,9 @@
 environment:
   matrix:
     - TARGET_ARCH: x64
-      CONDA_PY: 36
+      CONDA_PY: 38
       CONDA_INSTALL_LOCN: C:\Miniconda3-x64
-      GDAL_DATA: C:\Miniconda3-x64\Library\share\gdal
+      GDAL_DATA: C:\Miniconda3-x64\envs\ps_test_dev\Library\share\gdal
       PROJECT_DIR: C:\projects\pyrosar
       SNAP_INSTALL: C:\projects\snap
       PGUSER: postgres
