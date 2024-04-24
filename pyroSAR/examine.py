@@ -319,6 +319,10 @@ class ExamineSnap(object):
     @property
     def userpath(self):
         return self.snap_properties.userpath
+    
+    @userpath.setter
+    def userpath(self, value):
+        self.snap_properties.userpath = value
 
 
 class ExamineGamma(object):
@@ -422,14 +426,25 @@ class SnapProperties(object):
         self.properties_path = os.path.join(path, 'etc', 'snap.properties')
         self.auxdata_properties_path = os.path.join(path, 'etc', 'snap.auxdata.properties')
         
+        log.debug(f"reading {self.properties_path}")
         self.properties = self._to_dict(self.properties_path)
         self.auxdata_properties = self._to_dict(self.auxdata_properties_path)
         
         self._dicts = [self.properties, self.auxdata_properties]
         
+        # some properties need to be read from the default directory path to
+        # be visible to SNAP
+        userpath_default = os.path.join(os.path.expanduser('~'), '.snap')
+        properties_path_default = os.path.join(userpath_default, 'etc', 'snap.properties')
+        log.debug(f"reading {properties_path_default}")
+        self.properties.update(self._to_dict(properties_path_default))
+        
         if self.userpath is None:
-            self.userpath = os.path.join(os.path.expanduser('~'), '.snap')
-        self.properties.update(self._to_dict(self.userpath_properties))
+            self.userpath = userpath_default
+        log.debug(f"reading {self.userpath_properties}")
+        conf = self._to_dict(self.userpath_properties)
+        log.debug(f"updating keys {list(conf.keys())}")
+        self.properties.update(conf)
         self.auxdata_properties.update(self._to_dict(self.userpath_auxdata_properties))
     
     def __getitem__(self, key):
@@ -465,8 +480,11 @@ class SnapProperties(object):
             return
         self.properties[key] = value
         if value is not None:
-            value = str(value)
-        if key in self.properties:
+            value = str(value).encode('unicode-escape').decode()
+        if key in ['snap.home', 'snap.userdir']:
+            path = os.path.join(os.path.expanduser('~'),
+                                '.snap', 'etc', 'snap.properties')
+        elif key in self.properties:
             path = self.userpath_properties
         elif key in self.auxdata_properties:
             path = self.userpath_auxdata_properties
@@ -486,6 +504,7 @@ class SnapProperties(object):
             content += f'\n{key} = {value}'
         
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        log.debug(f"writing key '{key}' with value '{value}' to '{path}'")
         with open(path, 'w') as f:
             f.write(content)
     
@@ -526,7 +545,7 @@ class SnapProperties(object):
                 try:
                     return float(string)
                 except ValueError:
-                    return string
+                    return string.replace('\\\\', '\\')
     
     def keys(self):
         """
