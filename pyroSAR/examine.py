@@ -318,10 +318,7 @@ class ExamineSnap(object):
     
     @property
     def userpath(self):
-        out = self.snap_properties['snap.userdir']
-        if out is None:
-            out = os.path.join(os.path.expanduser('~'), '.snap')
-        return out
+        return self.snap_properties.userpath
 
 
 class ExamineGamma(object):
@@ -428,12 +425,12 @@ class SnapProperties(object):
         self.properties = self._to_dict(self.properties_path)
         self.auxdata_properties = self._to_dict(self.auxdata_properties_path)
         
+        self._dicts = [self.properties, self.auxdata_properties]
+        
         if self.userpath is None:
             self.userpath = os.path.join(os.path.expanduser('~'), '.snap')
         self.properties.update(self._to_dict(self.userpath_properties))
         self.auxdata_properties.update(self._to_dict(self.userpath_auxdata_properties))
-        
-        self._dicts = [self.properties, self.auxdata_properties]
     
     def __getitem__(self, key):
         """
@@ -549,11 +546,15 @@ class SnapProperties(object):
     
     @property
     def userpath(self):
-        return self.properties['snap.userdir']
+        out = self.properties['snap.userdir']
+        if out is None:
+            return os.path.join(os.path.expanduser('~'), '.snap')
+        else:
+            return out
     
     @userpath.setter
     def userpath(self, value):
-        self.properties['snap.userdir'] = value
+        self['snap.userdir'] = value
     
     @property
     def userpath_auxdata_properties(self):
