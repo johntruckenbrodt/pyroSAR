@@ -461,10 +461,11 @@ class SnapProperties(object):
         -------
 
         """
+        if value == self[key] and isinstance(value, type(self[key])):
+            return
+        self.properties[key] = value
         if value is not None:
             value = str(value)
-        if value == self[key]:
-            return
         if key in self.properties:
             path = self.userpath_properties
         elif key in self.auxdata_properties:
@@ -487,10 +488,6 @@ class SnapProperties(object):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'w') as f:
             f.write(content)
-        if isinstance(value, str):
-            self.properties[key] = self._string_convert(value)
-        else:
-            self.properties[key] = value
     
     def _to_dict(self, path):
         """
@@ -546,7 +543,7 @@ class SnapProperties(object):
     
     @property
     def userpath(self):
-        out = self.properties['snap.userdir']
+        out = self['snap.userdir']
         if out is None:
             return os.path.join(os.path.expanduser('~'), '.snap')
         else:
