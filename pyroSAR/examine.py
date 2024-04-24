@@ -574,8 +574,10 @@ class SnapProperties(object):
     
     @property
     def userpath_auxdata_properties(self):
-        return os.path.join(self.userpath, 'etc', 'snap.auxdata.properties')
+        return os.path.join(os.path.expanduser('~'), '.snap',
+                            'etc', 'snap.auxdata.properties')
     
     @property
     def userpath_properties(self):
-        return os.path.join(self.userpath, 'etc', 'snap.properties')
+        return os.path.join(os.path.expanduser('~'), '.snap',
+                            'etc', 'snap.properties')
