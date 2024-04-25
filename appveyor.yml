@@ -40,25 +40,17 @@ install:
 
   - set PYTHONUNBUFFERED=1
 
-
-  # Add our channels.
-  - conda config --set show_channel_urls true
-  - conda config --remove channels defaults
-  - conda config --add channels defaults
-  - conda config --add channels conda-forge
-
   # install ESA SNAP
   - appveyor DownloadFile https://download.esa.int/step/snap/%SNAP_VERSION%_0/installers/%SNAP_INSTALLER%
   - start %SNAP_INSTALLER% -q -dir %SNAP_INSTALL%
-
   - set PATH=%PATH%;%SNAP_INSTALL%\bin
 
-  - echo %PATH%
-
-  # Configure the VM.
+  # set up conda env
   - conda env create --file environment-dev.yml
   - conda activate ps_test_dev
   - pip install .
+  - conda list
+  - echo %CONDA_PREFIX%
 
 # Skip .NET project specific build phase.
 build: false
