@@ -4,11 +4,7 @@ on: [ push ]
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgis/postgis:16-3.4
@@ -26,7 +22,6 @@ jobs:
       - name: install ESA SNAP
         run: |
           wget -nv https://download.esa.int/step/snap/10_0/installers/esa-snap_sentinel_linux-10.0.0.sh
-          echo installing ESA SNAP to $GITHUB_ACTION_PATH/esa-snap
           bash esa-snap_sentinel_linux-10.0.0.sh -q -dir $GITHUB_ACTION_PATH/esa-snap
       - name: Set paths and variables
         run: |
