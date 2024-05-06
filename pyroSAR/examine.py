@@ -48,9 +48,11 @@ class ExamineSnap(object):
         # update legacy config files
         if 'OUTPUT' in config.sections:
             config.remove_section('OUTPUT')
-        for key in ['auxdata', 'auxdatapath', 'properties']:
-            if key in config.keys('SNAP'):
-                config.remove_option('SNAP', key)
+        if 'SNAP' in config.sections:
+            snap_keys = config.keys('SNAP')
+            for key in ['auxdata', 'auxdatapath', 'properties']:
+                if key in snap_keys:
+                    config.remove_option(section='SNAP', key=key)
         
         # define some attributes which identify SNAP
         self.identifiers = ['path', 'gpt', 'etc']
