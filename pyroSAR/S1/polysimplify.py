@@ -300,7 +300,7 @@ else:
                 name = geom.geom_type.upper()
                 self.Geometry = lambda w: fromstr(w)
                 self.pts = np.array(geom.tuple)
-            elif isinstance(geom, unicode) or isinstance(geom, str):
+            elif isinstance(geom, str) or isinstance(geom, bytes):
                 # assume wkt
                 # for WKT
                 def str2tuple(q):
