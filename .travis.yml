@@ -31,7 +31,7 @@ services:
   - postgresql
 
 python:
-  - '3.7'
+  - '3.8'
 
 before_install:
   - export SNAP_INSTALLER=esa-snap_sentinel_unix_"$SNAP_VERSION"_0_0.sh
@@ -60,6 +60,3 @@ script:
 
 after_success:
   - coveralls
-
-notifications:
-  slack: pyrosar:bs03zodEkRSYr8MN5HrgfSeB
