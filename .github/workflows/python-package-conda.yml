@@ -24,9 +24,9 @@ jobs:
           python-version: '3.10'
       - name: install ESA SNAP
         run: |
-          wget https://download.esa.int/step/snap/10_0/installers/esa-snap_sentinel_windows-10.0.0.exe
+          wget -nv https://download.esa.int/step/snap/10_0/installers/esa-snap_sentinel_windows-10.0.0.exe
           echo installing ESA SNAP to $GITHUB_ACTION_PATH/esa-snap
-          bash -q -dir $GITHUB_ACTION_PATH/esa-snap
+          bash esa-snap_sentinel_windows-10.0.0.exe -q -dir $GITHUB_ACTION_PATH/esa-snap
       - name: Set paths and variables
         run: |
           echo "$CONDA/bin" >> $GITHUB_PATH
