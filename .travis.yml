@@ -12,7 +12,7 @@ env:
     - TESTDATA_DIR=$HOME/testdata
     - PGUSER=travis
     - PGPASSWORD=Password12!
-    - SNAP_VERSION=9
+    - SNAP_VERSION=10
 
 addons:
   postgresql: '14'
@@ -31,11 +31,11 @@ services:
   - postgresql
 
 python:
-  - '3.7'
+  - '3.10'
 
 before_install:
-  - export SNAP_INSTALLER=esa-snap_sentinel_unix_"$SNAP_VERSION"_0_0.sh
-  - wget -O $SNAP_INSTALLER https://download.esa.int/step/snap/"$SNAP_VERSION".0/installers/"$SNAP_INSTALLER"
+  - export SNAP_INSTALLER=esa-snap_sentinel_linux-"$SNAP_VERSION".0.0.sh
+  - wget -O $SNAP_INSTALLER https://download.esa.int/step/snap/"$SNAP_VERSION"_0/installers/"$SNAP_INSTALLER"
   - bash $SNAP_INSTALLER -q
   - export PATH=$PATH:/opt/snap/bin
 
@@ -60,6 +60,3 @@ script:
 
 after_success:
   - coveralls
-
-notifications:
-  slack: pyrosar:bs03zodEkRSYr8MN5HrgfSeB
