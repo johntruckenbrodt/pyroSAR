@@ -35,6 +35,8 @@ jobs:
           echo "PROJ_DATA=$CONDA/share/proj" >> $GITHUB_ENV
       - name: Install dependencies
         run: |
+          : # https://github.com/conda/conda/issues/13560#issuecomment-1992720842
+          conda install -y python=3.10
           conda env update --file environment.yml --name base
       - name: Lint with flake8
         run: |
