@@ -5,12 +5,10 @@
 <h3 align="center">A Python Framework for Large-Scale SAR Satellite Data Processing</h3>
 
 <p align="center">
-  <a href='https://app.travis-ci.com/johntruckenbrodt/pyroSAR'>
-    <img src='https://app.travis-ci.com/johntruckenbrodt/pyroSAR.svg?branch=master' alt='Travis Status'></a>
-  <a href='https://ci.appveyor.com/project/johntruckenbrodt/pyrosar'>
-    <img src='https://ci.appveyor.com/api/projects/status/won0layps8mkss9h/branch/master?svg=true' alt='AppVeyor Status' /></a>
-  <a href='https://coveralls.io/github/johntruckenbrodt/pyroSAR?branch=master'>
-    <img src='https://coveralls.io/repos/github/johntruckenbrodt/pyroSAR/badge.svg?branch=master' alt='Coveralls Status' /></a>
+  <a href='https://github.com/johntruckenbrodt/pyroSAR/actions/workflows/python-package-conda.yml'>
+    <img src='https://github.com/johntruckenbrodt/pyroSAR/actions/workflows/python-package-conda.yml/badge.svg' alt='Travis Status'></a>
+  <a href='https://coveralls.io/github/johntruckenbrodt/pyroSAR?branch=main'>
+    <img src='https://coveralls.io/repos/github/johntruckenbrodt/pyroSAR/badge.svg?branch=main' alt='Coveralls Status' /></a>
   <a href='https://pyrosar.readthedocs.io/en/latest/?badge=latest'>
     <img src='https://readthedocs.org/projects/pyrosar/badge/?version=latest' alt='Documentation Status' /></a>
   <a href='https://badge.fury.io/py/pyroSAR'>
