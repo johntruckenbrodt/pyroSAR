@@ -42,6 +42,10 @@ class ExamineSnap(object):
     This is used by SNAP to manage data from e.g. the SRTM mission. In case SNAP is not installed, the respective
     information is read from a default file delivered with pyroSAR. This has the advantage of using the SNAP download
     URLs and local directory structure without having SNAP installed such that it can be adapted by other SAR software.
+    
+    SNAP configuration can be read and modified via the attribute `snap_properties` of type
+    :class:`~pyroSAR.examine.SnapProperties` or the properties :attr:`~pyroSAR.examine.ExamineSnap.userpath` and
+    :attr:`~pyroSAR.examine.ExamineSnap.auxdatapath`.
     """
     
     def __init__(self):
@@ -318,6 +322,17 @@ class ExamineSnap(object):
     
     @property
     def auxdatapath(self):
+        """
+        Get/set the SNAP configuration for `AuxDataPath` in `snap.auxdata.properties`.
+        
+        Example
+        -------
+        >>> from pyroSAR.examine import ExamineSnap
+        >>> config = ExamineSnap()
+        >>> config.auxdatapath = '/path/to/snap/auxdata'
+        # This is equivalent to
+        >>> config.snap_properties['AuxDataPath'] = '/path/to/snap/auxdata'
+        """
         out = self.snap_properties['AuxDataPath']
         if out is None:
             out = os.path.join(self.userpath, 'auxdata')
@@ -329,6 +344,17 @@ class ExamineSnap(object):
     
     @property
     def userpath(self):
+        """
+        Get/set the SNAP configuration for `snap.userdir` in `snap.properties`.
+
+        Example
+        -------
+        >>> from pyroSAR.examine import ExamineSnap
+        >>> config = ExamineSnap()
+        >>> config.userpath = '/path/to/snap/data'
+        # This is equivalent to
+        >>> config.snap_properties['snap.userdir'] = '/path/to/snap/data'
+        """
         return self.snap_properties.userpath
     
     @userpath.setter

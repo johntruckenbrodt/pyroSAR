@@ -10,6 +10,7 @@ General Topics
 
     general/installation
     general/filenaming
+    general/configuration
     general/OSV
     general/DEM
     general/snap
