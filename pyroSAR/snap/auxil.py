@@ -142,6 +142,10 @@ def parse_node(name, use_existing=True):
                          'validExpression', 'spectralBandIndex']:
                 el = tband.find('.//{}'.format(item))
                 tband.remove(el)
+            for item in ['targetBands', 'variables']:
+                elem = tree.find(f'.//{item}')
+                pl = elem.find('.//_.002e..')
+                elem.remove(pl)
         tree.find('.//parameters').set('class', 'com.bc.ceres.binding.dom.XppDomElement')
         node = Node(node)
         
