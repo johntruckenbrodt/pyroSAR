@@ -75,7 +75,7 @@ class ExamineSnap(object):
         
         # if the SNAP suffices attribute was not yet identified,
         # point it to the default file delivered with pyroSAR
-        if not hasattr(self, 'suffices'):
+        if not hasattr(self, '__suffices'):
             dir_data = importlib.resources.files('pyroSAR') / 'snap' / 'data'
             fname_suffices = str(dir_data / 'snap.suffices.properties')
             with open(fname_suffices, 'r') as infile:
