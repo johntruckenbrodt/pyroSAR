@@ -98,7 +98,14 @@ class ExamineSnap(object):
         self.__update_config()
     
     def __getattr__(self, item):
-        raise AttributeError("'ExamineSnap' object has no attribute '{}'".format(item))
+        if item in ['path', 'gpt']:
+            msg = ('SNAP could not be identified. If you have installed it '
+                   'please add the path to the SNAP executables (bin subdirectory) '
+                   'to the PATH environment. E.g. in the Linux .bashrc file add '
+                   'the following line:\nexport PATH=$PATH:path/to/snap/bin"')
+        else:
+            msg = "'ExamineSnap' object has no attribute '{}'".format(item)
+        raise AttributeError(msg)
     
     def __is_identified(self):
         """
@@ -168,10 +175,6 @@ class ExamineSnap(object):
             self.etc = etc
             self.gpt = gpt
             return
-        
-        log.warning('SNAP could not be identified. If you have installed it please add the path to the SNAP '
-                    'executables (bin subdirectory) to the PATH environment. '
-                    'E.g. in the Linux .bashrc file add the following line:\nexport PATH=$PATH:path/to/snap/bin"')
     
     def __read_config(self):
         """
