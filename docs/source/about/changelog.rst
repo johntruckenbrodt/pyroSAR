@@ -1044,3 +1044,15 @@ changes to Sentinel-1 OSV data handling:
   + make use of new classes :class:`~pyroSAR.ancillary.Lock` and :class:`~pyroSAR.ancillary.LockCollection`
     for DEM download and mosaic creation (new argument `lock_timeout`)
   + check whether all VRT source files exist
+
+0.26.0 | 2024-05-15
+===================
+
+SNAP API
+--------
+- compatibility with SNAP 10.
+- completely revised configuration mechanisms. See
+
+  + :doc:`/general/configuration`
+  + :class:`pyroSAR.examine.ExamineSnap`
+  + :class:`pyroSAR.examine.SnapProperties`
