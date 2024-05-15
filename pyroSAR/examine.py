@@ -144,7 +144,7 @@ class ExamineSnap(object):
                         'snap.conf', 'snap.properties']
             for name in expected:
                 if name not in config_files:
-                    log.debug("could not find the 'snap.auxdata.properties' file")
+                    log.debug(f"could not find the '{name}' file")
                     continue
             
             # identify the gpt executable
