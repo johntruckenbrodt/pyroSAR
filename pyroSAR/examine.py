@@ -478,20 +478,16 @@ class SnapProperties(object):
         
         self._dicts = [self.properties, self.auxdata_properties]
         
-        # some properties need to be read from the default directory path to
+        # some properties need to be read from the default user path to
         # be visible to SNAP
-        userpath_default = os.path.join(os.path.expanduser('~'), '.snap')
-        properties_path_default = os.path.join(userpath_default, 'etc', 'snap.properties')
-        log.debug(f"reading {properties_path_default}")
-        self.properties.update(self._to_dict(properties_path_default))
-        
-        if self.userpath is None:
-            self.userpath = userpath_default
-        log.debug(f"reading {self.userpath_properties}")
-        conf = self._to_dict(self.userpath_properties)
-        log.debug(f"updating keys {list(conf.keys())}")
-        self.properties.update(conf)
-        self.auxdata_properties.update(self._to_dict(self.userpath_auxdata_properties))
+        pairs = [(self.userpath_properties, self.properties_path),
+                 (self.userpath_auxdata_properties, self.auxdata_properties_path)]
+        for default, defined in pairs:
+            if default != defined:
+                conf = self._to_dict(default)
+                if len(conf.keys()) > 0:
+                    log.debug(f"updating keys {list(conf.keys())} from {default}")
+                    self.properties.update(conf)
     
     def __getitem__(self, key):
         """
