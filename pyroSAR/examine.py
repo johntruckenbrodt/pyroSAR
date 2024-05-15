@@ -38,10 +38,8 @@ class ExamineSnap(object):
     and their existence is verified.
     If this fails, a system check is performed to find relevant binaries in the system PATH variable and
     additional files and folders relative to them.
-    Furthermore, a snap.auxdata.properties file is scanned for auxiliary data URLs and local storage location.
-    This is used by SNAP to manage data from e.g. the SRTM mission. In case SNAP is not installed, the respective
-    information is read from a default file delivered with pyroSAR. This has the advantage of using the SNAP download
-    URLs and local directory structure without having SNAP installed such that it can be adapted by other SAR software.
+    In case SNAP is not installed, a default `snap.auxdata.properties` file delivered with pyroSAR will be copied to
+    `$HOME/.snap/etc` so that SNAP download URLS and local directory structure can be adapted by other software.
     
     SNAP configuration can be read and modified via the attribute `snap_properties` of type
     :class:`~pyroSAR.examine.SnapProperties` or the properties :attr:`~pyroSAR.examine.ExamineSnap.userpath` and
@@ -73,6 +71,17 @@ class ExamineSnap(object):
             log.debug('identifying SNAP')
             self.__identify_snap()
         
+        # if SNAP cannot be identified, copy the snap.auxdata.properties file to $HOME/.snap/etc
+        if not self.__is_identified():
+            self.etc = os.path.join(os.path.expanduser('~'), '.snap', 'etc')
+            os.makedirs(self.etc, exist_ok=True)
+            dst = os.path.join(self.etc, 'snap.auxdata.properties')
+            if not os.path.isfile(dst):
+                dir_data = importlib.resources.files('pyroSAR') / 'snap' / 'data'
+                src = str(dir_data / 'snap.auxdata.properties')
+                log.debug(f'creating {dst}')
+                shutil.copyfile(src, dst)
+        
         # if the SNAP suffices attribute was not yet identified,
         # point it to the default file delivered with pyroSAR
         if not hasattr(self, '__suffices'):
@@ -93,7 +102,7 @@ class ExamineSnap(object):
     
     def __is_identified(self):
         """
-        Check if SNAP has been properly identified, i.e. all paths in self.identifiers
+        Check if SNAP has been properly identified, i.e. all paths in `self.identifiers`
         have been detected and confirmed.
         
         Returns
