@@ -26,7 +26,7 @@ import logging
 
 log = logging.getLogger(__name__)
 
-config = ConfigHandler()
+__config__ = ConfigHandler()
 
 
 class ExamineSnap(object):
@@ -50,13 +50,13 @@ class ExamineSnap(object):
     
     def __init__(self):
         # update legacy config files
-        if 'OUTPUT' in config.sections:
-            config.remove_section('OUTPUT')
-        if 'SNAP' in config.sections:
-            snap_keys = config.keys('SNAP')
+        if 'OUTPUT' in __config__.sections:
+            __config__.remove_section('OUTPUT')
+        if 'SNAP' in __config__.sections:
+            snap_keys = __config__.keys('SNAP')
             for key in ['auxdata', 'auxdatapath', 'properties']:
                 if key in snap_keys:
-                    config.remove_option(section='SNAP', key=key)
+                    __config__.remove_option(section='SNAP', key=key)
         
         # define some attributes which identify SNAP
         self.identifiers = ['path', 'gpt', 'etc']
@@ -178,8 +178,8 @@ class ExamineSnap(object):
             self.__read_config_attr(attr, section='SNAP')
         
         suffices = {}
-        if 'SNAP_SUFFIX' in config.sections:
-            suffices = config['SNAP_SUFFIX']
+        if 'SNAP_SUFFIX' in __config__.sections:
+            suffices = __config__['SNAP_SUFFIX']
         if len(suffices.keys()) > 0:
             self.__suffices = suffices
     
@@ -198,18 +198,18 @@ class ExamineSnap(object):
         -------
         
         """
-        if section in config.sections:
-            if attr in config[section].keys():
-                val = config[section][attr]
+        if section in __config__.sections:
+            if attr in __config__[section].keys():
+                val = __config__[section][attr]
                 if os.path.exists(val):
                     # log.info('setting attribute {}'.format(attr))
                     setattr(self, attr, val)
     
     def __update_config(self):
         for section in self.sections:
-            if section not in config.sections:
+            if section not in __config__.sections:
                 # log.info('creating section {}..'.format(section))
-                config.add_section(section)
+                __config__.add_section(section)
         
         for key in self.identifiers:
             if hasattr(self, key):
@@ -223,10 +223,10 @@ class ExamineSnap(object):
         if isinstance(value, list):
             value = json.dumps(value)
         
-        if attr not in config[section].keys() or config[section][attr] != value:
+        if attr not in __config__[section].keys() or __config__[section][attr] != value:
             # log.info('updating attribute {0}:{1}..'.format(section, attr))
             # log.info('  {0} -> {1}'.format(repr(config[section][attr]), repr(value)))
-            config.set(section, key=attr, value=value, overwrite=True)
+            __config__.set(section, key=attr, value=value, overwrite=True)
     
     def get_suffix(self, operator):
         """
@@ -410,15 +410,15 @@ class ExamineGamma(object):
         self.__update_config()
     
     def __read_config(self):
-        self.fname = config.file
-        if 'GAMMA' in config.sections:
-            attr = config['GAMMA']
+        self.fname = __config__.file
+        if 'GAMMA' in __config__.sections:
+            attr = __config__['GAMMA']
             for key, value in attr.items():
                 setattr(self, key, value)
     
     def __update_config(self):
-        if 'GAMMA' not in config.sections:
-            config.add_section('GAMMA')
+        if 'GAMMA' not in __config__.sections:
+            __config__.add_section('GAMMA')
         
         for attr in ['home', 'version']:
             self.__update_config_attr(attr, getattr(self, attr), 'GAMMA')
@@ -428,8 +428,8 @@ class ExamineGamma(object):
         if isinstance(value, list):
             value = json.dumps(value)
         
-        if attr not in config[section].keys() or config[section][attr] != value:
-            config.set(section, key=attr, value=value, overwrite=True)
+        if attr not in __config__[section].keys() or __config__[section][attr] != value:
+            __config__.set(section, key=attr, value=value, overwrite=True)
 
 
 class SnapProperties(object):
