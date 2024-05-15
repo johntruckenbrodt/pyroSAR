@@ -611,11 +611,11 @@ class SnapProperties(object):
     
     @property
     def userpath(self):
-        out = self['snap.userdir']
-        if out is None:
+        key = 'snap.userdir'
+        if key not in self.keys() or self[key] is None:
             return os.path.join(os.path.expanduser('~'), '.snap')
         else:
-            return out
+            return self[key]
     
     @userpath.setter
     def userpath(self, value):
