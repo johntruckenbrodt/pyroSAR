@@ -49,6 +49,7 @@ from osgeo import gdal, osr, ogr
 from osgeo.gdalconst import GA_ReadOnly
 
 from . import S1, patterns
+from .config import __LOCAL__
 from .ERS import passdb_query, get_angles_resolution
 from .xml_util import getNamespaces
 
@@ -71,11 +72,6 @@ import subprocess
 import logging
 
 log = logging.getLogger(__name__)
-
-__LOCAL__ = ['acquisition_mode', 'coordinates', 'cycleNumber', 'frameNumber',
-             'lines', 'orbit', 'orbitNumber_abs', 'orbitNumber_rel',
-             'polarizations', 'product', 'projection', 'samples',
-             'sensor', 'spacing', 'start', 'stop']
 
 
 def identify(scene):
