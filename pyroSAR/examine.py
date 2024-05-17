@@ -530,10 +530,7 @@ class SnapProperties(object):
         if value is not None:
             value = str(value).encode('unicode-escape').decode()
             value = value.replace(':', '\\:')
-        if key in ['snap.home', 'snap.userdir']:
-            path = os.path.join(os.path.expanduser('~'),
-                                '.snap', 'etc', 'snap.properties')
-        elif key in self.properties:
+        if key in self.properties:
             path = self.userpath_properties
         elif key in self.auxdata_properties:
             path = self.userpath_auxdata_properties
