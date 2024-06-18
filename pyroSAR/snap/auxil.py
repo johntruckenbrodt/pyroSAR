@@ -1,7 +1,7 @@
 ###############################################################################
 # pyroSAR SNAP API tools
 
-# Copyright (c) 2017-2023, the pyroSAR Developers.
+# Copyright (c) 2017-2024, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -15,6 +15,7 @@ import os
 import re
 import copy
 import shutil
+import traceback
 import subprocess as sp
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
@@ -88,7 +89,7 @@ def parse_node(name, use_existing=True):
     {'selectedPolarisations': None, 'removeThermalNoise': 'true', 'reIntroduceThermalNoise': 'false'}
     """
     snap = ExamineSnap()
-    version = snap.get_version('s1tbx')['version']
+    version = snap.get_version('microwavetbx')['version']
     name = name if name.endswith('.xml') else name + '.xml'
     operator = os.path.splitext(name)[0]
     nodepath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')
@@ -141,6 +142,10 @@ def parse_node(name, use_existing=True):
                          'validExpression', 'spectralBandIndex']:
                 el = tband.find('.//{}'.format(item))
                 tband.remove(el)
+            for item in ['targetBands', 'variables']:
+                elem = tree.find(f'.//{item}')
+                pl = elem.find('.//_.002e..')
+                elem.remove(pl)
         tree.find('.//parameters').set('class', 'com.bc.ceres.binding.dom.XppDomElement')
         node = Node(node)
         
@@ -377,7 +382,7 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
         del workflow['Remove-GRD-Border-Noise']
         # remove the node name from the groups
         i = 0
-        while i < len(groups) - 1:
+        while i < len(groups):
             if 'Remove-GRD-Border-Noise' in groups[i]:
                 del groups[i][groups[i].index('Remove-GRD-Border-Noise')]
             if len(groups[i]) == 0:
@@ -408,6 +413,8 @@ def gpt(xmlfile, tmpdir, groups=None, cleanup=True,
         else:
             execute(xmlfile, cleanup=cleanup, gpt_exceptions=gpt_exceptions, gpt_args=gpt_args)
     except Exception:
+        tb = traceback.format_exc()
+        log.info(tb)
         log.info('failed: {}'.format(xmlfile))
         raise
     finally:
@@ -1682,7 +1689,7 @@ def sub_parametrize(scene, geometry=None, offset=None, buffer=0.01, copyMetadata
         
          - :class:`~spatialist.vector.Vector`: a vector object in arbitrary CRS
          - :class:`str`: a name of a file that can be read with :class:`~spatialist.vector.Vector` in arbitrary CRS
-         - :class:`dict`: a dictionary with keys `xmin`, `xmax`, `ymin`, `ymax` in LatLon coordinates
+         - :class:`dict`: a dictionary with keys `xmin`, `xmax`, `ymin`, `ymax` in EPSG:4326 coordinates
     offset: tuple or None
         a tuple with pixel coordinates as (left, right, top, bottom)
     buffer: int or float

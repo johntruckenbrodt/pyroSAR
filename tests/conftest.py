@@ -1,5 +1,6 @@
 import os
 import pytest
+import platform
 
 
 @pytest.fixture
@@ -21,7 +22,8 @@ def testdir():
 def testdata(testdir):
     out = {
         # ASAR_IMS__A_20040703T205338, product: SLC, driver: ESA
-        'asar': os.path.join(testdir, 'ASA_IMS_1PNESA20040703_205338_000000182028_00172_12250_00001672562030318361237.N1'),
+        'asar': os.path.join(testdir,
+                             'ASA_IMS_1PNESA20040703_205338_000000182028_00172_12250_00001672562030318361237.N1'),
         # ERS1_IMP__A_19960808T205906, product: PRI, driver: ESA
         'ers1_esa': os.path.join(testdir, 'SAR_IMP_1PXESA19960808_205906_00000017G158_00458_26498_2615.E1'),
         # ERS1_IMS__D_19951220T024320, product: SLC, driver: CEOS_ERS
@@ -39,7 +41,8 @@ def testdata(testdir):
         # used in test_osv
         's1_orbit': os.path.join(testdir, 'S1A_IW_GRDH_1SDV_20210119T031653_20210119T031718_036201_043ED0_8255.zip'),
         'tif': os.path.join(testdir, 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'),
-        'archive_old': os.path.join(testdir, 'archive_outdated.csv'),
+        'archive_old_csv': os.path.join(testdir, 'archive_outdated.csv'),
+        'archive_old_bbox': os.path.join(testdir, 'archive_outdated_bbox.db'),
         'dempar': os.path.join(testdir, 'dem.par'),
         'mlipar': os.path.join(testdir, 'mli.par')
     }
@@ -53,3 +56,13 @@ def auxdata_dem_cases():
              ('SRTM 3Sec', ['srtm_39_02.zip']),
              ('TDX90m', ['DEM/N51/E010/TDM1_DEM__30_N51E011.zip'])]
     return cases
+
+
+@pytest.fixture
+def tmp_home(monkeypatch, tmp_path):
+    home = tmp_path / 'tmp_home'
+    home.mkdir()
+    var = 'USERPROFILE' if platform.system() == 'Windows' else 'HOME'
+    monkeypatch.setenv(var, str(home))
+    assert os.path.expanduser('~') == str(home)
+    yield home

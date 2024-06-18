@@ -1,7 +1,7 @@
 ###############################################################################
 # Convenience functions for SAR image batch processing with ESA SNAP
 
-# Copyright (c) 2016-2022, the pyroSAR Developers.
+# Copyright (c) 2016-2024, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -14,6 +14,7 @@
 import os
 import re
 import shutil
+import traceback
 from ..drivers import identify, identify_many, ID
 from .auxil import parse_recipe, parse_node, gpt, groupbyWorkers, writer, \
     windows_fileprefix, orb_parametrize, geo_parametrize, sub_parametrize, \
@@ -66,7 +67,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
     outdir: str
         The directory to write the final files to.
     t_srs: int or str or osgeo.osr.SpatialReference
-        A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
+        A target spatial reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
     spacing: int or float, optional
@@ -75,8 +76,12 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         The polarizations to be processed; can be a string for a single polarization, e.g. 'VV', or a list of several
         polarizations, e.g. ['VV', 'VH']. With the special value 'all' (default) all available polarizations are
         processed.
-    shapefile: str or :py:class:`~spatialist.vector.Vector` or dict, optional
-        A vector geometry for subsetting the SAR scene to a test site. Default is None.
+    shapefile: str or :class:`~spatialist.vector.Vector` or dict, optional
+        A vector geometry for spatial subsetting:
+        
+         - :class:`~spatialist.vector.Vector`: a vector object in arbitrary CRS
+         - :class:`str`: a name of a file that can be read with :class:`~spatialist.vector.Vector` in arbitrary CRS
+         - :class:`dict`: a dictionary with keys `xmin`, `xmax`, `ymin`, `ymax` in EPSG:4326 coordinates
     scaling: {'dB', 'db', 'linear'}, optional
         Should the output be in linear or decibel scaling? Default is 'dB'.
     geocoding_type: {'Range-Doppler', 'SAR simulation cross correlation'}, optional
@@ -412,7 +417,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
                 tf.parameters['outputSigma0'] = True
             except KeyError:
                 raise RuntimeError("The Terrain-Flattening node does not accept "
-                                   "parameter 'outputSigma0'. Please update S1TBX.")
+                                   "parameter 'outputSigma0'. Please update SNAP.")
         last = tf
     ############################################
     # merge bands to pass them to Terrain-Correction
@@ -641,10 +646,10 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
                 removeS1BorderNoiseMethod=removeS1BorderNoiseMethod)
             writer(xmlfile=wf_name, outdir=outdir, basename_extensions=basename_extensions,
                    clean_edges=clean_edges, clean_edges_npixels=clean_edges_npixels)
-        except Exception as e:
-            log.info(str(e))
+        except:
+            tb = traceback.format_exc()
             with open(wf_name.replace('_proc.xml', '_error.log'), 'w') as logfile:
-                logfile.write(str(e))
+                logfile.write(tb)
         finally:
             if cleanup and os.path.isdir(outname):
                 log.info('deleting temporary files')
@@ -673,7 +678,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     spacing: int or float
         The target pixel spacing in meters.
     t_srs: int or str or osgeo.osr.SpatialReference
-        A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
+        A target spatial reference system in WKT, EPSG, PROJ4 or OPENGIS format.
     refarea: str
         either 'beta0', 'gamma0' or 'sigma0'.
     tmpdir: str
