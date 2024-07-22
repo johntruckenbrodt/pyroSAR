@@ -2957,7 +2957,7 @@ class Archive(object):
         Parameters
         ----------
         vectorobject: :class:`~spatialist.vector.Vector` or None
-            a geometry with which the scenes need to overlap
+            a geometry with which the scenes need to overlap. The object may only contain one feature.
         mindate: str or datetime.datetime or None
             the minimum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
         maxdate: str or datetime.datetime or None
@@ -3029,14 +3029,15 @@ class Archive(object):
         
         if vectorobject:
             if isinstance(vectorobject, Vector):
+                if vectorobject.nfeatures > 1:
+                    raise RuntimeError("'vectorobject' contains more than one feature.")
                 with vectorobject.clone() as vec:
                     vec.reproject(4326)
                     site_geom = vec.convert2wkt(set3D=False)[0]
                 # postgres has a different way to store geometries
                 if self.driver == 'postgresql':
-                    arg_format.append("st_intersects(geometry, 'SRID=4326; {}')".format(
-                        site_geom
-                    ))
+                    statement = f"st_intersects(geometry, 'SRID=4326; {site_geom}')"
+                    arg_format.append(statement)
                 else:
                     arg_format.append('st_intersects(GeomFromText(?, 4326), geometry) = 1')
                     vals.append(site_geom)
