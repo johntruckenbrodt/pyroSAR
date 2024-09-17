@@ -536,16 +536,21 @@ class DEMHandler:
             opts['VRTNodata'] = dst_nodata
         opts['outputBounds'] = (extent['xmin'], extent['ymin'],
                                 extent['xmax'], extent['ymax'])
-        with Lock(vrtfile, timeout=lock_timeout):
-            if not os.path.isfile(vrtfile):
-                gdalbuildvrt(src=locals, dst=vrtfile, **opts)
-                if dst_datatype is not None:
-                    datatype = Dtype(dst_datatype).gdalstr
-                    tree = etree.parse(source=vrtfile)
-                    band = tree.find(path='VRTRasterBand')
-                    band.attrib['dataType'] = datatype
-                    tree.write(file=vrtfile, pretty_print=True,
-                               xml_declaration=False, encoding='utf-8')
+        lock = None
+        if os.access(vrtfile, os.W_OK):
+            # lock only if writable, not e.g. vsimem
+            lock = Lock(vrtfile, timeout=lock_timeout)
+        if not os.path.isfile(vrtfile):
+            gdalbuildvrt(src=locals, dst=vrtfile, **opts)
+            if dst_datatype is not None:
+                datatype = Dtype(dst_datatype).gdalstr
+                tree = etree.parse(source=vrtfile)
+                band = tree.find(path='VRTRasterBand')
+                band.attrib['dataType'] = datatype
+                tree.write(file=vrtfile, pretty_print=True,
+                           xml_declaration=False, encoding='utf-8')
+        if lock is not None:
+            lock.remove()
     
     def __commonextent(self, buffer=None):
         """
