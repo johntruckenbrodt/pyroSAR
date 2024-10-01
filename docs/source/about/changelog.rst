@@ -1056,3 +1056,18 @@ SNAP API
   + :doc:`/general/configuration`
   + :class:`pyroSAR.examine.ExamineSnap`
   + :class:`pyroSAR.examine.SnapProperties`
+
+0.26.1 | 2024-10-01
+===================
+
+Drivers
+-------
+- method :meth:`pyroSAR.drivers.Archive.select`: do not accept multi-feature vectorobjects
+
+SNAP API
+--------
+- fixed bug in writing SNAP properties configuration
+
+Auxiliary Data Handling
+-----------------------
+- class :class:`pyroSAR.auxdata.DEMHandler`: lock created VRT files
