@@ -1,5 +1,5 @@
 progressbar2
-numpy
+numpy<2.0
 spatialist>=0.12.1
 pyyaml
 requests
