@@ -5,7 +5,7 @@ channels:
 dependencies:
   - python>=3.8,<3.11  # https://github.com/kvesteri/sqlalchemy-utils/issues/716
   - progressbar2
-  - numpy
+  - numpy<2.0
   - spatialist>=0.12.1
   - pyyaml
   - requests
