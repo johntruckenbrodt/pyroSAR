@@ -23,8 +23,10 @@ from math import sin, radians
 import inspect
 from datetime import datetime
 from . import patterns
-
 from spatialist.ancillary import finder
+import logging
+
+log = logging.getLogger(__name__)
 
 
 def groupby(images, attribute):
@@ -355,9 +357,8 @@ class Lock(object):
     timeout: int
         the time in seconds to retry acquiring a lock
     """
+    
     def __init__(self, target, soft=False, timeout=7200):
-        if os.path.isdir(target) and not os.path.exists(target):
-            raise OSError('target does not exist: {}'.format(target))
         self.target = target
         used_id = str(uuid.uuid4())
         self.lock = self.target + '.lock'
@@ -368,6 +369,7 @@ class Lock(object):
             msg = 'cannot acquire lock on damaged target: {}'
             raise RuntimeError(msg.format(self.target))
         end = time.time() + timeout
+        log.debug(f'trying to {"read" if self.soft else "write"}-lock {target}')
         while True:
             if time.time() > end:
                 msg = 'could not acquire lock due to timeout: {}'
@@ -382,6 +384,7 @@ class Lock(object):
             except FileExistsError:
                 pass
             time.sleep(1)
+        log.debug(f'acquired {"read" if self.soft else "write"}-lock on {target}')
     
     def __enter__(self):
         return self
@@ -390,6 +393,7 @@ class Lock(object):
         if not self.soft and exc_type is not None:
             if os.path.exists(self.target):
                 os.rename(self.lock, self.error)
+                log.debug(f'placed error-lock on {self.target}')
         else:
             self.remove()
     
@@ -418,6 +422,7 @@ class Lock(object):
             os.remove(self.used)
         else:
             os.remove(self.lock)
+        log.debug(f'removed {"read" if self.soft else "write"}-lock on {self.target}')
 
 
 class LockCollection(object):
@@ -433,6 +438,7 @@ class LockCollection(object):
     timeout: int
         the time in seconds to retry acquiring a lock
     """
+    
     def __init__(self, targets, soft=False, timeout=7200):
         self.locks = [Lock(x, soft=soft, timeout=timeout) for x in targets]
     
