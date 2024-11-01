@@ -40,7 +40,7 @@ log = logging.getLogger(__name__)
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
-                 password=None, product='dem', crop=True):
+                 password=None, product='dem', crop=True, lock_timeout=600):
     """
     obtain all relevant DEM tiles for selected geometries and optionally mosaic them in a VRT.
 
@@ -195,6 +195,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
     
     crop: bool
         crop to the provided geometries (or return the full extent of the DEM tiles)?
+    lock_timeout: int
+        how long to wait to acquire a lock on the downloaded files?
     
     Returns
     -------
@@ -242,7 +244,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
                             vrt=vrt,
                             buffer=buffer,
                             product=product,
-                            crop=crop)
+                            crop=crop,
+                            lock_timeout=lock_timeout)
 
 
 def dem_create(src, dst, t_srs=None, tr=None, threads=None,
