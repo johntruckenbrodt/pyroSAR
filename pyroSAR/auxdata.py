@@ -248,7 +248,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
 def dem_create(src, dst, t_srs=None, tr=None, threads=None,
                geoid_convert=False, geoid='EGM96', nodata=None,
                resampleAlg='bilinear', dtype=None, pbar=False,
-               lock_timeout=600, **kwargs):
+               **kwargs):
     """
     Create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid.
     This is basically a convenience wrapper around :func:`osgeo.gdal.Warp` via :func:`spatialist.auxil.gdalwarp`.
@@ -300,8 +300,6 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
         See :class:`spatialist.raster.Dtype`.
     pbar: bool
         add a progressbar?
-    lock_timeout: int
-        how long to wait to acquire a lock on `dst`?
     **kwargs
         additional keyword arguments to be passed to :func:`spatialist.auxil.gdalwarp`.
         See :func:`osgeo.gdal.WarpOptions` for options. The following arguments cannot
@@ -395,24 +393,22 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
         else:
             msg = "argument '{}' cannot be set via kwargs as it is set internally."
             raise RuntimeError(msg.format(key))
-    
-    with Lock(dst, timeout=lock_timeout):
-        try:
-            if not os.path.isfile(dst):
-                message = 'creating mosaic'
-                crs = gdalwarp_args['dstSRS']
-                if crs != 'EPSG:4326':
-                    message += ' and reprojecting to {}'.format(crs)
-                log.info(f'{message}: {dst}')
-                gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
-            else:
-                log.info(f'mosaic already exists: {dst}')
-        except Exception:
-            if os.path.isfile(dst):
-                os.remove(dst)
-            raise
-        finally:
-            gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
+    try:
+        if not os.path.isfile(dst):
+            message = 'creating mosaic'
+            crs = gdalwarp_args['dstSRS']
+            if crs != 'EPSG:4326':
+                message += ' and reprojecting to {}'.format(crs)
+            log.info(f'{message}: {dst}')
+            gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
+        else:
+            log.info(f'mosaic already exists: {dst}')
+    except Exception:
+        if os.path.isfile(dst):
+            os.remove(dst)
+        raise
+    finally:
+        gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
 
 
 class DEMHandler:
