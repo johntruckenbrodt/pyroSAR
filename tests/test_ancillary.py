@@ -1,5 +1,10 @@
+import os
+import pytest
 import datetime
-from pyroSAR.ancillary import seconds, groupbyTime, groupby, parse_datasetname, find_datasets
+from pathlib import Path
+from pyroSAR.ancillary import (seconds, groupbyTime, groupby,
+                               parse_datasetname, find_datasets,
+                               Lock, LockCollection)
 
 
 def test_seconds():
@@ -68,7 +73,7 @@ def test_parse_datasetname():
     meta = parse_datasetname(filename, parse_date=True)
     assert sorted(meta.keys()) == ['acquisition_mode', 'extensions', 'filename',
                                    'filetype', 'orbit', 'outname_base',
-                                   'polarization','proc_steps', 'sensor', 'start']
+                                   'polarization', 'proc_steps', 'sensor', 'start']
     assert meta['acquisition_mode'] == 'IW'
     assert meta['extensions'] is None
     assert meta['filename'] == filename
@@ -100,7 +105,7 @@ def test_parse_datasetname():
                    'proc_steps': ['grd', 'mli', 'geo', 'norm', 'db'], 'filetype': '.tif',
                    'filename': 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'}
     assert parse_datasetname(filename) == expectation
-
+    
     filename = 'S1A__IW___A_20150309T173017_149_abc_VV_grd_mli_geo_norm_db.tif'
     expectation = {'outname_base': 'S1A__IW___A_20150309T173017_149_abc', 'sensor': 'S1A', 'acquisition_mode': 'IW',
                    'orbit': 'A', 'start': '20150309T173017', 'extensions': '149_abc', 'polarization': 'VV',
@@ -118,3 +123,38 @@ def test_parse_datasetname():
 def test_find_datasets(testdir):
     assert len(find_datasets(testdir, sensor='S1A')) == 1
     assert len(find_datasets(testdir, sensor='S1B')) == 0
+
+
+def test_lock(tmpdir):
+    f1 = str(tmpdir / 'test1.txt')
+    f2 = str(tmpdir / 'test2.txt')
+    Path(f1).touch()
+    Path(f2).touch()
+    
+    with Lock(f1):
+        with Lock(f1):
+            assert os.path.isfile(f1 + '.lock')
+        assert os.path.isfile(f1 + '.lock')
+    assert not os.path.isfile(f1 + '.lock')
+    
+    with Lock(f1):
+        with Lock(f2):
+            assert os.path.isfile(f2 + '.lock')
+        assert os.path.isfile(f1 + '.lock')
+    
+    with LockCollection([f1, f2]):
+        with LockCollection([f1, f2]):
+            assert os.path.isfile(f1 + '.lock')
+            assert os.path.isfile(f2 + '.lock')
+        with Lock(f2):
+            assert os.path.isfile(f1 + '.lock')
+            assert os.path.isfile(f2 + '.lock')
+        assert os.path.isfile(f1 + '.lock')
+        assert os.path.isfile(f2 + '.lock')
+    assert not os.path.isfile(f1 + '.lock')
+    assert not os.path.isfile(f2 + '.lock')
+    
+    with Lock(f1):
+        with pytest.raises(RuntimeError):
+            with Lock(f1, soft=True):
+                assert os.path.isfile(f1 + '.lock')
