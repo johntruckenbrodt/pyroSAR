@@ -474,7 +474,7 @@ class DEMHandler:
     @staticmethod
     def __buildvrt(tiles, vrtfile, pattern, vsi, extent, src_nodata=None,
                    dst_nodata=None, hide_nodata=False, resolution=None,
-                   tap=True, dst_datatype=None, lock_timeout=600):
+                   tap=True, dst_datatype=None):
         """
         Build a VRT mosaic from DEM tiles. The VRT is cropped to the specified `extent` but the pixel grid
         of the source files is preserved and no resampling/shifting is applied.
@@ -506,8 +506,6 @@ class DEMHandler:
         dst_datatype: int or str or None
             the VRT data type as supported by :class:`spatialist.raster.Dtype`.
             Default None: use the same data type as the source files.
-        lock_timeout: int
-            how long to wait to acquire a lock on `vrtfile`?
         
         Returns
         -------
@@ -532,21 +530,15 @@ class DEMHandler:
             opts['VRTNodata'] = dst_nodata
         opts['outputBounds'] = (extent['xmin'], extent['ymin'],
                                 extent['xmax'], extent['ymax'])
-        lock = None
-        if os.access(vrtfile, os.W_OK):
-            # lock only if writable, not e.g. vsimem
-            lock = Lock(vrtfile, timeout=lock_timeout)
-        if not os.path.isfile(vrtfile):
-            gdalbuildvrt(src=locals, dst=vrtfile, **opts)
-            if dst_datatype is not None:
-                datatype = Dtype(dst_datatype).gdalstr
-                tree = etree.parse(source=vrtfile)
-                band = tree.find(path='VRTRasterBand')
-                band.attrib['dataType'] = datatype
-                tree.write(file=vrtfile, pretty_print=True,
-                           xml_declaration=False, encoding='utf-8')
-        if lock is not None:
-            lock.remove()
+        
+        gdalbuildvrt(src=locals, dst=vrtfile, **opts)
+        if dst_datatype is not None:
+            datatype = Dtype(dst_datatype).gdalstr
+            tree = etree.parse(source=vrtfile)
+            band = tree.find(path='VRTRasterBand')
+            band.attrib['dataType'] = datatype
+            tree.write(file=vrtfile, pretty_print=True,
+                       xml_declaration=False, encoding='utf-8')
     
     def __commonextent(self, buffer=None):
         """
@@ -1062,7 +1054,7 @@ class DEMHandler:
             bounding box of the geometries is expanded so that the coordinates are
             multiples of the tile size of the respective DEM option.
         lock_timeout: int
-            how long to wait to acquire a lock on the downloaded files and `vrt`?
+            how long to wait to acquire a lock on the downloaded files?
         
         Returns
         -------
@@ -1158,8 +1150,7 @@ class DEMHandler:
                             src_nodata=src_nodata, dst_nodata=dst_nodata,
                             hide_nodata=True,
                             resolution=resolution,
-                            tap=tap, dst_datatype=datatype,
-                            lock_timeout=lock_timeout)
+                            tap=tap, dst_datatype=datatype)
         else:
             return locals
     
