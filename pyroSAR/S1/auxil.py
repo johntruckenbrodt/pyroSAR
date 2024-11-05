@@ -1,7 +1,7 @@
 ###############################################################################
 # general utilities for Sentinel-1
 
-# Copyright (c) 2016-2023, the pyroSAR Developers.
+# Copyright (c) 2016-2024, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -231,6 +231,7 @@ class OSV(object):
             sensor = [sensor]
         
         files = []
+        date_search_final = datetime(year=stop.year, month=stop.month, day=1)
         for sens in sensor:
             date_search = datetime(year=start.year,
                                    month=start.month,
@@ -258,7 +259,7 @@ class OSV(object):
                         files.append({'filename': file,
                                       'href': url_sub + '/' + file + '.zip',
                                       'auth': None})
-                    if start2 >= stop:
+                    if date_search == date_search_final:
                         busy = False
                 date_search += relativedelta(months=1)
                 if date_search > datetime.now():
@@ -391,7 +392,7 @@ class OSV(object):
              - 'S1A'
              - 'S1B'
              - ['S1A', 'S1B']
-        osvtype: str or list[str]
+        osvtype: str
             the type of orbit files required
         start: str or None
             the date to start searching for files in format YYYYmmddTHHMMSS
