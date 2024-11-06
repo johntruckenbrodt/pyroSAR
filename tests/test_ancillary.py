@@ -131,17 +131,28 @@ def test_lock(tmpdir):
     Path(f1).touch()
     Path(f2).touch()
     
+    # simple nested write-locking
     with Lock(f1):
         with Lock(f1):
             assert os.path.isfile(f1 + '.lock')
         assert os.path.isfile(f1 + '.lock')
     assert not os.path.isfile(f1 + '.lock')
     
+    # simple nested read-locking
+    with Lock(f1, soft=True) as l1:
+        used = l1.used
+        with Lock(f1, soft=True):
+            assert os.path.isfile(used)
+        assert os.path.isfile(used)
+    assert not os.path.isfile(used)
+    
+    # separate instances for different files
     with Lock(f1):
         with Lock(f2):
             assert os.path.isfile(f2 + '.lock')
         assert os.path.isfile(f1 + '.lock')
     
+    # combination of nested locking, multiple instances, and LockCollection
     with LockCollection([f1, f2]):
         with LockCollection([f1, f2]):
             assert os.path.isfile(f1 + '.lock')
@@ -154,6 +165,7 @@ def test_lock(tmpdir):
     assert not os.path.isfile(f1 + '.lock')
     assert not os.path.isfile(f2 + '.lock')
     
+    # nested locking does not work if the `soft` argument changes
     with Lock(f1):
         with pytest.raises(RuntimeError):
             with Lock(f1, soft=True):

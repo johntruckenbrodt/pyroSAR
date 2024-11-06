@@ -371,16 +371,17 @@ class Lock(object):
     def __new__(cls, target, soft=False, timeout=7200):
         target_abs = os.path.abspath(os.path.expanduser(target))
         if target_abs not in cls._instances:
-            log.debug('creating lock instance')
+            log.debug(f'creating lock instance for target {target_abs}')
             instance = super().__new__(cls)
             cls._instances[target_abs] = instance
             cls._nesting_levels[target_abs] = 0
         else:
             if soft != cls._instances[target_abs].soft:
-                msg = 'cannot place nested {}-lock on existing {}-lock'
+                msg = 'cannot place nested {}-lock on existing {}-lock for target {}'
                 vals = ['read', 'write'] if soft else ['write', 'read']
+                vals.append(target_abs)
                 raise RuntimeError(msg.format(*vals))
-            log.debug('reusing lock instance')
+            log.debug(f'reusing lock instance for target {target_abs}')
         return cls._instances[target_abs]
     
     def __init__(self, target, soft=False, timeout=7200):
