@@ -40,7 +40,7 @@ log = logging.getLogger(__name__)
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
-                 password=None, product='dem', crop=True):
+                 password=None, product='dem', crop=True, lock_timeout=600):
     """
     obtain all relevant DEM tiles for selected geometries and optionally mosaic them in a VRT.
 
@@ -195,6 +195,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
     
     crop: bool
         crop to the provided geometries (or return the full extent of the DEM tiles)?
+    lock_timeout: int
+        how long to wait to acquire a lock on the downloaded files?
     
     Returns
     -------
@@ -242,13 +244,14 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
                             vrt=vrt,
                             buffer=buffer,
                             product=product,
-                            crop=crop)
+                            crop=crop,
+                            lock_timeout=lock_timeout)
 
 
 def dem_create(src, dst, t_srs=None, tr=None, threads=None,
                geoid_convert=False, geoid='EGM96', nodata=None,
                resampleAlg='bilinear', dtype=None, pbar=False,
-               lock_timeout=600, **kwargs):
+               **kwargs):
     """
     Create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid.
     This is basically a convenience wrapper around :func:`osgeo.gdal.Warp` via :func:`spatialist.auxil.gdalwarp`.
@@ -300,8 +303,6 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
         See :class:`spatialist.raster.Dtype`.
     pbar: bool
         add a progressbar?
-    lock_timeout: int
-        how long to wait to acquire a lock on `dst`?
     **kwargs
         additional keyword arguments to be passed to :func:`spatialist.auxil.gdalwarp`.
         See :func:`osgeo.gdal.WarpOptions` for options. The following arguments cannot
@@ -395,24 +396,22 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
         else:
             msg = "argument '{}' cannot be set via kwargs as it is set internally."
             raise RuntimeError(msg.format(key))
-    
-    with Lock(dst, timeout=lock_timeout):
-        try:
-            if not os.path.isfile(dst):
-                message = 'creating mosaic'
-                crs = gdalwarp_args['dstSRS']
-                if crs != 'EPSG:4326':
-                    message += ' and reprojecting to {}'.format(crs)
-                log.info(f'{message}: {dst}')
-                gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
-            else:
-                log.info(f'mosaic already exists: {dst}')
-        except Exception:
-            if os.path.isfile(dst):
-                os.remove(dst)
-            raise
-        finally:
-            gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
+    try:
+        if not os.path.isfile(dst):
+            message = 'creating mosaic'
+            crs = gdalwarp_args['dstSRS']
+            if crs != 'EPSG:4326':
+                message += ' and reprojecting to {}'.format(crs)
+            log.info(f'{message}: {dst}')
+            gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
+        else:
+            log.info(f'mosaic already exists: {dst}')
+    except Exception:
+        if os.path.isfile(dst):
+            os.remove(dst)
+        raise
+    finally:
+        gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
 
 
 class DEMHandler:
@@ -478,7 +477,7 @@ class DEMHandler:
     @staticmethod
     def __buildvrt(tiles, vrtfile, pattern, vsi, extent, src_nodata=None,
                    dst_nodata=None, hide_nodata=False, resolution=None,
-                   tap=True, dst_datatype=None, lock_timeout=600):
+                   tap=True, dst_datatype=None):
         """
         Build a VRT mosaic from DEM tiles. The VRT is cropped to the specified `extent` but the pixel grid
         of the source files is preserved and no resampling/shifting is applied.
@@ -510,8 +509,6 @@ class DEMHandler:
         dst_datatype: int or str or None
             the VRT data type as supported by :class:`spatialist.raster.Dtype`.
             Default None: use the same data type as the source files.
-        lock_timeout: int
-            how long to wait to acquire a lock on `vrtfile`?
         
         Returns
         -------
@@ -536,21 +533,15 @@ class DEMHandler:
             opts['VRTNodata'] = dst_nodata
         opts['outputBounds'] = (extent['xmin'], extent['ymin'],
                                 extent['xmax'], extent['ymax'])
-        lock = None
-        if os.access(vrtfile, os.W_OK):
-            # lock only if writable, not e.g. vsimem
-            lock = Lock(vrtfile, timeout=lock_timeout)
-        if not os.path.isfile(vrtfile):
-            gdalbuildvrt(src=locals, dst=vrtfile, **opts)
-            if dst_datatype is not None:
-                datatype = Dtype(dst_datatype).gdalstr
-                tree = etree.parse(source=vrtfile)
-                band = tree.find(path='VRTRasterBand')
-                band.attrib['dataType'] = datatype
-                tree.write(file=vrtfile, pretty_print=True,
-                           xml_declaration=False, encoding='utf-8')
-        if lock is not None:
-            lock.remove()
+        
+        gdalbuildvrt(src=locals, dst=vrtfile, **opts)
+        if dst_datatype is not None:
+            datatype = Dtype(dst_datatype).gdalstr
+            tree = etree.parse(source=vrtfile)
+            band = tree.find(path='VRTRasterBand')
+            band.attrib['dataType'] = datatype
+            tree.write(file=vrtfile, pretty_print=True,
+                       xml_declaration=False, encoding='utf-8')
     
     def __commonextent(self, buffer=None):
         """
@@ -1066,7 +1057,7 @@ class DEMHandler:
             bounding box of the geometries is expanded so that the coordinates are
             multiples of the tile size of the respective DEM option.
         lock_timeout: int
-            how long to wait to acquire a lock on the downloaded files and `vrt`?
+            how long to wait to acquire a lock on the downloaded files?
         
         Returns
         -------
@@ -1162,8 +1153,7 @@ class DEMHandler:
                             src_nodata=src_nodata, dst_nodata=dst_nodata,
                             hide_nodata=True,
                             resolution=resolution,
-                            tap=tap, dst_datatype=datatype,
-                            lock_timeout=lock_timeout)
+                            tap=tap, dst_datatype=datatype)
         else:
             return locals
     
