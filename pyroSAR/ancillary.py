@@ -419,18 +419,7 @@ class Lock(object):
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
-        Lock._nesting_levels[self.target] -= 1
-        if Lock._nesting_levels[self.target] == 0:
-            if not self.soft and exc_type is not None:
-                if os.path.exists(self.target):
-                    os.rename(self.lock, self.error)
-                    log.debug(f'placed error-lock on {self.target}')
-            else:
-                self.remove()
-            del Lock._instances[self.target]
-            del Lock._nesting_levels[self.target]
-        else:
-            log.debug(f'decrementing lock level on {self.target}')
+        self.remove(exc_type)
     
     def is_used(self):
         """
@@ -445,7 +434,7 @@ class Lock(object):
         files = list(Path(folder).glob(base + '.used*'))
         return len(files) > 0
     
-    def remove(self):
+    def remove(self, exc_type=None):
         """
         Remove the acquired soft/hard lock
         
@@ -453,11 +442,23 @@ class Lock(object):
         -------
 
         """
-        if self.soft:
-            os.remove(self.used)
+        Lock._nesting_levels[self.target] -= 1
+        if Lock._nesting_levels[self.target] == 0:
+            if not self.soft and exc_type is not None:
+                if os.path.exists(self.target):
+                    os.rename(self.lock, self.error)
+                    log.debug(f'placed error-lock on {self.target}')
+            else:
+                if self.soft:
+                    os.remove(self.used)
+                else:
+                    os.remove(self.lock)
+                msg_sub = "read" if self.soft else "write"
+                log.debug(f'removed {msg_sub}-lock on {self.target}')
+            del Lock._instances[self.target]
+            del Lock._nesting_levels[self.target]
         else:
-            os.remove(self.lock)
-        log.debug(f'removed {"read" if self.soft else "write"}-lock on {self.target}')
+            log.debug(f'decrementing lock level on {self.target}')
 
 
 class LockCollection(object):

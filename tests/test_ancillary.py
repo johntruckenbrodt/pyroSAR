@@ -170,3 +170,10 @@ def test_lock(tmpdir):
         with pytest.raises(RuntimeError):
             with Lock(f1, soft=True):
                 assert os.path.isfile(f1 + '.lock')
+    
+    lock = Lock(f1)
+    try:
+        raise RuntimeError
+    except RuntimeError as e:
+        lock.remove(exc_type=type(e))
+    assert os.path.isfile(f1 + '.error')
