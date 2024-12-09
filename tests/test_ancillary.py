@@ -171,6 +171,12 @@ def test_lock(tmpdir):
             with Lock(f1, soft=True):
                 assert os.path.isfile(f1 + '.lock')
     
+    with Lock(f1, soft=True):
+        with pytest.raises(RuntimeError):
+            with Lock(f1):
+                assert os.path.isfile(f1 + '.lock')
+    
+    # not using the context manager requires manual lock removal
     lock = Lock(f1)
     try:
         raise RuntimeError
