@@ -413,9 +413,9 @@ class Lock(object):
                 time.sleep(1)
             log.debug(f'acquired {"read" if self.soft else "write"}-lock on {target}')
             self._initialized = True
+        Lock._nesting_levels[self.target] += 1
     
     def __enter__(self):
-        Lock._nesting_levels[self.target] += 1
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
@@ -478,8 +478,6 @@ class LockCollection(object):
         self.locks = [Lock(x, soft=soft, timeout=timeout) for x in targets]
     
     def __enter__(self):
-        for lock in self.locks:
-            lock.__enter__()
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
