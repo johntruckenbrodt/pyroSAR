@@ -55,13 +55,6 @@ jobs:
     defaults:
       run:
         shell: cmd /C CALL {0}
-    services:
-      postgres:
-        image: postgis/postgis:16-3.4
-        env:
-          POSTGRES_PASSWORD: Password12!
-        ports:
-          - 5432:5432
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v3
