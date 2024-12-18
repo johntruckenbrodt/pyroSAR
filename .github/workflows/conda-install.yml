@@ -82,6 +82,7 @@ jobs:
           pip install .
       - name: Test with pytest
         run: |
+          conda install pytest
           pytest
         env:
           PGUSER: postgres
