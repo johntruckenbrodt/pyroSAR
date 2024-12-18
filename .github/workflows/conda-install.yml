@@ -65,6 +65,8 @@ jobs:
           environment-file: environment-dev.yml
           auto-activate-base: false
       - uses: nyurik/action-setup-postgis@v2
+        with:
+          cached-dir: C:\downloads
       - name: Install ESA SNAP
         run: |
           curl -O https://download.esa.int/step/snap/10_0/installers/esa-snap_sentinel_windows-10.0.0.exe
