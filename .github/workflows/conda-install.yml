@@ -78,6 +78,7 @@ jobs:
           pip install .
       - name: Test with pytest
         run: |
+          echo %PATH%
           pytest
         env:
           PGUSER: postgres
