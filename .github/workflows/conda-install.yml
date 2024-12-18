@@ -54,7 +54,7 @@ jobs:
     runs-on: windows-latest
     defaults:
       run:
-        shell: cmd
+        shell: cmd /C CALL {0}
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python 3.10
@@ -75,7 +75,7 @@ jobs:
         run: |
           conda install -y python=3.10 pytest
           conda env update --file environment.yml --name base
-      - name: Install package
+      - name: Install pyroSAR
         run: |
           pip install .
       - name: Test with pytest
