@@ -54,7 +54,7 @@ jobs:
     runs-on: windows-latest
     defaults:
       run:
-        shell: cmd /C CALL {0}
+        shell: cmd
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v3
