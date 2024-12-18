@@ -61,7 +61,7 @@ jobs:
         with:
           activate-environment: ps_test_dev
           auto-update-conda: true
-          python-version: '3.10'
+          python-version: '3.13'
           environment-file: environment-dev.yml
           auto-activate-base: false
       - uses: nyurik/action-setup-postgis@v2
@@ -81,8 +81,6 @@ jobs:
           pip install .
       - name: Test with pytest
         run: |
-          echo %PATH%
-          dir C:\esa-snap\bin
           pytest
         env:
           PGUSER: postgres
