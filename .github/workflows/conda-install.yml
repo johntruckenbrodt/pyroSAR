@@ -3,7 +3,7 @@ name: conda build
 on: [ push ]
 
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -19,7 +19,7 @@ jobs:
         with:
           auto-update-conda: true
           python-version: '3.10'
-      - name: install ESA SNAP
+      - name: Install ESA SNAP
         run: |
           wget -nv https://download.esa.int/step/snap/10_0/installers/esa-snap_sentinel_linux-10.0.0.sh
           bash esa-snap_sentinel_linux-10.0.0.sh -q -dir $GITHUB_ACTION_PATH/esa-snap
@@ -30,15 +30,12 @@ jobs:
           echo "PROJ_DATA=$CONDA/share/proj" >> $GITHUB_ENV
       - name: Install dependencies
         run: |
-          : # https://github.com/conda/conda/issues/13560#issuecomment-1992720842
           conda install -y python=3.10
           conda env update --file environment.yml --name base
       - name: Lint with flake8
         run: |
           conda install flake8
-          # stop the build if there are Python syntax errors or undefined names
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       - name: Install package
         run: |
@@ -54,3 +51,35 @@ jobs:
         uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ github.token }}
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python 3.10
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: '3.10'
+      - name: Install ESA SNAP
+        run: |
+          curl -O https://download.esa.int/step/snap/10_0/installers/esa-snap_sentinel_windows-10.0.0.exe
+          start /wait esa-snap_sentinel_windows-10.0.0.exe /S /D=$GITHUB_ACTION_PATH\esa-snap
+      - name: Set paths and variables
+        run: |
+          echo "$CONDA\Scripts" >> $GITHUB_PATH
+          echo "$GITHUB_ACTION_PATH\esa-snap\bin" >> $GITHUB_PATH
+          echo "PROJ_DATA=$CONDA\share\proj" >> $GITHUB_ENV
+      - name: Install dependencies
+        run: |
+          conda install -y python=3.10
+          conda env update --file environment.yml --name base
+      - name: Install package
+        run: |
+          pip install .
+      - name: Test with pytest
+        run: |
+          pytest
+        env:
+          PGUSER: postgres
+          PGPASSWORD: Password12!
