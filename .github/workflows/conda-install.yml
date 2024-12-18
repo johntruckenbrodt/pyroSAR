@@ -70,9 +70,9 @@ jobs:
           start /wait esa-snap_sentinel_windows-10.0.0.exe -q -dir C:\esa-snap
       - name: Set paths and variables
         run: |
-          echo %CONDA%\Scripts >> %GITHUB_PATH%
-          echo C:\esa-snap\bin >> %GITHUB_PATH%
-          echo PROJ_DATA=%CONDA%\share\proj >> %GITHUB_ENV%
+          echo %CONDA%\Scripts>> %GITHUB_PATH%
+          echo C:\esa-snap\bin>> %GITHUB_PATH%
+          echo PROJ_DATA=%CONDA%\share\proj>> %GITHUB_ENV%
       - name: Install pyroSAR
         run: |
           pip install .
