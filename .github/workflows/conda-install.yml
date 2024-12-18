@@ -79,6 +79,7 @@ jobs:
       - name: Test with pytest
         run: |
           echo %PATH%
+          dir C:\esa-snap\bin
           pytest
         env:
           PGUSER: postgres
