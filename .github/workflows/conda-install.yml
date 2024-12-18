@@ -28,21 +28,19 @@ jobs:
           echo "$CONDA/bin" >> $GITHUB_PATH
           echo "$GITHUB_ACTION_PATH/esa-snap/bin" >> $GITHUB_PATH
           echo "PROJ_DATA=$CONDA/share/proj" >> $GITHUB_ENV
-      - name: Install dependencies
+      - name: Install python packages
         run: |
-          conda install -y python=3.10
+          conda install -y python=3.10 flake8 pytest coverage
           conda env update --file environment.yml --name base
       - name: Lint with flake8
         run: |
-          conda install flake8
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      - name: Install package
+      - name: Install pyroSAR
         run: |
           pip install .
       - name: Test with pytest
         run: |
-          conda install pytest coverage
           coverage run -m pytest
         env:
           PGUSER: postgres
@@ -73,16 +71,15 @@ jobs:
           echo %CONDA%\Scripts >> %GITHUB_PATH%
           echo %GITHUB_ACTION_PATH%\esa-snap\bin >> %GITHUB_PATH%
           echo PROJ_DATA=%CONDA%\share\proj >> %GITHUB_ENV%
-      - name: Install dependencies
+      - name: Install python packages
         run: |
-          conda install -y python=3.10
+          conda install -y python=3.10 pytest
           conda env update --file environment.yml --name base
       - name: Install package
         run: |
           pip install .
       - name: Test with pytest
         run: |
-          conda install pytest
           pytest
         env:
           PGUSER: postgres
