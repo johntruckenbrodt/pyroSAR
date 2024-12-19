@@ -5,16 +5,16 @@
 <h3 align="center">A Python Framework for Large-Scale SAR Satellite Data Processing</h3>
 
 <p align="center">
-  <a href='https://github.com/johntruckenbrodt/pyroSAR/actions/workflows/python-package-conda.yml'>
-    <img src='https://github.com/johntruckenbrodt/pyroSAR/actions/workflows/python-package-conda.yml/badge.svg' alt='Travis Status'></a>
+  <a href='https://github.com/johntruckenbrodt/pyroSAR/actions/workflows/conda-install.yml'>
+    <img src='https://github.com/johntruckenbrodt/pyroSAR/actions/workflows/conda-install.yml/badge.svg' alt='Conda Build Status'></a>
   <a href='https://coveralls.io/github/johntruckenbrodt/pyroSAR?branch=main'>
     <img src='https://coveralls.io/repos/github/johntruckenbrodt/pyroSAR/badge.svg?branch=main' alt='Coveralls Status' /></a>
   <a href='https://pyrosar.readthedocs.io/en/latest/?badge=latest'>
     <img src='https://readthedocs.org/projects/pyrosar/badge/?version=latest' alt='Documentation Status' /></a>
   <a href='https://badge.fury.io/py/pyroSAR'>
-    <img src='https://badge.fury.io/py/pyroSAR.svg' alt='PIP Status' /></a>
+    <img src='https://badge.fury.io/py/pyroSAR.svg' alt='PyPI Status' /></a>
   <a href='https://anaconda.org/conda-forge/pyrosar'>
-    <img src='https://img.shields.io/conda/vn/conda-forge/pyrosar.svg' alt='Conda Status' /></a>
+    <img src='https://img.shields.io/conda/vn/conda-forge/pyrosar.svg' alt='Conda-Forge Status' /></a>
 </p>
 
 The pyroSAR package aims at providing a complete solution for the scalable organization and processing of SAR satellite data:
