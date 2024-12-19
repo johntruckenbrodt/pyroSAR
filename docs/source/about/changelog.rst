@@ -1036,10 +1036,7 @@ Ancillary Tools
 
 Auxiliary Data Handling
 -----------------------
-
-changes to Sentinel-1 OSV data handling:
-
-- function :meth:`pyroSAR.auxdata.dem_create`:
+- function :func:`pyroSAR.auxdata.dem_create`:
 
   + make use of new classes :class:`~pyroSAR.ancillary.Lock` and :class:`~pyroSAR.ancillary.LockCollection`
     for DEM download and mosaic creation (new argument `lock_timeout`)
@@ -1071,3 +1068,21 @@ SNAP API
 Auxiliary Data Handling
 -----------------------
 - class :class:`pyroSAR.auxdata.DEMHandler`: lock created VRT files
+
+0.27.0 | 2024-12-19
+===================
+
+Auxiliary Data Handling
+-----------------------
+- class :class:`pyroSAR.S1.OSV`: fixed bug in searching STEP OSV repository
+- function :func:`pyroSAR.auxdata.dem_create`: removed argument `lock_timeout`, do no longer lock the target file.
+- function :func:`pyroSAR.auxdata.dem_autoload`: the target VRT file is no longer locked. However, the individual downloaded DEM tiles now are.
+
+Ancillary Tools
+---------------
+- classes :class:`~pyroSAR.ancillary.Lock` and :class:`~pyroSAR.ancillary.LockCollection`:
+  enable nested locking
+
+Misc
+----
+- removed upper Python dependency limit
