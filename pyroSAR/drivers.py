@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2024, the pyroSAR Developers.
+# Copyright (c) 2016-2025, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -54,7 +54,7 @@ from .ERS import passdb_query, get_angles_resolution
 from .xml_util import getNamespaces
 
 from spatialist import crsConvert, sqlite3, Vector, bbox
-from spatialist.ancillary import parse_literal, finder
+from spatialist.ancillary import parse_literal, finder, multicore
 
 from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, insert
 from sqlalchemy import inspect as sql_inspect
@@ -129,10 +129,10 @@ def identify(scene):
     raise RuntimeError('data format not supported')
 
 
-def identify_many(scenes, pbar=False, sortkey=None):
+def identify_many(scenes, pbar=False, sortkey=None, cores=1):
     """
-    wrapper function for returning metadata handlers of all valid scenes in a list, similar to function
-    :func:`~pyroSAR.drivers.identify`.
+    wrapper function for returning metadata handlers of all valid scenes in a list,
+    similar to function :func:`~pyroSAR.drivers.identify`.
 
     Parameters
     ----------
@@ -142,6 +142,9 @@ def identify_many(scenes, pbar=False, sortkey=None):
         adds a progressbar if True
     sortkey: str or None
         sort the handler object list by an attribute
+    cores: int
+        the number of cores to parallelize identification
+    
     Returns
     -------
     list[ID]
@@ -153,28 +156,38 @@ def identify_many(scenes, pbar=False, sortkey=None):
     >>> files = finder('/path', ['S1*.zip'])
     >>> ids = identify_many(files, pbar=False, sortkey='start')
     """
-    idlist = []
-    if pbar:
-        progress = pb.ProgressBar(max_value=len(scenes)).start()
-    else:
-        progress = None
-    for i, scene in enumerate(scenes):
+    
+    def handler(scene):
         if isinstance(scene, ID):
-            idlist.append(scene)
+            return scene
         else:
             try:
                 id = identify(scene)
-                idlist.append(id)
+                return id
             except RuntimeError:
-                continue
+                return None
             except PermissionError:
                 log.warning("Permission denied: '{}'".format(scene))
+    
+    if cores == 1:
+        idlist = []
+        if pbar:
+            progress = pb.ProgressBar(max_value=len(scenes)).start()
+        else:
+            progress = None
+        for i, scene in enumerate(scenes):
+            id = handler(scene)
+            idlist.append(id)
+            if progress is not None:
+                progress.update(i + 1)
         if progress is not None:
-            progress.update(i + 1)
-    if progress is not None:
-        progress.finish()
-    if sortkey is not None:
-        idlist.sort(key=operator.attrgetter(sortkey))
+            progress.finish()
+        if sortkey is not None:
+            idlist.sort(key=operator.attrgetter(sortkey))
+    else:
+        idlist = multicore(function=handler, multiargs={'scene': scenes},
+                           pbar=pbar, cores=cores)
+    idlist = list(filter(None, idlist))
     return idlist
 
 
