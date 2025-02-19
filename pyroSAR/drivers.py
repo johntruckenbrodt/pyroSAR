@@ -746,8 +746,9 @@ class ID(object):
                             outname = os.path.join(directory, repl)
                             outname = outname.replace('/', os.path.sep)
                             if item.endswith('/'):
-                                os.makedirs(outname)
+                                os.makedirs(outname, exist_ok=True)
                             else:
+                                os.makedirs(os.path.dirname(outname), exist_ok=True)
                                 try:
                                     with open(outname, 'wb') as outfile:
                                         outfile.write(archive.read(item))
