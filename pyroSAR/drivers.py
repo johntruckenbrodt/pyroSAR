@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2024, the pyroSAR Developers.
+# Copyright (c) 2016-2025, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -1649,7 +1649,7 @@ class SAFE(ID):
         
         self.pattern = patterns.safe
         
-        self.pattern_ds = r'^s1[ab]-' \
+        self.pattern_ds = r'^s1[abcd]-' \
                           r'(?P<swath>s[1-6]|iw[1-3]?|ew[1-5]?|wv[1-2]|n[1-6])-' \
                           r'(?P<product>slc|grd|ocn)-' \
                           r'(?P<pol>hh|hv|vv|vh)-' \
