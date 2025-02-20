@@ -1,7 +1,7 @@
 ###############################################################################
 # general utilities for Sentinel-1
 
-# Copyright (c) 2016-2024, the pyroSAR Developers.
+# Copyright (c) 2016-2025, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -246,21 +246,22 @@ class OSV(object):
                                           month=date_search.month)
                 log.info(url_sub)
                 response = requests.get(url_sub, timeout=self.timeout)
-                response.raise_for_status()
-                result = response.text
-                files_sub = list(set(re.findall(self.pattern, result)))
-                if len(files_sub) == 0:
-                    break
-                for file in files_sub:
-                    match = re.match(self.pattern_fine, file)
-                    start2 = datetime.strptime(match.group('start'), '%Y%m%dT%H%M%S')
-                    stop2 = datetime.strptime(match.group('stop'), '%Y%m%dT%H%M%S')
-                    if start2 < stop and stop2 > start:
-                        files.append({'filename': file,
-                                      'href': url_sub + '/' + file + '.zip',
-                                      'auth': None})
-                    if date_search == date_search_final:
-                        busy = False
+                if response.status_code != 404:
+                    response.raise_for_status()
+                    result = response.text
+                    files_sub = list(set(re.findall(self.pattern, result)))
+                    if len(files_sub) == 0:
+                        break
+                    for file in files_sub:
+                        match = re.match(self.pattern_fine, file)
+                        start2 = datetime.strptime(match.group('start'), '%Y%m%dT%H%M%S')
+                        stop2 = datetime.strptime(match.group('stop'), '%Y%m%dT%H%M%S')
+                        if start2 < stop and stop2 > start:
+                            files.append({'filename': file,
+                                          'href': url_sub + '/' + file + '.zip',
+                                          'auth': None})
+                if date_search == date_search_final:
+                    busy = False
                 date_search += relativedelta(months=1)
                 if date_search > datetime.now():
                     busy = False
