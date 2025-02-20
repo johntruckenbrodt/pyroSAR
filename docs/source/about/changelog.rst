@@ -1086,3 +1086,21 @@ Ancillary Tools
 Misc
 ----
 - removed upper Python dependency limit
+
+0.28.0 | 2025-02-20
+===================
+
+General
+-------
+- support for SNAP 11 (tested, no modifications necessary)
+- support for Sentinel-1C and D
+
+Drivers
+-------
+- function :func:`pyroSAR.drivers.identify_many`: new argument `cores` for parallel scene identification
+- class :class:`pyroSAR.drivers.SAFE`: enable unzipping of products from CDSE
+
+Auxiliary Data Handling
+-----------------------
+- removed option for `TDX90m` DEM download because the FTP server has been shut down
+  (perhaps reactivated in the future if HTTPS authentication can be implemented)
