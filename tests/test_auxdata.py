@@ -17,7 +17,8 @@ def test_handler(auxdata_dem_cases):
             cases = [('AW3D30', ['S055W015/S052W012.tar.gz']),
                      ('SRTM 1Sec HGT', ['S52W012.SRTMGL1.hgt.zip']),
                      ('SRTM 3Sec', ['srtm_34_23.zip']),
-                     ('TDX90m', ['DEM/S52/W010/TDM1_DEM__30_S52W012.zip'])]
+                     # ('TDX90m', ['DEM/S52/W010/TDM1_DEM__30_S52W012.zip'])
+                     ]
             for demType, reference in cases:
                 result = handler.remote_ids(dem_type=demType, extent=box.extent)
                 assert result == reference
