@@ -705,7 +705,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     scenes = identify_many(scenes)
     ref = scenes[0]
     
-    if ref.sensor not in ['S1A', 'S1B', 'PALSAR-2']:
+    if ref.sensor not in ['S1A', 'S1B', 'S1C', 'PALSAR-2']:
         raise RuntimeError(
             'this function currently only supports Sentinel-1 and PALSAR-2 Path data. Please stay tuned...')
     
