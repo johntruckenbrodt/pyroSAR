@@ -281,11 +281,11 @@ class OSV(object):
         else:
             raise RuntimeError("osvtype must be either 'POE' or 'RES'")
         
-        if sensor in ['S1A', 'S1B']:
+        if sensor in ['S1A', 'S1B', 'S1C', 'S1D']:
             query['platformname'] = 'Sentinel-1'
             # filename starts w/ sensor
             query['filename'] = '{}*'.format(sensor)
-        elif sorted(sensor) == ['S1A', 'S1B']:
+        elif sorted(sensor) == ['S1A', 'S1B', 'S1C', 'S1D']:
             query['platformname'] = 'Sentinel-1'
         else:
             raise RuntimeError('unsupported input for parameter sensor')
@@ -392,7 +392,7 @@ class OSV(object):
             
              - 'S1A'
              - 'S1B'
-             - ['S1A', 'S1B']
+             - ['S1A', 'S1B', 'S1C', 'S1D']
         osvtype: str
             the type of orbit files required
         start: str or None

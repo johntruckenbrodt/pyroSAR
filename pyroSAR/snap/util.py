@@ -331,7 +331,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = read
         ############################################
         # Remove-GRD-Border-Noise node configuration
-        if id.sensor in ['S1A', 'S1B'] and id.product == 'GRD' and removeS1BorderNoise:
+        if id.sensor in ['S1A', 'S1B', 'S1C', 'S1D'] and id.product == 'GRD' and removeS1BorderNoise:
             bn = parse_node('Remove-GRD-Border-Noise')
             workflow.insert_node(bn, before=last.id)
             bn.parameters['selectedPolarisations'] = polarizations
@@ -357,7 +357,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = cal
         ############################################
         # ThermalNoiseRemoval node configuration
-        if id.sensor in ['S1A', 'S1B'] and removeS1ThermalNoise:
+        if id.sensor in ['S1A', 'S1B', 'S1C', 'S1D'] and removeS1ThermalNoise:
             tn = parse_node('ThermalNoiseRemoval')
             workflow.insert_node(tn, before=last.id)
             tn.parameters['selectedPolarisations'] = polarizations
@@ -746,7 +746,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     
     id = identify(infile)
     
-    if id.sensor not in ['S1A', 'S1B']:
+    if id.sensor not in ['S1A', 'S1B', 'S1C', 'S1D']:
         raise RuntimeError('this function is for Sentinel-1 only')
     
     os.makedirs(outdir, exist_ok=True)

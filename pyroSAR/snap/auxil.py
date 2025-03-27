@@ -528,7 +528,7 @@ def writer(xmlfile, outdir, basename_extensions=None,
         infile = reader.parameters['file']
         try:
             id = identify(infile)
-            if id.sensor in ['S1A', 'S1B']:
+            if id.sensor in ['S1A', 'S1B', 'S1C', 'S1D']:
                 manifest = id.getFileObj(id.findfiles('manifest.safe')[0])
                 basename = id.outname_base(basename_extensions)
                 basename = '{0}_manifest.safe'.format(basename)
