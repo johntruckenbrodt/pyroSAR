@@ -38,7 +38,8 @@ import operator
 import tarfile as tf
 import xml.etree.ElementTree as ET
 import zipfile as zf
-from datetime import datetime
+from datetime import datetime, timezone
+from dateutil.parser import parse as dateparse
 from time import strptime, strftime
 from statistics import median
 from itertools import groupby
@@ -56,7 +57,7 @@ from .xml_util import getNamespaces
 from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder, multicore
 
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, insert
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
@@ -68,7 +69,6 @@ from geoalchemy2 import Geometry
 import socket
 import time
 import platform
-import subprocess
 import logging
 
 log = logging.getLogger(__name__)
@@ -1709,6 +1709,75 @@ class SAFE(ID):
         :func:`~pyroSAR.S1.removeGRDBorderNoise`
         """
         S1.removeGRDBorderNoise(self, method=method)
+    
+    def geo_grid(self, outname=None, driver=None, overwrite=True):
+        """
+        get the geo grid as vector geometry
+
+        Parameters
+        ----------
+        outname: str
+            the name of the vector file to be written
+        driver: str
+            the output file format; needs to be defined if the format cannot
+            be auto-detected from the filename extension
+        overwrite: bool
+            overwrite an existing vector file?
+
+        Returns
+        -------
+        ~spatialist.vector.Vector or None
+            the vector object if `outname` is None, None otherwise
+        
+        See also
+        --------
+        spatialist.vector.Vector.write
+        """
+        annotations = self.findfiles(self.pattern_ds)
+        key = lambda x: re.search('-[vh]{2}-', x).group()
+        groups = groupby(sorted(annotations, key=key), key=key)
+        annotations = [list(value) for key, value in groups][0]
+        
+        vec = Vector(driver='Memory')
+        vec.addlayer('geogrid', 4326, ogr.wkbPoint25D)
+        field_defs = [
+            ("swath", ogr.OFTString),
+            ("azimuthTime", ogr.OFTDateTime),
+            ("slantRangeTime", ogr.OFTReal),
+            ("line", ogr.OFTInteger),
+            ("pixel", ogr.OFTInteger),
+            ("incidenceAngle", ogr.OFTReal),
+            ("elevationAngle", ogr.OFTReal),
+        ]
+        for name, ftype in field_defs:
+            field = ogr.FieldDefn(name, ftype)
+            vec.layer.CreateField(field)
+        
+        for ann in annotations:
+            with self.getFileObj(ann) as ann_xml:
+                tree = ET.fromstring(ann_xml.read())
+            swath = tree.find(".//adsHeader/swath").text
+            points = tree.findall(".//geolocationGridPoint")
+            for point in points:
+                meta = {child.tag: child.text for child in point}
+                meta["swath"] = swath
+                x = float(meta.pop("longitude"))
+                y = float(meta.pop("latitude"))
+                z = float(meta.pop("height"))
+                geom = ogr.Geometry(ogr.wkbPoint25D)
+                geom.AddPoint(x, y, z)
+                az_time = dateparse(meta["azimuthTime"])
+                meta["azimuthTime"] = az_time.replace(tzinfo=timezone.utc)
+                for key in ["slantRangeTime", "incidenceAngle", "elevationAngle"]:
+                    meta[key] = float(meta[key])
+                for key in ["line", "pixel"]:
+                    meta[key] = int(meta[key])
+                vec.addfeature(geom, fields=meta)
+        geom = None
+        if outname is None:
+            return vec
+        else:
+            vec.write(outfile=outname, driver=driver, overwrite=overwrite)
     
     def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=300, url_option=1):
         """

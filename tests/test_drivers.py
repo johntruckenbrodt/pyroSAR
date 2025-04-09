@@ -301,3 +301,12 @@ def test_geometry(testdata, dataset):
     scene = pyroSAR.identify(testdata[dataset])
     with scene.geometry() as geom:
         assert isinstance(geom, Vector)
+
+
+def test_geo_grid(tmpdir, testdata):
+    scene = pyroSAR.identify(testdata['s1'])
+    with scene.geo_grid() as geom:
+        assert isinstance(geom, Vector)
+    out = tmpdir / "geogrid.gpkg"
+    scene.geo_grid(outname=str(out))
+    assert out.exists()
