@@ -1104,3 +1104,14 @@ Auxiliary Data Handling
 -----------------------
 - removed option for `TDX90m` DEM download because the FTP server has been shut down
   (perhaps reactivated in the future if HTTPS authentication can be implemented)
+
+0.29.0 | 2025-04-09
+===================
+
+General
+-------
+- extended support for Sentinel-1C and D
+
+Drivers
+-------
+- :meth:`pyroSAR.drivers.SAFE.geo_grid`: new method
