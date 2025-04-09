@@ -57,7 +57,7 @@ from .xml_util import getNamespaces
 from spatialist import crsConvert, sqlite3, Vector, bbox
 from spatialist.ancillary import parse_literal, finder, multicore
 
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, insert
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
@@ -69,7 +69,6 @@ from geoalchemy2 import Geometry
 import socket
 import time
 import platform
-import subprocess
 import logging
 
 log = logging.getLogger(__name__)
