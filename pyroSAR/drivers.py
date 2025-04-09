@@ -182,11 +182,11 @@ def identify_many(scenes, pbar=False, sortkey=None, cores=1):
                 progress.update(i + 1)
         if progress is not None:
             progress.finish()
-        if sortkey is not None:
-            idlist.sort(key=operator.attrgetter(sortkey))
     else:
         idlist = multicore(function=handler, multiargs={'scene': scenes},
                            pbar=pbar, cores=cores)
+    if sortkey is not None:
+        idlist.sort(key=operator.attrgetter(sortkey))
     idlist = list(filter(None, idlist))
     return idlist
 
