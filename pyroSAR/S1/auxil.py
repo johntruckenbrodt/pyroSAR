@@ -108,8 +108,8 @@ class OSV(object):
             osvdir = os.path.join(auxdatapath, 'Orbits', 'Sentinel-1')
         self.outdir_poe = os.path.join(osvdir, 'POEORB')
         self.outdir_res = os.path.join(osvdir, 'RESORB')
-        self.pattern = r'S1[AB]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
-        self.pattern_fine = r'(?P<sensor>S1[AB])_OPER_AUX_' \
+        self.pattern = r'S1[ABCD]_OPER_AUX_(?:POE|RES)ORB_OPOD_[0-9TV_]{48}\.EOF'
+        self.pattern_fine = r'(?P<sensor>S1[ABCD])_OPER_AUX_' \
                             r'(?P<type>(?:POE|RES)ORB)_OPOD_' \
                             r'(?P<publish>[0-9]{8}T[0-9]{6})_V' \
                             r'(?P<start>[0-9]{8}T[0-9]{6})_' \
@@ -281,11 +281,11 @@ class OSV(object):
         else:
             raise RuntimeError("osvtype must be either 'POE' or 'RES'")
         
-        if sensor in ['S1A', 'S1B']:
+        if sensor in ['S1A', 'S1B', 'S1C', 'S1D']:
             query['platformname'] = 'Sentinel-1'
             # filename starts w/ sensor
             query['filename'] = '{}*'.format(sensor)
-        elif sorted(sensor) == ['S1A', 'S1B']:
+        elif sorted(sensor) == ['S1A', 'S1B', 'S1C', 'S1D']:
             query['platformname'] = 'Sentinel-1'
         else:
             raise RuntimeError('unsupported input for parameter sensor')
@@ -392,7 +392,9 @@ class OSV(object):
             
              - 'S1A'
              - 'S1B'
-             - ['S1A', 'S1B']
+             - 'S1C'
+             - 'S1D'
+             - ['S1A', 'S1B', 'S1C', 'S1D']
         osvtype: str
             the type of orbit files required
         start: str or None

@@ -96,6 +96,8 @@ class Dataset(object):
                              'PSR2': ('ALOS-2', 'PALSAR-2'),
                              'S1A': ('SENTINEL-1', 'C-SAR'),
                              'S1B': ('SENTINEL-1', 'C-SAR'),
+                             'S1C': ('SENTINEL-1', 'C-SAR'),
+                             'S1D': ('SENTINEL-1', 'C-SAR'),
                              'TSX1': ('TERRASAR-X_1', 'SAR'),
                              'TDX1': ('TANDEM-X_1', 'SAR')}
             

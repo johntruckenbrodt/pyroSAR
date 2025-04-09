@@ -1651,6 +1651,8 @@ class SAFE(ID):
     Sensors:
         * S1A
         * S1B
+        * S1C
+        * S1D
 
     References:
         * S1-RS-MDA-52-7443 Sentinel-1 IPF Auxiliary Product Specification
