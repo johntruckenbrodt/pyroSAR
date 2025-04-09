@@ -1740,6 +1740,7 @@ class SAFE(ID):
         vec = Vector(driver='Memory')
         vec.addlayer('geogrid', 4326, ogr.wkbPoint25D)
         field_defs = [
+            ("swath", ogr.OFTString),
             ("azimuthTime", ogr.OFTDateTime),
             ("slantRangeTime", ogr.OFTReal),
             ("line", ogr.OFTInteger),
@@ -1754,9 +1755,11 @@ class SAFE(ID):
         for ann in annotations:
             with self.getFileObj(ann) as ann_xml:
                 tree = ET.fromstring(ann_xml.read())
+            swath = tree.find(".//adsHeader/swath").text
             points = tree.findall(".//geolocationGridPoint")
             for point in points:
                 meta = {child.tag: child.text for child in point}
+                meta["swath"] = swath
                 x = float(meta.pop("longitude"))
                 y = float(meta.pop("latitude"))
                 z = float(meta.pop("height"))
