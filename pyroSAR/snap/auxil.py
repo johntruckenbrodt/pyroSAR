@@ -1,7 +1,7 @@
 ###############################################################################
 # pyroSAR SNAP API tools
 
-# Copyright (c) 2017-2024, the pyroSAR Developers.
+# Copyright (c) 2017-2025, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -135,17 +135,22 @@ def parse_node(name, use_existing=True):
             child.tag = 'sourceProduct'
             child.attrib['refid'] = 'Read'
             child.text = None
+        
+        # cleanup the BandMaths node
         if operator == 'BandMaths':
             tband = tree.find('.//targetBand')
-            for item in ['spectralWavelength', 'spectralBandwidth',
-                         'scalingOffset', 'scalingFactor',
-                         'validExpression', 'spectralBandIndex']:
-                el = tband.find('.//{}'.format(item))
+            allowed = ['name', 'type', 'expression',
+                       'description', 'unit', 'noDataValue']
+            invalid = [x.tag for x in tband if x.tag not in allowed]
+            for tag in invalid:
+                el = tband.find(f'.//{tag}')
                 tband.remove(el)
             for item in ['targetBands', 'variables']:
                 elem = tree.find(f'.//{item}')
                 pl = elem.find('.//_.002e..')
                 elem.remove(pl)
+        
+        # add a class parameter and create the Node object
         tree.find('.//parameters').set('class', 'com.bc.ceres.binding.dom.XppDomElement')
         node = Node(node)
         
@@ -171,9 +176,7 @@ def parse_node(name, use_existing=True):
         
         with open(absname, 'w') as xml:
             xml.write(str(node))
-        
         return node
-    
     else:
         with open(absname, 'r') as workflow:
             element = ET.fromstring(workflow.read())
