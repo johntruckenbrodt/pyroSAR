@@ -22,7 +22,7 @@ import xml.etree.ElementTree as ET
 
 from pyroSAR import identify
 from pyroSAR.examine import ExamineSnap
-from pyroSAR.ancillary import windows_fileprefix, multilook_factors
+from pyroSAR.ancillary import windows_fileprefix, multilook_factors, Lock
 from pyroSAR.auxdata import get_egm_lookup
 
 from spatialist import Vector, Raster, vectorize, rasterize, boundary, intersect, bbox
@@ -75,7 +75,7 @@ def parse_node(name, use_existing=True):
     name: str
         the name of the processing node, e.g. Terrain-Correction
     use_existing: bool
-        use an existing XML text file or force re-parsing the gpt docstring and overwriting the XML file?
+        use an existing XML text file or force reparsing the gpt docstring and overwriting the XML file?
 
     Returns
     -------
@@ -102,85 +102,92 @@ def parse_node(name, use_existing=True):
     for item in deprecated:
         os.remove(item)
     
-    if not os.path.isfile(absname) or not use_existing:
-        gpt = snap.gpt
-        
-        cmd = [gpt, operator, '-h']
-        
-        out, err = run(cmd=cmd, void=False)
-        
-        if re.search('Unknown operator', out + err):
-            raise RuntimeError("unknown operator '{}'".format(operator))
-        
-        graph = re.search('<graph id.*', out, flags=re.DOTALL).group()
-        graph = re.sub(r'>\${.*', '/>', graph)  # remove placeholder values like ${value}
-        graph = re.sub(r'<\.\.\./>.*', '', graph)  # remove <.../> placeholders
-        if operator == 'BandMaths':
-            graph = graph.replace('sourceProducts', 'sourceProduct')
-        tree = ET.fromstring(graph)
-        for elt in tree.iter():
-            if elt.text in ['string', 'double', 'integer', 'float']:
-                elt.text = None
-        node = tree.find('node')
-        node.attrib['id'] = operator
-        # add a second source product entry for multi-source nodes
-        # multi-source nodes are those with an entry 'sourceProducts' instead of 'sourceProduct'
-        # exceptions are registered in this list:
-        multisource = ['Back-Geocoding']
-        if operator != 'Read' and operator != 'ProductSet-Reader':
-            source = node.find('.//sources')
-            child = source[0]
-            if child.tag == 'sourceProducts' or operator in multisource:
-                child2 = ET.SubElement(source, 'sourceProduct.1', {'refid': 'Read (2)'})
-            child.tag = 'sourceProduct'
-            child.attrib['refid'] = 'Read'
-            child.text = None
-        
-        # cleanup the BandMaths node
-        if operator == 'BandMaths':
-            tband = tree.find('.//targetBand')
-            allowed = ['name', 'type', 'expression',
-                       'description', 'unit', 'noDataValue']
-            invalid = [x.tag for x in tband if x.tag not in allowed]
-            for tag in invalid:
-                el = tband.find(f'.//{tag}')
-                tband.remove(el)
-            for item in ['targetBands', 'variables']:
-                elem = tree.find(f'.//{item}')
-                pl = elem.find('.//_.002e..')
-                elem.remove(pl)
-        
-        # add a class parameter and create the Node object
-        tree.find('.//parameters').set('class', 'com.bc.ceres.binding.dom.XppDomElement')
-        node = Node(node)
-        
-        # read the default values from the parameter documentation
-        parameters = node.parameters.keys()
-        out += '-P'
-        for parameter in parameters:
-            p1 = r'-P{}.*?-P'.format(parameter)
-            p2 = r"Default\ value\ is '([a-zA-Z0-9 ._\(\)]+)'"
-            r1 = re.search(p1, out, re.S)
-            if r1:
-                sub = r1.group()
-                r2 = re.search(p2, sub)
-                if r2:
-                    value = r2.groups()[0]
-                    node.parameters[parameter] = value
-                    continue
-            node.parameters[parameter] = None
-        
-        # fill in some additional defaults
-        if operator == 'BandMerge':
-            node.parameters['geographicError'] = '1.0E-5'
-        
-        with open(absname, 'w') as xml:
-            xml.write(str(node))
-        return node
-    else:
-        with open(absname, 'r') as workflow:
-            element = ET.fromstring(workflow.read())
-        return Node(element)
+    with Lock(absname):
+        if not os.path.isfile(absname) or not use_existing:
+            gpt = snap.gpt
+            
+            cmd = [gpt, operator, '-h']
+            
+            out, err = run(cmd=cmd, void=False)
+            
+            if re.search('Unknown operator', out + err):
+                raise RuntimeError("unknown operator '{}'".format(operator))
+            
+            graph = re.search('<graph id.*', out, flags=re.DOTALL).group()
+            # remove placeholder values like ${value}
+            graph = re.sub(r'>\${.*', '/>', graph)
+            # remove <.../> placeholders
+            graph = re.sub(r'<\.\.\./>.*', '', graph)
+            if operator == 'BandMaths':
+                graph = graph.replace('sourceProducts', 'sourceProduct')
+            tree = ET.fromstring(graph)
+            for elt in tree.iter():
+                if elt.text in ['string', 'double', 'integer', 'float']:
+                    elt.text = None
+            node = tree.find('node')
+            node.attrib['id'] = operator
+            # add a second source product entry for multi-source nodes
+            # multi-source nodes are those with an entry 'sourceProducts'
+            # instead of 'sourceProduct'
+            # exceptions are registered in this list:
+            multisource = ['Back-Geocoding']
+            if operator != 'Read' and operator != 'ProductSet-Reader':
+                source = node.find('.//sources')
+                child = source[0]
+                if child.tag == 'sourceProducts' or operator in multisource:
+                    child2 = ET.SubElement(source,
+                                           'sourceProduct.1',
+                                           {'refid': 'Read (2)'})
+                child.tag = 'sourceProduct'
+                child.attrib['refid'] = 'Read'
+                child.text = None
+            
+            # cleanup the BandMaths node
+            if operator == 'BandMaths':
+                tband = tree.find('.//targetBand')
+                allowed = ['name', 'type', 'expression',
+                           'description', 'unit', 'noDataValue']
+                invalid = [x.tag for x in tband if x.tag not in allowed]
+                for tag in invalid:
+                    el = tband.find(f'.//{tag}')
+                    tband.remove(el)
+                for item in ['targetBands', 'variables']:
+                    elem = tree.find(f'.//{item}')
+                    pl = elem.find('.//_.002e..')
+                    elem.remove(pl)
+            
+            # add a class parameter and create the Node object
+            value = 'com.bc.ceres.binding.dom.XppDomElement'
+            tree.find('.//parameters').set('class', value)
+            node = Node(node)
+            
+            # read the default values from the parameter documentation
+            parameters = node.parameters.keys()
+            out += '-P'
+            for parameter in parameters:
+                p1 = r'-P{}.*?-P'.format(parameter)
+                p2 = r"Default\ value\ is '([a-zA-Z0-9 ._\(\)]+)'"
+                r1 = re.search(p1, out, re.S)
+                if r1:
+                    sub = r1.group()
+                    r2 = re.search(p2, sub)
+                    if r2:
+                        value = r2.groups()[0]
+                        node.parameters[parameter] = value
+                        continue
+                node.parameters[parameter] = None
+            
+            # fill in some additional defaults
+            if operator == 'BandMerge':
+                node.parameters['geographicError'] = '1.0E-5'
+            
+            with open(absname, 'w') as xml:
+                xml.write(str(node))
+            return node
+        else:
+            with open(absname, 'r') as workflow:
+                element = ET.fromstring(workflow.read())
+            return Node(element)
 
 
 def execute(xmlfile, cleanup=True, gpt_exceptions=None, gpt_args=None):
