@@ -3,19 +3,19 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python>=3.8
-  - progressbar2
+  - gdal>=2.4
+  - geoalchemy2<0.14.0
+  - libgdal
+  - libspatialite>=5.1.0
+  - lxml
   - numpy<2.0
-  - spatialist>=0.15.0
+  - packaging
+  - pillow
+  - progressbar2
+  - psycopg2
+  - python>=3.8
   - pyyaml
   - requests
-  - psycopg2
+  - spatialist>=0.15.1
   - sqlalchemy>=1.4,<2.0
   - sqlalchemy-utils>=0.37
-  - geoalchemy2<0.14.0
-  - gdal>=2.4
-  - libgdal
-  - pillow
-  - lxml
-  - packaging
-  - libspatialite>=5.1.0
