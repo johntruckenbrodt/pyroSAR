@@ -5,6 +5,9 @@ on: [ push ]
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: micromamba-shell {0}
     services:
       postgres:
         image: postgis/postgis:16-3.4
@@ -33,22 +36,18 @@ jobs:
           echo "PROJ_DATA=$CONDA/share/proj" >> $GITHUB_ENV
       - name: Install python packages
         run: |
-          mamba install -y python=3.10 flake8
-          mamba env update --file environment-dev.yml -n base
-        shell: micromamba-shell {0}
+          micromamba install -y python=3.10 flake8
+          micromamba env update --file environment-dev.yml -n base
       - name: Lint with flake8
         run: |
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-        shell: micromamba-shell {0}
       - name: Install pyroSAR
         run: |
           pip install .
-        shell: micromamba-shell {0}
       - name: Test with pytest
         run: |
           coverage run -m pytest
-        shell: micromamba-shell {0}
         env:
           PGUSER: postgres
           PGPASSWORD: Password12!
