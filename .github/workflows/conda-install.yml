@@ -30,8 +30,9 @@ jobs:
           echo "PROJ_DATA=$CONDA/share/proj" >> $GITHUB_ENV
       - name: Install python packages
         run: |
-          conda install -y python=3.10 flake8 pytest coverage
+          conda install -y python=3.10 flake8
           conda env update --file environment.yml --name base
+          conda env update --file environment-dev.yml --name base
       - name: Lint with flake8
         run: |
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
@@ -62,7 +63,6 @@ jobs:
           activate-environment: ps_test_dev
           auto-update-conda: true
           python-version: '3.12'
-          environment-file: environment-dev.yml
           auto-activate-base: false
       - uses: nyurik/action-setup-postgis@v2
         with:
@@ -76,6 +76,10 @@ jobs:
           echo %CONDA%\Scripts>> %GITHUB_PATH%
           echo C:\esa-snap\bin>> %GITHUB_PATH%
           echo PROJ_DATA=%CONDA%\share\proj>> %GITHUB_ENV%
+      - name: Install python packages
+        run: |
+          conda env update --file environment.yml
+          conda env update --file environment-dev.yml
       - name: Install pyroSAR
         run: |
           pip install .
