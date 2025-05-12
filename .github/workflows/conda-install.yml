@@ -58,6 +58,7 @@ jobs:
         with:
           file: "${GITHUB_WORKSPACE}/.coverage"
           github-token: ${{ github.token }}
+          debug: true
 
   build-windows:
     runs-on: windows-latest
