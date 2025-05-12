@@ -56,6 +56,7 @@ jobs:
       - name: Publish to coveralls.io
         uses: coverallsapp/github-action@v2
         with:
+          file: "${GITHUB_WORKSPACE}/.coverage"
           github-token: ${{ github.token }}
 
   build-windows:
