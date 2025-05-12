@@ -36,8 +36,8 @@ jobs:
           echo "PROJ_DATA=$CONDA/share/proj" >> $GITHUB_ENV
       - name: Install python packages
         run: |
-          micromamba install -y python=3.10 flake8
-          micromamba env update --file environment-dev.yml
+          micromamba install -y python=3.10 flake8 -n ps_test
+          micromamba env update --file environment-dev.yml -n ps_test
       - name: Lint with flake8
         run: |
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
