@@ -51,6 +51,8 @@ jobs:
         env:
           PGUSER: postgres
           PGPASSWORD: Password12!
+      - name: Show coverage file location (optional)
+        run: ls -lha "${GITHUB_WORKSPACE}"
       - name: Publish to coveralls.io
         uses: coverallsapp/github-action@v2
         with:
