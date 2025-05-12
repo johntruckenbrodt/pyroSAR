@@ -49,8 +49,6 @@ jobs:
         run: |
           coverage run -m pytest
           coverage xml
-          pwd
-          ls -lha
         env:
           PGUSER: postgres
           PGPASSWORD: Password12!
@@ -67,12 +65,13 @@ jobs:
         shell: cmd /C CALL {0}
     steps:
       - uses: actions/checkout@v3
-      - uses: mamba-org/setup-micromamba@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
+          activate-environment: ps_test_dev
+          auto-update-conda: true
+          python-version: '3.12'
           environment-file: environment.yml
-          cache-environment: true
-          init-shell: cmd.exe
-          post-cleanup: 'all'
+          auto-activate-base: false
       - uses: nyurik/action-setup-postgis@v2
         with:
           cached-dir: C:\downloads
@@ -87,7 +86,7 @@ jobs:
           echo PROJ_DATA=%CONDA%\share\proj>> %GITHUB_ENV%
       - name: Install python packages
         run: |
-          mamba env update --file environment-dev.yml -n base
+          conda env update --file environment-dev.yml --name ps_test_dev
       - name: Install pyroSAR
         run: |
           pip install .
