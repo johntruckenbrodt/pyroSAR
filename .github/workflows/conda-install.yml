@@ -37,7 +37,7 @@ jobs:
       - name: Install python packages
         run: |
           micromamba install -y python=3.10 flake8
-          micromamba env update --file environment-dev.yml -n base
+          micromamba env update --file environment-dev.yml
       - name: Lint with flake8
         run: |
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
