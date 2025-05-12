@@ -47,18 +47,17 @@ jobs:
           pip install .
       - name: Test with pytest
         run: |
-          coverage run --data-file="${GITHUB_WORKSPACE}/.coverage" -m pytest
+          coverage run --data-file="${{ github.workspace }}/.coverage" -m pytest
+          coverage xml
         env:
           PGUSER: postgres
           PGPASSWORD: Password12!
-      - name: Show coverage file location (optional)
-        run: ls -lha "${GITHUB_WORKSPACE}"
       - name: Publish to coveralls.io
         uses: coverallsapp/github-action@v2
         with:
           file: "${GITHUB_WORKSPACE}/.coverage"
           github-token: ${{ github.token }}
-          debug: true
+          format: cobertura
 
   build-windows:
     runs-on: windows-latest
