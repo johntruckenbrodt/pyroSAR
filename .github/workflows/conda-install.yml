@@ -47,7 +47,7 @@ jobs:
           pip install .
       - name: Test with pytest
         run: |
-          coverage run -m pytest
+          coverage run --data-file=.coverage -m pytest
         env:
           PGUSER: postgres
           PGPASSWORD: Password12!
