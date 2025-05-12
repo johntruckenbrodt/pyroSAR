@@ -177,6 +177,18 @@ def test_archive(tmpdir, testdata):
     assert len(out) == 1
     assert isinstance(out[0], str)
     
+    out = db.select(vv=1, return_value=['mindate', 'geometry_wkt'])
+    assert len(out) == 1
+    assert isinstance(out[0], tuple)
+    assert out[0][0] == '20150222T170750'
+    assert out[0][1] == ('POLYGON(('
+                         '8.505644 50.295261, 8.017178 51.788181, '
+                         '11.653832 52.183979, 12.0268 50.688881, '
+                         '8.505644 50.295261))')
+    
+    with pytest.raises(ValueError):
+        out = db.select(vv=1, return_value=['foobar'])
+    
     db.insert(testdata['s1_3'])
     db.insert(testdata['s1_4'])
     db.drop_element(testdata['s1_3'])
@@ -249,6 +261,15 @@ def test_archive_postgres(tmpdir, testdata):
     out = db.select(vv=1, acquisition_mode=('IW', 'EW'))
     assert len(out) == 1
     assert isinstance(out[0], str)
+    
+    out = db.select(vv=1, return_value=['scene', 'start'])
+    assert len(out) == 1
+    assert isinstance(out[0], tuple)
+    assert out[0][1] == '20150222T170750'
+    
+    with pytest.raises(ValueError):
+        out = db.select(vv=1, return_value=['foobar'])
+    
     db.add_tables(mytable)
     assert 'mytable' in db.get_tablenames()
     with pytest.raises(TypeError):

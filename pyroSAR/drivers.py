@@ -3035,7 +3035,7 @@ class Archive(object):
             log.info('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
     
     def select(self, vectorobject=None, mindate=None, maxdate=None, date_strict=True,
-               processdir=None, recursive=False, polarizations=None, **args):
+               processdir=None, recursive=False, polarizations=None, return_value="scene", **args):
         """
         select scenes from the database
 
@@ -3050,7 +3050,7 @@ class Archive(object):
         date_strict: bool
             treat dates as strict limits or also allow flexible limits to incorporate scenes
             whose acquisition period overlaps with the defined limit?
-            
+
             - strict: start >= mindate & stop <= maxdate
             - not strict: stop >= mindate & start <= maxdate
         processdir: str or None
@@ -3060,15 +3060,55 @@ class Archive(object):
             (only if `processdir` is not None) should also the subdirectories of the `processdir` be scanned?
         polarizations: list[str] or None
             a list of polarization strings, e.g. ['HH', 'VV']
+        return_value: str or List[str]
+            the query return value(s). Options:
+            
+            - geometry_wkb: the scene's footprint geometry formatted as WKB
+            - geometry_wkt: the scene's footprint geometry formatted as WKT
+            - mindate: the acquisition start datetime in UTC formatted as YYYYmmddTHHMMSS
+            - maxdate: the acquisition end datetime in UTC formatted as YYYYmmddTHHMMSS
+            - all further database column names (see :meth:`~Archive.get_colnames()`)
         **args:
             any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
 
         Returns
         -------
-        list[str]
-            the file names pointing to the selected scenes
-
+        List[str] or List[tuple[str]]
+            If a single return_value is specified: list of values for that attribute
+            If multiple return_values are specified: list of tuples containing the requested attributes
         """
+        # Convert return_value to list if it's a string
+        if isinstance(return_value, str):
+            return_values = [return_value]
+        else:
+            return_values = return_value
+        
+        return_values_sql = []
+        for val in return_values:
+            if val == 'mindate':
+                return_values_sql.append('start')
+            elif val == 'maxdate':
+                return_values_sql.append('stop')
+            elif val == 'geometry_wkt':
+                prefix = 'ST_' if self.driver == 'postgresql' else ''
+                return_values_sql.append(f'{prefix}AsText(geometry) as geometry_wkt')
+            elif val == 'geometry_wkb':
+                prefix = 'ST_' if self.driver == 'postgresql' else ''
+                return_values_sql.append(f'{prefix}AsBinary(geometry) as geometry_wkb')
+            else:
+                return_values_sql.append(val)
+        
+        # Validate that all requested return values exist in the database
+        valid_columns = self.get_colnames()
+        extra = ['mindate', 'maxdate', 'geometry_wkt', 'geometry_wkb']
+        normal_returns = [x for x in return_values if x not in extra]
+        invalid_returns = [x for x in normal_returns if x not in valid_columns]
+        if invalid_returns:
+            invalid_str = ', '.join(invalid_returns)
+            msg = (f"The following options are not supported as "
+                   f"return values: {invalid_str}")
+            raise ValueError(msg)
+        
         arg_valid = [x for x in args.keys() if x in self.get_colnames()]
         arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
@@ -3084,6 +3124,7 @@ class Archive(object):
                     arg_format.append("""{0}='{1}'""".format(key, args[key]))
                 elif isinstance(args[key], (tuple, list)):
                     arg_format.append("""{0} IN ('{1}')""".format(key, "', '".join(map(str, args[key]))))
+        
         if mindate:
             if isinstance(mindate, datetime):
                 mindate = mindate.strftime('%Y%m%dT%H%M%S')
@@ -3095,6 +3136,7 @@ class Archive(object):
                 vals.append(mindate)
             else:
                 log.info('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
+        
         if maxdate:
             if isinstance(maxdate, datetime):
                 maxdate = maxdate.strftime('%Y%m%dT%H%M%S')
@@ -3133,7 +3175,10 @@ class Archive(object):
             subquery = ' WHERE {}'.format(' AND '.join(arg_format))
         else:
             subquery = ''
-        query = '''SELECT scene, outname_base FROM data{}'''.format(subquery)
+        
+        # Modify the query to select the requested return values
+        query = 'SELECT {}, outname_base FROM data{}'.format(', '.join(return_values_sql), subquery)
+        
         # the query gets assembled stepwise here
         for val in vals:
             query = query.replace('?', """'{0}'""", 1).format(val)
@@ -3144,12 +3189,18 @@ class Archive(object):
         
         if processdir and os.path.isdir(processdir):
             scenes = [x for x in query_rs
-                      if len(finder(processdir, [x[1]], regex=True, recursive=recursive)) == 0]
+                      if len(finder(processdir, [x[-1]], regex=True, recursive=recursive)) == 0]
         else:
             scenes = query_rs
+        
         ret = []
         for x in scenes:
-            ret.append(self.encode(x[0]))
+            # If only one return value was requested, append just that value
+            if len(return_values) == 1:
+                ret.append(self.encode(x[0]))
+            else:
+                # If multiple return values were requested, append a tuple of all values
+                ret.append(tuple(self.encode(val) for val in x[:-1]))  # Exclude outname_base
         
         return ret
     
