@@ -16,6 +16,6 @@ dependencies:
   - python>=3.8
   - pyyaml
   - requests
-  - spatialist>=0.15.1
+  - spatialist>=0.15.2
   - sqlalchemy>=1.4,<2.0
   - sqlalchemy-utils>=0.37
