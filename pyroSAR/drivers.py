@@ -2796,7 +2796,7 @@ class Archive(object):
     
     @staticmethod
     def encode(string, encoding='utf-8'):
-        if not isinstance(string, str):
+        if not isinstance(string, str) and hasattr(string, 'encode'):
             return string.encode(encoding)
         else:
             return string
