@@ -1115,3 +1115,21 @@ General
 Drivers
 -------
 - :meth:`pyroSAR.drivers.SAFE.geo_grid`: new method
+
+0.29.1 | 2025-05-12
+===================
+
+SNAP API
+--------
+- support for SNAP 12
+
+0.30.0 | 2025-05-14
+===================
+
+Drivers
+-------
+- changed polygon coordinate order to counter-clockwise for methods
+
+  - :meth:`pyroSAR.drivers.ID.bbox`
+  - :meth:`pyroSAR.drivers.ID.geometry`
+- method :meth:`pyroSAR.drivers.Archive.select`: new argument `return_value`

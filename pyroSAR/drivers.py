@@ -3070,10 +3070,10 @@ class Archive(object):
         return_value: str or List[str]
             the query return value(s). Options:
             
-            - geometry_wkb: the scene's footprint geometry formatted as WKB
-            - geometry_wkt: the scene's footprint geometry formatted as WKT
-            - mindate: the acquisition start datetime in UTC formatted as YYYYmmddTHHMMSS
-            - maxdate: the acquisition end datetime in UTC formatted as YYYYmmddTHHMMSS
+            - `geometry_wkb`: the scene's footprint geometry formatted as WKB
+            - `geometry_wkt`: the scene's footprint geometry formatted as WKT
+            - `mindate`: the acquisition start datetime in UTC formatted as YYYYmmddTHHMMSS
+            - `maxdate`: the acquisition end datetime in UTC formatted as YYYYmmddTHHMMSS
             - all further database column names (see :meth:`~Archive.get_colnames()`)
         **args:
             any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
