@@ -307,9 +307,16 @@ class ID(object):
             point.AddPoint(lon, lat)
             points.AddGeometry(point)
         geom = points.ConvexHull()
-        point = points = None
-        
         geom.FlattenTo2D()
+        point = points = None
+        exterior = geom.GetGeometryRef(0)
+        if exterior.IsClockwise():
+            points = list(exterior.GetPoints())
+            exterior.Empty()
+            for x, y in reversed(points):
+                exterior.AddPoint(x, y)
+            geom.CloseRings()
+        exterior = points = None
         
         bbox = Vector(driver='Memory')
         bbox.addlayer('geometry', srs, geom.GetGeometryType())
