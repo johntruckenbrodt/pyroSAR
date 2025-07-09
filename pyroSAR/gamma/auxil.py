@@ -209,7 +209,7 @@ class ISPPar(object):
                 and self.projection_name == 'WGS 84 / Antarctic Polar Stereographic'
             ):
                 out['map_info'] = [
-                    'WGS 84 / Antarctic Polar Stereographic',
+                    'EPSG:3031 - WGS 84 / Antarctic Polar Stereographic',
                     '1.0000',
                     '1.0000',
                     self.corner_east - (abs(self.post_east) / 2),
