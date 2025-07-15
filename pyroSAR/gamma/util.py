@@ -835,9 +835,9 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     
     reference_par = ISPPar(reference + '.par')
     ######################################################################
-    # DEM product generation #############################################
+    # geocoding and DEM product generation ###############################
     ######################################################################
-    log.info('creating DEM products')
+    log.info('geocoding and creating DEM products')
     gc_map_wrap(image=reference, namespace=n, dem=dem, spacing=spacing, exist_ok=exist_ok,
                 logpath=path_log, outdir=tmpdir, shellscript=shellscript)
     
@@ -850,7 +850,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
                     logpath=path_log, outdir=tmpdir, shellscript=shellscript)
     
     ######################################################################
-    # lookup table Refinement ############################################
+    # lookup table refinement ############################################
     ######################################################################
     lut_final = n.lut_init
     if refine_lut:
@@ -864,7 +864,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
                              logpath=path_log,
                              outdir=tmpdir,
                              shellscript=shellscript)
-        # Refinement Lookuptable
+        # Refinement of lookup table
         # for "shift" data offset window size enlarged twice to 512 and 256, for data without shift 256 128
         diff.offset_pwrm(MLI_1=n.pix_area_sigma0,
                          MLI_2=reference,
@@ -906,9 +906,9 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
                         logpath=path_log, outdir=tmpdir, shellscript=shellscript)
         lut_final = lut_final + '.fine'
     ######################################################################
-    # radiometric terrain correction and backward geocoding ##############
+    # radiometric terrain correction and back-geocoding ##################
     ######################################################################
-    log.info('radiometric terrain correction and backward geocoding')
+    log.info('radiometric terrain correction and back-geocoding')
     for image in images:
         if 'lat' in locals():
             lat.product(data_1=image,
@@ -1242,14 +1242,17 @@ def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
                            outdir=outdir,
                            shellscript=shellscript)
     
-    isp.SLC_mosaic_S1_TOPS(SLC_tab=tab_out,
-                           SLC=name_out,
-                           SLC_par=name_out + '.par',
-                           rlks=rlks,
-                           azlks=azlks,
-                           logpath=logpath,
-                           outdir=outdir,
-                           shellscript=shellscript)
+    new = 'SLC_mosaic_ScanSAR'
+    old = 'SLC_mosaic_S1_TOPS'
+    slc_mosaic = new if hasattr(isp, new) else old
+    getattr(isp, slc_mosaic)(SLC_tab=tab_out,
+                             SLC=name_out,
+                             SLC_par=name_out + '.par',
+                             rlks=rlks,
+                             azlks=azlks,
+                             logpath=logpath,
+                             outdir=outdir,
+                             shellscript=shellscript)
     if replace:
         for item in [burst1, burst2, burst3]:
             for subitem in [item + x for x in ['', '.par', '.tops_par']]:
@@ -1314,7 +1317,7 @@ def pixel_area_wrap(image, namespace, lut, exist_ok=False,
                        'outdir': outdir,
                        'shellscript': shellscript}
     
-    # newer versions of GAMMA enable creating the ratio of ellipsoid based
+    # newer versions of GAMMA enable creating the ratio of ellipsoid-based
     # pixel area and DEM-facet pixel area directly with command pixel_area
     if hasarg(diff.pixel_area, 'sig2gam_ratio'):
         namespace.appreciate(['pix_ratio'])
@@ -1351,7 +1354,7 @@ def pixel_area_wrap(image, namespace, lut, exist_ok=False,
                     if c1 or c2:
                         shutil.copy(src=image + '.hdr', dst=hdr_out)
         
-        # ratio of ellipsoid based pixel area and DEM-facet pixel area
+        # ratio of ellipsoid-based pixel area and DEM-facet pixel area
         c1 = not os.path.isfile(namespace.pix_ratio)
         c2 = os.path.isfile(namespace.pix_ratio) and not exist_ok
         if c1 or c2:
@@ -1366,6 +1369,8 @@ def pixel_area_wrap(image, namespace, lut, exist_ok=False,
                           outdir=outdir,
                           shellscript=shellscript)
             else:
+                for item in ['pix_area_gamma0', 'pix_ellip_sigma0']:
+                    par2hdr(image + '.par', namespace[item] + '.hdr')
                 lat_ratio(data_in1=namespace.pix_ellip_sigma0,
                           data_in2=namespace.pix_area_gamma0,
                           data_out=namespace.pix_ratio)
@@ -1385,6 +1390,8 @@ def pixel_area_wrap(image, namespace, lut, exist_ok=False,
                           outdir=outdir,
                           shellscript=shellscript)
             else:
+                for item in ['pix_area_gamma0', 'pix_area_sigma0']:
+                    par2hdr(image + '.par', namespace[item] + '.hdr')
                 lat_ratio(data_in1=namespace.pix_area_gamma0,
                           data_in2=namespace.pix_area_sigma0,
                           data_out=namespace.gs_ratio)
@@ -1395,7 +1402,8 @@ def pixel_area_wrap(image, namespace, lut, exist_ok=False,
             hdr_out = namespace[item] + '.hdr'
             c1 = not os.path.isfile(item)
             c2 = os.path.isfile(hdr_out) and not exist_ok
-            par2hdr(image + '.par', hdr_out)
+            if c1 or c2:
+                par2hdr(image + '.par', hdr_out)
 
 
 def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False,
