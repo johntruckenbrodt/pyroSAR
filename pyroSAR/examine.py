@@ -465,8 +465,9 @@ class SnapProperties(object):
     
     Examples
     --------
-    >>> from pyroSAR.examine import SnapProperties
-    >>> config = SnapProperties()
+    >>> from pyroSAR.examine import ExamineSnap, SnapProperties
+    >>> path = ExamineSnap().path
+    >>> config = SnapProperties(path=path)
     >>> config['snap.userdir'] = '/path/to/snap/auxdata'
     """
     

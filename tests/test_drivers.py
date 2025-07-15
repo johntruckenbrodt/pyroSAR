@@ -8,6 +8,7 @@ from datetime import datetime
 from spatialist import Vector
 from sqlalchemy import Table, MetaData, Column, Integer, String
 from geoalchemy2 import Geometry
+from shapely import wkt
 
 metadata = MetaData()
 
@@ -177,6 +178,20 @@ def test_archive(tmpdir, testdata):
     assert len(out) == 1
     assert isinstance(out[0], str)
     
+    out = db.select(vv=1, return_value=['mindate', 'geometry_wkt', 'geometry_wkb'])
+    assert len(out) == 1
+    assert isinstance(out[0], tuple)
+    assert out[0][0] == '20150222T170750'
+    geom = wkt.loads('POLYGON(('
+                     '8.505644 50.295261, 12.0268 50.688881, '
+                     '11.653832 52.183979, 8.017178 51.788181, '
+                     '8.505644 50.295261))')
+    assert wkt.loads(out[0][1]) == geom
+    assert out[0][2] == geom.wkb
+    
+    with pytest.raises(ValueError):
+        out = db.select(vv=1, return_value=['foobar'])
+    
     db.insert(testdata['s1_3'])
     db.insert(testdata['s1_4'])
     db.drop_element(testdata['s1_3'])
@@ -202,9 +217,11 @@ def test_archive2(tmpdir, testdata):
     assert not os.path.isfile(dbfile)
     assert Vector(shp).nfeatures == 1
     
-    with pytest.raises(OSError):
-        with pyroSAR.Archive(dbfile) as db:
+    with pyroSAR.Archive(dbfile) as db:
+        with pytest.raises(OSError):
             db.import_outdated(testdata['archive_old_csv'])
+        with pytest.raises(RuntimeError):
+            db.import_outdated('foobar')
     
     # the archive_old_bbox database contains a relative file name for the scene
     # so that it can be reimported into the new database. The working directory
@@ -249,6 +266,15 @@ def test_archive_postgres(tmpdir, testdata):
     out = db.select(vv=1, acquisition_mode=('IW', 'EW'))
     assert len(out) == 1
     assert isinstance(out[0], str)
+    
+    out = db.select(vv=1, return_value=['scene', 'start'])
+    assert len(out) == 1
+    assert isinstance(out[0], tuple)
+    assert out[0][1] == '20150222T170750'
+    
+    with pytest.raises(ValueError):
+        out = db.select(vv=1, return_value=['foobar'])
+    
     db.add_tables(mytable)
     assert 'mytable' in db.get_tablenames()
     with pytest.raises(TypeError):
@@ -301,3 +327,12 @@ def test_geometry(testdata, dataset):
     scene = pyroSAR.identify(testdata[dataset])
     with scene.geometry() as geom:
         assert isinstance(geom, Vector)
+
+
+def test_geo_grid(tmpdir, testdata):
+    scene = pyroSAR.identify(testdata['s1'])
+    with scene.geo_grid() as geom:
+        assert isinstance(geom, Vector)
+    out = tmpdir / "geogrid.gpkg"
+    scene.geo_grid(outname=str(out))
+    assert out.exists()

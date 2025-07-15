@@ -1,7 +1,7 @@
 ###############################################################################
 # Convenience functions for SAR image batch processing with ESA SNAP
 
-# Copyright (c) 2016-2024, the pyroSAR Developers.
+# Copyright (c) 2016-2025, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -270,7 +270,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
     
     if id.sensor in ['ASAR', 'ERS1', 'ERS2']:
         formatName = 'ENVISAT'
-    elif id.sensor in ['S1A', 'S1B']:
+    elif re.search('S1[A-Z]', id.sensor):
         if id.product == 'SLC':
             removeS1BorderNoise = False
             process_S1_SLC = True
@@ -331,7 +331,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = read
         ############################################
         # Remove-GRD-Border-Noise node configuration
-        if id.sensor in ['S1A', 'S1B'] and id.product == 'GRD' and removeS1BorderNoise:
+        if id.sensor in ['S1A', 'S1B', 'S1C', 'S1D'] and id.product == 'GRD' and removeS1BorderNoise:
             bn = parse_node('Remove-GRD-Border-Noise')
             workflow.insert_node(bn, before=last.id)
             bn.parameters['selectedPolarisations'] = polarizations
@@ -357,7 +357,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = cal
         ############################################
         # ThermalNoiseRemoval node configuration
-        if id.sensor in ['S1A', 'S1B'] and removeS1ThermalNoise:
+        if id.sensor in ['S1A', 'S1B', 'S1C', 'S1D'] and removeS1ThermalNoise:
             tn = parse_node('ThermalNoiseRemoval')
             workflow.insert_node(tn, before=last.id)
             tn.parameters['selectedPolarisations'] = polarizations
@@ -746,7 +746,7 @@ def noise_power(infile, outdir, polarizations, spacing, t_srs, refarea='sigma0',
     
     id = identify(infile)
     
-    if id.sensor not in ['S1A', 'S1B']:
+    if id.sensor not in ['S1A', 'S1B', 'S1C', 'S1D']:
         raise RuntimeError('this function is for Sentinel-1 only')
     
     os.makedirs(outdir, exist_ok=True)

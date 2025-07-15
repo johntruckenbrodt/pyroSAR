@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2024, the pyroSAR Developers.
+# Copyright (c) 2016-2025, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -38,7 +38,8 @@ import operator
 import tarfile as tf
 import xml.etree.ElementTree as ET
 import zipfile as zf
-from datetime import datetime
+from datetime import datetime, timezone
+from dateutil.parser import parse as dateparse
 from time import strptime, strftime
 from statistics import median
 from itertools import groupby
@@ -54,9 +55,9 @@ from .ERS import passdb_query, get_angles_resolution
 from .xml_util import getNamespaces
 
 from spatialist import crsConvert, sqlite3, Vector, bbox
-from spatialist.ancillary import parse_literal, finder
+from spatialist.ancillary import parse_literal, finder, multicore
 
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, insert
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
@@ -68,7 +69,6 @@ from geoalchemy2 import Geometry
 import socket
 import time
 import platform
-import subprocess
 import logging
 
 log = logging.getLogger(__name__)
@@ -129,10 +129,10 @@ def identify(scene):
     raise RuntimeError('data format not supported')
 
 
-def identify_many(scenes, pbar=False, sortkey=None):
+def identify_many(scenes, pbar=False, sortkey=None, cores=1):
     """
-    wrapper function for returning metadata handlers of all valid scenes in a list, similar to function
-    :func:`~pyroSAR.drivers.identify`.
+    wrapper function for returning metadata handlers of all valid scenes in a list,
+    similar to function :func:`~pyroSAR.drivers.identify`.
 
     Parameters
     ----------
@@ -142,6 +142,9 @@ def identify_many(scenes, pbar=False, sortkey=None):
         adds a progressbar if True
     sortkey: str or None
         sort the handler object list by an attribute
+    cores: int
+        the number of cores to parallelize identification
+    
     Returns
     -------
     list[ID]
@@ -153,28 +156,38 @@ def identify_many(scenes, pbar=False, sortkey=None):
     >>> files = finder('/path', ['S1*.zip'])
     >>> ids = identify_many(files, pbar=False, sortkey='start')
     """
-    idlist = []
-    if pbar:
-        progress = pb.ProgressBar(max_value=len(scenes)).start()
-    else:
-        progress = None
-    for i, scene in enumerate(scenes):
+    
+    def handler(scene):
         if isinstance(scene, ID):
-            idlist.append(scene)
+            return scene
         else:
             try:
                 id = identify(scene)
-                idlist.append(id)
+                return id
             except RuntimeError:
-                continue
+                return None
             except PermissionError:
                 log.warning("Permission denied: '{}'".format(scene))
+    
+    if cores == 1:
+        idlist = []
+        if pbar:
+            progress = pb.ProgressBar(max_value=len(scenes)).start()
+        else:
+            progress = None
+        for i, scene in enumerate(scenes):
+            id = handler(scene)
+            idlist.append(id)
+            if progress is not None:
+                progress.update(i + 1)
         if progress is not None:
-            progress.update(i + 1)
-    if progress is not None:
-        progress.finish()
+            progress.finish()
+    else:
+        idlist = multicore(function=handler, multiargs={'scene': scenes},
+                           pbar=pbar, cores=cores)
     if sortkey is not None:
         idlist.sort(key=operator.attrgetter(sortkey))
+    idlist = list(filter(None, idlist))
     return idlist
 
 
@@ -294,9 +307,16 @@ class ID(object):
             point.AddPoint(lon, lat)
             points.AddGeometry(point)
         geom = points.ConvexHull()
-        point = points = None
-        
         geom.FlattenTo2D()
+        point = points = None
+        exterior = geom.GetGeometryRef(0)
+        if exterior.IsClockwise():
+            points = list(exterior.GetPoints())
+            exterior.Empty()
+            for x, y in reversed(points):
+                exterior.AddPoint(x, y)
+            geom.CloseRings()
+        exterior = points = None
         
         bbox = Vector(driver='Memory')
         bbox.addlayer('geometry', srs, geom.GetGeometryType())
@@ -746,8 +766,9 @@ class ID(object):
                             outname = os.path.join(directory, repl)
                             outname = outname.replace('/', os.path.sep)
                             if item.endswith('/'):
-                                os.makedirs(outname)
+                                os.makedirs(outname, exist_ok=True)
                             else:
+                                os.makedirs(os.path.dirname(outname), exist_ok=True)
                                 try:
                                     with open(outname, 'wb') as outfile:
                                         outfile.write(archive.read(item))
@@ -1637,6 +1658,8 @@ class SAFE(ID):
     Sensors:
         * S1A
         * S1B
+        * S1C
+        * S1D
 
     References:
         * S1-RS-MDA-52-7443 Sentinel-1 IPF Auxiliary Product Specification
@@ -1649,7 +1672,7 @@ class SAFE(ID):
         
         self.pattern = patterns.safe
         
-        self.pattern_ds = r'^s1[ab]-' \
+        self.pattern_ds = r'^s1[abcd]-' \
                           r'(?P<swath>s[1-6]|iw[1-3]?|ew[1-5]?|wv[1-2]|n[1-6])-' \
                           r'(?P<product>slc|grd|ocn)-' \
                           r'(?P<pol>hh|hv|vv|vh)-' \
@@ -1693,6 +1716,75 @@ class SAFE(ID):
         :func:`~pyroSAR.S1.removeGRDBorderNoise`
         """
         S1.removeGRDBorderNoise(self, method=method)
+    
+    def geo_grid(self, outname=None, driver=None, overwrite=True):
+        """
+        get the geo grid as vector geometry
+
+        Parameters
+        ----------
+        outname: str
+            the name of the vector file to be written
+        driver: str
+            the output file format; needs to be defined if the format cannot
+            be auto-detected from the filename extension
+        overwrite: bool
+            overwrite an existing vector file?
+
+        Returns
+        -------
+        ~spatialist.vector.Vector or None
+            the vector object if `outname` is None, None otherwise
+        
+        See also
+        --------
+        spatialist.vector.Vector.write
+        """
+        annotations = self.findfiles(self.pattern_ds)
+        key = lambda x: re.search('-[vh]{2}-', x).group()
+        groups = groupby(sorted(annotations, key=key), key=key)
+        annotations = [list(value) for key, value in groups][0]
+        
+        vec = Vector(driver='Memory')
+        vec.addlayer('geogrid', 4326, ogr.wkbPoint25D)
+        field_defs = [
+            ("swath", ogr.OFTString),
+            ("azimuthTime", ogr.OFTDateTime),
+            ("slantRangeTime", ogr.OFTReal),
+            ("line", ogr.OFTInteger),
+            ("pixel", ogr.OFTInteger),
+            ("incidenceAngle", ogr.OFTReal),
+            ("elevationAngle", ogr.OFTReal),
+        ]
+        for name, ftype in field_defs:
+            field = ogr.FieldDefn(name, ftype)
+            vec.layer.CreateField(field)
+        
+        for ann in annotations:
+            with self.getFileObj(ann) as ann_xml:
+                tree = ET.fromstring(ann_xml.read())
+            swath = tree.find(".//adsHeader/swath").text
+            points = tree.findall(".//geolocationGridPoint")
+            for point in points:
+                meta = {child.tag: child.text for child in point}
+                meta["swath"] = swath
+                x = float(meta.pop("longitude"))
+                y = float(meta.pop("latitude"))
+                z = float(meta.pop("height"))
+                geom = ogr.Geometry(ogr.wkbPoint25D)
+                geom.AddPoint(x, y, z)
+                az_time = dateparse(meta["azimuthTime"])
+                meta["azimuthTime"] = az_time.replace(tzinfo=timezone.utc)
+                for key in ["slantRangeTime", "incidenceAngle", "elevationAngle"]:
+                    meta[key] = float(meta[key])
+                for key in ["line", "pixel"]:
+                    meta[key] = int(meta[key])
+                vec.addfeature(geom, fields=meta)
+        geom = None
+        if outname is None:
+            return vec
+        else:
+            vec.write(outfile=outname, driver=driver, overwrite=overwrite)
     
     def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=300, url_option=1):
         """
@@ -2704,7 +2796,7 @@ class Archive(object):
     
     @staticmethod
     def encode(string, encoding='utf-8'):
-        if not isinstance(string, str):
+        if not isinstance(string, str) and hasattr(string, 'encode'):
             return string.encode(encoding)
         else:
             return string
@@ -2950,7 +3042,7 @@ class Archive(object):
             log.info('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
     
     def select(self, vectorobject=None, mindate=None, maxdate=None, date_strict=True,
-               processdir=None, recursive=False, polarizations=None, **args):
+               processdir=None, recursive=False, polarizations=None, return_value="scene", **args):
         """
         select scenes from the database
 
@@ -2965,7 +3057,7 @@ class Archive(object):
         date_strict: bool
             treat dates as strict limits or also allow flexible limits to incorporate scenes
             whose acquisition period overlaps with the defined limit?
-            
+
             - strict: start >= mindate & stop <= maxdate
             - not strict: stop >= mindate & start <= maxdate
         processdir: str or None
@@ -2975,15 +3067,55 @@ class Archive(object):
             (only if `processdir` is not None) should also the subdirectories of the `processdir` be scanned?
         polarizations: list[str] or None
             a list of polarization strings, e.g. ['HH', 'VV']
+        return_value: str or List[str]
+            the query return value(s). Options:
+            
+            - `geometry_wkb`: the scene's footprint geometry formatted as WKB
+            - `geometry_wkt`: the scene's footprint geometry formatted as WKT
+            - `mindate`: the acquisition start datetime in UTC formatted as YYYYmmddTHHMMSS
+            - `maxdate`: the acquisition end datetime in UTC formatted as YYYYmmddTHHMMSS
+            - all further database column names (see :meth:`~Archive.get_colnames()`)
         **args:
             any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
 
         Returns
         -------
-        list[str]
-            the file names pointing to the selected scenes
-
+        List[str] or List[tuple[str]]
+            If a single return_value is specified: list of values for that attribute
+            If multiple return_values are specified: list of tuples containing the requested attributes
         """
+        # Convert return_value to list if it's a string
+        if isinstance(return_value, str):
+            return_values = [return_value]
+        else:
+            return_values = return_value
+        
+        return_values_sql = []
+        for val in return_values:
+            if val == 'mindate':
+                return_values_sql.append('start')
+            elif val == 'maxdate':
+                return_values_sql.append('stop')
+            elif val == 'geometry_wkt':
+                prefix = 'ST_' if self.driver == 'postgresql' else ''
+                return_values_sql.append(f'{prefix}AsText(geometry) as geometry_wkt')
+            elif val == 'geometry_wkb':
+                prefix = 'ST_' if self.driver == 'postgresql' else ''
+                return_values_sql.append(f'{prefix}AsBinary(geometry) as geometry_wkb')
+            else:
+                return_values_sql.append(val)
+        
+        # Validate that all requested return values exist in the database
+        valid_columns = self.get_colnames()
+        extra = ['mindate', 'maxdate', 'geometry_wkt', 'geometry_wkb']
+        normal_returns = [x for x in return_values if x not in extra]
+        invalid_returns = [x for x in normal_returns if x not in valid_columns]
+        if invalid_returns:
+            invalid_str = ', '.join(invalid_returns)
+            msg = (f"The following options are not supported as "
+                   f"return values: {invalid_str}")
+            raise ValueError(msg)
+        
         arg_valid = [x for x in args.keys() if x in self.get_colnames()]
         arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
@@ -2999,6 +3131,7 @@ class Archive(object):
                     arg_format.append("""{0}='{1}'""".format(key, args[key]))
                 elif isinstance(args[key], (tuple, list)):
                     arg_format.append("""{0} IN ('{1}')""".format(key, "', '".join(map(str, args[key]))))
+        
         if mindate:
             if isinstance(mindate, datetime):
                 mindate = mindate.strftime('%Y%m%dT%H%M%S')
@@ -3010,6 +3143,7 @@ class Archive(object):
                 vals.append(mindate)
             else:
                 log.info('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
+        
         if maxdate:
             if isinstance(maxdate, datetime):
                 maxdate = maxdate.strftime('%Y%m%dT%H%M%S')
@@ -3048,7 +3182,10 @@ class Archive(object):
             subquery = ' WHERE {}'.format(' AND '.join(arg_format))
         else:
             subquery = ''
-        query = '''SELECT scene, outname_base FROM data{}'''.format(subquery)
+        
+        # Modify the query to select the requested return values
+        query = 'SELECT {}, outname_base FROM data{}'.format(', '.join(return_values_sql), subquery)
+        
         # the query gets assembled stepwise here
         for val in vals:
             query = query.replace('?', """'{0}'""", 1).format(val)
@@ -3059,12 +3196,18 @@ class Archive(object):
         
         if processdir and os.path.isdir(processdir):
             scenes = [x for x in query_rs
-                      if len(finder(processdir, [x[1]], regex=True, recursive=recursive)) == 0]
+                      if len(finder(processdir, [x[-1]], regex=True, recursive=recursive)) == 0]
         else:
             scenes = query_rs
+        
         ret = []
         for x in scenes:
-            ret.append(self.encode(x[0]))
+            # If only one return value was requested, append just that value
+            if len(return_values) == 1:
+                ret.append(self.encode(x[0]))
+            else:
+                # If multiple return values were requested, append a tuple of all values
+                ret.append(tuple(self.encode(val) for val in x[:-1]))  # Exclude outname_base
         
         return ret
     
