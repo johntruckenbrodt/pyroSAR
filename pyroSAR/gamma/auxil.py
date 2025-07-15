@@ -204,26 +204,38 @@ class ISPPar(object):
                                    str(abs(float(self.post_lon))),
                                    str(abs(float(self.post_lat))),
                                    'WGS-84', 'units=Degrees']
-            elif (
-                self.DEM_projection == 'PS'
-                and self.projection_name == 'WGS 84 / Antarctic Polar Stereographic'
-            ):
-                out['map_info'] = [
-                    'EPSG:3031 - WGS 84 / Antarctic Polar Stereographic',
-                    '1.0000',
-                    '1.0000',
-                    self.corner_east - (abs(self.post_east) / 2),
-                    self.corner_north + (abs(self.post_north) / 2),
-                    str(abs(float(self.post_east))),
-                    str(abs(float(self.post_north))),
-                    'WGS-84',
-                    'units=Meters',
-                ]
+            elif self.DEM_projection == 'PS':
+                if self.projection_name == 'WGS 84 / Antarctic Polar Stereographic':
+                    out['map_info'] = [
+                        'EPSG:3031 - WGS 84 / Antarctic Polar Stereographic',
+                        '1.0000',
+                        '1.0000',
+                        self.corner_east - (abs(self.post_east) / 2),
+                        self.corner_north + (abs(self.post_north) / 2),
+                        str(abs(float(self.post_east))),
+                        str(abs(float(self.post_north))),
+                        'WGS-84',
+                        'units=Meters',
+                    ]
+                elif self.projection_name == 'WGS 84 / Arctic Polar Stereographic':
+                    out['map_info'] = [
+                        'EPSG:3995 - WGS 84 / Arctic Polar Stereographic',
+                        '1.0000',
+                        '1.0000',
+                        self.corner_east - (abs(self.post_east) / 2),
+                        self.corner_north + (abs(self.post_north) / 2),
+                        str(abs(float(self.post_east))),
+                        str(abs(float(self.post_north))),
+                        'WGS-84',
+                        'units=Meters',
+                    ]
+                else:
+                    raise RuntimeError(
+                        f'unsupported projection: "{self.DEM_projection}; {self.projection_name}". The projection name "{self.projection_name}" was not recognised. Expected projection names are "WGS 84 / Arctic Polar Stereographic" and "WGS 84 / Antarctic Polar Stereographic". Add support for the required projection name as an ENVI map info output in gamma.auxil.ISPPar.envidict.'
+                    )
             else:
                 raise RuntimeError(
-                    'unsupported projection: {}. To resolve, create an ENVI map info output for this projection in the envidict function of the ISPPar class.'.format(
-                        self.DEM_projection
-                    )
+                    f'unsupported projection: "{self.DEM_projection}; {self.projection_name}". To resolve, create an ENVI map info output for this projection in gamma.auxil.ISPPar.envidict.'
                 )
         return out
 
