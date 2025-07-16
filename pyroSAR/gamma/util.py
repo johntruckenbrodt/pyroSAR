@@ -845,7 +845,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     ######################################################################
     # RTC reference area computation #####################################
     ######################################################################
-    log.info('computing pixel area')
+    log.info('computing pixel area (for radiometric terrain correction, rtc)')
     pixel_area_wrap(image=reference, namespace=n, lut=n.lut_init, exist_ok=exist_ok,
                     logpath=path_log, outdir=tmpdir, shellscript=shellscript)
     
@@ -908,7 +908,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     ######################################################################
     # radiometric terrain correction and back-geocoding ##################
     ######################################################################
-    log.info('radiometric terrain correction and back-geocoding')
+    log.info('applying rtc and back-geocoding')
     for image in images:
         if 'lat' in locals():
             lat.product(data_1=image,
@@ -990,7 +990,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
                         os.path.join(outdir, outname_base + '_manifest.safe'))
     
     if export_extra is not None:
-        log.info('exporting extra products')
+        log.info('back-geocoding and exporting extra products')
         for key in export_extra:
             if key in pix_geo:
                 fname = n.get(key)
