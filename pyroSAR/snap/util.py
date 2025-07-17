@@ -340,7 +340,12 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         # Calibration node configuration
         cal = parse_node('Calibration')
         workflow.insert_node(cal, before=last.id)
-        cal.parameters['selectedPolarisations'] = polarizations
+        # leave the selectedPolarisations field empty when processing all polarizations
+        if len(polarizations) == len(id.polarizations):
+            polarizations_cal = None
+        else:
+            polarizations_cal = polarizations
+        cal.parameters['selectedPolarisations'] = polarizations_cal
         if isinstance(refarea, str):
             refarea = [refarea]
         for item in refarea:
