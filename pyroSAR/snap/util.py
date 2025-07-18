@@ -347,6 +347,19 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         else:
             polarizations_cal = polarizations
         cal.parameters['selectedPolarisations'] = polarizations_cal
+        # choose the intensity band(s)
+        c1 = id.sensor in ['ERS1', 'ERS2']
+        c2 = id.sensor == 'ASAR' and id.acquisition_mode == 'IMP' and id.product == 'PRI'
+        if c1 or c2:
+            cal.parameters['sourceBands'] = 'Intensity'
+        else:
+            cal.parameters['sourceBands'] = [f'Intensity_{x}' for x in polarizations]
+        
+        cal.parameters['outputBetaBand'] = False
+        cal.parameters['outputSigmaBand'] = False
+        cal.parameters['outputGammaBand'] = False
+        cal.parameters['createBetaBand'] = False
+        cal.parameters['createGammaBand'] = False
         if isinstance(refarea, str):
             refarea = [refarea]
         for item in refarea:
@@ -358,8 +371,9 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         else:
             for opt in refarea:
                 cal.parameters['output{}Band'.format(opt[:-1].capitalize())] = True
-        if id.sensor in ['ERS1', 'ERS2', 'ASAR']:
-            cal.parameters['createBetaBand'] = True
+        # I don't think this is needed (introduced by Ricardo Noguera some while ago)
+        # if id.sensor in ['ERS1', 'ERS2', 'ASAR']:
+        #     cal.parameters['createBetaBand'] = True
         last = cal
         ############################################
         # ThermalNoiseRemoval node configuration
@@ -402,10 +416,11 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
         last = sub
     ############################################
     # Multilook node configuration
-    if id.sensor in ['ERS1', 'ERS2', 'ASAR']:
-        bands = bandnames['beta0'] + bandnames['sigma0']
-    else:
-        bands = None
+    # I don't think this is needed (introduced by Ricardo Noguera some while ago)
+    # if id.sensor in ['ERS1', 'ERS2', 'ASAR']:
+    #     bands = bandnames['beta0']
+    # else:
+    bands = None
     ml = mli_parametrize(scene=id, spacing=spacing, rlks=rlks, azlks=azlks, sourceBands=bands)
     if ml is not None:
         workflow.insert_node(ml, before=last.id)

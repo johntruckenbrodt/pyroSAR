@@ -1801,7 +1801,7 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
          - SAR simulation cross correlation
            (SNAP nodes `SAR-Simulation`->`Cross-Correlation`->`SARSim-Terrain-Correction`)
     
-    sourceBands: list[str] or None
+    sourceBands: List[str] or None
         the image band names to geocode; default None: geocode all incoming bands.
     spacing: int or float
         The target pixel spacing in meters.
