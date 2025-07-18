@@ -1588,25 +1588,29 @@ class ESA(ID):
             raw = [raw[i:i + 7] for i in range(0, len(raw), 7)]
             datasets = {x.pop(0)[1]: {y[0]: y[1] for y in x} for x in raw}
             
-            offset = 0
-            for key in datasets.keys():
-                size = int(datasets[key]['DSR_SIZE'])
-                n = int(datasets[key]['NUM_DSR'])
-                if key == 'GEOLOCATION GRID ADS':
-                    break
-                offset += size * n
+            key = 'GEOLOCATION GRID ADS'
+            ds_offset = int(datasets[key]['DS_OFFSET'])
+            ds_size = int(datasets[key]['DS_SIZE'])
+            dsr_size = int(datasets[key]['DSR_SIZE'])
+            obj.seek(ds_offset)
+            geo = obj.read(ds_size)
+        
+        geo = [geo[i:i + dsr_size] for i in range(0, len(geo), dsr_size)]
+        
+        lat = []
+        lon = []
+        for segment in geo:
+            lat_seg = segment[157:(157 + 44)] + segment[411:(411 + 44)]
+            lon_seg = segment[201:(201 + 44)] + segment[455:(455 + 44)]
             
-            obj.seek(offset, 1)
-            gcps = obj.read(size * n)
-        
-        lat = gcps[157:(157 + 44)] + gcps[411:(411 + 44)]
-        lon = gcps[201:(201 + 44)] + gcps[455:(455 + 44)]
-        
-        lat = [lat[i:i + 4] for i in range(0, len(lat), 4)]
-        lon = [lon[i:i + 4] for i in range(0, len(lon), 4)]
-        
-        lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
-        lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
+            lat_seg = [lat_seg[i:i + 4] for i in range(0, len(lat_seg), 4)]
+            lon_seg = [lon_seg[i:i + 4] for i in range(0, len(lon_seg), 4)]
+            
+            lat_seg = [struct.unpack('>i', x)[0] / 1000000. for x in lat_seg]
+            lon_seg = [struct.unpack('>i', x)[0] / 1000000. for x in lon_seg]
+            
+            lat.extend(lat_seg)
+            lon.extend(lon_seg)
         
         meta['coordinates'] = list(zip(lon, lat))
         
