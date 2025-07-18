@@ -1666,11 +1666,20 @@ def orb_parametrize(scene, formatName, allow_RES_OSV=True, url_option=1, **kwarg
     Node
         the Apply-Orbit-File node object
     """
-    orbit_lookup = {'ENVISAT': 'PRARE Precise (ERS1&2) (Auto Download)',
-                    'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
-    orbitType = orbit_lookup[formatName]
-    if formatName == 'ENVISAT' and scene.sensor == 'ASAR':
-        orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
+    orbitType = None
+    orbit_lookup = {'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
+    if formatName in orbit_lookup:
+        orbitType = orbit_lookup[formatName]
+    if formatName == 'ENVISAT':  # ASAR, ERS1, ERS2
+        if scene.sensor == 'ASAR':
+            orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
+        else:
+            # Another option for ERS is 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)'.
+            # Neither option is suitable for all products, and auto-selection can
+            # only happen once a downloader (similar to S1.auxil.OSV) is written.
+            orbitType = 'PRARE Precise (ERS1&2) (Auto Download)'
+    if orbitType is None:
+        raise RuntimeError(f'Could not determine orbit type for {formatName} format')
     
     if formatName == 'SENTINEL-1':
         osv_type = ['POE', 'RES'] if allow_RES_OSV else 'POE'
