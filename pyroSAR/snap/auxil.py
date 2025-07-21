@@ -719,22 +719,25 @@ def groupbyWorkers(xmlfile, n=2):
     selects_id = [x.id for x in workflow['operator=BandSelect']]
     workers_groups = [workers_id[i:i + n] for i in range(0, len(workers_id), n)]
     
-    # in S1TBX 8.0.6 problems were found when executing ThermalNoiseRemoval by itself (after e.g. Calibration).
-    # When executed together with other nodes this worked so the node is re-grouped into the group of the source node.
-    i = 0
-    while i < len(workers_groups):
-        if workers_groups[i][0].startswith('ThermalNoiseRemoval'):
-            # get the group ID of the source node
-            source = workflow[workers_groups[i][0]].source
-            source_group_id = [source in x for x in workers_groups].index(True)
-            # move the node to the source group
-            workers_groups[source_group_id].append(workers_groups[i][0])
-            del workers_groups[i][0]
-        # delete the group if it is empty
-        if len(workers_groups[i]) == 0:
-            del workers_groups[i]
-        else:
-            i += 1
+    # some nodes must be executed together with a preceding node. They are moved to the previous group.
+    def move_group(operator):
+        i = 0
+        while i < len(workers_groups):
+            if workers_groups[i][0].startswith(operator):
+                # get the group ID of the source node
+                source = workflow[workers_groups[i][0]].source
+                source_group_id = [source in x for x in workers_groups].index(True)
+                # move the node to the source group
+                workers_groups[source_group_id].append(workers_groups[i][0])
+                del workers_groups[i][0]
+            # delete the group if it is empty
+            if len(workers_groups[i]) == 0:
+                del workers_groups[i]
+            else:
+                i += 1
+    
+    for operator in ['ThermalNoiseRemoval', 'Warp']:
+        move_group(operator)
     
     # append the BandSelect nodes to the group of their source nodes
     for item in selects_id:
