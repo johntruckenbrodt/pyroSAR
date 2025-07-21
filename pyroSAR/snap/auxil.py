@@ -520,10 +520,12 @@ def writer(xmlfile, outdir, basename_extensions=None,
                     base = re.sub('gammaSigmaRatio_[HV]{2}', 'gammaSigmaRatio', base)
                 if re.search('NE[BGS]Z', base):
                     base = re.sub('(NE[BGS]Z)_([HV]{2})', r'\g<2>_\g<1>', base)
+                if re.search('layover_shadow_mask', base):
+                    base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
                 name_new = outname_base.replace(suffix, '{0}.tif'.format(base))
             if re.search('elevation', basename):
                 nodata = dem_nodata
-            elif re.search('layoverShadowMask', basename):
+            elif re.search('layoverShadowMask|layover_shadow_mask', basename):
                 nodata = 255
             else:
                 nodata = 0
@@ -1847,7 +1849,7 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         
          - DEM
          - latLon
-         - incidenceAngleFromEllipsoid (Range-Doppler only)
+         - incidenceAngleFromEllipsoid
          - layoverShadowMask
          - localIncidenceAngle
          - projectedLocalIncidenceAngle
@@ -1877,10 +1879,11 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         the Terrain-Correction node object or a list containing the objects for SAR-Simulation,
         Cross-Correlation and SARSim-Terrain-Correction.
     """
+    tc = parse_node('Terrain-Correction')
+    tc.parameters['nodataValueAtSea'] = nodataValueAtSea
+    
     if tc_method == 'Range-Doppler':
-        tc = parse_node('Terrain-Correction')
         tc.parameters['sourceBands'] = sourceBands
-        tc.parameters['nodataValueAtSea'] = nodataValueAtSea
         sarsim = None
         out = tc
         dem_nodes = [tc]
@@ -1893,11 +1896,10 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         cc.parameters['maxIteration'] = 2
         cc.parameters['onlyGCPsOnLand'] = True
         warp = parse_node('Warp')
-        tc = parse_node('Terrain-Correction')
         dem_nodes = [sarsim, tc]
         out = [sarsim, cc, warp, tc]
     else:
-        raise RuntimeError('tc_method not recognized')
+        raise RuntimeError(f'tc_method not recognized: "{tc_method}"')
     
     tc.parameters['imgResamplingMethod'] = imgResamplingMethod
     
@@ -1948,9 +1950,8 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         for item in export_extra:
             if item in export_extra_options:
                 key = f'save{item[0].upper()}{item[1:]}'
-                if tc_method == 'SAR simulation cross correlation':
-                    if item == 'layoverShadowMask':
-                        sarsim.parameters[key] = True
+                if sarsim is not None and item == 'layoverShadowMask':
+                    sarsim.parameters[key] = True
                 else:
                     tc.parameters[key] = True
     
