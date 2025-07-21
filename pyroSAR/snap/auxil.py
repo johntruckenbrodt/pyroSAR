@@ -1802,7 +1802,7 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         
          - Range-Doppler (SNAP node `Terrain-Correction`)
          - SAR simulation cross correlation
-           (SNAP nodes `SAR-Simulation`->`Cross-Correlation`->`SARSim-Terrain-Correction`)
+           (SNAP nodes `SAR-Simulation`->`Cross-Correlation`->`Warp`->`Terrain-Correction`)
     
     sourceBands: List[str] or None
         the image band names to geocode; default None: geocode all incoming bands.
@@ -1882,14 +1882,20 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         tc.parameters['sourceBands'] = sourceBands
         tc.parameters['nodataValueAtSea'] = nodataValueAtSea
         sarsim = None
-        dem_node = out = tc
+        out = tc
+        dem_nodes = [tc]
     elif tc_method == 'SAR simulation cross correlation':
         sarsim = parse_node('SAR-Simulation')
         sarsim.parameters['sourceBands'] = sourceBands
         cc = parse_node('Cross-Correlation')
-        tc = parse_node('SARSim-Terrain-Correction')
-        dem_node = sarsim
-        out = [sarsim, cc, tc]
+        cc.parameters['coarseRegistrationWindowWidth'] = 64
+        cc.parameters['coarseRegistrationWindowHeight'] = 64
+        cc.parameters['maxIteration'] = 2
+        cc.parameters['onlyGCPsOnLand'] = True
+        warp = parse_node('Warp')
+        tc = parse_node('Terrain-Correction')
+        dem_nodes = [sarsim, tc]
+        out = [sarsim, cc, warp, tc]
     else:
         raise RuntimeError('tc_method not recognized')
     
@@ -1942,17 +1948,18 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         for item in export_extra:
             if item in export_extra_options:
                 key = f'save{item[0].upper()}{item[1:]}'
-                if tc.operator == 'SARSim-Terrain-Correction':
+                if tc_method == 'SAR simulation cross correlation':
                     if item == 'layoverShadowMask':
                         sarsim.parameters[key] = True
                 else:
                     tc.parameters[key] = True
     
-    dem_parametrize(node=dem_node, demName=demName,
-                    externalDEMFile=externalDEMFile,
-                    externalDEMNoDataValue=externalDEMNoDataValue,
-                    externalDEMApplyEGM=externalDEMApplyEGM,
-                    demResamplingMethod=demResamplingMethod)
+    for dem_node in dem_nodes:
+        dem_parametrize(node=dem_node, demName=demName,
+                        externalDEMFile=externalDEMFile,
+                        externalDEMNoDataValue=externalDEMNoDataValue,
+                        externalDEMApplyEGM=externalDEMApplyEGM,
+                        demResamplingMethod=demResamplingMethod)
     
     for key, val in kwargs.items():
         tc.parameters[key] = val
