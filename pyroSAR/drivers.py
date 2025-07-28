@@ -843,8 +843,13 @@ class BEAM_DIMAP(ID):
         meta['image_geometry'] = 'GROUND_RANGE' if srgr else 'SLANT_RANGE'
         
         inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
-        incidence = [float(x.text) for x in inc_elements]
-        meta['incidence'] = median(incidence)
+        if len(inc_elements) > 0:
+            incidence = [float(x.text) for x in inc_elements]
+            meta['incidence'] = median(incidence)
+        else:
+            inc_near = float(self.root.find('.//MDATTR[@name="incidence_near"]').text)
+            inc_far = float(self.root.find('.//MDATTR[@name="incidence_far"]').text)
+            meta['incidence'] = (inc_near + inc_far) / 2
         
         # Metadata sections that need some parsing to match naming convention with SAFE format
         start = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_START_TIME').text,
