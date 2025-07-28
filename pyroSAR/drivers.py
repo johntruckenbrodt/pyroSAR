@@ -1569,14 +1569,15 @@ class ESA(ID):
             dsd = obj.read(5040).decode('ascii')
             
             pattern = r'(?P<key>[A-Z0-9_]+)\=(")?(?P<value>.*?)("|<|$)'
-            origin = dict()
-            header = mph + sph
-            lines = header.split('\n')
-            for line in lines:
-                match = re.match(pattern, line)
-                if match:
-                    matchdict = match.groupdict()
-                    origin[matchdict['key']] = str(matchdict['value']).strip()
+            origin = {'MPH': {}, 'SPH': {}, 'DSD': {}}
+            for section, content in {'MPH': mph, 'SPH': sph}.items():
+                lines = content.split('\n')
+                for line in lines:
+                    match = re.match(pattern, line)
+                    if match:
+                        matchdict = match.groupdict()
+                        val = str(matchdict['value']).strip()
+                        origin[section][matchdict['key']] = val
             
             raw = []
             lines = dsd.split('\n')
@@ -1587,11 +1588,14 @@ class ESA(ID):
                     raw.append((matchdict['key'], str(matchdict['value']).strip()))
             raw = [raw[i:i + 7] for i in range(0, len(raw), 7)]
             datasets = {x.pop(0)[1]: {y[0]: y[1] for y in x} for x in raw}
+            origin['DSD'] = datasets
+            
+            meta['origin'] = origin
             
             key = 'GEOLOCATION GRID ADS'
-            ds_offset = int(datasets[key]['DS_OFFSET'])
-            ds_size = int(datasets[key]['DS_SIZE'])
-            dsr_size = int(datasets[key]['DSR_SIZE'])
+            ds_offset = int(origin['DSD'][key]['DS_OFFSET'])
+            ds_size = int(origin['DSD'][key]['DS_SIZE'])
+            dsr_size = int(origin['DSD'][key]['DSR_SIZE'])
             obj.seek(ds_offset)
             geo = obj.read(ds_size)
         
@@ -1615,31 +1619,31 @@ class ESA(ID):
         meta['coordinates'] = list(zip(lon, lat))
         
         if meta['sensor'] == 'ASAR':
-            pols = [y for x, y in origin.items() if 'TX_RX_POLAR' in x]
+            pols = [y for x, y in origin['SPH'].items() if 'TX_RX_POLAR' in x]
             pols = [x.replace('/', '') for x in pols if len(x) == 3]
             meta['polarizations'] = sorted(pols)
         elif meta['sensor'] in ['ERS1', 'ERS2']:
             meta['polarizations'] = ['VV']
         
-        meta['orbit'] = origin['PASS'][0]
-        start = datetime.strptime(origin['SENSING_START'], '%d-%b-%Y %H:%M:%S.%f')
+        meta['orbit'] = origin['SPH']['PASS'][0]
+        start = datetime.strptime(origin['MPH']['SENSING_START'], '%d-%b-%Y %H:%M:%S.%f')
         meta['start'] = start.strftime('%Y%m%dT%H%M%S')
-        stop = datetime.strptime(origin['SENSING_STOP'], '%d-%b-%Y %H:%M:%S.%f')
+        stop = datetime.strptime(origin['MPH']['SENSING_STOP'], '%d-%b-%Y %H:%M:%S.%f')
         meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
-        meta['spacing'] = (float(origin['RANGE_SPACING']), float(origin['AZIMUTH_SPACING']))
-        meta['looks'] = (float(origin['RANGE_LOOKS']), float(origin['AZIMUTH_LOOKS']))
-        meta['samples'] = int(origin['LINE_LENGTH'])
-        meta['lines'] = int(datasets['MDS1']['NUM_DSR'])
+        meta['spacing'] = (float(origin['SPH']['RANGE_SPACING']), float(origin['SPH']['AZIMUTH_SPACING']))
+        meta['looks'] = (float(origin['SPH']['RANGE_LOOKS']), float(origin['SPH']['AZIMUTH_LOOKS']))
+        meta['samples'] = int(origin['SPH']['LINE_LENGTH'])
+        meta['lines'] = int(origin['DSD']['MDS1']['NUM_DSR'])
         
-        meta['orbitNumber_abs'] = int(origin['ABS_ORBIT'])
-        meta['orbitNumber_rel'] = int(origin['REL_ORBIT'])
-        meta['cycleNumber'] = int(origin['CYCLE'])
+        meta['orbitNumber_abs'] = int(origin['MPH']['ABS_ORBIT'])
+        meta['orbitNumber_rel'] = int(origin['MPH']['REL_ORBIT'])
+        meta['cycleNumber'] = int(origin['MPH']['CYCLE'])
         
         meta['incidenceAngleMin'], meta['incidenceAngleMax'], \
             meta['rangeResolution'], meta['azimuthResolution'], \
             meta['neszNear'], meta['neszFar'] = \
             get_angles_resolution(meta['sensor'], meta['acquisition_mode'],
-                                  origin['SWATH'], meta['start'])
+                                  origin['SPH']['SWATH'], meta['start'])
         meta['incidence'] = median([meta['incidenceAngleMin'], meta['incidenceAngleMax']])
         
         meta['projection'] = crsConvert(4326, 'wkt')
