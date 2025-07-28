@@ -826,6 +826,7 @@ class BEAM_DIMAP(ID):
         meta['sensor'] = get_by_name('MISSION', section=section).replace('ENTINEL-', '')
         meta['orbit'] = get_by_name('PASS', section=section)[0]
         pols = [x.text for x in self.root.findall('.//MDATTR[@desc="Polarization"]')]
+        pols = list(filter(None, pols))
         meta['polarizations'] = list(set([x for x in pols if '-' not in x]))
         meta['spacing'] = (round(float(get_by_name('range_spacing', section=section)), 6),
                            round(float(get_by_name('azimuth_spacing', section=section)), 6))
