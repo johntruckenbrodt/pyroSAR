@@ -1648,8 +1648,8 @@ class ESA(ID):
         meta['incidenceAngleMin'], meta['incidenceAngleMax'], \
             meta['rangeResolution'], meta['azimuthResolution'], \
             meta['neszNear'], meta['neszFar'] = \
-            get_angles_resolution(meta['sensor'], meta['acquisition_mode'],
-                                  origin['SPH']['SWATH'], meta['start'])
+            get_angles_resolution(sensor=meta['sensor'], mode=meta['acquisition_mode'],
+                                  swath_id=origin['SPH']['SWATH'], date=meta['start'])
         meta['incidence'] = median([meta['incidenceAngleMin'], meta['incidenceAngleMax']])
         
         meta['projection'] = crsConvert(4326, 'wkt')
