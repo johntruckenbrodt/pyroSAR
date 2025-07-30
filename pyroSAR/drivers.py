@@ -813,17 +813,45 @@ class BEAM_DIMAP(ID):
         self.root = ET.parse(self.scene).getroot()
         
         def get_by_name(attr, section='Abstracted_Metadata'):
-            element = self.root.find('.//MDElem[@name="{}"]'.format(section))
-            out = element.find('.//MDATTR[@name="{}"]'.format(attr))
-            if out is None or out.text == '99999.0':
-                msg = 'cannot get attribute {} from section {}'
-                raise RuntimeError(msg.format(attr, section))
-            return out.text
+            msg = 'cannot get attribute "{}" from section "{}"'
+            if isinstance(attr, list):
+                for i, item in enumerate(attr):
+                    try:
+                        return get_by_name(item, section=section)
+                    except RuntimeError:
+                        if i <= len(attr):
+                            continue
+                        else:
+                            raise RuntimeError(msg.format('|'.join(attr), section))
+            else:
+                element = self.root.find('.//MDElem[@name="{}"]'.format(section))
+                out = element.find('.//MDATTR[@name="{}"]'.format(attr))
+                if out is None or out.text == '99999':
+                    raise RuntimeError(msg.format(attr, section))
+                return out.text
+        
+        missions = {'ENVISAT': 'ASAR',
+                    'ERS1': 'ERS1',
+                    'ERS2': 'ERS2',
+                    'SENTINEL-1A': 'S1A',
+                    'SENTINEL-1B': 'S1B',
+                    'SENTINEL-1C': 'S1C',
+                    'SENTINEL-1D': 'S1D'}
         
         section = 'Abstracted_Metadata'
-        meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE', section=section)
+        meta['sensor'] = missions[get_by_name('MISSION', section=section)]
+        if re.search('S1[A-Z]', meta['sensor']):
+            meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE', section=section)
+            meta['product'] = self.root.find('.//PRODUCT_TYPE').text
+        elif meta['sensor'] in ['ASAR', 'ERS1', 'ERS2']:
+            product_type = get_by_name('PRODUCT_TYPE', section=section)
+            meta['acquisition_mode'] = product_type[4:7]
+            meta['product'] = 'SLC' if meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
+        else:
+            raise RuntimeError('unknown sensor {}'.format(meta['sensor']))
+        
         meta['IPF_version'] = get_by_name('Processing_system_identifier', section=section)
-        meta['sensor'] = get_by_name('MISSION', section=section).replace('ENTINEL-', '')
+        
         meta['orbit'] = get_by_name('PASS', section=section)[0]
         pols = [x.text for x in self.root.findall('.//MDATTR[@desc="Polarization"]')]
         pols = list(filter(None, pols))
@@ -835,35 +863,47 @@ class BEAM_DIMAP(ID):
         meta['bands'] = int(self.root.find('.//NBANDS').text)
         meta['orbitNumber_abs'] = int(get_by_name('ABS_ORBIT', section=section))
         meta['orbitNumber_rel'] = int(get_by_name('REL_ORBIT', section=section))
-        meta['cycleNumber'] = int(get_by_name('orbit_cycle', section=section))
-        meta['frameNumber'] = int(get_by_name('data_take_id', section=section))
-        meta['product'] = self.root.find('.//PRODUCT_TYPE').text
+        meta['cycleNumber'] = int(get_by_name(['orbit_cycle', 'CYCLE'], section=section))
+        meta['frameNumber'] = int(get_by_name(['data_take_id', 'ABS_ORBIT'], section=section))
+        
+        meta['swath'] = get_by_name('SWATH', section=section)
         
         srgr = bool(int(get_by_name('srgr_flag', section=section)))
         meta['image_geometry'] = 'GROUND_RANGE' if srgr else 'SLANT_RANGE'
-        
-        inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
-        if len(inc_elements) > 0:
-            incidence = [float(x.text) for x in inc_elements]
-            meta['incidence'] = median(incidence)
-        else:
-            inc_near = float(self.root.find('.//MDATTR[@name="incidence_near"]').text)
-            inc_far = float(self.root.find('.//MDATTR[@name="incidence_far"]').text)
-            meta['incidence'] = (inc_near + inc_far) / 2
-        
-        # Metadata sections that need some parsing to match naming convention with SAFE format
+        #################################################################################
+        # start, stop
         start = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_START_TIME').text,
                                   '%d-%b-%Y %H:%M:%S.%f')
         meta['start'] = start.strftime('%Y%m%dT%H%M%S')
         stop = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_STOP_TIME').text,
                                  '%d-%b-%Y %H:%M:%S.%f')
         meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
-        
+        #################################################################################
+        # incidence angles, resolution, NESZ
+        if meta['sensor'] in ['ASAR', 'ERS1', 'ERS2']:
+            meta['incidenceAngleMin'], meta['incidenceAngleMax'], \
+                meta['rangeResolution'], meta['azimuthResolution'], \
+                meta['neszNear'], meta['neszFar'] = \
+                get_angles_resolution(meta['sensor'], meta['acquisition_mode'],
+                                      meta['swath'], meta['start'])
+            meta['incidence'] = median([meta['incidenceAngleMin'], meta['incidenceAngleMax']])
+        else:
+            inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
+            if len(inc_elements) > 0:
+                incidence = [float(x.text) for x in inc_elements]
+                meta['incidence'] = median(incidence)
+            else:
+                inc_near = float(self.root.find('.//MDATTR[@name="incidence_near"]').text)
+                inc_far = float(self.root.find('.//MDATTR[@name="incidence_far"]').text)
+                meta['incidence'] = (inc_near + inc_far) / 2
+        #################################################################################
+        # projection
         if self.root.find('.//WKT') is not None:
             meta['projection'] = self.root.find('.//WKT').text.lstrip()
         else:
             meta['projection'] = crsConvert(4326, 'wkt')
-        
+        #################################################################################
+        # coordinates
         keys = ['{}_{}_{}'.format(a, b, c)
                 for a in ['first', 'last']
                 for b in ['far', 'near']
@@ -875,6 +915,7 @@ class BEAM_DIMAP(ID):
                                (coords['last_near_long'], coords['last_near_lat']),
                                (coords['last_far_long'], coords['last_far_lat']),
                                (coords['first_far_long'], coords['first_far_lat'])]
+        #################################################################################
         return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
