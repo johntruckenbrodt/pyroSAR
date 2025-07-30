@@ -1601,7 +1601,6 @@ class ESA(ID):
         meta['sensor'] = sensor_lookup[match.group('satellite_ID')]
         meta['acquisition_mode'] = match2.group('image_mode')
         meta['product'] = 'SLC' if meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
-        meta['frameNumber'] = int(match.group('counter'))
         
         if meta['acquisition_mode'] in ['APS', 'IMS', 'WSM']:
             meta['image_geometry'] = 'SLANT_RANGE'
@@ -1685,6 +1684,7 @@ class ESA(ID):
         meta['orbitNumber_abs'] = int(origin['MPH']['ABS_ORBIT'])
         meta['orbitNumber_rel'] = int(origin['MPH']['REL_ORBIT'])
         meta['cycleNumber'] = int(origin['MPH']['CYCLE'])
+        meta['frameNumber'] = int(origin['MPH']['ABS_ORBIT'])
         
         meta['incidenceAngleMin'], meta['incidenceAngleMax'], \
             meta['rangeResolution'], meta['azimuthResolution'], \
