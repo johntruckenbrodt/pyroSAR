@@ -1735,6 +1735,67 @@ class ESA(ID):
         
         return meta
     
+    def geo_grid(self, outname=None, driver=None, overwrite=True):
+        """
+        get the geo grid as vector geometry
+
+        Parameters
+        ----------
+        outname: str
+            the name of the vector file to be written
+        driver: str
+            the output file format; needs to be defined if the format cannot
+            be auto-detected from the filename extension
+        overwrite: bool
+            overwrite an existing vector file?
+
+        Returns
+        -------
+        spatialist.vector.Vector or None
+            the vector object if `outname` is None, None otherwise
+
+        See also
+        --------
+        spatialist.vector.Vector.write
+        """
+        vec = Vector(driver='Memory')
+        vec.addlayer('geogrid', 4326, ogr.wkbPoint)
+        field_defs = [
+            ("swath", ogr.OFTString),
+            ("azimuthTime", ogr.OFTDateTime),
+            ("slantRangeTime", ogr.OFTReal),
+            ("line", ogr.OFTInteger),
+            ("pixel", ogr.OFTInteger),
+            ("incidenceAngle", ogr.OFTReal)
+        ]
+        for name, ftype in field_defs:
+            field = ogr.FieldDefn(name, ftype)
+            vec.layer.CreateField(field)
+        
+        for granule in self.meta['origin']['GEOLOCATION_GRID_ADS']:
+            line_first = granule['line_num']
+            line_last = granule['line_num'] + granule['num_lines'] - 1
+            for group in ['first', 'last']:
+                meta = {'swath': granule['swath_number'],
+                        'azimuthTime': granule[f'{group}_zero_doppler_time'],
+                        'line': line_first if group == 'first' else line_last}
+                tp = granule[f'{group}_line_tie_points']
+                for i in range(11):
+                    x = tp[i]['longitude']
+                    y = tp[i]['latitude']
+                    geom = ogr.Geometry(ogr.wkbPoint)
+                    geom.AddPoint(x, y)
+                    geom.FlattenTo2D()
+                    meta['slantRangeTime'] = tp[i]['slant_range_time']
+                    meta['pixel'] = tp[i]['sample_number']
+                    meta['incidenceAngle'] = tp[i]['incident_angle']
+                    vec.addfeature(geom, fields=meta)
+        geom = None
+        if outname is None:
+            return vec
+        else:
+            vec.write(outfile=outname, driver=driver, overwrite=overwrite)
+    
     def unpack(self, directory, overwrite=False, exist_ok=False):
         base_file = os.path.basename(self.file).strip(r'\.zip|\.tar(?:\.gz|)')
         base_dir = os.path.basename(directory.strip('/'))
