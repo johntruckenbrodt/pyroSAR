@@ -38,7 +38,7 @@ import operator
 import tarfile as tf
 import xml.etree.ElementTree as ET
 import zipfile as zf
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from dateutil.parser import parse as dateparse
 from time import strptime, strftime
 from statistics import median
@@ -1647,20 +1647,58 @@ class ESA(ID):
         
         geo = [geo[i:i + dsr_size] for i in range(0, len(geo), dsr_size)]
         
+        keys = ['first_zero_doppler_time', 'attach_flag', 'line_num',
+                'num_lines', 'sub_sat_track', 'first_line_tie_points',
+                'spare', 'last_zero_doppler_time', 'last_line_tie_points',
+                'swath_number']
+        lengths = [12, 1, 4, 4, 4, 220, 22, 12, 220, 3, 19]
+        
+        meta['origin']['GEOLOCATION_GRID_ADS'] = []
+        for granule in geo:
+            start = 0
+            values = {}
+            for i, key in enumerate(keys):
+                value = granule[start:sum(lengths[:i + 1])]
+                if key in ['first_zero_doppler_time', 'last_zero_doppler_time']:
+                    unpack = dict(zip(('days', 'seconds', 'microseconds'),
+                                      struct.unpack('>lLL', value)))
+                    value = datetime(year=2000, month=1, day=1, tzinfo=timezone.utc)
+                    value += timedelta(**unpack)
+                elif key in ['attach_flag']:
+                    value = struct.unpack('B', value)[0]
+                elif key in ['line_num', 'num_lines']:
+                    value = struct.unpack('>L', value)[0]
+                elif key in ['sub_sat_track']:
+                    value = struct.unpack('>f', value)[0]
+                elif key in ['first_line_tie_points', 'last_line_tie_points']:
+                    sample_numbers = struct.unpack('>' + 'L' * 11, value[0:44])
+                    slant_range_times = struct.unpack('>' + 'f' * 11, value[44:88])
+                    incident_angles = struct.unpack('>' + 'f' * 11, value[88:132])
+                    latitudes = struct.unpack('>' + 'l' * 11, value[132:176])
+                    latitudes = [x / 1000000. for x in latitudes]
+                    longitudes = struct.unpack('>' + 'l' * 11, value[176:220])
+                    longitudes = [x / 1000000. for x in longitudes]
+                    value = []
+                    for j in range(11):
+                        value.append({'sample_number': sample_numbers[j],
+                                      'slant_range_time': slant_range_times[j],
+                                      'incident_angle': incident_angles[j],
+                                      'latitude': latitudes[j],
+                                      'longitude': longitudes[j]})
+                elif key == 'swath_number':
+                    value = value.decode('ascii')
+                if key != 'spare':
+                    values[key] = value
+                start += lengths[i]
+            meta['origin']['GEOLOCATION_GRID_ADS'].append(values)
+        
         lat = []
         lon = []
-        for segment in geo:
-            lat_seg = segment[157:(157 + 44)] + segment[411:(411 + 44)]
-            lon_seg = segment[201:(201 + 44)] + segment[455:(455 + 44)]
-            
-            lat_seg = [lat_seg[i:i + 4] for i in range(0, len(lat_seg), 4)]
-            lon_seg = [lon_seg[i:i + 4] for i in range(0, len(lon_seg), 4)]
-            
-            lat_seg = [struct.unpack('>i', x)[0] / 1000000. for x in lat_seg]
-            lon_seg = [struct.unpack('>i', x)[0] / 1000000. for x in lon_seg]
-            
-            lat.extend(lat_seg)
-            lon.extend(lon_seg)
+        for granule in meta['origin']['GEOLOCATION_GRID_ADS']:
+            for group in ['first', 'last']:
+                for i in range(11):
+                    lat.append(granule[f'{group}_line_tie_points'][i]['latitude'])
+                    lon.append(granule[f'{group}_line_tie_points'][i]['longitude'])
         
         meta['coordinates'] = list(zip(lon, lat))
         
