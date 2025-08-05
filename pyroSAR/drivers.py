@@ -1609,6 +1609,20 @@ class ESA(ID):
         else:
             raise RuntimeError(f"unsupported acquisition mode: '{meta['acquisition_mode']}'")
         
+        def val_convert(val):
+            try:
+                out = int(val)
+            except ValueError:
+                try:
+                    out = float(val)
+                except ValueError:
+                    if re.search('[0-9]{2}-[A-Z]{3}-[0-9]{2}', val):
+                        out = dateparse(val)
+                        out = out.replace(tzinfo=timezone.utc)
+                    else:
+                        out = val
+            return out
+        
         with self.getFileObj(self.file) as obj:
             mph = obj.read(1247).decode('ascii')
             sph = obj.read(1059).decode('ascii')
@@ -1622,7 +1636,7 @@ class ESA(ID):
                     match = re.match(pattern, line)
                     if match:
                         matchdict = match.groupdict()
-                        val = str(matchdict['value']).strip()
+                        val = val_convert(str(matchdict['value']).strip())
                         origin[section][matchdict['key']] = val
             
             raw = []
@@ -1631,7 +1645,8 @@ class ESA(ID):
                 match = re.match(pattern, line)
                 if match:
                     matchdict = match.groupdict()
-                    raw.append((matchdict['key'], str(matchdict['value']).strip()))
+                    val = val_convert(str(matchdict['value']).strip())
+                    raw.append((matchdict['key'], val))
             raw = [raw[i:i + 7] for i in range(0, len(raw), 7)]
             datasets = {x.pop(0)[1]: {y[0]: y[1] for y in x} for x in raw}
             origin['DSD'] = datasets
@@ -1639,9 +1654,9 @@ class ESA(ID):
             meta['origin'] = origin
             
             key = 'GEOLOCATION GRID ADS'
-            ds_offset = int(origin['DSD'][key]['DS_OFFSET'])
-            ds_size = int(origin['DSD'][key]['DS_SIZE'])
-            dsr_size = int(origin['DSD'][key]['DSR_SIZE'])
+            ds_offset = origin['DSD'][key]['DS_OFFSET']
+            ds_size = origin['DSD'][key]['DS_SIZE']
+            dsr_size = origin['DSD'][key]['DSR_SIZE']
             obj.seek(ds_offset)
             geo = obj.read(ds_size)
         
@@ -1710,19 +1725,17 @@ class ESA(ID):
             meta['polarizations'] = ['VV']
         
         meta['orbit'] = origin['SPH']['PASS'][0]
-        start = datetime.strptime(origin['MPH']['SENSING_START'], '%d-%b-%Y %H:%M:%S.%f')
-        meta['start'] = start.strftime('%Y%m%dT%H%M%S')
-        stop = datetime.strptime(origin['MPH']['SENSING_STOP'], '%d-%b-%Y %H:%M:%S.%f')
-        meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
-        meta['spacing'] = (float(origin['SPH']['RANGE_SPACING']), float(origin['SPH']['AZIMUTH_SPACING']))
-        meta['looks'] = (float(origin['SPH']['RANGE_LOOKS']), float(origin['SPH']['AZIMUTH_LOOKS']))
-        meta['samples'] = int(origin['SPH']['LINE_LENGTH'])
-        meta['lines'] = int(origin['DSD']['MDS1']['NUM_DSR'])
+        meta['start'] = origin['MPH']['SENSING_START'].strftime('%Y%m%dT%H%M%S')
+        meta['stop'] = origin['MPH']['SENSING_STOP'].strftime('%Y%m%dT%H%M%S')
+        meta['spacing'] = (origin['SPH']['RANGE_SPACING'], origin['SPH']['AZIMUTH_SPACING'])
+        meta['looks'] = (origin['SPH']['RANGE_LOOKS'], origin['SPH']['AZIMUTH_LOOKS'])
+        meta['samples'] = origin['SPH']['LINE_LENGTH']
+        meta['lines'] = origin['DSD']['MDS1']['NUM_DSR']
         
-        meta['orbitNumber_abs'] = int(origin['MPH']['ABS_ORBIT'])
-        meta['orbitNumber_rel'] = int(origin['MPH']['REL_ORBIT'])
-        meta['cycleNumber'] = int(origin['MPH']['CYCLE'])
-        meta['frameNumber'] = int(origin['MPH']['ABS_ORBIT'])
+        meta['orbitNumber_abs'] = origin['MPH']['ABS_ORBIT']
+        meta['orbitNumber_rel'] = origin['MPH']['REL_ORBIT']
+        meta['cycleNumber'] = origin['MPH']['CYCLE']
+        meta['frameNumber'] = origin['MPH']['ABS_ORBIT']
         
         meta['incidenceAngleMin'], meta['incidenceAngleMax'], \
             meta['rangeResolution'], meta['azimuthResolution'], \
