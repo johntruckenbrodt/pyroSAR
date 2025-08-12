@@ -31,7 +31,7 @@ from spatialist import haversine, Raster
 from spatialist.ancillary import union, finder
 
 from ..S1 import OSV
-from ..drivers import ID, identify, identify_many
+from ..drivers import ID, identify_many
 from . import ISPPar, Namespace, par2hdr
 from ..ancillary import multilook_factors, hasarg, groupby
 from pyroSAR.examine import ExamineSnap
@@ -453,8 +453,8 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
         If the OSV file is packed in a zip file it will be unpacked to a subdirectory `osv`.
     osvdir: str
         the directory of OSV files; subdirectories POEORB and RESORB are created automatically
-    osvType: {'POE', 'RES'}
-        the OSV type to be used
+    osvType: str or List[str]
+        the OSV type (POE|RES) to be used
     timeout: int or tuple or None
         the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
     logpath: str or None

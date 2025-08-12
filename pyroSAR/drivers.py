@@ -595,7 +595,7 @@ class ID(object):
         
         Parameters
         ----------
-        extensions: list[str]
+        extensions: list[str] or None
             the names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
         Returns
         -------
