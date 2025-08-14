@@ -1,7 +1,7 @@
 ###############################################################################
 # general GAMMA utilities
 
-# Copyright (c) 2014-2021, the pyroSAR Developers, Stefan Engelhardt.
+# Copyright (c) 2014-2025, the pyroSAR Developers, Stefan Engelhardt.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -89,7 +89,7 @@ class ISPPar(object):
         elif 'DEM/MAP parameter file' in content[0]:
             setattr(self, 'filetype', 'dem')
         else:
-            setattr(self, 'filetype', 'unknown')
+            raise RuntimeError('unknown parameter file type')
         
         for line in content:
             match = ISPPar._re_kv_pair.match(line)
