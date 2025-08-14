@@ -858,6 +858,8 @@ class BEAM_DIMAP(ID):
         meta['polarizations'] = list(set([x for x in pols if '-' not in x]))
         meta['spacing'] = (round(float(get_by_name('range_spacing', section=section)), 6),
                            round(float(get_by_name('azimuth_spacing', section=section)), 6))
+        meta['looks'] = (float(get_by_name('range_looks', section=section)),
+                         float(get_by_name('azimuth_looks', section=section)))
         meta['samples'] = int(self.root.find('.//BAND_RASTER_WIDTH').text)
         meta['lines'] = int(self.root.find('.//BAND_RASTER_HEIGHT').text)
         meta['bands'] = int(self.root.find('.//NBANDS').text)
