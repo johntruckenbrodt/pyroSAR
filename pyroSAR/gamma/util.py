@@ -542,6 +542,103 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
                         shellscript=shellscript)
 
 
+def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False,
+                logpath=None, outdir=None, shellscript=None):
+    """
+    helper function for computing DEM products in function geocode.
+
+    Parameters
+    ----------
+    image: str
+        the reference SAR image
+    namespace: pyroSAR.gamma.auxil.Namespace
+        an object collecting all output file names
+    dem: str
+        the digital elevation model
+    spacing: int or float
+        the target pixel spacing in meters
+    exist_ok: bool
+        allow existing output files and do not create new ones?
+    logpath: str
+        a directory to write command logfiles to
+    outdir: str
+        the directory to execute the command in
+    shellscript: str
+        a file to write the GAMMA commands to in shell format
+
+    Returns
+    -------
+
+    """
+    # compute DEM oversampling factors; will be 1 for range and
+    # azimuth if the DEM spacing matches the target spacing
+    ovs_lat, ovs_lon = ovs(dem + '.par', spacing)
+    
+    image_par = ISPPar(image + '.par')
+    
+    gc_map_args = {'DEM_par': dem + '.par',
+                   'DEM': dem,
+                   'DEM_seg_par': namespace.dem_seg_geo + '.par',
+                   'DEM_seg': namespace.dem_seg_geo,
+                   'lookup_table': namespace.lut_init,
+                   'lat_ovr': ovs_lat,
+                   'lon_ovr': ovs_lon,
+                   'sim_sar': namespace.sim_sar_geo,
+                   'u': namespace.u_geo,
+                   'v': namespace.v_geo,
+                   'inc': namespace.inc_geo,
+                   'psi': namespace.psi_geo,
+                   'pix': namespace.pix_geo,
+                   'ls_map': namespace.ls_map_geo,
+                   'frame': 8,
+                   'ls_mode': 2,
+                   'logpath': logpath,
+                   'shellscript': shellscript,
+                   'outdir': outdir}
+    out_id = ['DEM_seg_par', 'DEM_seg', 'lookup_table', 'sim_sar',
+              'u', 'v', 'inc', 'psi', 'pix', 'ls_map']
+    
+    # remove all output files to make sure they are replaced and not updated
+    if not exist_ok:
+        for id in out_id:
+            base = gc_map_args[id]
+            if base != '-':
+                for suffix in ['', '.par', '.hdr']:
+                    fname = base + suffix
+                    if os.path.isfile(fname):
+                        os.remove(fname)
+    
+    if image_par.image_geometry == 'GROUND_RANGE':
+        gc_map_args.update({'GRD_par': image + '.par'})
+        if do_execute(gc_map_args, out_id, exist_ok):
+            diff.gc_map_grd(**gc_map_args)
+    else:
+        gc_map_args.update({'MLI_par': image + '.par'})
+        if do_execute(gc_map_args, out_id, exist_ok):
+            # gc_map2 is the successor of gc_map. However, earlier versions
+            # did not yet come with full functionality.
+            gc_map2_ok = False
+            if 'gc_map2' in dir(diff):
+                keys = list(gc_map_args.keys())
+                keys.remove('ls_mode')
+                gc_map2_ok = all([hasarg(diff.gc_map2, x) for x in keys])
+            if gc_map2_ok:
+                del gc_map_args['ls_mode']
+                diff.gc_map2(**gc_map_args)
+            else:
+                # gc_map might have an argument OFF_par, which is not needed for SLC/MLI geocoding
+                if hasarg(diff.gc_map, 'OFF_par'):
+                    gc_map_args.update({'OFF_par': '-'})
+                diff.gc_map(**gc_map_args)
+    
+    # create ENVI header files for all created images
+    for item in ['dem_seg_geo', 'sim_sar_geo', 'u_geo', 'v_geo',
+                 'psi_geo', 'pix_geo', 'inc_geo', 'ls_map_geo']:
+        if namespace.isappreciated(item):
+            mods = {'data_type': 1} if item == 'ls_map_geo' else None
+            par2hdr(namespace.dem_seg_geo + '.par', namespace.get(item) + '.hdr', mods)
+
+
 def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=1,
             nodata=(0, -99), update_osv=True, osvdir=None, allow_RES_OSV=False,
             cleanup=True, export_extra=None, basename_extensions=None,
@@ -1027,44 +1124,100 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         shutil.rmtree(tmpdir)
 
 
-def ovs(parfile, spacing):
+def lat_linear_to_db(data_in, data_out):
     """
-    compute DEM oversampling factors for a target resolution in meters
+    Alternative to LAT module command linear_to_dB.
 
     Parameters
     ----------
-    parfile: str
-        a GAMMA DEM parameter file
-    spacing: int or float
-        the target pixel spacing in meters
-    
+    data_in: str
+        the input data file
+    data_out: str
+        the output data file
+
     Returns
     -------
-    tuple of float
-        the oversampling factors for latitude and longitude
+
     """
-    # read DEM parameter file
-    dempar = ISPPar(parfile)
-    
-    # extract coordinates and pixel posting of the DEM
-    if hasattr(dempar, 'post_north'):
-        post_north, post_east = [abs(float(x)) for x in
-                                 [dempar.post_north, dempar.post_east]]
-    else:
-        res_lat, res_lon = [abs(float(x)) for x in [dempar.post_lat, dempar.post_lon]]
-        
-        # compute center coordinate
-        lat = float(dempar.corner_lat) - (res_lat * (dempar.nlines // 2))
-        lon = float(dempar.corner_lon) + (res_lon * (dempar.width // 2))
-        
-        # convert DEM resolution to meters
-        post_north = haversine(lat, lon, lat + res_lat, lon)
-        post_east = haversine(lat, lon, lat, lon + res_lon)
-    
-    # compute resampling factors for the DEM
-    ovs_lat = post_north / spacing
-    ovs_lon = post_east / spacing
-    return ovs_lat, ovs_lon
+    with Raster(data_in) as ras:
+        a1 = ras.array()
+        a1[a1 <= 0] = np.nan
+        out = 10 * np.log10(a1)
+        tmp = data_out + '_tmp'
+        ras.write(outname=tmp, array=out, format='ENVI',
+                  nodata=0, dtype='float32')
+    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
+    shutil.copy(src=data_in + '.hdr', dst=data_out + '.hdr')
+    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
+        os.remove(item)
+
+
+def lat_product(data_in1, data_in2, data_out):
+    """
+    Alternative to LAT module command product.
+
+    Parameters
+    ----------
+    data_in1: str
+        input data file 1
+    data_in2: str
+        input data file 2
+    data_out: str
+        the output data file
+
+    Returns
+    -------
+
+    """
+    with Raster(data_in1) as ras:
+        a1 = ras.array()
+        a1[a1 == 0] = np.nan
+    with Raster(data_in2) as ras:
+        a2 = ras.array()
+        a2[a2 == 0] = np.nan
+        out = a1 * a2
+        tmp = data_out + '_tmp'
+        ras.write(outname=tmp, array=out, format='ENVI',
+                  nodata=0, dtype='float32')
+    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
+    shutil.copy(src=data_in1 + '.hdr', dst=data_out + '.hdr')
+    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
+        if os.path.isfile(item):
+            os.remove(item)
+
+
+def lat_ratio(data_in1, data_in2, data_out):
+    """
+    Alternative to LAT module command ratio.
+
+    Parameters
+    ----------
+    data_in1: str
+        input data file 1
+    data_in2: str
+        input data file 2
+    data_out: str
+        the output data file
+
+    Returns
+    -------
+
+    """
+    with Raster(data_in1) as ras:
+        a1 = ras.array()
+        a1[a1 == 0] = np.nan
+    with Raster(data_in2) as ras:
+        a2 = ras.array()
+        a2[a2 == 0] = np.nan
+        out = a1 / a2
+        tmp = data_out + '_tmp'
+        ras.write(outname=tmp, array=out, format='ENVI',
+                  nodata=0, dtype='float32')
+    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
+    shutil.copy(src=data_in1 + '.hdr', dst=data_out + '.hdr')
+    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
+        if os.path.isfile(item):
+            os.remove(item)
 
 
 def multilook(infile, outfile, spacing, rlks=None, azlks=None,
@@ -1084,7 +1237,7 @@ def multilook(infile, outfile, spacing, rlks=None, azlks=None,
     ----------
     infile: str or list[str]
         one of the following:
-        
+
         - a SAR image in GAMMA format with a parameter file <infile>.par
         - a list of ScanSAR SLC swaths with parameter files <slc>.par and <slc>.tops_par; in this case a text file
           <outfile>_slc-tab.txt will be created, which is passed to the GAMMA command ``multi_look_ScanSAR``
@@ -1182,93 +1335,51 @@ def multilook(infile, outfile, spacing, rlks=None, azlks=None,
             par2hdr(outfile + '.par', outfile + '.hdr')
 
 
-def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
-               replace=False, logpath=None, outdir=None, shellscript=None):
+def ovs(parfile, spacing):
     """
-    Debursting of Sentinel-1 SLC imagery in GAMMA
-    
-    The procedure consists of two steps. First antenna pattern deramping and
-    then mosaicing of the single deramped bursts.
-    For mosaicing, the burst boundaries are calculated from the number of looks in range (`rlks`)
-    and azimuth (`azlks`), in this case 5 range looks and 1 azimuth looks.
-    Alternately 10 range looks and 2 azimuth looks could be used.
-    
+    compute DEM oversampling factors for a target resolution in meters
+
     Parameters
     ----------
-    burst1: str
-        burst image 1
-    burst2: str
-        burst image 2
-    burst3: str
-        burst image 3
-    name_out: str
-        the name of the output file
-    rlks: int
-        the number of looks in range
-    azlks: int
-        the number of looks in azimuth
-    replace: bool
-        replace the burst images by the new file? If True, the three burst images will be deleted.
-    logpath: str or None
-        a directory to write command logfiles to
-    outdir: str or None
-        the directory to execute the command in
-    shellscript: str or None
-        a file to write the Gamma commands to in shell format
-
+    parfile: str
+        a GAMMA DEM parameter file
+    spacing: int or float
+        the target pixel spacing in meters
+    
     Returns
     -------
-    
+    tuple of float
+        the oversampling factors for latitude and longitude
     """
-    for burst in [burst1, burst2, burst3]:
-        if not os.path.isfile(burst) or not os.path.isfile(burst + '.par') or not os.path.isfile(burst + '.tops_par'):
-            raise IOError('input files missing; parameter files must be named e.g. {burst1}.par and {burst1}.tops_par')
-    outpath = os.path.dirname(name_out)
-    if not os.path.isdir(outpath):
-        os.makedirs(outpath)
-    tab_in = os.path.join(outpath, 'tab_deramp1')
-    tab_out = os.path.join(outpath, 'tab_deramp2')
-    with open(tab_in, 'w') as out1:
-        with open(tab_out, 'w') as out2:
-            for item in [burst1, burst2, burst3]:
-                out1.write(item + '\t' + item + '.par\t' + item + '.tops_par\n')
-                out2.write(item + '_drp\t' + item + '_drp.par\t' + item + '_drp.tops_par\n')
+    # read DEM parameter file
+    dempar = ISPPar(parfile)
     
-    isp.SLC_deramp_ScanSAR(SLC1_tab=tab_in,
-                           SLC2_tab=tab_out,
-                           mode=0,
-                           phflg=0,
-                           logpath=logpath,
-                           outdir=outdir,
-                           shellscript=shellscript)
+    # extract coordinates and pixel posting of the DEM
+    if hasattr(dempar, 'post_north'):
+        post_north, post_east = [abs(float(x)) for x in
+                                 [dempar.post_north, dempar.post_east]]
+    else:
+        res_lat, res_lon = [abs(float(x)) for x in [dempar.post_lat, dempar.post_lon]]
+        
+        # compute center coordinate
+        lat = float(dempar.corner_lat) - (res_lat * (dempar.nlines // 2))
+        lon = float(dempar.corner_lon) + (res_lon * (dempar.width // 2))
+        
+        # convert DEM resolution to meters
+        post_north = haversine(lat, lon, lat + res_lat, lon)
+        post_east = haversine(lat, lon, lat, lon + res_lon)
     
-    new = 'SLC_mosaic_ScanSAR'
-    old = 'SLC_mosaic_S1_TOPS'
-    slc_mosaic = new if hasattr(isp, new) else old
-    getattr(isp, slc_mosaic)(SLC_tab=tab_out,
-                             SLC=name_out,
-                             SLC_par=name_out + '.par',
-                             rlks=rlks,
-                             azlks=azlks,
-                             logpath=logpath,
-                             outdir=outdir,
-                             shellscript=shellscript)
-    if replace:
-        for item in [burst1, burst2, burst3]:
-            for subitem in [item + x for x in ['', '.par', '.tops_par']]:
-                os.remove(subitem)
-    for item in [burst1, burst2, burst3]:
-        for subitem in [item + x for x in ['_drp', '_drp.par', '_drp.tops_par']]:
-            os.remove(subitem)
-    os.remove(tab_in)
-    os.remove(tab_out)
+    # compute resampling factors for the DEM
+    ovs_lat = post_north / spacing
+    ovs_lon = post_east / spacing
+    return ovs_lat, ovs_lon
 
 
 def pixel_area_wrap(image, namespace, lut, exist_ok=False,
                     logpath=None, outdir=None, shellscript=None):
     """
     helper function for computing pixel_area files in function geocode.
-    
+
     Parameters
     ----------
     image: str
@@ -1406,194 +1517,83 @@ def pixel_area_wrap(image, namespace, lut, exist_ok=False,
                 par2hdr(image + '.par', hdr_out)
 
 
-def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False,
-                logpath=None, outdir=None, shellscript=None):
+def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
+               replace=False, logpath=None, outdir=None, shellscript=None):
     """
-    helper function for computing DEM products in function geocode.
-
+    Debursting of Sentinel-1 SLC imagery in GAMMA
+    
+    The procedure consists of two steps. First antenna pattern deramping and
+    then mosaicing of the single deramped bursts.
+    For mosaicing, the burst boundaries are calculated from the number of looks in range (`rlks`)
+    and azimuth (`azlks`), in this case 5 range looks and 1 azimuth looks.
+    Alternately 10 range looks and 2 azimuth looks could be used.
+    
     Parameters
     ----------
-    image: str
-        the reference SAR image
-    namespace: pyroSAR.gamma.auxil.Namespace
-        an object collecting all output file names
-    dem: str
-        the digital elevation model
-    spacing: int or float
-        the target pixel spacing in meters
-    exist_ok: bool
-        allow existing output files and do not create new ones?
-    logpath: str
+    burst1: str
+        burst image 1
+    burst2: str
+        burst image 2
+    burst3: str
+        burst image 3
+    name_out: str
+        the name of the output file
+    rlks: int
+        the number of looks in range
+    azlks: int
+        the number of looks in azimuth
+    replace: bool
+        replace the burst images by the new file? If True, the three burst images will be deleted.
+    logpath: str or None
         a directory to write command logfiles to
-    outdir: str
+    outdir: str or None
         the directory to execute the command in
-    shellscript: str
-        a file to write the GAMMA commands to in shell format
+    shellscript: str or None
+        a file to write the Gamma commands to in shell format
 
     Returns
     -------
-
-    """
-    # compute DEM oversampling factors; will be 1 for range and
-    # azimuth if the DEM spacing matches the target spacing
-    ovs_lat, ovs_lon = ovs(dem + '.par', spacing)
     
-    image_par = ISPPar(image + '.par')
-    
-    gc_map_args = {'DEM_par': dem + '.par',
-                   'DEM': dem,
-                   'DEM_seg_par': namespace.dem_seg_geo + '.par',
-                   'DEM_seg': namespace.dem_seg_geo,
-                   'lookup_table': namespace.lut_init,
-                   'lat_ovr': ovs_lat,
-                   'lon_ovr': ovs_lon,
-                   'sim_sar': namespace.sim_sar_geo,
-                   'u': namespace.u_geo,
-                   'v': namespace.v_geo,
-                   'inc': namespace.inc_geo,
-                   'psi': namespace.psi_geo,
-                   'pix': namespace.pix_geo,
-                   'ls_map': namespace.ls_map_geo,
-                   'frame': 8,
-                   'ls_mode': 2,
-                   'logpath': logpath,
-                   'shellscript': shellscript,
-                   'outdir': outdir}
-    out_id = ['DEM_seg_par', 'DEM_seg', 'lookup_table', 'sim_sar',
-              'u', 'v', 'inc', 'psi', 'pix', 'ls_map']
-    
-    # remove all output files to make sure they are replaced and not updated
-    if not exist_ok:
-        for id in out_id:
-            base = gc_map_args[id]
-            if base != '-':
-                for suffix in ['', '.par', '.hdr']:
-                    fname = base + suffix
-                    if os.path.isfile(fname):
-                        os.remove(fname)
-    
-    if image_par.image_geometry == 'GROUND_RANGE':
-        gc_map_args.update({'GRD_par': image + '.par'})
-        if do_execute(gc_map_args, out_id, exist_ok):
-            diff.gc_map_grd(**gc_map_args)
-    else:
-        gc_map_args.update({'MLI_par': image + '.par'})
-        if do_execute(gc_map_args, out_id, exist_ok):
-            # gc_map2 is the successor of gc_map. However, earlier versions
-            # did not yet come with full functionality.
-            gc_map2_ok = False
-            if 'gc_map2' in dir(diff):
-                keys = list(gc_map_args.keys())
-                keys.remove('ls_mode')
-                gc_map2_ok = all([hasarg(diff.gc_map2, x) for x in keys])
-            if gc_map2_ok:
-                del gc_map_args['ls_mode']
-                diff.gc_map2(**gc_map_args)
-            else:
-                # gc_map might have an argument OFF_par, which is not needed for SLC/MLI geocoding
-                if hasarg(diff.gc_map, 'OFF_par'):
-                    gc_map_args.update({'OFF_par': '-'})
-                diff.gc_map(**gc_map_args)
-    
-    # create ENVI header files for all created images
-    for item in ['dem_seg_geo', 'sim_sar_geo', 'u_geo', 'v_geo',
-                 'psi_geo', 'pix_geo', 'inc_geo', 'ls_map_geo']:
-        if namespace.isappreciated(item):
-            mods = {'data_type': 1} if item == 'ls_map_geo' else None
-            par2hdr(namespace.dem_seg_geo + '.par', namespace.get(item) + '.hdr', mods)
-
-
-def lat_linear_to_db(data_in, data_out):
     """
-    Alternative to LAT module command linear_to_dB.
+    for burst in [burst1, burst2, burst3]:
+        if not os.path.isfile(burst) or not os.path.isfile(burst + '.par') or not os.path.isfile(burst + '.tops_par'):
+            raise IOError('input files missing; parameter files must be named e.g. {burst1}.par and {burst1}.tops_par')
+    outpath = os.path.dirname(name_out)
+    if not os.path.isdir(outpath):
+        os.makedirs(outpath)
+    tab_in = os.path.join(outpath, 'tab_deramp1')
+    tab_out = os.path.join(outpath, 'tab_deramp2')
+    with open(tab_in, 'w') as out1:
+        with open(tab_out, 'w') as out2:
+            for item in [burst1, burst2, burst3]:
+                out1.write(item + '\t' + item + '.par\t' + item + '.tops_par\n')
+                out2.write(item + '_drp\t' + item + '_drp.par\t' + item + '_drp.tops_par\n')
     
-    Parameters
-    ----------
-    data_in: str
-        the input data file
-    data_out: str
-        the output data file
-
-    Returns
-    -------
-
-    """
-    with Raster(data_in) as ras:
-        a1 = ras.array()
-        a1[a1 <= 0] = np.nan
-        out = 10 * np.log10(a1)
-        tmp = data_out + '_tmp'
-        ras.write(outname=tmp, array=out, format='ENVI',
-                  nodata=0, dtype='float32')
-    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
-    shutil.copy(src=data_in + '.hdr', dst=data_out + '.hdr')
-    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
-        os.remove(item)
-
-
-def lat_product(data_in1, data_in2, data_out):
-    """
-    Alternative to LAT module command product.
+    isp.SLC_deramp_ScanSAR(SLC1_tab=tab_in,
+                           SLC2_tab=tab_out,
+                           mode=0,
+                           phflg=0,
+                           logpath=logpath,
+                           outdir=outdir,
+                           shellscript=shellscript)
     
-    Parameters
-    ----------
-    data_in1: str
-        input data file 1
-    data_in2: str
-        input data file 2
-    data_out: str
-        the output data file
-
-    Returns
-    -------
-
-    """
-    with Raster(data_in1) as ras:
-        a1 = ras.array()
-        a1[a1 == 0] = np.nan
-    with Raster(data_in2) as ras:
-        a2 = ras.array()
-        a2[a2 == 0] = np.nan
-        out = a1 * a2
-        tmp = data_out + '_tmp'
-        ras.write(outname=tmp, array=out, format='ENVI',
-                  nodata=0, dtype='float32')
-    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
-    shutil.copy(src=data_in1 + '.hdr', dst=data_out + '.hdr')
-    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
-        if os.path.isfile(item):
-            os.remove(item)
-
-
-def lat_ratio(data_in1, data_in2, data_out):
-    """
-    Alternative to LAT module command ratio.
-
-    Parameters
-    ----------
-    data_in1: str
-        input data file 1
-    data_in2: str
-        input data file 2
-    data_out: str
-        the output data file
-
-    Returns
-    -------
-
-    """
-    with Raster(data_in1) as ras:
-        a1 = ras.array()
-        a1[a1 == 0] = np.nan
-    with Raster(data_in2) as ras:
-        a2 = ras.array()
-        a2[a2 == 0] = np.nan
-        out = a1 / a2
-        tmp = data_out + '_tmp'
-        ras.write(outname=tmp, array=out, format='ENVI',
-                  nodata=0, dtype='float32')
-    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
-    shutil.copy(src=data_in1 + '.hdr', dst=data_out + '.hdr')
-    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
-        if os.path.isfile(item):
-            os.remove(item)
+    new = 'SLC_mosaic_ScanSAR'
+    old = 'SLC_mosaic_S1_TOPS'
+    slc_mosaic = new if hasattr(isp, new) else old
+    getattr(isp, slc_mosaic)(SLC_tab=tab_out,
+                             SLC=name_out,
+                             SLC_par=name_out + '.par',
+                             rlks=rlks,
+                             azlks=azlks,
+                             logpath=logpath,
+                             outdir=outdir,
+                             shellscript=shellscript)
+    if replace:
+        for item in [burst1, burst2, burst3]:
+            for subitem in [item + x for x in ['', '.par', '.tops_par']]:
+                os.remove(subitem)
+    for item in [burst1, burst2, burst3]:
+        for subitem in [item + x for x in ['_drp', '_drp.par', '_drp.tops_par']]:
+            os.remove(subitem)
+    os.remove(tab_in)
+    os.remove(tab_out)

@@ -1133,3 +1133,23 @@ Drivers
   - :meth:`pyroSAR.drivers.ID.bbox`
   - :meth:`pyroSAR.drivers.ID.geometry`
 - method :meth:`pyroSAR.drivers.Archive.select`: new argument `return_value`
+
+0.30.1 | 2025-08-22
+===================
+
+Drivers
+-------
+- :class:`~pyroSAR.drivers.ESA`: read all `GEOLOCATION GRID ADS` segments to obtain GCPs, not just the first one (bugfix)
+
+GAMMA API
+---------
+- support for GAMMA version 20250625
+- support for polar stereographic projections (via :meth:`~pyroSAR.gamma.auxil.ISPPar.envidict`)
+- class :class:`~pyroSAR.gamma.auxil.ISPPar`: raise error if file type is unknown
+  (instead of setting the `filetype` attribute to `unknown`)
+- :func:`~pyroSAR.gamma.util.pixel_area_wrap`:
+
+  + create ENVI HDR files for inputs to :func:`~pyroSAR.gamma.util.lat_ratio` (bugfix)
+  + fixed bug in ignoring conditions for writing ENVI HDR files of `pix*` and `gs_ratio` products
+
+- improved readability of tests
