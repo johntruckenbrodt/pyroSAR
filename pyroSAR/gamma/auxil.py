@@ -26,6 +26,28 @@ from spatialist.envi import hdr
 from .error import gammaErrorHandler
 
 
+def do_execute(par, ids, exist_ok):
+    """
+    small helper function to assess whether a GAMMA command shall be executed.
+
+    Parameters
+    ----------
+    par: dict
+        a dictionary containing all arguments for the command
+    ids: list[str]
+        the IDs of the output files
+    exist_ok: bool
+        allow existing output files?
+
+    Returns
+    -------
+    bool
+        execute the command because (a) not all output files exist or (b) existing files are not allowed
+    """
+    all_exist = all([os.path.isfile(par[x]) for x in ids if par[x] != '-'])
+    return (exist_ok and not all_exist) or not exist_ok
+
+
 class ISPPar(object):
     """
     Reader for ISP parameter files of the GAMMA software package
@@ -120,7 +142,7 @@ class ISPPar(object):
                             break
             self.keys.append(key)
             setattr(self, key, value)
-
+        
         if hasattr(self, 'date'):
             try:
                 self.date = '{}-{:02d}-{:02d}T{:02d}:{:02d}:{:02f}'.format(*self.date)
@@ -240,6 +262,98 @@ class ISPPar(object):
         return out
 
 
+class Namespace(object):
+    """
+    GAMMA file name handler. This improves managing the many files names
+    handled when processing with GAMMA.
+    
+    Parameters
+    ----------
+    directory: str
+        the directory path where files shall be written.
+    basename: str
+        the product basename as returned by
+        :meth:`pyroSAR.drivers.ID.outname_base`
+    
+    Examples
+    --------
+    >>> n = Namespace(directory='/path', basename='S1A__IW___A_20180829T170631')
+    >>> print(n.pix_geo)
+    '-'
+    >>> n.appreciate(['pix_geo'])
+    >>> print(n.pix_geo)
+    '/path/S1A__IW___A_20180829T170631_pix_geo'
+    """
+    def __init__(self, directory, basename):
+        self.__base = basename
+        self.__outdir = directory
+        self.__reg = []
+    
+    def __getitem__(self, item):
+        item = str(item).replace('.', '_')
+        return self.get(item)
+    
+    def __getattr__(self, item):
+        # will only be run if object has no attribute item
+        return '-'
+    
+    def appreciate(self, keys):
+        """
+
+        Parameters
+        ----------
+        keys: list[str]
+
+        Returns
+        -------
+
+        """
+        for key in keys:
+            setattr(self, key.replace('.', '_'), os.path.join(self.__outdir, self.__base + '_' + key))
+            if key not in self.__reg:
+                self.__reg.append(key.replace('.', '_'))
+    
+    def depreciate(self, keys):
+        """
+
+        Parameters
+        ----------
+        keys: list[str]
+
+        Returns
+        -------
+
+        """
+        for key in keys:
+            setattr(self, key.replace('.', '_'), '-')
+            if key not in self.__reg:
+                self.__reg.append(key.replace('.', '_'))
+    
+    def getall(self):
+        out = {}
+        for key in self.__reg:
+            out[key] = getattr(self, key)
+        return out
+    
+    def select(self, selection):
+        return [getattr(self, key) for key in selection]
+    
+    def isregistered(self, key):
+        return key in self.__reg
+    
+    def isappreciated(self, key):
+        if self.isregistered(key):
+            if self.get(key) != '-':
+                return True
+        return False
+    
+    def isfile(self, key):
+        return hasattr(self, key) and os.path.isfile(getattr(self, key))
+    
+    def get(self, key):
+        return getattr(self, key)
+
+
 def par2hdr(parfile, hdrfile, modifications=None, nodata=None):
     """
     Create an ENVI HDR file from a GAMMA PAR file
@@ -278,49 +392,11 @@ def par2hdr(parfile, hdrfile, modifications=None, nodata=None):
         hdr(items, hdrfile)
 
 
-class UTM(object):
-    """
-    convert a gamma parameter file corner coordinate from EQA to UTM
-    
-    Parameters
-    ----------
-    parfile: str
-        the GAMMA parameter file to read the coordinate from
-    
-    Example
-    -------
-    
-    >>> from pyroSAR.gamma import UTM
-    >>> print(UTM('gamma.par').zone)
-    """
-    
-    def __init__(self, parfile):
-        par = ISPPar(parfile)
-        inlist = ['WGS84', 1, 'EQA', par.corner_lon, par.corner_lat, '', 'WGS84', 1, 'UTM', '']
-        inlist = map(str, inlist)
-        proc = sp.Popen(['coord_trans'], stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE,
-                        universal_newlines=True, shell=False)
-        out, err = proc.communicate(''.join([x + '\n' for x in inlist]))
-        out = [x for x in filter(None, out.split('\n')) if ':' in x]
-        
-        self.meta = dict()
-        for line in out:
-            key, value = re.split(r'\s*:\s*', line)
-            value = value.split()
-            value = map(parse_literal, value) if len(value) > 1 else value[0]
-            self.meta[key] = value
-        try:
-            self.zone, self.northing, self.easting, self.altitude = \
-                self.meta['UTM zone/northing/easting/altitude (m)']
-        except KeyError:
-            self.zone, self.northing, self.easting = \
-                self.meta['UTM zone/northing/easting (m)']
-
-
-def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True, shellscript=None):
+def process(cmd, outdir=None, logfile=None, logpath=None,
+            inlist=None, void=True, shellscript=None):
     """
     wrapper function to execute GAMMA commands via module :mod:`subprocess`
-    
+
     Parameters
     ----------
     cmd: list[str]
@@ -338,7 +414,7 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
         return the stdout and stderr messages?
     shellscript: str
         a file to write the GAMMA commands to in shell format
-    
+
     Returns
     -------
     tuple of str or None
@@ -393,111 +469,10 @@ def process(cmd, outdir=None, logfile=None, logpath=None, inlist=None, void=True
         return out, err
 
 
-class Spacing(object):
-    """
-    compute multilooking factors and pixel spacings from an ISPPar object for a defined ground range target pixel spacing
-    
-    Parameters
-    ----------
-    par: str or ISPPar
-        the ISP parameter file
-    spacing: int or float
-        the target pixel spacing in ground range
-    """
-    def __init__(self, par, spacing='automatic'):
-        # compute ground range pixel spacing
-        par = par if isinstance(par, ISPPar) else ISPPar(par)
-        self.groundRangePS = par.range_pixel_spacing / (math.sin(math.radians(par.incidence_angle)))
-        # compute initial multilooking factors
-        if spacing == 'automatic':
-            if self.groundRangePS > par.azimuth_pixel_spacing:
-                ratio = self.groundRangePS / par.azimuth_pixel_spacing
-                self.rlks = 1
-                self.azlks = int(round(ratio))
-            else:
-                ratio = par.azimuth_pixel_spacing / self.groundRangePS
-                self.rlks = int(round(ratio))
-                self.azlks = 1
-        else:
-            self.rlks = int(round(float(spacing) / self.groundRangePS))
-            self.azlks = int(round(float(spacing) / par.azimuth_pixel_spacing))
-
-
-class Namespace(object):
-    def __init__(self, directory, basename):
-        self.__base = basename
-        self.__outdir = directory
-        self.__reg = []
-    
-    def __getitem__(self, item):
-        item = str(item).replace('.', '_')
-        return self.get(item)
-    
-    def __getattr__(self, item):
-        # will only be run if object has no attribute item
-        return '-'
-    
-    def appreciate(self, keys):
-        """
-        
-        Parameters
-        ----------
-        keys: list[str]
-
-        Returns
-        -------
-
-        """
-        for key in keys:
-            setattr(self, key.replace('.', '_'), os.path.join(self.__outdir, self.__base + '_' + key))
-            if key not in self.__reg:
-                self.__reg.append(key.replace('.', '_'))
-    
-    def depreciate(self, keys):
-        """
-        
-        Parameters
-        ----------
-        keys: list[str]
-
-        Returns
-        -------
-
-        """
-        for key in keys:
-            setattr(self, key.replace('.', '_'), '-')
-            if key not in self.__reg:
-                self.__reg.append(key.replace('.', '_'))
-    
-    def getall(self):
-        out = {}
-        for key in self.__reg:
-            out[key] = getattr(self, key)
-        return out
-    
-    def select(self, selection):
-        return [getattr(self, key) for key in selection]
-    
-    def isregistered(self, key):
-        return key in self.__reg
-    
-    def isappreciated(self, key):
-        if self.isregistered(key):
-            if self.get(key) != '-':
-                return True
-        return False
-    
-    def isfile(self, key):
-        return hasattr(self, key) and os.path.isfile(getattr(self, key))
-    
-    def get(self, key):
-        return getattr(self, key)
-
-
 def slc_corners(parfile):
     """
     extract the corner coordinates of a SAR scene
-    
+
     Parameters
     ----------
     parfile: str
@@ -521,23 +496,71 @@ def slc_corners(parfile):
     return pts
 
 
-def do_execute(par, ids, exist_ok):
+class Spacing(object):
     """
-    small helper function to assess whether a GAMMA command shall be executed.
+    compute multilooking factors and pixel spacings from an ISPPar object for a defined ground range target pixel spacing
 
     Parameters
     ----------
-    par: dict
-        a dictionary containing all arguments for the command
-    ids: list[str]
-        the IDs of the output files
-    exist_ok: bool
-        allow existing output files?
-
-    Returns
-    -------
-    bool
-        execute the command because (a) not all output files exist or (b) existing files are not allowed
+    par: str or ISPPar
+        the ISP parameter file
+    spacing: int or float
+        the target pixel spacing in ground range
     """
-    all_exist = all([os.path.isfile(par[x]) for x in ids if par[x] != '-'])
-    return (exist_ok and not all_exist) or not exist_ok
+    
+    def __init__(self, par, spacing='automatic'):
+        # compute ground range pixel spacing
+        par = par if isinstance(par, ISPPar) else ISPPar(par)
+        self.groundRangePS = par.range_pixel_spacing / (math.sin(math.radians(par.incidence_angle)))
+        # compute initial multilooking factors
+        if spacing == 'automatic':
+            if self.groundRangePS > par.azimuth_pixel_spacing:
+                ratio = self.groundRangePS / par.azimuth_pixel_spacing
+                self.rlks = 1
+                self.azlks = int(round(ratio))
+            else:
+                ratio = par.azimuth_pixel_spacing / self.groundRangePS
+                self.rlks = int(round(ratio))
+                self.azlks = 1
+        else:
+            self.rlks = int(round(float(spacing) / self.groundRangePS))
+            self.azlks = int(round(float(spacing) / par.azimuth_pixel_spacing))
+
+
+class UTM(object):
+    """
+    convert a gamma parameter file corner coordinate from EQA to UTM
+    
+    Parameters
+    ----------
+    parfile: str
+        the GAMMA parameter file to read the coordinate from
+    
+    Example
+    -------
+    
+    >>> from pyroSAR.gamma import UTM
+    >>> print(UTM('gamma.par').zone)
+    """
+    
+    def __init__(self, parfile):
+        par = ISPPar(parfile)
+        inlist = ['WGS84', 1, 'EQA', par.corner_lon, par.corner_lat, '', 'WGS84', 1, 'UTM', '']
+        inlist = map(str, inlist)
+        proc = sp.Popen(['coord_trans'], stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE,
+                        universal_newlines=True, shell=False)
+        out, err = proc.communicate(''.join([x + '\n' for x in inlist]))
+        out = [x for x in filter(None, out.split('\n')) if ':' in x]
+        
+        self.meta = dict()
+        for line in out:
+            key, value = re.split(r'\s*:\s*', line)
+            value = value.split()
+            value = map(parse_literal, value) if len(value) > 1 else value[0]
+            self.meta[key] = value
+        try:
+            self.zone, self.northing, self.easting, self.altitude = \
+                self.meta['UTM zone/northing/easting/altitude (m)']
+        except KeyError:
+            self.zone, self.northing, self.easting = \
+                self.meta['UTM zone/northing/easting (m)']

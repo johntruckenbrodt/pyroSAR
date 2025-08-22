@@ -1,3 +1,3 @@
 from .auxil import process, ISPPar, UTM, Spacing, Namespace, slc_corners, par2hdr
-from .util import geocode, multilook, ovs, convert2gamma, calibrate, correctOSV, S1_deburst
+from .util import calibrate, convert2gamma, correctOSV, geocode, multilook, ovs, S1_deburst
 from . import dem
