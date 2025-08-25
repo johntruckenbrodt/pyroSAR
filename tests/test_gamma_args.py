@@ -47,6 +47,9 @@ def test_args_disp():
 def test_args_isp():
     from pyroSAR.gamma.api import isp
     lookup = {
+        'MLI_cat': ['degree', 'dtype', 'extrapol', 'interp_mode', 'mflg',
+                    'MLI1', 'MLI1_par', 'MLI2', 'MLI2_par', 'MLI3', 'MLI3_par',
+                    'overlap'],
         'multi_look': ['MLI', 'MLI_par', 'SLC', 'SLC_par', 'azlks', 'exp',
                        'loff', 'nlines', 'rlks', 'scale'],
         'multi_look_MLI': ['MLI_in', 'MLI_in_par', 'MLI_out', 'MLI_out_par',

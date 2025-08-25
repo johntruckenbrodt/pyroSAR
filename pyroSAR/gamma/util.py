@@ -891,11 +891,11 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
             all_exist = all([os.path.isfile(x) for x in [out, out_par]])
             if not all_exist:
                 log.info('mosaicing scenes')
-                isp.MLI_cat(MLI_1=group[0],
+                isp.MLI_cat(MLI1=group[0],
                             MLI1_par=group[0] + '.par',
-                            MLI_2=group[1],
+                            MLI2=group[1],
                             MLI2_par=group[1] + '.par',
-                            MLI_3=out,
+                            MLI3=out,
                             MLI3_par=out_par,
                             logpath=path_log, outdir=tmpdir, shellscript=shellscript)
                 par2hdr(out_par, out + '.hdr')
