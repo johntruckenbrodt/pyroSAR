@@ -246,9 +246,10 @@ class ID(object):
             lines.append(line)
         return '\n'.join(lines)
     
-    def bbox(self, outname=None, driver=None, overwrite=True):
+    def bbox(self, outname=None, driver=None, overwrite=True, buffer=None):
         """
-        get the bounding box of a scene either as a vector object or written to a file
+        get the bounding box of a scene. The result is either returned as
+        vector object or written to a file.
 
         Parameters
         ----------
@@ -259,6 +260,9 @@ class ID(object):
             be auto-detected from the filename extension
         overwrite: bool
             overwrite an existing vector file?
+        buffer: None or int or float or tuple[int or float]
+            a buffer to add around `coordinates`. Default None: do not add
+            a buffer. A tuple is interpreted as (x buffer, y buffer).
 
         Returns
         -------
@@ -270,10 +274,12 @@ class ID(object):
         spatialist.vector.Vector.bbox
         """
         if outname is None:
-            return bbox(self.getCorners(), self.projection)
+            return bbox(coordinates=self.getCorners(), crs=self.projection,
+                        buffer=buffer)
         else:
-            bbox(self.getCorners(), self.projection, outname=outname, driver=driver,
-                 overwrite=overwrite)
+            bbox(coordinates=self.getCorners(), crs=self.projection,
+                 outname=outname, driver=driver, overwrite=overwrite,
+                 buffer=buffer)
     
     def geometry(self, outname=None, driver=None, overwrite=True):
         """
