@@ -47,48 +47,40 @@ def test_args_disp():
 def test_args_isp():
     from pyroSAR.gamma.api import isp
     lookup = {
+        'MLI_cat': ['degree', 'dtype', 'extrapol', 'interp_mode', 'mflg',
+                    'MLI1', 'MLI1_par', 'MLI2', 'MLI2_par', 'MLI3', 'MLI3_par',
+                    'overlap'],
         'multi_look': ['MLI', 'MLI_par', 'SLC', 'SLC_par', 'azlks', 'exp',
-                       'loff', 'logpath', 'nlines', 'outdir', 'rlks', 'scale',
-                       'shellscript'],
+                       'loff', 'nlines', 'rlks', 'scale'],
         'multi_look_MLI': ['MLI_in', 'MLI_in_par', 'MLI_out', 'MLI_out_par',
-                           'azlks', 'loff', 'logpath', 'nlines', 'outdir',
-                           'rlks', 'scale', 'shellscript'],
-        'par_ASAR': ['ASAR_ERS_file', 'K_dB', 'logpath', 'outdir', 'output_name',
-                     'shellscript'],
+                           'azlks', 'loff', 'nlines', 'rlks', 'scale'],
+        'par_ASAR': ['ASAR_ERS_file', 'K_dB', 'output_name'],
         'par_EORC_PALSAR': ['CEOS_data', 'CEOS_leader', 'SLC', 'SLC_par', 'dtype',
-                            'logpath', 'outdir', 'sc_dB', 'shellscript'],
-        'par_ESA_ERS': ['CEOS_DAT', 'CEOS_SAR_leader', 'SLC', 'SLC_par', 'inlist',
-                        'logpath', 'outdir', 'shellscript'],
+                            'sc_dB'],
+        'par_ESA_ERS': ['CEOS_DAT', 'CEOS_SAR_leader', 'SLC', 'SLC_par', 'inlist'],
         'par_S1_GRD': ['GRD', 'GRD_par', 'GeoTIFF', 'MLI', 'MLI_par', 'annotation_XML',
-                       'calibration_XML', 'eflg', 'logpath', 'noise_XML', 'noise_pwr',
-                       'outdir', 'rps', 'shellscript'],
+                       'calibration_XML', 'eflg', 'noise_XML', 'noise_pwr', 'rps'],
         'par_S1_SLC': ['GeoTIFF', 'SLC', 'SLC_par', 'TOPS_par', 'annotation_XML',
-                       'calibration_XML', 'dtype', 'logpath', 'noise_XML',
-                       'noise_pwr', 'outdir', 'sc_dB', 'shellscript'],
-        'par_TX_GRD': ['GRD', 'GRD_par', 'GeoTIFF', 'annotation_XML',
-                       'logpath', 'outdir', 'pol', 'shellscript'],
-        'par_TX_SLC': ['COSAR', 'SLC', 'SLC_par', 'annotation_XML', 'dtype',
-                       'logpath', 'outdir', 'pol', 'shellscript'],
+                       'calibration_XML', 'dtype', 'noise_XML',
+                       'noise_pwr', 'sc_dB'],
+        'par_TX_GRD': ['GRD', 'GRD_par', 'GeoTIFF', 'annotation_XML', 'pol'],
+        'par_TX_SLC': ['COSAR', 'SLC', 'SLC_par', 'annotation_XML', 'dtype', 'pol'],
         'radcal_MLI': ['CMLI', 'K_dB', 'MLI', 'MLI_par', 'OFF_par', 'ant_flag',
-                       'antenna', 'logpath', 'outdir', 'pix_area', 'refarea_flag',
-                       'rloss_flag', 'sc_dB', 'shellscript'],
+                       'antenna', 'pix_area', 'refarea_flag',
+                       'rloss_flag', 'sc_dB'],
         'radcal_PRI': ['GRD', 'GRD_par', 'K_dB', 'PRI', 'PRI_par',
-                       'inc_ref', 'loff', 'logpath', 'nl', 'nr',
-                       'outdir', 'roff', 'shellscript'],
+                       'inc_ref', 'loff', 'nl', 'nr', 'roff'],
         'radcal_SLC': ['CSLC', 'CSLC_par', 'K_dB', 'SLC', 'SLC_par',
-                       'ant_flag', 'antenna', 'fcase', 'logpath', 'outdir',
-                       'pix_area', 'refarea_flag', 'rloss_flag', 'sc_dB',
-                       'shellscript'],
-        'S1_OPOD_vec': ['OPOD', 'SLC_par', 'logpath', 'nstate', 'outdir',
-                        'shellscript'],
-        'SLC_deramp_ScanSAR': ['SLC1_tab', 'SLC2_tab', 'logpath', 'mode',
-                               'outdir', 'phflg', 'shellscript'],
+                       'ant_flag', 'antenna', 'fcase',
+                       'pix_area', 'refarea_flag', 'rloss_flag', 'sc_dB'],
+        'S1_OPOD_vec': ['OPOD', 'SLC_par', 'nstate'],
+        'SLC_deramp_ScanSAR': ['SLC1_tab', 'SLC2_tab', 'mode', 'phflg'],
         'SLC_mosaic_ScanSAR': ['SLC', 'SLCR_tab', 'SLC_par', 'SLC_tab',
-                               'azlks', 'logpath', 'outdir', 'rlks',
-                               'shellscript', 'bflg']
+                               'azlks', 'rlks', 'bflg']
     }
     for command, args in lookup.items():
-        assert set(args).issubset(getargs(getattr(isp, command)))
+        default = ['logpath', 'outdir', 'shellscript']
+        assert set(args + default).issubset(getargs(getattr(isp, command)))
 
 
 @pytest.mark.skipif('lat' not in dir(api), reason='requires GAMMA installation with module LAT')

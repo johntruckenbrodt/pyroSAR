@@ -2213,14 +2213,23 @@ class SAFE(ID):
             sp_rg = [float(x.find('.//rangePixelSpacing').text) for x in ann_trees]
             sp_az = [float(x.find('.//azimuthPixelSpacing').text) for x in ann_trees]
             meta['spacing'] = (median(sp_rg), median(sp_az))
+            
+            looks_rg = [float(x.find('.//rangeProcessing/numberOfLooks').text) for x in ann_trees]
+            looks_az = [float(x.find('.//azimuthProcessing/numberOfLooks').text) for x in ann_trees]
+            meta['looks'] = (median(looks_rg), median(looks_az))
+            
             samples = [x.find('.//imageAnnotation/imageInformation/numberOfSamples').text for x in ann_trees]
             meta['samples'] = sum([int(x) for x in samples])
+            
             lines = [x.find('.//imageAnnotation/imageInformation/numberOfLines').text for x in ann_trees]
             meta['lines'] = sum([int(x) for x in lines])
+            
             heading = median(float(x.find('.//platformHeading').text) for x in ann_trees)
             meta['heading'] = heading if heading > 0 else heading + 360
+            
             incidence = [float(x.find('.//incidenceAngleMidSwath').text) for x in ann_trees]
             meta['incidence'] = median(incidence)
+            
             meta['image_geometry'] = ann_trees[0].find('.//projection').text.replace(' ', '_').upper()
         
         return meta
