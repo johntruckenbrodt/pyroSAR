@@ -47,7 +47,8 @@ except ImportError:
     pass
 
 
-def calibrate(id, directory, return_fnames=False, logpath=None, outdir=None, shellscript=None):
+def calibrate(id, directory, return_fnames=False,
+              logpath=None, outdir=None, shellscript=None):
     """
     radiometric calibration of SAR scenes
     
@@ -68,7 +69,7 @@ def calibrate(id, directory, return_fnames=False, logpath=None, outdir=None, she
 
     Returns
     -------
-
+    List[str] or None
     """
     cname = type(id).__name__
     new = []
@@ -112,7 +113,8 @@ def calibrate(id, directory, return_fnames=False, logpath=None, outdir=None, she
     elif cname == 'ESA':
         k_db = {'ASAR': 55., 'ERS1': 58.24, 'ERS2': 59.75}[id.sensor]
         inc_ref = 90. if id.sensor == 'ASAR' else 23.
-        candidates = [x for x in id.getGammaImages(directory) if re.search('_pri$', x)]
+        imgs = id.getGammaImages(directory)
+        candidates = [x for x in imgs if re.search('_pri$', x)]
         for image in candidates:
             out = image.replace('pri', 'grd')
             isp.radcal_PRI(PRI=image,
@@ -131,7 +133,8 @@ def calibrate(id, directory, return_fnames=False, logpath=None, outdir=None, she
         log.info('calibration already performed during import')
     
     else:
-        raise NotImplementedError('calibration for class {} is not implemented yet'.format(cname))
+        msg = f'calibration for class {cname} is not implemented yet'
+        raise NotImplementedError(msg)
     
     if return_fnames and len(new) > 0:
         return new
@@ -888,11 +891,11 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
             all_exist = all([os.path.isfile(x) for x in [out, out_par]])
             if not all_exist:
                 log.info('mosaicing scenes')
-                isp.MLI_cat(MLI_1=group[0],
+                isp.MLI_cat(MLI1=group[0],
                             MLI1_par=group[0] + '.par',
-                            MLI_2=group[1],
+                            MLI2=group[1],
                             MLI2_par=group[1] + '.par',
-                            MLI_3=out,
+                            MLI3=out,
                             MLI3_par=out_par,
                             logpath=path_log, outdir=tmpdir, shellscript=shellscript)
                 par2hdr(out_par, out + '.hdr')
