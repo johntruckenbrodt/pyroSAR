@@ -1610,9 +1610,9 @@ class ESA(ID):
         meta['acquisition_mode'] = match2.group('image_mode')
         meta['product'] = 'SLC' if meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
         
-        if meta['acquisition_mode'] in ['APS', 'IMS', 'WSM']:
+        if meta['acquisition_mode'] in ['APS', 'IMS', 'WSS']:
             meta['image_geometry'] = 'SLANT_RANGE'
-        elif meta['acquisition_mode'] in ['APP', 'IMP']:
+        elif meta['acquisition_mode'] in ['APP', 'IMP', 'WSM']:
             meta['image_geometry'] = 'GROUND_RANGE'
         else:
             raise RuntimeError(f"unsupported acquisition mode: '{meta['acquisition_mode']}'")
