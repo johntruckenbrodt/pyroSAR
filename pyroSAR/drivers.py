@@ -1709,7 +1709,7 @@ class ESA(ID):
                                       'latitude': latitudes[j],
                                       'longitude': longitudes[j]})
                 elif key == 'swath_number':
-                    value = value.decode('ascii')
+                    value = value.decode('ascii').strip()
                 if key != 'spare':
                     values[key] = value
                 start += lengths[i]
