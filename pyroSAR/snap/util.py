@@ -404,10 +404,6 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
     ############################################
     # Apply-Orbit-File node configuration
     continue_on_fail = False
-    # Auxiliary orbit files don't exist for all ERS products.
-    # For which products orbit files are available is yet to be assessed.
-    if id.sensor in ['ERS1', 'ERS2']:
-        continue_on_fail = True
     orb = orb_parametrize(scene=id, formatName=formatName, allow_RES_OSV=allow_RES_OSV,
                           url_option=s1_osv_url_option, continueOnFail=continue_on_fail)
     workflow.insert_node(orb, before=last.id)
