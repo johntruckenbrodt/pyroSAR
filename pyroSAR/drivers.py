@@ -1744,6 +1744,8 @@ class ESA(ID):
                                   swath_id=origin['SPH']['SWATH'], date=meta['start'])
         
         meta['incidence'] = (incidence_nr + incidence_fr) / 2
+        meta['incidence_nr'] = incidence_nr
+        meta['incidence_fr'] = incidence_fr
         meta['resolution'] = (resolution_rg, resolution_az)
         meta['nesz'] = (nesz_nr, nesz_fr)
         
