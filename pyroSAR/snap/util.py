@@ -436,7 +436,10 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
                   'projectedLocalIncidenceAngle',
                   'DEM',
                   'layoverShadowMask']
-    tc_export_extra = [x for x in export_extra if x in tc_options]
+    if export_extra is not None:
+        tc_export_extra = [x for x in export_extra if x in tc_options]
+    else:
+        tc_export_extra = None
     tc = geo_parametrize(spacing=spacing, t_srs=t_srs,
                          tc_method=geocoding_type, sourceBands=bands,
                          alignToStandardGrid=alignToStandardGrid,
