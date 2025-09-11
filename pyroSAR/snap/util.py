@@ -349,10 +349,10 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
             polarizations_cal = polarizations
         cal.parameters['selectedPolarisations'] = polarizations_cal
         # choose the intensity band(s)
-        c1 = id.sensor in ['ERS1', 'ERS2']
-        c2 = id.sensor == 'ASAR' and id.acquisition_mode == 'IMP' and id.product == 'PRI'
+        c1 = id.sensor == 'ASAR' and id.acquisition_mode in ['IMP', 'WSM']
+        c2 = id.sensor in ['ERS1', 'ERS2']
         if c1 or c2:
-            cal.parameters['sourceBands'] = 'Intensity'
+                cal.parameters['sourceBands'] = 'Intensity'
         else:
             cal.parameters['sourceBands'] = [f'Intensity_{x}' for x in polarizations]
         
