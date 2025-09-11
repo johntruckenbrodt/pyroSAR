@@ -446,8 +446,6 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
     if isinstance(tc, list):
         sarsim, cc, warp, tc = tc
         workflow.insert_node([sarsim, cc, warp], before=last.id)
-        if 'layoverShadowMask' in export_extra:
-            bands_extra.append('layover_shadow_mask')
         last = warp
     ############################################
     # Terrain-Flattening node configuration

@@ -1950,10 +1950,7 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         for item in export_extra:
             if item in export_extra_options:
                 key = f'save{item[0].upper()}{item[1:]}'
-                if sarsim is not None and item == 'layoverShadowMask':
-                    sarsim.parameters[key] = True
-                else:
-                    tc.parameters[key] = True
+                tc.parameters[key] = True
     
     for dem_node in dem_nodes:
         dem_parametrize(node=dem_node, demName=demName,
