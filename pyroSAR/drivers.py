@@ -1743,7 +1743,7 @@ class ESA(ID):
             get_angles_resolution(sensor=meta['sensor'], mode=meta['acquisition_mode'],
                                   swath_id=origin['SPH']['SWATH'], date=meta['start'])
         
-        meta['incidence'] = (incidence_nr, incidence_fr)
+        meta['incidence'] = (incidence_nr + incidence_fr) / 2
         meta['resolution'] = (resolution_rg, resolution_az)
         meta['nesz'] = (nesz_nr, nesz_fr)
         
