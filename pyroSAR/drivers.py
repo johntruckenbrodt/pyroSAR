@@ -887,23 +887,15 @@ class BEAM_DIMAP(ID):
                                  '%d-%b-%Y %H:%M:%S.%f')
         meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
         #################################################################################
-        # incidence angles, resolution, NESZ
-        if meta['sensor'] in ['ASAR', 'ERS1', 'ERS2']:
-            meta['incidenceAngleMin'], meta['incidenceAngleMax'], \
-                meta['rangeResolution'], meta['azimuthResolution'], \
-                meta['neszNear'], meta['neszFar'] = \
-                get_angles_resolution(meta['sensor'], meta['acquisition_mode'],
-                                      meta['swath'], meta['start'])
-            meta['incidence'] = median([meta['incidenceAngleMin'], meta['incidenceAngleMax']])
+        # incidence angle
+        inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
+        if len(inc_elements) > 0:
+            incidence = [float(x.text) for x in inc_elements]
+            meta['incidence'] = median(incidence)
         else:
-            inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
-            if len(inc_elements) > 0:
-                incidence = [float(x.text) for x in inc_elements]
-                meta['incidence'] = median(incidence)
-            else:
-                inc_near = float(self.root.find('.//MDATTR[@name="incidence_near"]').text)
-                inc_far = float(self.root.find('.//MDATTR[@name="incidence_far"]').text)
-                meta['incidence'] = (inc_near + inc_far) / 2
+            inc_near = float(self.root.find('.//MDATTR[@name="incidence_near"]').text)
+            inc_far = float(self.root.find('.//MDATTR[@name="incidence_far"]').text)
+            meta['incidence'] = (inc_near + inc_far) / 2
         #################################################################################
         # projection
         if self.root.find('.//WKT') is not None:
