@@ -1745,12 +1745,15 @@ class ESA(ID):
         meta['cycleNumber'] = origin['MPH']['CYCLE']
         meta['frameNumber'] = origin['MPH']['ABS_ORBIT']
         
-        meta['incidenceAngleMin'], meta['incidenceAngleMax'], \
-            meta['rangeResolution'], meta['azimuthResolution'], \
-            meta['neszNear'], meta['neszFar'] = \
+        incidence_nr, incidence_fr, \
+            resolution_rg, resolution_az, \
+            nesz_nr, nesz_fr = \
             get_angles_resolution(sensor=meta['sensor'], mode=meta['acquisition_mode'],
                                   swath_id=origin['SPH']['SWATH'], date=meta['start'])
-        meta['incidence'] = median([meta['incidenceAngleMin'], meta['incidenceAngleMax']])
+        
+        meta['incidence'] = (incidence_nr, incidence_fr)
+        meta['resolution'] = (resolution_rg, resolution_az)
+        meta['nesz'] = (nesz_nr, nesz_fr)
         
         meta['projection'] = crsConvert(4326, 'wkt')
         
