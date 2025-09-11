@@ -1600,12 +1600,16 @@ class ESA(ID):
         sensor_lookup = {'N1': 'ASAR', 'E1': 'ERS1', 'E2': 'ERS2'}
         meta['sensor'] = sensor_lookup[match.group('satellite_ID')]
         meta['acquisition_mode'] = match2.group('image_mode')
-        meta['product'] = 'SLC' if meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
         
+        meta['image_geometry'] = 'GROUND_RANGE'
+        # product overview table: https://doi.org/10.5167/UZH-96146
         if meta['acquisition_mode'] in ['APS', 'IMS', 'WSS']:
+            meta['product'] = 'SLC'
             meta['image_geometry'] = 'SLANT_RANGE'
-        elif meta['acquisition_mode'] in ['APP', 'IMP', 'WSM']:
-            meta['image_geometry'] = 'GROUND_RANGE'
+        elif meta['acquisition_mode'] in ['APP', 'IMP']:
+            meta['product'] = 'PRI'
+        elif meta['acquisition_mode'] in ['APM', 'IMM', 'WSM']:
+            meta['product'] = 'MR'
         else:
             raise RuntimeError(f"unsupported acquisition mode: '{meta['acquisition_mode']}'")
         
