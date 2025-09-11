@@ -852,7 +852,15 @@ class BEAM_DIMAP(ID):
         elif meta['sensor'] in ['ASAR', 'ERS1', 'ERS2']:
             product_type = get_by_name('PRODUCT_TYPE', section=section)
             meta['acquisition_mode'] = product_type[4:7]
-            meta['product'] = 'SLC' if meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
+            # product overview table: https://doi.org/10.5167/UZH-96146
+            if meta['acquisition_mode'] in ['APS', 'IMS', 'WSS']:
+                meta['product'] = 'SLC'
+            elif meta['acquisition_mode'] in ['APP', 'IMP']:
+                meta['product'] = 'PRI'
+            elif meta['acquisition_mode'] in ['APM', 'IMM', 'WSM']:
+                meta['product'] = 'MR'
+            else:
+                raise RuntimeError(f"unsupported acquisition mode: '{meta['acquisition_mode']}'")
         else:
             raise RuntimeError('unknown sensor {}'.format(meta['sensor']))
         
