@@ -72,7 +72,7 @@ jobs:
           python-version: '3.12'
           environment-file: environment.yml
           auto-activate-base: false
-      - uses: nyurik/action-setup-postgis@v2
+      - uses: nyurik/action-setup-postgis@v2.2
         with:
           cached-dir: C:\downloads
       - name: Install ESA SNAP
