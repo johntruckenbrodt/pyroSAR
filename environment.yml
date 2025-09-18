@@ -1,7 +1,6 @@
 name: ps_test
 channels:
   - conda-forge
-  - defaults
 dependencies:
   - gdal>=2.4
   - geoalchemy2<0.14.0

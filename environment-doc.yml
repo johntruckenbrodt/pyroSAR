@@ -1,7 +1,6 @@
 name: ps_doc
 channels:
   - conda-forge
-  - defaults
 dependencies:
   - python>=3.8
   - matplotlib
