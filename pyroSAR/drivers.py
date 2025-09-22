@@ -2996,7 +2996,7 @@ class Archive(object):
         elif isinstance(dbfile, Archive):
             with self.engine.begin() as conn:
                 scenes = conn.exec_driver_sql('SELECT scene from data')
-            scenes = [s.scene for s in scenes]
+                scenes = [s.scene for s in scenes]
             self.insert(scenes)
             reinsert = dbfile.select_duplicates(value='scene')
             if reinsert is not None:
@@ -3267,29 +3267,28 @@ class Archive(object):
         else:
             raise ValueError("argument 'value' must be either 0 or 1")
         
-        if not outname_base and not scene:
-            # core SQL execution
-            with self.engine.begin() as conn:
+        with self.engine.begin() as conn:
+            if not outname_base and not scene:
+                # core SQL execution
                 scenes = conn.exec_driver_sql('SELECT * from duplicates')
-        else:
-            cond = []
-            arg = []
-            if outname_base:
-                cond.append('outname_base=?')
-                arg.append(outname_base)
-            if scene:
-                cond.append('scene=?')
-                arg.append(scene)
-            query = 'SELECT * from duplicates WHERE {}'.format(' AND '.join(cond))
-            for a in arg:
-                query = query.replace('?', ''' '{0}' ''', 1).format(a)
-            # core SQL execution
-            with self.engine.begin() as conn:
+            else:
+                cond = []
+                arg = []
+                if outname_base:
+                    cond.append('outname_base=?')
+                    arg.append(outname_base)
+                if scene:
+                    cond.append('scene=?')
+                    arg.append(scene)
+                query = 'SELECT * from duplicates WHERE {}'.format(' AND '.join(cond))
+                for a in arg:
+                    query = query.replace('?', ''' '{0}' ''', 1).format(a)
+                # core SQL execution
                 scenes = conn.exec_driver_sql(query)
-        
-        ret = []
-        for x in scenes:
-            ret.append(self.encode(x[key]))
+            
+            ret = []
+            for x in scenes:
+                ret.append(self.encode(x[key]))
         
         return ret
     
