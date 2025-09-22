@@ -2447,9 +2447,8 @@ class Archive(object):
             listen(target=self.engine, identifier='connect', fn=self.__load_spatialite)
             # check if loading was successful
             try:
-                conn = self.engine.connect()
-                version = conn.execute('SELECT spatialite_version();')
-                conn.close()
+                with self.engine.begin() as conn:
+                    version = conn.execute('SELECT spatialite_version();')
             except exc.OperationalError:
                 raise RuntimeError('could not load spatialite extension')
         
@@ -2459,13 +2458,12 @@ class Archive(object):
                 log.debug('creating new PostgreSQL database')
                 create_database(self.engine.url)
             log.debug('enabling spatial extension for new database')
-            self.conn = self.engine.connect()
             if self.driver == 'sqlite':
-                self.conn.execute(select([func.InitSpatialMetaData(1)]))
+                with self.engine.begin() as conn:
+                    conn.execute(select([func.InitSpatialMetaData(1)]))
             elif self.driver == 'postgresql':
-                self.conn.execute('CREATE EXTENSION postgis;')
-        else:
-            self.conn = self.engine.connect()
+                with self.engine.begin() as conn:
+                    conn.exec_driver_sql('CREATE EXTENSION IF NOT EXISTS postgis;')
         # create Session (ORM) and get metadata
         self.Session = sessionmaker(bind=self.engine)
         self.meta = MetaData(self.engine)
@@ -2659,13 +2657,14 @@ class Archive(object):
         list[str]
             the names of all scenes, which are no longer stored in their registered location
         """
-        if table == 'data':
-            # using ORM query to get all scenes locations
-            scenes = self.Session().query(self.Data.scene)
-        elif table == 'duplicates':
-            scenes = self.Session().query(self.Duplicates.scene)
-        else:
-            raise ValueError("parameter 'table' must either be 'data' or 'duplicates'")
+        with self.Session() as session:
+            if table == 'data':
+                # using ORM query to get all scenes locations
+                scenes = session.query(self.Data.scene)
+            elif table == 'duplicates':
+                scenes = session.query(self.Duplicates.scene)
+            else:
+                raise ValueError("parameter 'table' must either be 'data' or 'duplicates'")
         files = [self.encode(x[0]) for x in scenes]
         return [x for x in files if not os.path.isfile(x)]
     
@@ -2713,38 +2712,39 @@ class Archive(object):
         else:
             progress = None
         insertions = []
-        session = self.Session()
-        for i, id in enumerate(scenes):
-            basename = id.outname_base()
-            if not self.is_registered(id):
-                insertion = self.__prepare_insertion(id)
-                insertions.append(insertion)
-                counter_regulars += 1
-                log.debug('regular:   {}'.format(id.scene))
-            elif not self.__is_registered_in_duplicates(id):
-                insertion = self.Duplicates(outname_base=basename, scene=id.scene)
-                insertions.append(insertion)
-                counter_duplicates += 1
-                log.debug('duplicate: {}'.format(id.scene))
-            else:
-                list_duplicates.append(id.outname_base())
+        with self.Session() as session:
+            for i, id in enumerate(scenes):
+                basename = id.outname_base()
+                if not self.is_registered(id):
+                    insertion = self.__prepare_insertion(id)
+                    insertions.append(insertion)
+                    counter_regulars += 1
+                    log.debug('regular:   {}'.format(id.scene))
+                elif not self.__is_registered_in_duplicates(id):
+                    insertion = self.Duplicates(outname_base=basename,
+                                                scene=id.scene)
+                    insertions.append(insertion)
+                    counter_duplicates += 1
+                    log.debug('duplicate: {}'.format(id.scene))
+                else:
+                    list_duplicates.append(id.outname_base())
+                
+                if progress is not None:
+                    progress.update(i + 1)
             
             if progress is not None:
-                progress.update(i + 1)
-        
-        if progress is not None:
-            progress.finish()
-        
-        session.add_all(insertions)
-        
-        if not test:
-            log.debug('committing transactions to permanent database')
-            # commit changes of the session
-            session.commit()
-        else:
-            log.info('rolling back temporary database changes')
-            # roll back changes of the session
-            session.rollback()
+                progress.finish()
+            
+            session.add_all(insertions)
+            
+            if not test:
+                log.debug('committing transactions to permanent database')
+                # commit changes of the session
+                session.commit()
+            else:
+                log.info('rolling back temporary database changes')
+                # roll back changes of the session
+                session.rollback()
         
         message = '{0} scene{1} registered regularly'
         log.info(message.format(counter_regulars, '' if counter_regulars == 1 else 's'))
@@ -2766,11 +2766,12 @@ class Archive(object):
             is the scene already registered?
         """
         id = scene if isinstance(scene, ID) else identify(scene)
-        # ORM query, where scene equals id.scene, return first
-        exists_data = self.Session().query(self.Data.outname_base).filter_by(
-            outname_base=id.outname_base(), product=id.product).first()
-        exists_duplicates = self.Session().query(self.Duplicates.outname_base).filter(
-            self.Duplicates.outname_base == id.outname_base()).first()
+        with self.Session() as session:
+            # ORM query, where scene equals id.scene, return first
+            exists_data = session.query(self.Data.outname_base).filter_by(
+                outname_base=id.outname_base(), product=id.product).first()
+            exists_duplicates = session.query(self.Duplicates.outname_base).filter(
+                self.Duplicates.outname_base == id.outname_base()).first()
         in_data = False
         in_dup = False
         if exists_data:
@@ -2794,9 +2795,10 @@ class Archive(object):
             is the scene already registered?
         """
         id = scene if isinstance(scene, ID) else identify(scene)
-        # ORM query as in is registered
-        exists_duplicates = self.Session().query(self.Duplicates.outname_base).filter(
-            self.Duplicates.outname_base == id.outname_base()).first()
+        with self.Session() as session:
+            # ORM query as in is registered
+            exists_duplicates = session.query(self.Duplicates.outname_base).filter(
+                self.Duplicates.outname_base == id.outname_base()).first()
         in_dup = False
         if exists_duplicates:
             in_dup = len(exists_duplicates) != 0
@@ -2893,10 +2895,11 @@ class Archive(object):
             if not isinstance(item, (ID, str)):
                 raise TypeError("items in scenelist must be of type 'str' or 'pyroSAR.ID'")
         
-        # ORM query, get all scenes locations
-        scenes_data = self.Session().query(self.Data.scene)
-        registered = [os.path.basename(self.encode(x[0])) for x in scenes_data]
-        scenes_duplicates = self.Session().query(self.Duplicates.scene)
+        with self.Session() as session:
+            # ORM query, get all scenes locations
+            scenes_data = session.query(self.Data.scene)
+            registered = [os.path.basename(self.encode(x[0])) for x in scenes_data]
+            scenes_duplicates = session.query(self.Duplicates.scene)
         duplicates = [os.path.basename(self.encode(x[0])) for x in scenes_duplicates]
         names = [item.scene if isinstance(item, ID) else item for item in scenelist]
         filtered = [x for x, y in zip(scenelist, names) if os.path.basename(y) not in registered + duplicates]
@@ -2961,8 +2964,9 @@ class Archive(object):
         list[str]
             the directory names
         """
-        # ORM query, get all directories
-        scenes = self.Session().query(self.Data.scene)
+        with self.Session() as session:
+            # ORM query, get all directories
+            scenes = session.query(self.Data.scene)
         registered = [os.path.dirname(self.encode(x[0])) for x in scenes]
         return list(set(registered))
     
@@ -2990,7 +2994,8 @@ class Archive(object):
                     scenes.append(row['scene'])
                 self.insert(scenes)
         elif isinstance(dbfile, Archive):
-            scenes = dbfile.conn.execute('SELECT scene from data')
+            with self.engine.begin() as conn:
+                scenes = conn.exec_driver_sql('SELECT scene from data')
             scenes = [s.scene for s in scenes]
             self.insert(scenes)
             reinsert = dbfile.select_duplicates(value='scene')
@@ -3045,15 +3050,18 @@ class Archive(object):
                 table = 'data'
             else:
                 # using core connection to execute SQL syntax (as was before)
-                query_duplicates = self.conn.execute(
-                    '''SELECT scene FROM duplicates WHERE scene='{0}' '''.format(scene))
+                query = '''SELECT scene FROM duplicates WHERE scene='{0}' '''.format(scene)
+                with self.engine.begin() as conn:
+                    query_duplicates = conn.exec_driver_sql(query)
                 if len(query_duplicates) != 0:
                     table = 'duplicates'
                 else:
                     table = None
             if table:
                 # using core connection to execute SQL syntax (as was before)
-                self.conn.execute('''UPDATE {0} SET scene= '{1}' WHERE scene='{2}' '''.format(table, new, scene))
+                query = '''UPDATE {0} SET scene= '{1}' WHERE scene='{2}' '''.format(table, new, scene)
+                with self.engine.begin() as conn:
+                    conn.exec_driver_sql(query)
         if progress is not None:
             progress.finish()
         
@@ -3213,7 +3221,8 @@ class Archive(object):
         log.debug(query)
         
         # core SQL execution
-        query_rs = self.conn.execute(query)
+        with self.engine.begin() as conn:
+            query_rs = conn.exec_driver_sql(query)
         
         if processdir and os.path.isdir(processdir):
             scenes = [x for x in query_rs
@@ -3260,7 +3269,8 @@ class Archive(object):
         
         if not outname_base and not scene:
             # core SQL execution
-            scenes = self.conn.execute('SELECT * from duplicates')
+            with self.engine.begin() as conn:
+                scenes = conn.exec_driver_sql('SELECT * from duplicates')
         else:
             cond = []
             arg = []
@@ -3274,7 +3284,8 @@ class Archive(object):
             for a in arg:
                 query = query.replace('?', ''' '{0}' ''', 1).format(a)
             # core SQL execution
-            scenes = self.conn.execute(query)
+            with self.engine.begin() as conn:
+                scenes = conn.exec_driver_sql(query)
         
         ret = []
         for x in scenes:
@@ -3293,10 +3304,9 @@ class Archive(object):
             the number of scenes in (1) the main table and (2) the duplicates table
         """
         # ORM query
-        session = self.Session()
-        r1 = session.query(self.Data.outname_base).count()
-        r2 = session.query(self.Duplicates.outname_base).count()
-        session.close()
+        with self.Session() as session:
+            r1 = session.query(self.Data.outname_base).count()
+            r2 = session.query(self.Duplicates.outname_base).count()
         return r1, r2
     
     def __enter__(self):
@@ -3306,8 +3316,6 @@ class Archive(object):
         """
         close the database connection
         """
-        self.Session().close()
-        self.conn.close()
         self.engine.dispose()
         gc.collect(generation=2)  # this was added as a fix for win PermissionError when deleting sqlite.db files.
     
@@ -3333,13 +3341,15 @@ class Archive(object):
         # save outname_base from to be deleted entry
         search = self.data_schema.select().where(self.data_schema.c.scene == scene)
         entry_data_outname_base = []
-        for rowproxy in self.conn.execute(search):
-            entry_data_outname_base.append((rowproxy[12]))
+        with self.engine.begin() as conn:
+            for rowproxy in conn.execute(search):
+                entry_data_outname_base.append((rowproxy[12]))
         # log.info(entry_data_outname_base)
         
         # delete entry in data table
         delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
-        self.conn.execute(delete_statement)
+        with self.engine.begin() as conn:
+            conn.execute(delete_statement)
         
         return_sentence = 'Entry with scene-id: \n{} \nwas dropped from data'.format(scene)
         
@@ -3347,7 +3357,8 @@ class Archive(object):
         if with_duplicates:
             delete_statement_dup = self.duplicates_schema.delete().where(
                 self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
-            self.conn.execute(delete_statement_dup)
+            with self.engine.begin() as conn:
+                conn.execute(delete_statement_dup)
             
             log.info(return_sentence + ' and duplicates!'.format(scene))
             return
@@ -3356,15 +3367,17 @@ class Archive(object):
         select_in_duplicates_statement = self.duplicates_schema.select().where(
             self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
         entry_duplicates_scene = []
-        for rowproxy in self.conn.execute(select_in_duplicates_statement):
-            entry_duplicates_scene.append((rowproxy[1]))
+        with self.engine.begin() as conn:
+            for rowproxy in conn.execute(select_in_duplicates_statement):
+                entry_duplicates_scene.append((rowproxy[1]))
         
         # check if there is a duplicate
         if len(entry_duplicates_scene) == 1:
             # remove entry from duplicates
             delete_statement_dup = self.duplicates_schema.delete().where(
                 self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
-            self.conn.execute(delete_statement_dup)
+            with self.engine.begin() as conn:
+                conn.execute(delete_statement_dup)
             
             # insert scene from duplicates into data
             self.insert(entry_duplicates_scene[0])
@@ -3390,10 +3403,12 @@ class Archive(object):
         if table in self.get_tablenames(return_all=True):
             # this removes the idx tables and entries in geometry_columns for sqlite databases
             if self.driver == 'sqlite':
-                tab_with_geom = [rowproxy[0] for rowproxy
-                                 in self.conn.execute("SELECT f_table_name FROM geometry_columns")]
-                if table in tab_with_geom:
-                    self.conn.execute("SELECT DropGeoTable('" + table + "')")
+                with self.engine.begin() as conn:
+                    query = "SELECT f_table_name FROM geometry_columns"
+                    tab_with_geom = [rowproxy[0] for rowproxy
+                                     in conn.exec_driver_sql(query)]
+                    if table in tab_with_geom:
+                        conn.exec_driver_sql("SELECT DropGeoTable('" + table + "')")
             else:
                 table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
                 table_info.drop(self.engine)
