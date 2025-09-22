@@ -2458,11 +2458,10 @@ class Archive(object):
                 log.debug('creating new PostgreSQL database')
                 create_database(self.engine.url)
             log.debug('enabling spatial extension for new database')
-            if self.driver == 'sqlite':
-                with self.engine.begin() as conn:
+            with self.engine.begin() as conn:
+                if self.driver == 'sqlite':
                     conn.execute(select([func.InitSpatialMetaData(1)]))
-            elif self.driver == 'postgresql':
-                with self.engine.begin() as conn:
+                else:
                     conn.exec_driver_sql('CREATE EXTENSION IF NOT EXISTS postgis;')
         # create Session (ORM) and get metadata
         self.Session = sessionmaker(bind=self.engine)
@@ -3224,20 +3223,21 @@ class Archive(object):
         with self.engine.begin() as conn:
             query_rs = conn.exec_driver_sql(query)
         
-        if processdir and os.path.isdir(processdir):
-            scenes = [x for x in query_rs
-                      if len(finder(processdir, [x[-1]], regex=True, recursive=recursive)) == 0]
-        else:
-            scenes = query_rs
-        
-        ret = []
-        for x in scenes:
-            # If only one return value was requested, append just that value
-            if len(return_values) == 1:
-                ret.append(self.encode(x[0]))
+            if processdir and os.path.isdir(processdir):
+                scenes = [x for x in query_rs
+                          if len(finder(processdir, [x[-1]],
+                                        regex=True, recursive=recursive)) == 0]
             else:
-                # If multiple return values were requested, append a tuple of all values
-                ret.append(tuple(self.encode(val) for val in x[:-1]))  # Exclude outname_base
+                scenes = query_rs
+            
+            ret = []
+            for x in scenes:
+                # If only one return value was requested, append just that value
+                if len(return_values) == 1:
+                    ret.append(self.encode(x[0]))
+                else:
+                    # If multiple return values were requested, append a tuple of all values
+                    ret.append(tuple(self.encode(val) for val in x[:-1]))  # Exclude outname_base
         
         return ret
     
