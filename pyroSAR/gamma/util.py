@@ -33,7 +33,7 @@ from spatialist.ancillary import union, finder
 from ..S1 import OSV
 from ..drivers import ID, identify_many
 from . import ISPPar, Namespace, par2hdr
-from ..ancillary import multilook_factors, hasarg, groupby
+from ..ancillary import multilook_factors, hasarg, groupby, Lock
 from pyroSAR.examine import ExamineSnap
 from .auxil import do_execute
 
@@ -212,9 +212,10 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                             'outdir': outdir,
                             'shellscript': shellscript}
                     
-                    if do_execute(pars, ['SLC', 'SLC_par'], exist_ok):
-                        isp.par_ESA_ERS(**pars)
-                        par2hdr(outname + '.par', outname + '.hdr')
+                    with Lock(outname):
+                        if do_execute(pars, ['SLC', 'SLC_par'], exist_ok):
+                            isp.par_ESA_ERS(**pars)
+                            par2hdr(outname + '.par', outname + '.hdr')
                     fnames.append(outname)
                 else:
                     log.info('scene already converted')
@@ -245,9 +246,10 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 pars['SLC'] = outname
                 pars['SLC_par'] = outname + '.par'
                 
-                if do_execute(pars, ['SLC', 'SLC_par'], exist_ok):
-                    isp.par_EORC_PALSAR(**pars)
-                    par2hdr(outname + '.par', outname + '.hdr')
+                with Lock(outname):
+                    if do_execute(pars, ['SLC', 'SLC_par'], exist_ok):
+                        isp.par_EORC_PALSAR(**pars)
+                        par2hdr(outname + '.par', outname + '.hdr')
             else:
                 outname_base = '{}_{}_mli_geo'.format(outname_base, polarization)
                 outname = os.path.join(directory, outname_base)
@@ -256,9 +258,10 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 pars['MLI_par'] = outname + '.par'
                 pars['DEM_par'] = outname + '_dem.par'
                 
-                if do_execute(pars, ['MLI', 'MLI_par', 'DEM_par'], exist_ok):
-                    diff.par_EORC_PALSAR_geo(**pars)
-                    par2hdr(outname + '.par', outname + '.hdr')
+                with Lock(outname):
+                    if do_execute(pars, ['MLI', 'MLI_par', 'DEM_par'], exist_ok):
+                        diff.par_EORC_PALSAR_geo(**pars)
+                        par2hdr(outname + '.par', outname + '.hdr')
             fnames.append(outname)
     
     elif cname == 'EORC_PSR':
@@ -284,9 +287,10 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                     'outdir': outdir,
                     'shellscript': shellscript}
             
-            if do_execute(pars, ['pwr', 'SLC_par'], exist_ok):
-                isp.par_KC_PALSAR_slr(**pars)
-                par2hdr(outname + '.par', outname + '.hdr')
+            with Lock(outname):
+                if do_execute(pars, ['pwr', 'SLC_par'], exist_ok):
+                    isp.par_KC_PALSAR_slr(**pars)
+                    par2hdr(outname + '.par', outname + '.hdr')
     
     elif cname == 'ESA':
         """
@@ -295,7 +299,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         this is not implemented here but instead in function calibrate
         """
         outname = os.path.join(directory, id.outname_base(extensions=basename_extensions))
-        if not id.is_processed(directory):
+        with Lock(outname):
             
             isp.par_ASAR(ASAR_ERS_file=os.path.basename(id.file),
                          output_name=outname,
@@ -316,9 +320,6 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 fnames.append(outname)
                 if outname.endswith('.par'):
                     par2hdr(outname, outname.replace('.par', '.hdr'))
-        else:
-            if not exist_ok:
-                raise IOError('scene already processed')
     
     elif cname == 'SAFE':
         if id.product == 'OCN':
@@ -366,9 +367,10 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 pars['SLC'] = outname
                 pars['SLC_par'] = outname + '.par'
                 pars['TOPS_par'] = outname + '.tops_par'
-                if do_execute(pars, ['SLC', 'SLC_par', 'TOPS_par'], exist_ok):
-                    isp.par_S1_SLC(**pars)
-                    par2hdr(outname + '.par', outname + '.hdr')
+                with Lock(outname):
+                    if do_execute(pars, ['SLC', 'SLC_par', 'TOPS_par'], exist_ok):
+                        isp.par_S1_SLC(**pars)
+                        par2hdr(outname + '.par', outname + '.hdr')
             else:
                 if hasarg(isp.par_S1_GRD, 'edge_flag'):
                     if S1_bnr:
@@ -383,9 +385,10 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                                            "pyroSAR's own method for this task.")
                 pars['MLI'] = outname
                 pars['MLI_par'] = outname + '.par'
-                if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
-                    isp.par_S1_GRD(**pars)
-                    par2hdr(outname + '.par', outname + '.hdr')
+                with Lock(outname):
+                    if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
+                        isp.par_S1_GRD(**pars)
+                        par2hdr(outname + '.par', outname + '.hdr')
             fnames.append(outname)
     
     elif cname == 'TSX':
@@ -407,18 +410,20 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 pars['COSAR'] = image
                 pars['SLC_par'] = outname + '.par'
                 pars['SLC'] = outname
-                if do_execute(pars, ['SLC', 'SLC_par'], exist_ok):
-                    isp.par_TX_SLC(**pars)
-                    par2hdr(outname + '.par', outname + '.hdr')
+                with Lock(outname):
+                    if do_execute(pars, ['SLC', 'SLC_par'], exist_ok):
+                        isp.par_TX_SLC(**pars)
+                        par2hdr(outname + '.par', outname + '.hdr')
             
             elif id.product == 'MGD':
                 outname += '_mli'
                 pars['GeoTIFF'] = image
                 pars['GRD_par'] = outname + '.par'
                 pars['GRD'] = outname
-                if do_execute(pars, ['GRD', 'GRD_par'], exist_ok):
-                    isp.par_TX_GRD(**pars)
-                    par2hdr(outname + '.par', outname + '.hdr')
+                with Lock(outname):
+                    if do_execute(pars, ['GRD', 'GRD_par'], exist_ok):
+                        isp.par_TX_GRD(**pars)
+                        par2hdr(outname + '.par', outname + '.hdr')
             
             elif id.product in ['GEC', 'EEC']:
                 outname += '_mli_geo'
@@ -426,9 +431,10 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 pars['MLI_par'] = outname + '.par'
                 pars['DEM_par'] = outname + '_dem.par'
                 pars['GEO'] = outname
-                if do_execute(pars, ['GEO', 'MLI_par', 'DEM_par'], exist_ok):
-                    diff.par_TX_geo(**pars)
-                    par2hdr(outname + '.par', outname + '.hdr')
+                with Lock(outname):
+                    if do_execute(pars, ['GEO', 'MLI_par', 'DEM_par'], exist_ok):
+                        diff.par_TX_geo(**pars)
+                        par2hdr(outname + '.par', outname + '.hdr')
             else:
                 raise RuntimeError('unknown product: {}'.format(id.product))
             fnames.append(outname)
@@ -454,9 +460,12 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
     directory: str or None
         a directory to be scanned for files associated with the scene, e.g. an SLC in GAMMA format.
         If the OSV file is packed in a zip file it will be unpacked to a subdirectory `osv`.
-    osvdir: str
-        the directory of OSV files; subdirectories POEORB and RESORB are created automatically
-    osvType: {'POE', 'RES'}
+    osvdir: str or None
+        the directory of the OSV files. Default None: use the SNAP directory
+        as configured via `pyroSAR.examine.ExamineSnap` or, if SNAP is not
+        installed, `~/.snap/auxdata/Orbits/Sentinel-1` (SNAP default).
+        Subdirectories POEORB and RESORB are created automatically.
+    osvType: str or list[str]
         the OSV type to be used
     timeout: int or tuple or None
         the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
@@ -538,11 +547,12 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
     log.debug('correcting state vectors with file {}'.format(osvfile))
     for par in parfiles:
         log.debug(par)
-        isp.S1_OPOD_vec(SLC_par=par,
-                        OPOD=osvfile,
-                        logpath=logpath,
-                        outdir=outdir,
-                        shellscript=shellscript)
+        with Lock(par.replace('.par', '')):
+            isp.S1_OPOD_vec(SLC_par=par,
+                            OPOD=osvfile,
+                            logpath=logpath,
+                            outdir=outdir,
+                            shellscript=shellscript)
 
 
 def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False,
