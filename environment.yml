@@ -19,4 +19,4 @@ dependencies:
   - shapely
   - spatialist>=0.16.0
   - sqlalchemy>=1.4,<2.0
-  - sqlalchemy-utils>=0.37
+  - sqlalchemy-utils>=0.37,<0.42
