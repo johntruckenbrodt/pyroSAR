@@ -4,7 +4,7 @@ requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2", "wheel"]
 [project]
 name = "pyroSAR"
 description = "a framework for large-scale SAR satellite data processing"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = { file = "LICENSE.txt" }
 maintainers = [
     { name = "John Truckenbrodt", email = "john.truckenbrodt@dlr.de" }
@@ -23,7 +23,10 @@ documentation = "https://pyrosar.readthedocs.io/en/latest/"
 
 [project.optional-dependencies]
 test = ["pytest"]
-docs = ["sphinx", "sphinxcontrib-bibtex", "sphinxcontrib-svg2pdfconverter", "cairosvg"]
+docs = [
+    "sphinx", "sphinx_rtd_theme", "sphinxcontrib-bibtex",
+    "sphinxcontrib-svg2pdfconverter", "cairosvg"
+]
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }

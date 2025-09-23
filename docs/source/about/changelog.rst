@@ -1153,3 +1153,17 @@ GAMMA API
   + fixed bug in ignoring conditions for writing ENVI HDR files of `pix*` and `gs_ratio` products
 
 - improved readability of tests
+
+0.31.0 | 2025-09-23
+===================
+
+Drivers
+-------
+- :meth:`pyroSAR.drivers.ID.bbox`: new argument `buffer`
+- :class:`~pyroSAR.drivers.SAFE`, :class:`~pyroSAR.drivers.BEAM_DIMAP`: new argument `looks`
+- :class:`~pyroSAR.drivers.Archive`: context-manage all database handles (code improvement)
+
+GAMMA API
+---------
+- :func:`~pyroSAR.gamma.util.convert2gamma`, :func:`~pyroSAR.gamma.util.correctOSV`: add file locking
+- fixed argument names of `isp.MLI_cat`

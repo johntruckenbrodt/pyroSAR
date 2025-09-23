@@ -2334,13 +2334,13 @@ class Archive(object):
 
     Examples
     ----------
-    Ingest all Sentinel-1 scenes in a directory and its sub-directories into the database:
+    Ingest all Sentinel-1 scenes in a directory and its subdirectories into the database:
 
     >>> from pyroSAR import Archive, identify
     >>> from spatialist.ancillary import finder
     >>> dbfile = '/.../scenelist.db'
     >>> archive_s1 = '/.../sentinel1/GRD'
-    >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*\.zip'], regex=True, recursive=True)
+    >>> scenes_s1 = finder(archive_s1, ['^S1[AB].*\.zip'], regex=True, recursive=True)
     >>> with Archive(dbfile) as archive:
     >>>     archive.insert(scenes_s1)
 

@@ -1,3 +1,5 @@
+.. _gamma-command-api:
+
 GAMMA Command API
 -----------------
 
