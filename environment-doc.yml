@@ -2,12 +2,11 @@ name: ps_doc
 channels:
   - conda-forge
 dependencies:
-  - python>=3.8
+  - python>=3.10
   - matplotlib
   - numpy<2.0
-  - sphinx<7.0  # https://github.com/readthedocs/sphinx_rtd_theme/issues/1463
+  - sphinx
+  - sphinx_rtd_theme
   - sphinxcontrib-bibtex>=2.2
-  - pip
+  - sphinxcontrib-svg2pdfconverter
   - cairosvg
-  - pip:
-      - sphinxcontrib-svg2pdfconverter
