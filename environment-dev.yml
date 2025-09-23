@@ -1,7 +1,6 @@
 name: ps_test_dev
 channels:
   - conda-forge
-  - defaults
 dependencies:
   - coverage
   - pytest
