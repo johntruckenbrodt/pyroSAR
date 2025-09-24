@@ -1,7 +1,7 @@
 ###############################################################################
 # parse GAMMA command docstrings to Python functions
 
-# Copyright (c) 2015-2022, the pyroSAR Developers.
+# Copyright (c) 2015-2025, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -58,11 +58,17 @@ def parse_command(command, indent='    '):
         # for all other commands stderr is just appended to stdout
         out += err
     
-    warning = None
-    pattern = r'([\w\.]+ (?:has been|was) re(?:named to|placed(?: that [ \*\n]*|) by)(?: the ISP program|) [\w\.]+)'
-    match = re.search(pattern, out)
-    if match:
-        warning = "raise DeprecationWarning('{}')".format(match.group())
+    # raise a warning when the command has been deprecated
+    # extract all lines starting and ending with three asterisks
+    matches = re.findall(r'^\*{3}\s*(.*?)\s*\*{3}$', out, re.MULTILINE)
+    if matches:
+        # join the lines and search for a deprecation message
+        cleaned = ' '.join(matches)
+        pattern = (r'([\w\.]+ (?:has been|was) re(?:named to|placed(?: that [ \*\n]*|) by)'
+                   r'(?:[ \*\n]*|)(?: the ISP program|) [\w\.]+)')
+        match = re.search(pattern, cleaned)
+        if match:
+            raise DeprecationWarning(match.group())
     
     if re.search(r"Can't locate FILE/Path\.pm in @INC", out):
         raise RuntimeError('unable to parse Perl script')
@@ -139,6 +145,8 @@ def parse_command(command, indent='    '):
                        'mk_base_calc': [('<RSLC_tab>', '<SLC_tab>')],
                        'mk_cpd_all': [('dtab', 'data_tab')],
                        'mk_cpx_ref_2d': [('diff_tab', 'cpx_tab')],
+                       'mk_diff_tc_2d': [('<def>', '<def_rate>'),
+                                         ('def       (input)', 'def_rate  (input)')],
                        'mk_dispmap2_2d': [('RMLI_image', 'MLI'),
                                           ('RMLI_par', 'MLI_par'),
                                           ('MLI_image', 'MLI'),
@@ -166,6 +174,7 @@ def parse_command(command, indent='    '):
                                         ('MLI_image', 'MLI')],
                        'mk_rasmph_all': [('RMLI_image', 'MLI'),
                                          ('MLI_image', 'MLI')],
+                       'mk_tab2': [('--linenumber', 'linenumber')],
                        'mk_unw_2d': [('unw_mask1', 'unw_mask')],
                        'mk_unw_ref_2d': [('diff_tab', 'DIFF_tab')],
                        'MLI2pt': [('MLI_TAB', 'MLI_tab'),
@@ -358,9 +367,6 @@ def parse_command(command, indent='    '):
     if command_base in replacements.keys():
         arg_req = replace(arg_req, replacements[command_base])
         arg_opt = replace(arg_opt, replacements[command_base])
-    
-    if command_base in ['par_CS_geo', 'par_KS_geo']:
-        out = re.sub('[ ]*trunk.*', '', out, flags=re.DOTALL)
     ###########################################
     # check if there are any double parameters
     
@@ -379,22 +385,23 @@ def parse_command(command, indent='    '):
     ######################################################################################
     # create the function argument string for the Python function
     
-    # optional arguments are parametrized with '-' as default value, e.g. arg_opt='-'
+    # optional arguments are parametrized with '-' as default value, e.g., arg_opt='-'
+    argstr_function = ', '.join(arg_req + [x + "='-'" for x in arg_opt])
     # a '-' in the parameter name is replaced with '_'
-    # example: "arg1, arg2, arg3='-'"
-    argstr_function = re.sub(r'([^\'])-([^\'])', r'\1_\2', ', '.join(arg_req + [x + "='-'" for x in arg_opt])) \
-        .replace(', def=', ', drm=')
+    argstr_function = re.sub(r'([^\'])-([^\'])', r'\1_\2', argstr_function)
+    # replace unsupported 'def' parameter name with 'drm'
+    argstr_function = argstr_function.replace(', def=', ', drm=')
     
     # some commands have different defaults than '-'
     replacements_defaults = {'S1_import_SLC_from_zipfiles': {'OPOD_dir': '.'}}
     
     if command_base in replacements_defaults.keys():
         for key, value in replacements_defaults[command_base].items():
-            old = "{}='-'".format(key)
+            old = f"{key}='-'"
             if isinstance(value, str):
-                new = "{0}='{1}'".format(key, value)
+                new = f"{key}='{value}'"
             else:
-                new = "{0}={1}".format(key, value)
+                new = f"{key}={value}"
             argstr_function = argstr_function.replace(old, new)
     
     # create the function definition string
@@ -417,12 +424,13 @@ def parse_command(command, indent='    '):
                                    ('max', '-b', None),
                                    ('rmax', '-R', None),
                                    ('mode', '-m', None),
-                                   ('update', '-u', False)]}
+                                   ('update', '-u', False)],
+                 'mk_tab2': [('linenumber', '--linenumber', False)]}
     
     # replace arg default like arg='-' with arg=None or arg=False
     if command_base in flag_args:
         for arg in flag_args[command_base]:
-            fun_def = re.sub('{}=\'-\''.format(arg[0]), '{0}={1}'.format(arg[0], arg[2]), fun_def)
+            fun_def = re.sub(f'{arg[0]}=\'-\'', f'{arg[0]}={arg[2]}', fun_def)
     ######################################################################################
     # create the process call argument string
     
@@ -440,7 +448,7 @@ def parse_command(command, indent='    '):
         key = replacements[command_base][0][1]
         if isinstance(key, list):
             key = key[0]
-        proc_args_tmp.insert(proc_args_tmp.index(key), 'len({})'.format(key))
+        proc_args_tmp.insert(proc_args_tmp.index(key), f'len({key})')
     
     if command_base == 'validate':
         index = proc_args_tmp.index('classes_inv')
@@ -469,10 +477,7 @@ def parse_command(command, indent='    '):
     # create the process call string
     proc_str = "process(cmd, logpath=logpath, outdir=outdir{inlist}, shellscript=shellscript)" \
         .format(inlist=', inlist=inlist' if command_base in inlist else '')
-    if warning is not None:
-        fun_proc = warning
-    else:
-        fun_proc = '{0}\n{1}'.format(cmd_str, proc_str)
+    fun_proc = '{0}\n{1}'.format(cmd_str, proc_str)
     
     if command_base == 'lin_comb_cpx':
         fun_proc = fun_proc.replace('factors_r, factors_i', 'zip(factors_r, factors_i)')
@@ -564,7 +569,7 @@ def parse_command(command, indent='    '):
         description = re.split(r'\n+\s*', description.strip('\n'))
         
         # escape * characters (which are treated as special characters for bullet lists by sphinx)
-        description = [x.replace('*', r'\*') for x in description]
+        description = [x.replace('*', r'\\*') for x in description]
         
         # convert all lines starting with an integer number or 'NOTE' to bullet list items
         latest = None
@@ -652,7 +657,7 @@ def parse_module(bindir, outfile):
     
     excludes = ['coord_trans',  # doesn't take any parameters and is interactive
                 'RSAT2_SLC_preproc',  # takes option flags
-                'mk_ASF_CEOS_list',  # "cannot create : Directory nonexistent"
+                'mk_ASF_CEOS_list',  # "cannot create: Directory nonexistent"
                 '2PASS_UNW',  # parameter name inconsistencies
                 'mk_diff_2d',  # takes option flags
                 'gamma_doc'  # opens the Gamma documentation
@@ -680,8 +685,8 @@ def parse_module(bindir, outfile):
         with open(outfile, 'a') as out:
             out.write(outstring)
     if len(failed) > 0:
-        log.info(
-            'the following functions could not be parsed:\n{0}\n({1} total)'.format('\n'.join(failed), len(failed)))
+        info = 'the following functions could not be parsed:\n{0}\n({1} total)'
+        log.info(info.format('\n'.join(failed), len(failed)))
 
 
 def autoparse():

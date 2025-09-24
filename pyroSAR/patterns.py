@@ -88,7 +88,7 @@ esa = r'(?P<product_id>(?:SAR|ASA)_(?:IM(?:S|P|G|M|_)|AP(?:S|P|G|M|_)|WV(?:I|S|W
       r'(?P<counter>[0-9]{4,})\.' \
       r'(?P<satellite_ID>[EN][12])'
 
-safe = r'^(?P<sensor>S1[AB])_' \
+safe = r'^(?P<sensor>S1[ABCD])_' \
        r'(?P<beam>S1|S2|S3|S4|S5|S6|IW|EW|WV|EN|N1|N2|N3|N4|N5|N6|IM)_' \
        r'(?P<product>SLC|GRD|OCN)' \
        r'(?P<resolution>F|H|M|_)_' \

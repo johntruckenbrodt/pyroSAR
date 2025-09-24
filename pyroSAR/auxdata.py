@@ -40,7 +40,7 @@ log = logging.getLogger(__name__)
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
-                 password=None, product='dem', crop=True):
+                 password=None, product='dem', crop=True, lock_timeout=600):
     """
     obtain all relevant DEM tiles for selected geometries and optionally mosaic them in a VRT.
 
@@ -103,12 +103,6 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
 
           * url: https://download.esa.int/step/auxdata/dem/SRTM90/tiff
           * height reference: EGM96
-        
-        - 'TDX90m'
-        
-          * registration:  https://geoservice.dlr.de/web/dataguide/tdm90
-          * url: ftpes://tandemx-90m.dlr.de
-          * height reference: WGS84
 
     vrt: str or None
         an optional GDAL VRT file created from the obtained DEM tiles
@@ -181,20 +175,11 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
         - 'SRTM 3Sec'
         
           * 'dem': the actual Digital Elevation Model
-        
-        - 'TDX90m'
-        
-          * 'dem': the actual Digital Elevation Model
-          * 'am2': Amplitude Mosaic representing the minimum value
-          * 'amp': Amplitude Mosaic representing the mean value
-          * 'com': Consistency Mask
-          * 'cov': Coverage Map
-          * 'hem': Height Error Map
-          * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
-          * 'wam': Water Indication Mask
     
     crop: bool
         crop to the provided geometries (or return the full extent of the DEM tiles)?
+    lock_timeout: int
+        how long to wait to acquire a lock on the downloaded files?
     
     Returns
     -------
@@ -242,13 +227,14 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
                             vrt=vrt,
                             buffer=buffer,
                             product=product,
-                            crop=crop)
+                            crop=crop,
+                            lock_timeout=lock_timeout)
 
 
 def dem_create(src, dst, t_srs=None, tr=None, threads=None,
                geoid_convert=False, geoid='EGM96', nodata=None,
                resampleAlg='bilinear', dtype=None, pbar=False,
-               lock_timeout=600, **kwargs):
+               **kwargs):
     """
     Create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid.
     This is basically a convenience wrapper around :func:`osgeo.gdal.Warp` via :func:`spatialist.auxil.gdalwarp`.
@@ -300,8 +286,6 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
         See :class:`spatialist.raster.Dtype`.
     pbar: bool
         add a progressbar?
-    lock_timeout: int
-        how long to wait to acquire a lock on `dst`?
     **kwargs
         additional keyword arguments to be passed to :func:`spatialist.auxil.gdalwarp`.
         See :func:`osgeo.gdal.WarpOptions` for options. The following arguments cannot
@@ -395,24 +379,22 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
         else:
             msg = "argument '{}' cannot be set via kwargs as it is set internally."
             raise RuntimeError(msg.format(key))
-    
-    with Lock(dst, timeout=lock_timeout):
-        try:
-            if not os.path.isfile(dst):
-                message = 'creating mosaic'
-                crs = gdalwarp_args['dstSRS']
-                if crs != 'EPSG:4326':
-                    message += ' and reprojecting to {}'.format(crs)
-                log.info(f'{message}: {dst}')
-                gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
-            else:
-                log.info(f'mosaic already exists: {dst}')
-        except Exception:
-            if os.path.isfile(dst):
-                os.remove(dst)
-            raise
-        finally:
-            gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
+    try:
+        if not os.path.isfile(dst):
+            message = 'creating mosaic'
+            crs = gdalwarp_args['dstSRS']
+            if crs != 'EPSG:4326':
+                message += ' and reprojecting to {}'.format(crs)
+            log.info(f'{message}: {dst}')
+            gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
+        else:
+            log.info(f'mosaic already exists: {dst}')
+    except Exception:
+        if os.path.isfile(dst):
+            os.remove(dst)
+        raise
+    finally:
+        gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
 
 
 class DEMHandler:
@@ -534,6 +516,7 @@ class DEMHandler:
             opts['VRTNodata'] = dst_nodata
         opts['outputBounds'] = (extent['xmin'], extent['ymin'],
                                 extent['xmax'], extent['ymax'])
+        
         gdalbuildvrt(src=locals, dst=vrtfile, **opts)
         if dst_datatype is not None:
             datatype = Dtype(dst_datatype).gdalstr
@@ -922,42 +905,42 @@ class DEMHandler:
                           'datatype': {'dem': 'Int16'},
                           'authentication': False
                           },
-            'TDX90m': {'url': 'ftpes://tandemx-90m.dlr.de',
-                       'nodata': {'dem': -32767.0,
-                                  'am2': 0,
-                                  'amp': 0,
-                                  'com': 0,
-                                  'cov': 0,
-                                  'hem': -32767.0,
-                                  'lsm': 0,
-                                  'wam': 0},
-                       'resolution': {'0-50': (1 / 1200, 1 / 1200),
-                                      '50-60': (1.5 / 1200, 1 / 1200),
-                                      '60-70': (2 / 1200, 1 / 1200),
-                                      '70-80': (3 / 1200, 1 / 1200),
-                                      '80-85': (5 / 1200, 1 / 1200),
-                                      '85-90': (10 / 1200, 1 / 1200)},
-                       'tilesize': 1,
-                       'area_or_point': 'point',
-                       'vsi': '/vsizip/',
-                       'pattern': {'dem': '*_DEM.tif',
-                                   'am2': '*_AM2.tif',
-                                   'amp': '*_AMP.tif',
-                                   'com': '*_COM.tif',
-                                   'cov': '*_COV.tif',
-                                   'hem': '*_HEM.tif',
-                                   'lsm': '*_LSM.tif',
-                                   'wam': '*_WAM.tif'},
-                       'datatype': {'dem': 'Float32',
-                                    'am2': 'UInt16',
-                                    'amp': 'UInt16',
-                                    'com': 'Byte',
-                                    'cov': 'Byte',
-                                    'hem': 'Float32',
-                                    'lsm': 'Byte',
-                                    'wam': 'Byte'},
-                       'authentication': True
-                       }
+            # 'TDX90m': {'url': 'ftpes://tandemx-90m.dlr.de',
+            #            'nodata': {'dem': -32767.0,
+            #                       'am2': 0,
+            #                       'amp': 0,
+            #                       'com': 0,
+            #                       'cov': 0,
+            #                       'hem': -32767.0,
+            #                       'lsm': 0,
+            #                       'wam': 0},
+            #            'resolution': {'0-50': (1 / 1200, 1 / 1200),
+            #                           '50-60': (1.5 / 1200, 1 / 1200),
+            #                           '60-70': (2 / 1200, 1 / 1200),
+            #                           '70-80': (3 / 1200, 1 / 1200),
+            #                           '80-85': (5 / 1200, 1 / 1200),
+            #                           '85-90': (10 / 1200, 1 / 1200)},
+            #            'tilesize': 1,
+            #            'area_or_point': 'point',
+            #            'vsi': '/vsizip/',
+            #            'pattern': {'dem': '*_DEM.tif',
+            #                        'am2': '*_AM2.tif',
+            #                        'amp': '*_AMP.tif',
+            #                        'com': '*_COM.tif',
+            #                        'cov': '*_COV.tif',
+            #                        'hem': '*_HEM.tif',
+            #                        'lsm': '*_LSM.tif',
+            #                        'wam': '*_WAM.tif'},
+            #            'datatype': {'dem': 'Float32',
+            #                         'am2': 'UInt16',
+            #                         'amp': 'UInt16',
+            #                         'com': 'Byte',
+            #                         'cov': 'Byte',
+            #                         'hem': 'Float32',
+            #                         'lsm': 'Byte',
+            #                         'wam': 'Byte'},
+            #            'authentication': True
+            #            }
         }
     
     def load(self, dem_type, vrt=None, buffer=None, username=None,
@@ -1057,7 +1040,7 @@ class DEMHandler:
             bounding box of the geometries is expanded so that the coordinates are
             multiples of the tile size of the respective DEM option.
         lock_timeout: int
-            how long to wait to acquire a lock on downloaded files?
+            how long to wait to acquire a lock on the downloaded files?
         
         Returns
         -------
@@ -1180,6 +1163,11 @@ class DEMHandler:
         str
             the sorted names of the remote files
         """
+        keys = self.config.keys()
+        if dem_type not in keys:
+            raise RuntimeError("demType '{}' is not supported\n  "
+                               "possible options: '{}'"
+                               .format(dem_type, "', '".join(keys)))
         
         def index(x=None, y=None, nx=3, ny=3, reverse=False):
             if reverse:

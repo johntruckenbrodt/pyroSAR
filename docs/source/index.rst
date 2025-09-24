@@ -25,7 +25,7 @@ API Documentation
 
     api/drivers
     api/snap
-    api/gamma
+    api/gamma/index
     api/sentinel-1
     api/auxdata
     api/datacube

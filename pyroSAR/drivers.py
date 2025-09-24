@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2024, the pyroSAR Developers.
+# Copyright (c) 2016-2025, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -38,7 +38,8 @@ import operator
 import tarfile as tf
 import xml.etree.ElementTree as ET
 import zipfile as zf
-from datetime import datetime
+from datetime import datetime, timezone
+from dateutil.parser import parse as dateparse
 from time import strptime, strftime
 from statistics import median
 from itertools import groupby
@@ -54,9 +55,9 @@ from .ERS import passdb_query, get_angles_resolution
 from .xml_util import getNamespaces
 
 from spatialist import crsConvert, sqlite3, Vector, bbox
-from spatialist.ancillary import parse_literal, finder
+from spatialist.ancillary import parse_literal, finder, multicore
 
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, insert
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
@@ -68,7 +69,6 @@ from geoalchemy2 import Geometry
 import socket
 import time
 import platform
-import subprocess
 import logging
 
 log = logging.getLogger(__name__)
@@ -129,10 +129,10 @@ def identify(scene):
     raise RuntimeError('data format not supported')
 
 
-def identify_many(scenes, pbar=False, sortkey=None):
+def identify_many(scenes, pbar=False, sortkey=None, cores=1):
     """
-    wrapper function for returning metadata handlers of all valid scenes in a list, similar to function
-    :func:`~pyroSAR.drivers.identify`.
+    wrapper function for returning metadata handlers of all valid scenes in a list,
+    similar to function :func:`~pyroSAR.drivers.identify`.
 
     Parameters
     ----------
@@ -142,6 +142,9 @@ def identify_many(scenes, pbar=False, sortkey=None):
         adds a progressbar if True
     sortkey: str or None
         sort the handler object list by an attribute
+    cores: int
+        the number of cores to parallelize identification
+    
     Returns
     -------
     list[ID]
@@ -153,28 +156,38 @@ def identify_many(scenes, pbar=False, sortkey=None):
     >>> files = finder('/path', ['S1*.zip'])
     >>> ids = identify_many(files, pbar=False, sortkey='start')
     """
-    idlist = []
-    if pbar:
-        progress = pb.ProgressBar(max_value=len(scenes)).start()
-    else:
-        progress = None
-    for i, scene in enumerate(scenes):
+    
+    def handler(scene):
         if isinstance(scene, ID):
-            idlist.append(scene)
+            return scene
         else:
             try:
                 id = identify(scene)
-                idlist.append(id)
+                return id
             except RuntimeError:
-                continue
+                return None
             except PermissionError:
                 log.warning("Permission denied: '{}'".format(scene))
+    
+    if cores == 1:
+        idlist = []
+        if pbar:
+            progress = pb.ProgressBar(max_value=len(scenes)).start()
+        else:
+            progress = None
+        for i, scene in enumerate(scenes):
+            id = handler(scene)
+            idlist.append(id)
+            if progress is not None:
+                progress.update(i + 1)
         if progress is not None:
-            progress.update(i + 1)
-    if progress is not None:
-        progress.finish()
+            progress.finish()
+    else:
+        idlist = multicore(function=handler, multiargs={'scene': scenes},
+                           pbar=pbar, cores=cores)
     if sortkey is not None:
         idlist.sort(key=operator.attrgetter(sortkey))
+    idlist = list(filter(None, idlist))
     return idlist
 
 
@@ -233,9 +246,10 @@ class ID(object):
             lines.append(line)
         return '\n'.join(lines)
     
-    def bbox(self, outname=None, driver=None, overwrite=True):
+    def bbox(self, outname=None, driver=None, overwrite=True, buffer=None):
         """
-        get the bounding box of a scene either as a vector object or written to a file
+        get the bounding box of a scene. The result is either returned as
+        vector object or written to a file.
 
         Parameters
         ----------
@@ -246,6 +260,9 @@ class ID(object):
             be auto-detected from the filename extension
         overwrite: bool
             overwrite an existing vector file?
+        buffer: None or int or float or tuple[int or float]
+            a buffer to add around `coordinates`. Default None: do not add
+            a buffer. A tuple is interpreted as (x buffer, y buffer).
 
         Returns
         -------
@@ -257,10 +274,12 @@ class ID(object):
         spatialist.vector.Vector.bbox
         """
         if outname is None:
-            return bbox(self.getCorners(), self.projection)
+            return bbox(coordinates=self.getCorners(), crs=self.projection,
+                        buffer=buffer)
         else:
-            bbox(self.getCorners(), self.projection, outname=outname, driver=driver,
-                 overwrite=overwrite)
+            bbox(coordinates=self.getCorners(), crs=self.projection,
+                 outname=outname, driver=driver, overwrite=overwrite,
+                 buffer=buffer)
     
     def geometry(self, outname=None, driver=None, overwrite=True):
         """
@@ -294,9 +313,16 @@ class ID(object):
             point.AddPoint(lon, lat)
             points.AddGeometry(point)
         geom = points.ConvexHull()
-        point = points = None
-        
         geom.FlattenTo2D()
+        point = points = None
+        exterior = geom.GetGeometryRef(0)
+        if exterior.IsClockwise():
+            points = list(exterior.GetPoints())
+            exterior.Empty()
+            for x, y in reversed(points):
+                exterior.AddPoint(x, y)
+            geom.CloseRings()
+        exterior = points = None
         
         bbox = Vector(driver='Memory')
         bbox.addlayer('geometry', srs, geom.GetGeometryType())
@@ -746,8 +772,9 @@ class ID(object):
                             outname = os.path.join(directory, repl)
                             outname = outname.replace('/', os.path.sep)
                             if item.endswith('/'):
-                                os.makedirs(outname)
+                                os.makedirs(outname, exist_ok=True)
                             else:
+                                os.makedirs(os.path.dirname(outname), exist_ok=True)
                                 try:
                                     with open(outname, 'wb') as outfile:
                                         outfile.write(archive.read(item))
@@ -808,6 +835,8 @@ class BEAM_DIMAP(ID):
         meta['polarizations'] = list(set([x for x in pols if '-' not in x]))
         meta['spacing'] = (round(float(get_by_name('range_spacing', section=section)), 6),
                            round(float(get_by_name('azimuth_spacing', section=section)), 6))
+        meta['looks'] = (float(get_by_name('range_looks', section=section)),
+                         float(get_by_name('azimuth_looks', section=section)))
         meta['samples'] = int(self.root.find('.//BAND_RASTER_WIDTH').text)
         meta['lines'] = int(self.root.find('.//BAND_RASTER_HEIGHT').text)
         meta['bands'] = int(self.root.find('.//NBANDS').text)
@@ -1567,25 +1596,29 @@ class ESA(ID):
             raw = [raw[i:i + 7] for i in range(0, len(raw), 7)]
             datasets = {x.pop(0)[1]: {y[0]: y[1] for y in x} for x in raw}
             
-            offset = 0
-            for key in datasets.keys():
-                size = int(datasets[key]['DSR_SIZE'])
-                n = int(datasets[key]['NUM_DSR'])
-                if key == 'GEOLOCATION GRID ADS':
-                    break
-                offset += size * n
+            key = 'GEOLOCATION GRID ADS'
+            ds_offset = int(datasets[key]['DS_OFFSET'])
+            ds_size = int(datasets[key]['DS_SIZE'])
+            dsr_size = int(datasets[key]['DSR_SIZE'])
+            obj.seek(ds_offset)
+            geo = obj.read(ds_size)
+        
+        geo = [geo[i:i + dsr_size] for i in range(0, len(geo), dsr_size)]
+        
+        lat = []
+        lon = []
+        for segment in geo:
+            lat_seg = segment[157:(157 + 44)] + segment[411:(411 + 44)]
+            lon_seg = segment[201:(201 + 44)] + segment[455:(455 + 44)]
             
-            obj.seek(offset, 1)
-            gcps = obj.read(size * n)
-        
-        lat = gcps[157:(157 + 44)] + gcps[411:(411 + 44)]
-        lon = gcps[201:(201 + 44)] + gcps[455:(455 + 44)]
-        
-        lat = [lat[i:i + 4] for i in range(0, len(lat), 4)]
-        lon = [lon[i:i + 4] for i in range(0, len(lon), 4)]
-        
-        lat = [struct.unpack('>i', x)[0] / 1000000. for x in lat]
-        lon = [struct.unpack('>i', x)[0] / 1000000. for x in lon]
+            lat_seg = [lat_seg[i:i + 4] for i in range(0, len(lat_seg), 4)]
+            lon_seg = [lon_seg[i:i + 4] for i in range(0, len(lon_seg), 4)]
+            
+            lat_seg = [struct.unpack('>i', x)[0] / 1000000. for x in lat_seg]
+            lon_seg = [struct.unpack('>i', x)[0] / 1000000. for x in lon_seg]
+            
+            lat.extend(lat_seg)
+            lon.extend(lon_seg)
         
         meta['coordinates'] = list(zip(lon, lat))
         
@@ -1637,6 +1670,8 @@ class SAFE(ID):
     Sensors:
         * S1A
         * S1B
+        * S1C
+        * S1D
 
     References:
         * S1-RS-MDA-52-7443 Sentinel-1 IPF Auxiliary Product Specification
@@ -1649,7 +1684,7 @@ class SAFE(ID):
         
         self.pattern = patterns.safe
         
-        self.pattern_ds = r'^s1[ab]-' \
+        self.pattern_ds = r'^s1[abcd]-' \
                           r'(?P<swath>s[1-6]|iw[1-3]?|ew[1-5]?|wv[1-2]|n[1-6])-' \
                           r'(?P<product>slc|grd|ocn)-' \
                           r'(?P<pol>hh|hv|vv|vh)-' \
@@ -1693,6 +1728,75 @@ class SAFE(ID):
         :func:`~pyroSAR.S1.removeGRDBorderNoise`
         """
         S1.removeGRDBorderNoise(self, method=method)
+    
+    def geo_grid(self, outname=None, driver=None, overwrite=True):
+        """
+        get the geo grid as vector geometry
+
+        Parameters
+        ----------
+        outname: str
+            the name of the vector file to be written
+        driver: str
+            the output file format; needs to be defined if the format cannot
+            be auto-detected from the filename extension
+        overwrite: bool
+            overwrite an existing vector file?
+
+        Returns
+        -------
+        ~spatialist.vector.Vector or None
+            the vector object if `outname` is None, None otherwise
+        
+        See also
+        --------
+        spatialist.vector.Vector.write
+        """
+        annotations = self.findfiles(self.pattern_ds)
+        key = lambda x: re.search('-[vh]{2}-', x).group()
+        groups = groupby(sorted(annotations, key=key), key=key)
+        annotations = [list(value) for key, value in groups][0]
+        
+        vec = Vector(driver='Memory')
+        vec.addlayer('geogrid', 4326, ogr.wkbPoint25D)
+        field_defs = [
+            ("swath", ogr.OFTString),
+            ("azimuthTime", ogr.OFTDateTime),
+            ("slantRangeTime", ogr.OFTReal),
+            ("line", ogr.OFTInteger),
+            ("pixel", ogr.OFTInteger),
+            ("incidenceAngle", ogr.OFTReal),
+            ("elevationAngle", ogr.OFTReal),
+        ]
+        for name, ftype in field_defs:
+            field = ogr.FieldDefn(name, ftype)
+            vec.layer.CreateField(field)
+        
+        for ann in annotations:
+            with self.getFileObj(ann) as ann_xml:
+                tree = ET.fromstring(ann_xml.read())
+            swath = tree.find(".//adsHeader/swath").text
+            points = tree.findall(".//geolocationGridPoint")
+            for point in points:
+                meta = {child.tag: child.text for child in point}
+                meta["swath"] = swath
+                x = float(meta.pop("longitude"))
+                y = float(meta.pop("latitude"))
+                z = float(meta.pop("height"))
+                geom = ogr.Geometry(ogr.wkbPoint25D)
+                geom.AddPoint(x, y, z)
+                az_time = dateparse(meta["azimuthTime"])
+                meta["azimuthTime"] = az_time.replace(tzinfo=timezone.utc)
+                for key in ["slantRangeTime", "incidenceAngle", "elevationAngle"]:
+                    meta[key] = float(meta[key])
+                for key in ["line", "pixel"]:
+                    meta[key] = int(meta[key])
+                vec.addfeature(geom, fields=meta)
+        geom = None
+        if outname is None:
+            return vec
+        else:
+            vec.write(outfile=outname, driver=driver, overwrite=overwrite)
     
     def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=300, url_option=1):
         """
@@ -1946,14 +2050,23 @@ class SAFE(ID):
             sp_rg = [float(x.find('.//rangePixelSpacing').text) for x in ann_trees]
             sp_az = [float(x.find('.//azimuthPixelSpacing').text) for x in ann_trees]
             meta['spacing'] = (median(sp_rg), median(sp_az))
+            
+            looks_rg = [float(x.find('.//rangeProcessing/numberOfLooks').text) for x in ann_trees]
+            looks_az = [float(x.find('.//azimuthProcessing/numberOfLooks').text) for x in ann_trees]
+            meta['looks'] = (median(looks_rg), median(looks_az))
+            
             samples = [x.find('.//imageAnnotation/imageInformation/numberOfSamples').text for x in ann_trees]
             meta['samples'] = sum([int(x) for x in samples])
+            
             lines = [x.find('.//imageAnnotation/imageInformation/numberOfLines').text for x in ann_trees]
             meta['lines'] = sum([int(x) for x in lines])
+            
             heading = median(float(x.find('.//platformHeading').text) for x in ann_trees)
             meta['heading'] = heading if heading > 0 else heading + 360
+            
             incidence = [float(x.find('.//incidenceAngleMidSwath').text) for x in ann_trees]
             meta['incidence'] = median(incidence)
+            
             meta['image_geometry'] = ann_trees[0].find('.//projection').text.replace(' ', '_').upper()
         
         return meta
@@ -2221,13 +2334,13 @@ class Archive(object):
 
     Examples
     ----------
-    Ingest all Sentinel-1 scenes in a directory and its sub-directories into the database:
+    Ingest all Sentinel-1 scenes in a directory and its subdirectories into the database:
 
     >>> from pyroSAR import Archive, identify
     >>> from spatialist.ancillary import finder
     >>> dbfile = '/.../scenelist.db'
     >>> archive_s1 = '/.../sentinel1/GRD'
-    >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*\.zip'], regex=True, recursive=True)
+    >>> scenes_s1 = finder(archive_s1, ['^S1[AB].*\.zip'], regex=True, recursive=True)
     >>> with Archive(dbfile) as archive:
     >>>     archive.insert(scenes_s1)
 
@@ -2334,9 +2447,8 @@ class Archive(object):
             listen(target=self.engine, identifier='connect', fn=self.__load_spatialite)
             # check if loading was successful
             try:
-                conn = self.engine.connect()
-                version = conn.execute('SELECT spatialite_version();')
-                conn.close()
+                with self.engine.begin() as conn:
+                    version = conn.execute('SELECT spatialite_version();')
             except exc.OperationalError:
                 raise RuntimeError('could not load spatialite extension')
         
@@ -2346,13 +2458,11 @@ class Archive(object):
                 log.debug('creating new PostgreSQL database')
                 create_database(self.engine.url)
             log.debug('enabling spatial extension for new database')
-            self.conn = self.engine.connect()
-            if self.driver == 'sqlite':
-                self.conn.execute(select([func.InitSpatialMetaData(1)]))
-            elif self.driver == 'postgresql':
-                self.conn.execute('CREATE EXTENSION postgis;')
-        else:
-            self.conn = self.engine.connect()
+            with self.engine.begin() as conn:
+                if self.driver == 'sqlite':
+                    conn.execute(select([func.InitSpatialMetaData(1)]))
+                else:
+                    conn.exec_driver_sql('CREATE EXTENSION IF NOT EXISTS postgis;')
         # create Session (ORM) and get metadata
         self.Session = sessionmaker(bind=self.engine)
         self.meta = MetaData(self.engine)
@@ -2546,13 +2656,14 @@ class Archive(object):
         list[str]
             the names of all scenes, which are no longer stored in their registered location
         """
-        if table == 'data':
-            # using ORM query to get all scenes locations
-            scenes = self.Session().query(self.Data.scene)
-        elif table == 'duplicates':
-            scenes = self.Session().query(self.Duplicates.scene)
-        else:
-            raise ValueError("parameter 'table' must either be 'data' or 'duplicates'")
+        with self.Session() as session:
+            if table == 'data':
+                # using ORM query to get all scenes locations
+                scenes = session.query(self.Data.scene)
+            elif table == 'duplicates':
+                scenes = session.query(self.Duplicates.scene)
+            else:
+                raise ValueError("parameter 'table' must either be 'data' or 'duplicates'")
         files = [self.encode(x[0]) for x in scenes]
         return [x for x in files if not os.path.isfile(x)]
     
@@ -2600,38 +2711,39 @@ class Archive(object):
         else:
             progress = None
         insertions = []
-        session = self.Session()
-        for i, id in enumerate(scenes):
-            basename = id.outname_base()
-            if not self.is_registered(id):
-                insertion = self.__prepare_insertion(id)
-                insertions.append(insertion)
-                counter_regulars += 1
-                log.debug('regular:   {}'.format(id.scene))
-            elif not self.__is_registered_in_duplicates(id):
-                insertion = self.Duplicates(outname_base=basename, scene=id.scene)
-                insertions.append(insertion)
-                counter_duplicates += 1
-                log.debug('duplicate: {}'.format(id.scene))
-            else:
-                list_duplicates.append(id.outname_base())
+        with self.Session() as session:
+            for i, id in enumerate(scenes):
+                basename = id.outname_base()
+                if not self.is_registered(id):
+                    insertion = self.__prepare_insertion(id)
+                    insertions.append(insertion)
+                    counter_regulars += 1
+                    log.debug('regular:   {}'.format(id.scene))
+                elif not self.__is_registered_in_duplicates(id):
+                    insertion = self.Duplicates(outname_base=basename,
+                                                scene=id.scene)
+                    insertions.append(insertion)
+                    counter_duplicates += 1
+                    log.debug('duplicate: {}'.format(id.scene))
+                else:
+                    list_duplicates.append(id.outname_base())
+                
+                if progress is not None:
+                    progress.update(i + 1)
             
             if progress is not None:
-                progress.update(i + 1)
-        
-        if progress is not None:
-            progress.finish()
-        
-        session.add_all(insertions)
-        
-        if not test:
-            log.debug('committing transactions to permanent database')
-            # commit changes of the session
-            session.commit()
-        else:
-            log.info('rolling back temporary database changes')
-            # roll back changes of the session
-            session.rollback()
+                progress.finish()
+            
+            session.add_all(insertions)
+            
+            if not test:
+                log.debug('committing transactions to permanent database')
+                # commit changes of the session
+                session.commit()
+            else:
+                log.info('rolling back temporary database changes')
+                # roll back changes of the session
+                session.rollback()
         
         message = '{0} scene{1} registered regularly'
         log.info(message.format(counter_regulars, '' if counter_regulars == 1 else 's'))
@@ -2653,11 +2765,12 @@ class Archive(object):
             is the scene already registered?
         """
         id = scene if isinstance(scene, ID) else identify(scene)
-        # ORM query, where scene equals id.scene, return first
-        exists_data = self.Session().query(self.Data.outname_base).filter_by(
-            outname_base=id.outname_base(), product=id.product).first()
-        exists_duplicates = self.Session().query(self.Duplicates.outname_base).filter(
-            self.Duplicates.outname_base == id.outname_base()).first()
+        with self.Session() as session:
+            # ORM query, where scene equals id.scene, return first
+            exists_data = session.query(self.Data.outname_base).filter_by(
+                outname_base=id.outname_base(), product=id.product).first()
+            exists_duplicates = session.query(self.Duplicates.outname_base).filter(
+                self.Duplicates.outname_base == id.outname_base()).first()
         in_data = False
         in_dup = False
         if exists_data:
@@ -2681,9 +2794,10 @@ class Archive(object):
             is the scene already registered?
         """
         id = scene if isinstance(scene, ID) else identify(scene)
-        # ORM query as in is registered
-        exists_duplicates = self.Session().query(self.Duplicates.outname_base).filter(
-            self.Duplicates.outname_base == id.outname_base()).first()
+        with self.Session() as session:
+            # ORM query as in is registered
+            exists_duplicates = session.query(self.Duplicates.outname_base).filter(
+                self.Duplicates.outname_base == id.outname_base()).first()
         in_dup = False
         if exists_duplicates:
             in_dup = len(exists_duplicates) != 0
@@ -2704,7 +2818,7 @@ class Archive(object):
     
     @staticmethod
     def encode(string, encoding='utf-8'):
-        if not isinstance(string, str):
+        if not isinstance(string, str) and hasattr(string, 'encode'):
             return string.encode(encoding)
         else:
             return string
@@ -2780,10 +2894,11 @@ class Archive(object):
             if not isinstance(item, (ID, str)):
                 raise TypeError("items in scenelist must be of type 'str' or 'pyroSAR.ID'")
         
-        # ORM query, get all scenes locations
-        scenes_data = self.Session().query(self.Data.scene)
-        registered = [os.path.basename(self.encode(x[0])) for x in scenes_data]
-        scenes_duplicates = self.Session().query(self.Duplicates.scene)
+        with self.Session() as session:
+            # ORM query, get all scenes locations
+            scenes_data = session.query(self.Data.scene)
+            registered = [os.path.basename(self.encode(x[0])) for x in scenes_data]
+            scenes_duplicates = session.query(self.Duplicates.scene)
         duplicates = [os.path.basename(self.encode(x[0])) for x in scenes_duplicates]
         names = [item.scene if isinstance(item, ID) else item for item in scenelist]
         filtered = [x for x, y in zip(scenelist, names) if os.path.basename(y) not in registered + duplicates]
@@ -2848,8 +2963,9 @@ class Archive(object):
         list[str]
             the directory names
         """
-        # ORM query, get all directories
-        scenes = self.Session().query(self.Data.scene)
+        with self.Session() as session:
+            # ORM query, get all directories
+            scenes = session.query(self.Data.scene)
         registered = [os.path.dirname(self.encode(x[0])) for x in scenes]
         return list(set(registered))
     
@@ -2877,8 +2993,9 @@ class Archive(object):
                     scenes.append(row['scene'])
                 self.insert(scenes)
         elif isinstance(dbfile, Archive):
-            scenes = dbfile.conn.execute('SELECT scene from data')
-            scenes = [s.scene for s in scenes]
+            with self.engine.begin() as conn:
+                scenes = conn.exec_driver_sql('SELECT scene from data')
+                scenes = [s.scene for s in scenes]
             self.insert(scenes)
             reinsert = dbfile.select_duplicates(value='scene')
             if reinsert is not None:
@@ -2932,15 +3049,18 @@ class Archive(object):
                 table = 'data'
             else:
                 # using core connection to execute SQL syntax (as was before)
-                query_duplicates = self.conn.execute(
-                    '''SELECT scene FROM duplicates WHERE scene='{0}' '''.format(scene))
+                query = '''SELECT scene FROM duplicates WHERE scene='{0}' '''.format(scene)
+                with self.engine.begin() as conn:
+                    query_duplicates = conn.exec_driver_sql(query)
                 if len(query_duplicates) != 0:
                     table = 'duplicates'
                 else:
                     table = None
             if table:
                 # using core connection to execute SQL syntax (as was before)
-                self.conn.execute('''UPDATE {0} SET scene= '{1}' WHERE scene='{2}' '''.format(table, new, scene))
+                query = '''UPDATE {0} SET scene= '{1}' WHERE scene='{2}' '''.format(table, new, scene)
+                with self.engine.begin() as conn:
+                    conn.exec_driver_sql(query)
         if progress is not None:
             progress.finish()
         
@@ -2950,14 +3070,14 @@ class Archive(object):
             log.info('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
     
     def select(self, vectorobject=None, mindate=None, maxdate=None, date_strict=True,
-               processdir=None, recursive=False, polarizations=None, **args):
+               processdir=None, recursive=False, polarizations=None, return_value="scene", **args):
         """
         select scenes from the database
 
         Parameters
         ----------
         vectorobject: :class:`~spatialist.vector.Vector` or None
-            a geometry with which the scenes need to overlap
+            a geometry with which the scenes need to overlap. The object may only contain one feature.
         mindate: str or datetime.datetime or None
             the minimum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
         maxdate: str or datetime.datetime or None
@@ -2965,7 +3085,7 @@ class Archive(object):
         date_strict: bool
             treat dates as strict limits or also allow flexible limits to incorporate scenes
             whose acquisition period overlaps with the defined limit?
-            
+
             - strict: start >= mindate & stop <= maxdate
             - not strict: stop >= mindate & start <= maxdate
         processdir: str or None
@@ -2975,15 +3095,55 @@ class Archive(object):
             (only if `processdir` is not None) should also the subdirectories of the `processdir` be scanned?
         polarizations: list[str] or None
             a list of polarization strings, e.g. ['HH', 'VV']
+        return_value: str or List[str]
+            the query return value(s). Options:
+            
+            - `geometry_wkb`: the scene's footprint geometry formatted as WKB
+            - `geometry_wkt`: the scene's footprint geometry formatted as WKT
+            - `mindate`: the acquisition start datetime in UTC formatted as YYYYmmddTHHMMSS
+            - `maxdate`: the acquisition end datetime in UTC formatted as YYYYmmddTHHMMSS
+            - all further database column names (see :meth:`~Archive.get_colnames()`)
         **args:
             any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
 
         Returns
         -------
-        list[str]
-            the file names pointing to the selected scenes
-
+        List[str] or List[tuple[str]]
+            If a single return_value is specified: list of values for that attribute
+            If multiple return_values are specified: list of tuples containing the requested attributes
         """
+        # Convert return_value to list if it's a string
+        if isinstance(return_value, str):
+            return_values = [return_value]
+        else:
+            return_values = return_value
+        
+        return_values_sql = []
+        for val in return_values:
+            if val == 'mindate':
+                return_values_sql.append('start')
+            elif val == 'maxdate':
+                return_values_sql.append('stop')
+            elif val == 'geometry_wkt':
+                prefix = 'ST_' if self.driver == 'postgresql' else ''
+                return_values_sql.append(f'{prefix}AsText(geometry) as geometry_wkt')
+            elif val == 'geometry_wkb':
+                prefix = 'ST_' if self.driver == 'postgresql' else ''
+                return_values_sql.append(f'{prefix}AsBinary(geometry) as geometry_wkb')
+            else:
+                return_values_sql.append(val)
+        
+        # Validate that all requested return values exist in the database
+        valid_columns = self.get_colnames()
+        extra = ['mindate', 'maxdate', 'geometry_wkt', 'geometry_wkb']
+        normal_returns = [x for x in return_values if x not in extra]
+        invalid_returns = [x for x in normal_returns if x not in valid_columns]
+        if invalid_returns:
+            invalid_str = ', '.join(invalid_returns)
+            msg = (f"The following options are not supported as "
+                   f"return values: {invalid_str}")
+            raise ValueError(msg)
+        
         arg_valid = [x for x in args.keys() if x in self.get_colnames()]
         arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
@@ -2999,6 +3159,7 @@ class Archive(object):
                     arg_format.append("""{0}='{1}'""".format(key, args[key]))
                 elif isinstance(args[key], (tuple, list)):
                     arg_format.append("""{0} IN ('{1}')""".format(key, "', '".join(map(str, args[key]))))
+        
         if mindate:
             if isinstance(mindate, datetime):
                 mindate = mindate.strftime('%Y%m%dT%H%M%S')
@@ -3010,6 +3171,7 @@ class Archive(object):
                 vals.append(mindate)
             else:
                 log.info('WARNING: argument mindate is ignored, must be in format YYYYmmddTHHMMSS')
+        
         if maxdate:
             if isinstance(maxdate, datetime):
                 maxdate = maxdate.strftime('%Y%m%dT%H%M%S')
@@ -3029,14 +3191,15 @@ class Archive(object):
         
         if vectorobject:
             if isinstance(vectorobject, Vector):
+                if vectorobject.nfeatures > 1:
+                    raise RuntimeError("'vectorobject' contains more than one feature.")
                 with vectorobject.clone() as vec:
                     vec.reproject(4326)
                     site_geom = vec.convert2wkt(set3D=False)[0]
                 # postgres has a different way to store geometries
                 if self.driver == 'postgresql':
-                    arg_format.append("st_intersects(geometry, 'SRID=4326; {}')".format(
-                        site_geom
-                    ))
+                    statement = f"st_intersects(geometry, 'SRID=4326; {site_geom}')"
+                    arg_format.append(statement)
                 else:
                     arg_format.append('st_intersects(GeomFromText(?, 4326), geometry) = 1')
                     vals.append(site_geom)
@@ -3047,23 +3210,34 @@ class Archive(object):
             subquery = ' WHERE {}'.format(' AND '.join(arg_format))
         else:
             subquery = ''
-        query = '''SELECT scene, outname_base FROM data{}'''.format(subquery)
+        
+        # Modify the query to select the requested return values
+        query = 'SELECT {}, outname_base FROM data{}'.format(', '.join(return_values_sql), subquery)
+        
         # the query gets assembled stepwise here
         for val in vals:
             query = query.replace('?', """'{0}'""", 1).format(val)
         log.debug(query)
         
         # core SQL execution
-        query_rs = self.conn.execute(query)
+        with self.engine.begin() as conn:
+            query_rs = conn.exec_driver_sql(query)
         
-        if processdir and os.path.isdir(processdir):
-            scenes = [x for x in query_rs
-                      if len(finder(processdir, [x[1]], regex=True, recursive=recursive)) == 0]
-        else:
-            scenes = query_rs
-        ret = []
-        for x in scenes:
-            ret.append(self.encode(x[0]))
+            if processdir and os.path.isdir(processdir):
+                scenes = [x for x in query_rs
+                          if len(finder(processdir, [x[-1]],
+                                        regex=True, recursive=recursive)) == 0]
+            else:
+                scenes = query_rs
+            
+            ret = []
+            for x in scenes:
+                # If only one return value was requested, append just that value
+                if len(return_values) == 1:
+                    ret.append(self.encode(x[0]))
+                else:
+                    # If multiple return values were requested, append a tuple of all values
+                    ret.append(tuple(self.encode(val) for val in x[:-1]))  # Exclude outname_base
         
         return ret
     
@@ -3093,27 +3267,28 @@ class Archive(object):
         else:
             raise ValueError("argument 'value' must be either 0 or 1")
         
-        if not outname_base and not scene:
-            # core SQL execution
-            scenes = self.conn.execute('SELECT * from duplicates')
-        else:
-            cond = []
-            arg = []
-            if outname_base:
-                cond.append('outname_base=?')
-                arg.append(outname_base)
-            if scene:
-                cond.append('scene=?')
-                arg.append(scene)
-            query = 'SELECT * from duplicates WHERE {}'.format(' AND '.join(cond))
-            for a in arg:
-                query = query.replace('?', ''' '{0}' ''', 1).format(a)
-            # core SQL execution
-            scenes = self.conn.execute(query)
-        
-        ret = []
-        for x in scenes:
-            ret.append(self.encode(x[key]))
+        with self.engine.begin() as conn:
+            if not outname_base and not scene:
+                # core SQL execution
+                scenes = conn.exec_driver_sql('SELECT * from duplicates')
+            else:
+                cond = []
+                arg = []
+                if outname_base:
+                    cond.append('outname_base=?')
+                    arg.append(outname_base)
+                if scene:
+                    cond.append('scene=?')
+                    arg.append(scene)
+                query = 'SELECT * from duplicates WHERE {}'.format(' AND '.join(cond))
+                for a in arg:
+                    query = query.replace('?', ''' '{0}' ''', 1).format(a)
+                # core SQL execution
+                scenes = conn.exec_driver_sql(query)
+            
+            ret = []
+            for x in scenes:
+                ret.append(self.encode(x[key]))
         
         return ret
     
@@ -3128,10 +3303,9 @@ class Archive(object):
             the number of scenes in (1) the main table and (2) the duplicates table
         """
         # ORM query
-        session = self.Session()
-        r1 = session.query(self.Data.outname_base).count()
-        r2 = session.query(self.Duplicates.outname_base).count()
-        session.close()
+        with self.Session() as session:
+            r1 = session.query(self.Data.outname_base).count()
+            r2 = session.query(self.Duplicates.outname_base).count()
         return r1, r2
     
     def __enter__(self):
@@ -3141,8 +3315,6 @@ class Archive(object):
         """
         close the database connection
         """
-        self.Session().close()
-        self.conn.close()
         self.engine.dispose()
         gc.collect(generation=2)  # this was added as a fix for win PermissionError when deleting sqlite.db files.
     
@@ -3168,13 +3340,15 @@ class Archive(object):
         # save outname_base from to be deleted entry
         search = self.data_schema.select().where(self.data_schema.c.scene == scene)
         entry_data_outname_base = []
-        for rowproxy in self.conn.execute(search):
-            entry_data_outname_base.append((rowproxy[12]))
+        with self.engine.begin() as conn:
+            for rowproxy in conn.execute(search):
+                entry_data_outname_base.append((rowproxy[12]))
         # log.info(entry_data_outname_base)
         
         # delete entry in data table
         delete_statement = self.data_schema.delete().where(self.data_schema.c.scene == scene)
-        self.conn.execute(delete_statement)
+        with self.engine.begin() as conn:
+            conn.execute(delete_statement)
         
         return_sentence = 'Entry with scene-id: \n{} \nwas dropped from data'.format(scene)
         
@@ -3182,7 +3356,8 @@ class Archive(object):
         if with_duplicates:
             delete_statement_dup = self.duplicates_schema.delete().where(
                 self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
-            self.conn.execute(delete_statement_dup)
+            with self.engine.begin() as conn:
+                conn.execute(delete_statement_dup)
             
             log.info(return_sentence + ' and duplicates!'.format(scene))
             return
@@ -3191,15 +3366,17 @@ class Archive(object):
         select_in_duplicates_statement = self.duplicates_schema.select().where(
             self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
         entry_duplicates_scene = []
-        for rowproxy in self.conn.execute(select_in_duplicates_statement):
-            entry_duplicates_scene.append((rowproxy[1]))
+        with self.engine.begin() as conn:
+            for rowproxy in conn.execute(select_in_duplicates_statement):
+                entry_duplicates_scene.append((rowproxy[1]))
         
         # check if there is a duplicate
         if len(entry_duplicates_scene) == 1:
             # remove entry from duplicates
             delete_statement_dup = self.duplicates_schema.delete().where(
                 self.duplicates_schema.c.outname_base == entry_data_outname_base[0])
-            self.conn.execute(delete_statement_dup)
+            with self.engine.begin() as conn:
+                conn.execute(delete_statement_dup)
             
             # insert scene from duplicates into data
             self.insert(entry_duplicates_scene[0])
@@ -3225,10 +3402,12 @@ class Archive(object):
         if table in self.get_tablenames(return_all=True):
             # this removes the idx tables and entries in geometry_columns for sqlite databases
             if self.driver == 'sqlite':
-                tab_with_geom = [rowproxy[0] for rowproxy
-                                 in self.conn.execute("SELECT f_table_name FROM geometry_columns")]
-                if table in tab_with_geom:
-                    self.conn.execute("SELECT DropGeoTable('" + table + "')")
+                with self.engine.begin() as conn:
+                    query = "SELECT f_table_name FROM geometry_columns"
+                    tab_with_geom = [rowproxy[0] for rowproxy
+                                     in conn.exec_driver_sql(query)]
+                    if table in tab_with_geom:
+                        conn.exec_driver_sql("SELECT DropGeoTable('" + table + "')")
             else:
                 table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
                 table_info.drop(self.engine)

@@ -1036,10 +1036,7 @@ Ancillary Tools
 
 Auxiliary Data Handling
 -----------------------
-
-changes to Sentinel-1 OSV data handling:
-
-- function :meth:`pyroSAR.auxdata.dem_create`:
+- function :func:`pyroSAR.auxdata.dem_create`:
 
   + make use of new classes :class:`~pyroSAR.ancillary.Lock` and :class:`~pyroSAR.ancillary.LockCollection`
     for DEM download and mosaic creation (new argument `lock_timeout`)
@@ -1056,3 +1053,117 @@ SNAP API
   + :doc:`/general/configuration`
   + :class:`pyroSAR.examine.ExamineSnap`
   + :class:`pyroSAR.examine.SnapProperties`
+
+0.26.1 | 2024-10-01
+===================
+
+Drivers
+-------
+- method :meth:`pyroSAR.drivers.Archive.select`: do not accept multi-feature vectorobjects
+
+SNAP API
+--------
+- fixed bug in writing SNAP properties configuration
+
+Auxiliary Data Handling
+-----------------------
+- class :class:`pyroSAR.auxdata.DEMHandler`: lock created VRT files
+
+0.27.0 | 2024-12-19
+===================
+
+Auxiliary Data Handling
+-----------------------
+- class :class:`pyroSAR.S1.OSV`: fixed bug in searching STEP OSV repository
+- function :func:`pyroSAR.auxdata.dem_create`: removed argument `lock_timeout`, do no longer lock the target file.
+- function :func:`pyroSAR.auxdata.dem_autoload`: the target VRT file is no longer locked. However, the individual downloaded DEM tiles now are.
+
+Ancillary Tools
+---------------
+- classes :class:`~pyroSAR.ancillary.Lock` and :class:`~pyroSAR.ancillary.LockCollection`:
+  enable nested locking
+
+Misc
+----
+- removed upper Python dependency limit
+
+0.28.0 | 2025-02-20
+===================
+
+General
+-------
+- support for SNAP 11 (tested, no modifications necessary)
+- support for Sentinel-1C and D
+
+Drivers
+-------
+- function :func:`pyroSAR.drivers.identify_many`: new argument `cores` for parallel scene identification
+- class :class:`pyroSAR.drivers.SAFE`: enable unzipping of products from CDSE
+
+Auxiliary Data Handling
+-----------------------
+- removed option for `TDX90m` DEM download because the FTP server has been shut down
+  (perhaps reactivated in the future if HTTPS authentication can be implemented)
+
+0.29.0 | 2025-04-09
+===================
+
+General
+-------
+- extended support for Sentinel-1C and D
+
+Drivers
+-------
+- :meth:`pyroSAR.drivers.SAFE.geo_grid`: new method
+
+0.29.1 | 2025-05-12
+===================
+
+SNAP API
+--------
+- support for SNAP 12
+
+0.30.0 | 2025-05-14
+===================
+
+Drivers
+-------
+- changed polygon coordinate order to counter-clockwise for methods
+
+  - :meth:`pyroSAR.drivers.ID.bbox`
+  - :meth:`pyroSAR.drivers.ID.geometry`
+- method :meth:`pyroSAR.drivers.Archive.select`: new argument `return_value`
+
+0.30.1 | 2025-08-22
+===================
+
+Drivers
+-------
+- :class:`~pyroSAR.drivers.ESA`: read all `GEOLOCATION GRID ADS` segments to obtain GCPs, not just the first one (bugfix)
+
+GAMMA API
+---------
+- support for GAMMA version 20250625
+- support for polar stereographic projections (via :meth:`~pyroSAR.gamma.auxil.ISPPar.envidict`)
+- class :class:`~pyroSAR.gamma.auxil.ISPPar`: raise error if file type is unknown
+  (instead of setting the `filetype` attribute to `unknown`)
+- :func:`~pyroSAR.gamma.util.pixel_area_wrap`:
+
+  + create ENVI HDR files for inputs to :func:`~pyroSAR.gamma.util.lat_ratio` (bugfix)
+  + fixed bug in ignoring conditions for writing ENVI HDR files of `pix*` and `gs_ratio` products
+
+- improved readability of tests
+
+0.31.0 | 2025-09-23
+===================
+
+Drivers
+-------
+- :meth:`pyroSAR.drivers.ID.bbox`: new argument `buffer`
+- :class:`~pyroSAR.drivers.SAFE`, :class:`~pyroSAR.drivers.BEAM_DIMAP`: new argument `looks`
+- :class:`~pyroSAR.drivers.Archive`: context-manage all database handles (code improvement)
+
+GAMMA API
+---------
+- :func:`~pyroSAR.gamma.util.convert2gamma`, :func:`~pyroSAR.gamma.util.correctOSV`: add file locking
+- fixed argument names of `isp.MLI_cat`

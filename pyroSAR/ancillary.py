@@ -23,8 +23,10 @@ from math import sin, radians
 import inspect
 from datetime import datetime
 from . import patterns
-
 from spatialist.ancillary import finder
+import logging
+
+log = logging.getLogger(__name__)
 
 
 def groupby(images, attribute):
@@ -333,6 +335,9 @@ class Lock(object):
     lock may be acquired whilst usage locks exist. On error usage locks are simply
     deleted.
     
+    The class supports nested locks. One function might lock a file and another
+    function called inside it will reuse this lock if it tries to lock the file.
+    
     It may happen that lock files remain when a process is killed by HPC schedulers
     like Slurm because in this case the process is not ended by Python. Optimally,
     hard locks should be renamed to error lock files and usage lock files should be
@@ -345,6 +350,11 @@ class Lock(object):
     >>> with Lock(target=target):
     >>>     with open(target, 'w') as f:
     >>>         f.write('Hello World!')
+    
+    >>> with Lock(target=target):  # initialize lock
+    >>>     with Lock(target=target):  # reuse lock
+    >>>         with open(target, 'w') as f:
+    >>>             f.write('Hello World!')
 
     Parameters
     ----------
@@ -355,43 +365,61 @@ class Lock(object):
     timeout: int
         the time in seconds to retry acquiring a lock
     """
+    _instances = {}
+    _nesting_levels = {}
+    
+    def __new__(cls, target, soft=False, timeout=7200):
+        target_abs = os.path.abspath(os.path.expanduser(target))
+        if target_abs not in cls._instances:
+            log.debug(f'creating lock instance for target {target_abs}')
+            instance = super().__new__(cls)
+            cls._instances[target_abs] = instance
+            cls._nesting_levels[target_abs] = 0
+        else:
+            if soft != cls._instances[target_abs].soft:
+                msg = 'cannot place nested {}-lock on existing {}-lock for target {}'
+                vals = ['read', 'write'] if soft else ['write', 'read']
+                vals.append(target_abs)
+                raise RuntimeError(msg.format(*vals))
+            log.debug(f'reusing lock instance for target {target_abs}')
+        return cls._instances[target_abs]
+    
     def __init__(self, target, soft=False, timeout=7200):
-        if os.path.isdir(target) and not os.path.exists(target):
-            raise OSError('target does not exist: {}'.format(target))
-        self.target = target
-        used_id = str(uuid.uuid4())
-        self.lock = self.target + '.lock'
-        self.error = self.target + '.error'
-        self.used = self.target + f'.used_{used_id}'
-        self.soft = soft
-        if os.path.isfile(self.error):
-            msg = 'cannot acquire lock on damaged target: {}'
-            raise RuntimeError(msg.format(self.target))
-        end = time.time() + timeout
-        while True:
-            if time.time() > end:
-                msg = 'could not acquire lock due to timeout: {}'
+        if not hasattr(self, '_initialized'):
+            self.target = os.path.abspath(os.path.expanduser(target))
+            used_id = str(uuid.uuid4())
+            self.lock = self.target + '.lock'
+            self.error = self.target + '.error'
+            self.used = self.target + f'.used_{used_id}'
+            self.soft = soft
+            if os.path.isfile(self.error):
+                msg = 'cannot acquire lock on damaged target: {}'
                 raise RuntimeError(msg.format(self.target))
-            try:
-                if self.soft and not os.path.isfile(self.lock):
-                    Path(self.used).touch(exist_ok=False)
-                    break
-                if not self.soft and not self.is_used():
-                    Path(self.lock).touch(exist_ok=False)
-                    break
-            except FileExistsError:
-                pass
-            time.sleep(1)
+            end = time.time() + timeout
+            log.debug(f'trying to {"read" if self.soft else "write"}-lock {target}')
+            while True:
+                if time.time() > end:
+                    msg = 'could not acquire lock due to timeout: {}'
+                    raise RuntimeError(msg.format(self.target))
+                try:
+                    if self.soft and not os.path.isfile(self.lock):
+                        Path(self.used).touch(exist_ok=False)
+                        break
+                    if not self.soft and not self.is_used():
+                        Path(self.lock).touch(exist_ok=False)
+                        break
+                except FileExistsError:
+                    pass
+                time.sleep(1)
+            log.debug(f'acquired {"read" if self.soft else "write"}-lock on {target}')
+            self._initialized = True
+        Lock._nesting_levels[self.target] += 1
     
     def __enter__(self):
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
-        if not self.soft and exc_type is not None:
-            if os.path.exists(self.target):
-                os.rename(self.lock, self.error)
-        else:
-            self.remove()
+        self.remove(exc_type)
     
     def is_used(self):
         """
@@ -406,7 +434,7 @@ class Lock(object):
         files = list(Path(folder).glob(base + '.used*'))
         return len(files) > 0
     
-    def remove(self):
+    def remove(self, exc_type=None):
         """
         Remove the acquired soft/hard lock
         
@@ -414,10 +442,23 @@ class Lock(object):
         -------
 
         """
-        if self.soft:
-            os.remove(self.used)
+        Lock._nesting_levels[self.target] -= 1
+        if Lock._nesting_levels[self.target] == 0:
+            if not self.soft and exc_type is not None:
+                if os.path.exists(self.target):
+                    os.rename(self.lock, self.error)
+                    log.debug(f'placed error-lock on {self.target}')
+            else:
+                if self.soft:
+                    os.remove(self.used)
+                else:
+                    os.remove(self.lock)
+                msg_sub = "read" if self.soft else "write"
+                log.debug(f'removed {msg_sub}-lock on {self.target}')
+            del Lock._instances[self.target]
+            del Lock._nesting_levels[self.target]
         else:
-            os.remove(self.lock)
+            log.debug(f'decrementing lock level on {self.target}')
 
 
 class LockCollection(object):
@@ -433,6 +474,7 @@ class LockCollection(object):
     timeout: int
         the time in seconds to retry acquiring a lock
     """
+    
     def __init__(self, targets, soft=False, timeout=7200):
         self.locks = [Lock(x, soft=soft, timeout=timeout) for x in targets]
     
@@ -440,5 +482,5 @@ class LockCollection(object):
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
-        for lock in self.locks:
-            lock.remove()
+        for lock in reversed(self.locks):
+            lock.__exit__(exc_type, exc_value, traceback)
