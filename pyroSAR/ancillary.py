@@ -97,7 +97,8 @@ def groupbyTime(images, function, time):
 
 def multilook_factors(source_rg, source_az, target, geometry, incidence):
     """
-    compute multi-looking factors to approximate a square pixel with defined target ground range pixel spacing.
+    Compute multi-looking factors. A square pixel is approximated with
+    defined target ground range pixel spacing.
     
     Parameters
     ----------
@@ -126,15 +127,16 @@ def multilook_factors(source_rg, source_az, target, geometry, incidence):
     4 1
     """
     azlks = int(round(float(target) / source_az))
-    azlks = azlks if azlks > 0 else 1
+    azlks = max(1, azlks)
     if geometry == 'SLANT_RANGE':
         rlks = float(azlks) * source_az * sin(radians(incidence)) / source_rg
     elif geometry == 'GROUND_RANGE':
         rlks = float(azlks) * source_az / source_rg
     else:
-        raise ValueError("parameter 'geometry' must be either 'SLANT_RANGE' or 'GROUND_RANGE'")
+        raise ValueError("parameter 'geometry' must be either "
+                         "'SLANT_RANGE' or 'GROUND_RANGE'")
     
-    rlks = int(round(rlks))
+    rlks = max(1, int(round(rlks)))
     return rlks, azlks
 
 

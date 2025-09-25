@@ -520,10 +520,12 @@ def writer(xmlfile, outdir, basename_extensions=None,
                     base = re.sub('gammaSigmaRatio_[HV]{2}', 'gammaSigmaRatio', base)
                 if re.search('NE[BGS]Z', base):
                     base = re.sub('(NE[BGS]Z)_([HV]{2})', r'\g<2>_\g<1>', base)
+                if re.search('layover_shadow_mask', base):
+                    base = re.sub('layover_shadow_mask_[HV]{2}', 'layoverShadowMask', base)
                 name_new = outname_base.replace(suffix, '{0}.tif'.format(base))
             if re.search('elevation', basename):
                 nodata = dem_nodata
-            elif re.search('layoverShadowMask', basename):
+            elif re.search('layoverShadowMask|layover_shadow_mask', basename):
                 nodata = 255
             else:
                 nodata = 0
@@ -719,22 +721,25 @@ def groupbyWorkers(xmlfile, n=2):
     selects_id = [x.id for x in workflow['operator=BandSelect']]
     workers_groups = [workers_id[i:i + n] for i in range(0, len(workers_id), n)]
     
-    # in S1TBX 8.0.6 problems were found when executing ThermalNoiseRemoval by itself (after e.g. Calibration).
-    # When executed together with other nodes this worked so the node is re-grouped into the group of the source node.
-    i = 0
-    while i < len(workers_groups):
-        if workers_groups[i][0].startswith('ThermalNoiseRemoval'):
-            # get the group ID of the source node
-            source = workflow[workers_groups[i][0]].source
-            source_group_id = [source in x for x in workers_groups].index(True)
-            # move the node to the source group
-            workers_groups[source_group_id].append(workers_groups[i][0])
-            del workers_groups[i][0]
-        # delete the group if it is empty
-        if len(workers_groups[i]) == 0:
-            del workers_groups[i]
-        else:
-            i += 1
+    # some nodes must be executed together with a preceding node. They are moved to the previous group.
+    def move_group(operator):
+        i = 0
+        while i < len(workers_groups):
+            if workers_groups[i][0].startswith(operator):
+                # get the group ID of the source node
+                source = workflow[workers_groups[i][0]].source
+                source_group_id = [source in x for x in workers_groups].index(True)
+                # move the node to the source group
+                workers_groups[source_group_id].append(workers_groups[i][0])
+                del workers_groups[i][0]
+            # delete the group if it is empty
+            if len(workers_groups[i]) == 0:
+                del workers_groups[i]
+            else:
+                i += 1
+    
+    for operator in ['ThermalNoiseRemoval', 'Warp']:
+        move_group(operator)
     
     # append the BandSelect nodes to the group of their source nodes
     for item in selects_id:
@@ -1666,11 +1671,20 @@ def orb_parametrize(scene, formatName, allow_RES_OSV=True, url_option=1, **kwarg
     Node
         the Apply-Orbit-File node object
     """
-    orbit_lookup = {'ENVISAT': 'PRARE Precise (ERS1&2) (Auto Download)',
-                    'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
-    orbitType = orbit_lookup[formatName]
-    if formatName == 'ENVISAT' and scene.sensor == 'ASAR':
-        orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
+    orbitType = None
+    orbit_lookup = {'SENTINEL-1': 'Sentinel Precise (Auto Download)'}
+    if formatName in orbit_lookup:
+        orbitType = orbit_lookup[formatName]
+    if formatName == 'ENVISAT':  # ASAR, ERS1, ERS2
+        if scene.sensor == 'ASAR':
+            orbitType = 'DORIS Precise VOR (ENVISAT) (Auto Download)'
+        else:
+            # Another option for ERS is 'DELFT Precise (ENVISAT, ERS1&2) (Auto Download)'.
+            # Neither option is suitable for all products, and auto-selection can
+            # only happen once a downloader (similar to S1.auxil.OSV) is written.
+            orbitType = 'PRARE Precise (ERS1&2) (Auto Download)'
+    if orbitType is None:
+        raise RuntimeError(f'Could not determine orbit type for {formatName} format')
     
     if formatName == 'SENTINEL-1':
         osv_type = ['POE', 'RES'] if allow_RES_OSV else 'POE'
@@ -1790,9 +1804,9 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         
          - Range-Doppler (SNAP node `Terrain-Correction`)
          - SAR simulation cross correlation
-           (SNAP nodes `SAR-Simulation`->`Cross-Correlation`->`SARSim-Terrain-Correction`)
+           (SNAP nodes `SAR-Simulation`->`Cross-Correlation`->`Warp`->`Terrain-Correction`)
     
-    sourceBands: list[str] or None
+    sourceBands: List[str] or None
         the image band names to geocode; default None: geocode all incoming bands.
     spacing: int or float
         The target pixel spacing in meters.
@@ -1835,7 +1849,7 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         
          - DEM
          - latLon
-         - incidenceAngleFromEllipsoid (Range-Doppler only)
+         - incidenceAngleFromEllipsoid
          - layoverShadowMask
          - localIncidenceAngle
          - projectedLocalIncidenceAngle
@@ -1865,21 +1879,27 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         the Terrain-Correction node object or a list containing the objects for SAR-Simulation,
         Cross-Correlation and SARSim-Terrain-Correction.
     """
+    tc = parse_node('Terrain-Correction')
+    tc.parameters['nodataValueAtSea'] = nodataValueAtSea
+    
     if tc_method == 'Range-Doppler':
-        tc = parse_node('Terrain-Correction')
         tc.parameters['sourceBands'] = sourceBands
-        tc.parameters['nodataValueAtSea'] = nodataValueAtSea
         sarsim = None
-        dem_node = out = tc
+        out = tc
+        dem_nodes = [tc]
     elif tc_method == 'SAR simulation cross correlation':
         sarsim = parse_node('SAR-Simulation')
         sarsim.parameters['sourceBands'] = sourceBands
         cc = parse_node('Cross-Correlation')
-        tc = parse_node('SARSim-Terrain-Correction')
-        dem_node = sarsim
-        out = [sarsim, cc, tc]
+        cc.parameters['coarseRegistrationWindowWidth'] = 64
+        cc.parameters['coarseRegistrationWindowHeight'] = 64
+        cc.parameters['maxIteration'] = 2
+        cc.parameters['onlyGCPsOnLand'] = True
+        warp = parse_node('Warp')
+        dem_nodes = [sarsim, tc]
+        out = [sarsim, cc, warp, tc]
     else:
-        raise RuntimeError('tc_method not recognized')
+        raise RuntimeError(f'tc_method not recognized: "{tc_method}"')
     
     tc.parameters['imgResamplingMethod'] = imgResamplingMethod
     
@@ -1930,17 +1950,14 @@ def geo_parametrize(spacing, t_srs, tc_method='Range-Doppler',
         for item in export_extra:
             if item in export_extra_options:
                 key = f'save{item[0].upper()}{item[1:]}'
-                if tc.operator == 'SARSim-Terrain-Correction':
-                    if item == 'layoverShadowMask':
-                        sarsim.parameters[key] = True
-                else:
-                    tc.parameters[key] = True
+                tc.parameters[key] = True
     
-    dem_parametrize(node=dem_node, demName=demName,
-                    externalDEMFile=externalDEMFile,
-                    externalDEMNoDataValue=externalDEMNoDataValue,
-                    externalDEMApplyEGM=externalDEMApplyEGM,
-                    demResamplingMethod=demResamplingMethod)
+    for dem_node in dem_nodes:
+        dem_parametrize(node=dem_node, demName=demName,
+                        externalDEMFile=externalDEMFile,
+                        externalDEMNoDataValue=externalDEMNoDataValue,
+                        externalDEMApplyEGM=externalDEMApplyEGM,
+                        demResamplingMethod=demResamplingMethod)
     
     for key, val in kwargs.items():
         tc.parameters[key] = val
