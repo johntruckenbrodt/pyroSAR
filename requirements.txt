@@ -1,6 +1,6 @@
 geoalchemy2<0.14.0
 lxml
-numpy<2.0
+numpy>=2.0
 packaging
 pillow
 progressbar2
@@ -8,6 +8,6 @@ psycopg2
 pyyaml
 requests
 shapely
-spatialist>=0.16.0
-sqlalchemy>=1.4,<2.0
+spatialist>=0.16.1
 sqlalchemy-utils>=0.37,<0.42
+sqlalchemy>=1.4,<2.0
