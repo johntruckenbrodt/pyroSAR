@@ -1,6 +1,6 @@
 geoalchemy2<0.14.0
 lxml
-numpy>=2.0
+numpy
 packaging
 pillow
 progressbar2
