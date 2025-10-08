@@ -4,7 +4,7 @@ channels:
 dependencies:
   - python>=3.10
   - matplotlib
-  - numpy<2.0
+  - numpy
   - sphinx
   - sphinx_rtd_theme
   - sphinxcontrib-bibtex>=2.2

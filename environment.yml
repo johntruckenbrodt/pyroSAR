@@ -7,7 +7,7 @@ dependencies:
   - libgdal
   - libspatialite>=5.1.0
   - lxml
-  - numpy<2.0
+  - numpy
   - packaging
   - pillow
   - progressbar2
