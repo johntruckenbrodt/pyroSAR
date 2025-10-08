@@ -1,7 +1,7 @@
 ###############################################################################
 # parse GAMMA command docstrings to Python functions
 
-# Copyright (c) 2015-2022, the pyroSAR Developers.
+# Copyright (c) 2015-2025, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
