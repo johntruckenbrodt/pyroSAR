@@ -1,6 +1,14 @@
 name: conda build
 
-on: [ push ]
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    types: [ opened, reopened, synchronize ]
+
+permissions:
+  contents: read
 
 jobs:
   build-linux:
@@ -53,7 +61,8 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: Password12!
       - name: Publish to coveralls.io
-        uses: coverallsapp/github-action@v2
+        if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: coverallsapp/github-action@v2.3.0
         with:
           github-token: ${{ github.token }}
           format: cobertura
