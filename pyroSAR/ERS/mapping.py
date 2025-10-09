@@ -321,10 +321,34 @@ ANGLES_RESOLUTION = {
 
 
 def get_angles_resolution(sensor, mode, swath_id, date):
-    string_new = ''
-    if mode == 'APP' and date > '20090528':
-        string_new = '-new'
+    """
+    Get acquisition characteristics not contained in the product metadata:
+    
+    - near range incidence angle
+    - far range incidence angle
+    - range resolution
+    - azimuth resolution
+    - near range noise equivalent sigma zero (NESZ)
+    - far range NESZ
+    
+    Parameters
+    ----------
+    sensor: {ERS1, ERS2, ASAR}
+        the satellite sensor
+    mode: {APP, APS, IMP, IMS, WSM}
+        the sensor acquisition mode
+    swath_id: {IS1, IS2, IS3, IS4, IS5, IS6, IS7, WS}
+        the sensor swath ID
+    date: str
+        the acquisition date formatted as YYYYmmdd/YYYYmmddTHHMMSS
+
+    Returns
+    -------
+    tuple[float]
+        the attributes listed above
+    """
+    suffix = '-new' if mode == 'APP' and date > '20090528' else ''
     data = ANGLES_RESOLUTION[sensor][mode][swath_id]
-    return (data[f'near{string_new}'], data[f'far{string_new}'],
-            data[f'range{string_new}'], data['azimuth'],
+    return (data[f'near{suffix}'], data[f'far{suffix}'],
+            data[f'range{suffix}'], data['azimuth'],
             data['nesz_near'], data['nesz_far'])
