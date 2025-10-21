@@ -663,6 +663,28 @@ class ID(object):
         """
         raise NotImplementedError
     
+    @property
+    def start_dt(self) -> datetime:
+        """
+        
+        Returns
+        -------
+            the acquisition start time as timezone-aware datetime object
+        """
+        out = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
+        return out.replace(tzinfo=timezone.utc)
+    
+    @property
+    def stop_dt(self) -> datetime:
+        """
+        
+        Returns
+        -------
+            the acquisition stop time as timezone-aware datetime object
+        """
+        out = datetime.strptime(self.stop, '%Y%m%dT%H%M%S')
+        return out.replace(tzinfo=timezone.utc)
+    
     def summary(self):
         """
         print the set of standardized scene metadata attributes
@@ -3394,7 +3416,7 @@ class Archive(object):
         # core SQL execution
         with self.engine.begin() as conn:
             query_rs = conn.exec_driver_sql(query)
-        
+            
             if processdir and os.path.isdir(processdir):
                 scenes = [x for x in query_rs
                           if len(finder(processdir, [x[-1]],
