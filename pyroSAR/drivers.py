@@ -2534,7 +2534,7 @@ class Archive(object):
     >>> from spatialist.ancillary import finder
     >>> dbfile = '/.../scenelist.db'
     >>> archive_s1 = '/.../sentinel1/GRD'
-    >>> scenes_s1 = finder(archive_s1, ['^S1[AB].*\.zip'], regex=True, recursive=True)
+    >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*.zip'], regex=True, recursive=True)
     >>> with Archive(dbfile) as archive:
     >>>     archive.insert(scenes_s1)
 
@@ -2571,7 +2571,7 @@ class Archive(object):
     >>> from spatialist.ancillary import finder
     >>> dbfile = 'scenelist_db'
     >>> archive_s1 = '/.../sentinel1/GRD'
-    >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*\.zip'], regex=True, recursive=True)
+    >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*.zip'], regex=True, recursive=True)
     >>> with Archive(dbfile, driver='postgres', user='user', password='password', host='host', port=5432) as archive:
     >>>     archive.insert(scenes_s1)
     
