@@ -466,7 +466,7 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
         installed, `~/.snap/auxdata/Orbits/Sentinel-1` (SNAP default).
         Subdirectories POEORB and RESORB are created automatically.
     osvType: str or list[str]
-        the OSV type to be used
+        the OSV type (POE|RES) to be used
     timeout: int or tuple or None
         the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
     logpath: str or None

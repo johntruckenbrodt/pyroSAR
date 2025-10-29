@@ -38,7 +38,7 @@ import operator
 import tarfile as tf
 import xml.etree.ElementTree as ET
 import zipfile as zf
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from dateutil.parser import parse as dateparse
 from time import strptime, strftime
 from statistics import median
@@ -601,7 +601,7 @@ class ID(object):
         
         Parameters
         ----------
-        extensions: list[str]
+        extensions: list[str] or None
             the names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
         Returns
         -------
@@ -662,6 +662,28 @@ class ID(object):
         >>> scene.quicklook('S1A__IW___A_20180101T170648.kmz')
         """
         raise NotImplementedError
+    
+    @property
+    def start_dt(self) -> datetime:
+        """
+        
+        Returns
+        -------
+            the acquisition start time as timezone-aware datetime object
+        """
+        out = datetime.strptime(self.start, '%Y%m%dT%H%M%S')
+        return out.replace(tzinfo=timezone.utc)
+    
+    @property
+    def stop_dt(self) -> datetime:
+        """
+        
+        Returns
+        -------
+            the acquisition stop time as timezone-aware datetime object
+        """
+        out = datetime.strptime(self.stop, '%Y%m%dT%H%M%S')
+        return out.replace(tzinfo=timezone.utc)
     
     def summary(self):
         """
@@ -819,19 +841,56 @@ class BEAM_DIMAP(ID):
         self.root = ET.parse(self.scene).getroot()
         
         def get_by_name(attr, section='Abstracted_Metadata'):
-            element = self.root.find('.//MDElem[@name="{}"]'.format(section))
-            out = element.find('.//MDATTR[@name="{}"]'.format(attr))
-            if out is None or out.text == '99999.0':
-                msg = 'cannot get attribute {} from section {}'
-                raise RuntimeError(msg.format(attr, section))
-            return out.text
+            msg = 'cannot get attribute "{}" from section "{}"'
+            if isinstance(attr, list):
+                for i, item in enumerate(attr):
+                    try:
+                        return get_by_name(item, section=section)
+                    except RuntimeError:
+                        if i <= len(attr):
+                            continue
+                        else:
+                            raise RuntimeError(msg.format('|'.join(attr), section))
+            else:
+                element = self.root.find('.//MDElem[@name="{}"]'.format(section))
+                out = element.find('.//MDATTR[@name="{}"]'.format(attr))
+                if out is None or out.text == '99999':
+                    raise RuntimeError(msg.format(attr, section))
+                return out.text
+        
+        missions = {'ENVISAT': 'ASAR',
+                    'ERS1': 'ERS1',
+                    'ERS2': 'ERS2',
+                    'SENTINEL-1A': 'S1A',
+                    'SENTINEL-1B': 'S1B',
+                    'SENTINEL-1C': 'S1C',
+                    'SENTINEL-1D': 'S1D'}
         
         section = 'Abstracted_Metadata'
-        meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE', section=section)
+        meta['sensor'] = missions[get_by_name('MISSION', section=section)]
+        if re.search('S1[A-Z]', meta['sensor']):
+            meta['acquisition_mode'] = get_by_name('ACQUISITION_MODE', section=section)
+            meta['product'] = self.root.find('.//PRODUCT_TYPE').text
+        elif meta['sensor'] in ['ASAR', 'ERS1', 'ERS2']:
+            product_type = get_by_name('PRODUCT_TYPE', section=section)
+            meta['acquisition_mode'] = product_type[4:7]
+            # product overview table: https://doi.org/10.5167/UZH-96146
+            if meta['acquisition_mode'] in ['APS', 'IMS', 'WSS']:
+                meta['product'] = 'SLC'
+            elif meta['acquisition_mode'] in ['APP', 'IMP']:
+                meta['product'] = 'PRI'
+            elif meta['acquisition_mode'] in ['APM', 'IMM', 'WSM']:
+                meta['product'] = 'MR'
+            else:
+                raise RuntimeError(f"unsupported acquisition mode: '{meta['acquisition_mode']}'")
+        else:
+            raise RuntimeError('unknown sensor {}'.format(meta['sensor']))
+        
         meta['IPF_version'] = get_by_name('Processing_system_identifier', section=section)
-        meta['sensor'] = get_by_name('MISSION', section=section).replace('ENTINEL-', '')
+        
         meta['orbit'] = get_by_name('PASS', section=section)[0]
         pols = [x.text for x in self.root.findall('.//MDATTR[@desc="Polarization"]')]
+        pols = list(filter(None, pols))
         meta['polarizations'] = list(set([x for x in pols if '-' not in x]))
         meta['spacing'] = (round(float(get_by_name('range_spacing', section=section)), 6),
                            round(float(get_by_name('azimuth_spacing', section=section)), 6))
@@ -842,30 +901,39 @@ class BEAM_DIMAP(ID):
         meta['bands'] = int(self.root.find('.//NBANDS').text)
         meta['orbitNumber_abs'] = int(get_by_name('ABS_ORBIT', section=section))
         meta['orbitNumber_rel'] = int(get_by_name('REL_ORBIT', section=section))
-        meta['cycleNumber'] = int(get_by_name('orbit_cycle', section=section))
-        meta['frameNumber'] = int(get_by_name('data_take_id', section=section))
-        meta['product'] = self.root.find('.//PRODUCT_TYPE').text
+        meta['cycleNumber'] = int(get_by_name(['orbit_cycle', 'CYCLE'], section=section))
+        meta['frameNumber'] = int(get_by_name(['data_take_id', 'ABS_ORBIT'], section=section))
+        
+        meta['swath'] = get_by_name('SWATH', section=section)
         
         srgr = bool(int(get_by_name('srgr_flag', section=section)))
         meta['image_geometry'] = 'GROUND_RANGE' if srgr else 'SLANT_RANGE'
-        
-        inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
-        incidence = [float(x.text) for x in inc_elements]
-        meta['incidence'] = median(incidence)
-        
-        # Metadata sections that need some parsing to match naming convention with SAFE format
+        #################################################################################
+        # start, stop
         start = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_START_TIME').text,
                                   '%d-%b-%Y %H:%M:%S.%f')
         meta['start'] = start.strftime('%Y%m%dT%H%M%S')
         stop = datetime.strptime(self.root.find('.//PRODUCT_SCENE_RASTER_STOP_TIME').text,
                                  '%d-%b-%Y %H:%M:%S.%f')
         meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
-        
+        #################################################################################
+        # incidence angle
+        inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
+        if len(inc_elements) > 0:
+            incidence = [float(x.text) for x in inc_elements]
+            meta['incidence'] = median(incidence)
+        else:
+            inc_near = float(self.root.find('.//MDATTR[@name="incidence_near"]').text)
+            inc_far = float(self.root.find('.//MDATTR[@name="incidence_far"]').text)
+            meta['incidence'] = (inc_near + inc_far) / 2
+        #################################################################################
+        # projection
         if self.root.find('.//WKT') is not None:
             meta['projection'] = self.root.find('.//WKT').text.lstrip()
         else:
             meta['projection'] = crsConvert(4326, 'wkt')
-        
+        #################################################################################
+        # coordinates
         keys = ['{}_{}_{}'.format(a, b, c)
                 for a in ['first', 'last']
                 for b in ['far', 'near']
@@ -877,6 +945,7 @@ class BEAM_DIMAP(ID):
                                (coords['last_near_long'], coords['last_near_lat']),
                                (coords['last_far_long'], coords['last_far_lat']),
                                (coords['first_far_long'], coords['first_far_lat'])]
+        #################################################################################
         return meta
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
@@ -1561,15 +1630,32 @@ class ESA(ID):
         sensor_lookup = {'N1': 'ASAR', 'E1': 'ERS1', 'E2': 'ERS2'}
         meta['sensor'] = sensor_lookup[match.group('satellite_ID')]
         meta['acquisition_mode'] = match2.group('image_mode')
-        meta['product'] = 'SLC' if meta['acquisition_mode'] in ['IMS', 'APS', 'WSS'] else 'PRI'
-        meta['frameNumber'] = int(match.group('counter'))
         
-        if meta['acquisition_mode'] in ['APS', 'IMS', 'WSM']:
+        meta['image_geometry'] = 'GROUND_RANGE'
+        # product overview table: https://doi.org/10.5167/UZH-96146
+        if meta['acquisition_mode'] in ['APS', 'IMS', 'WSS']:
+            meta['product'] = 'SLC'
             meta['image_geometry'] = 'SLANT_RANGE'
         elif meta['acquisition_mode'] in ['APP', 'IMP']:
-            meta['image_geometry'] = 'GROUND_RANGE'
+            meta['product'] = 'PRI'
+        elif meta['acquisition_mode'] in ['APM', 'IMM', 'WSM']:
+            meta['product'] = 'MR'
         else:
             raise RuntimeError(f"unsupported acquisition mode: '{meta['acquisition_mode']}'")
+        
+        def val_convert(val):
+            try:
+                out = int(val)
+            except ValueError:
+                try:
+                    out = float(val)
+                except ValueError:
+                    if re.search('[0-9]{2}-[A-Z]{3}-[0-9]{2}', val):
+                        out = dateparse(val)
+                        out = out.replace(tzinfo=timezone.utc)
+                    else:
+                        out = val
+            return out
         
         with self.getFileObj(self.file) as obj:
             mph = obj.read(1247).decode('ascii')
@@ -1577,14 +1663,15 @@ class ESA(ID):
             dsd = obj.read(5040).decode('ascii')
             
             pattern = r'(?P<key>[A-Z0-9_]+)\=(")?(?P<value>.*?)("|<|$)'
-            origin = dict()
-            header = mph + sph
-            lines = header.split('\n')
-            for line in lines:
-                match = re.match(pattern, line)
-                if match:
-                    matchdict = match.groupdict()
-                    origin[matchdict['key']] = str(matchdict['value']).strip()
+            origin = {'MPH': {}, 'SPH': {}, 'DSD': {}}
+            for section, content in {'MPH': mph, 'SPH': sph}.items():
+                lines = content.split('\n')
+                for line in lines:
+                    match = re.match(pattern, line)
+                    if match:
+                        matchdict = match.groupdict()
+                        val = val_convert(str(matchdict['value']).strip())
+                        origin[section][matchdict['key']] = val
             
             raw = []
             lines = dsd.split('\n')
@@ -1592,67 +1679,174 @@ class ESA(ID):
                 match = re.match(pattern, line)
                 if match:
                     matchdict = match.groupdict()
-                    raw.append((matchdict['key'], str(matchdict['value']).strip()))
+                    val = val_convert(str(matchdict['value']).strip())
+                    raw.append((matchdict['key'], val))
             raw = [raw[i:i + 7] for i in range(0, len(raw), 7)]
             datasets = {x.pop(0)[1]: {y[0]: y[1] for y in x} for x in raw}
+            origin['DSD'] = datasets
+            
+            meta['origin'] = origin
             
             key = 'GEOLOCATION GRID ADS'
-            ds_offset = int(datasets[key]['DS_OFFSET'])
-            ds_size = int(datasets[key]['DS_SIZE'])
-            dsr_size = int(datasets[key]['DSR_SIZE'])
+            ds_offset = origin['DSD'][key]['DS_OFFSET']
+            ds_size = origin['DSD'][key]['DS_SIZE']
+            dsr_size = origin['DSD'][key]['DSR_SIZE']
             obj.seek(ds_offset)
             geo = obj.read(ds_size)
         
         geo = [geo[i:i + dsr_size] for i in range(0, len(geo), dsr_size)]
         
+        keys = ['first_zero_doppler_time', 'attach_flag', 'line_num',
+                'num_lines', 'sub_sat_track', 'first_line_tie_points',
+                'spare', 'last_zero_doppler_time', 'last_line_tie_points',
+                'swath_number']
+        lengths = [12, 1, 4, 4, 4, 220, 22, 12, 220, 3, 19]
+        
+        meta['origin']['GEOLOCATION_GRID_ADS'] = []
+        for granule in geo:
+            start = 0
+            values = {}
+            for i, key in enumerate(keys):
+                value = granule[start:sum(lengths[:i + 1])]
+                if key in ['first_zero_doppler_time', 'last_zero_doppler_time']:
+                    unpack = dict(zip(('days', 'seconds', 'microseconds'),
+                                      struct.unpack('>lLL', value)))
+                    value = datetime(year=2000, month=1, day=1, tzinfo=timezone.utc)
+                    value += timedelta(**unpack)
+                elif key in ['attach_flag']:
+                    value = struct.unpack('B', value)[0]
+                elif key in ['line_num', 'num_lines']:
+                    value = struct.unpack('>L', value)[0]
+                elif key in ['sub_sat_track']:
+                    value = struct.unpack('>f', value)[0]
+                elif key in ['first_line_tie_points', 'last_line_tie_points']:
+                    sample_numbers = struct.unpack('>' + 'L' * 11, value[0:44])
+                    slant_range_times = struct.unpack('>' + 'f' * 11, value[44:88])
+                    incident_angles = struct.unpack('>' + 'f' * 11, value[88:132])
+                    latitudes = struct.unpack('>' + 'l' * 11, value[132:176])
+                    latitudes = [x / 1000000. for x in latitudes]
+                    longitudes = struct.unpack('>' + 'l' * 11, value[176:220])
+                    longitudes = [x / 1000000. for x in longitudes]
+                    value = []
+                    for j in range(11):
+                        value.append({'sample_number': sample_numbers[j],
+                                      'slant_range_time': slant_range_times[j],
+                                      'incident_angle': incident_angles[j],
+                                      'latitude': latitudes[j],
+                                      'longitude': longitudes[j]})
+                elif key == 'swath_number':
+                    value = value.decode('ascii').strip()
+                if key != 'spare':
+                    values[key] = value
+                start += lengths[i]
+            meta['origin']['GEOLOCATION_GRID_ADS'].append(values)
+        
         lat = []
         lon = []
-        for segment in geo:
-            lat_seg = segment[157:(157 + 44)] + segment[411:(411 + 44)]
-            lon_seg = segment[201:(201 + 44)] + segment[455:(455 + 44)]
-            
-            lat_seg = [lat_seg[i:i + 4] for i in range(0, len(lat_seg), 4)]
-            lon_seg = [lon_seg[i:i + 4] for i in range(0, len(lon_seg), 4)]
-            
-            lat_seg = [struct.unpack('>i', x)[0] / 1000000. for x in lat_seg]
-            lon_seg = [struct.unpack('>i', x)[0] / 1000000. for x in lon_seg]
-            
-            lat.extend(lat_seg)
-            lon.extend(lon_seg)
+        for granule in meta['origin']['GEOLOCATION_GRID_ADS']:
+            for group in ['first', 'last']:
+                for i in range(11):
+                    lat.append(granule[f'{group}_line_tie_points'][i]['latitude'])
+                    lon.append(granule[f'{group}_line_tie_points'][i]['longitude'])
         
         meta['coordinates'] = list(zip(lon, lat))
         
         if meta['sensor'] == 'ASAR':
-            pols = [y for x, y in origin.items() if 'TX_RX_POLAR' in x]
+            pols = [y for x, y in origin['SPH'].items() if 'TX_RX_POLAR' in x]
             pols = [x.replace('/', '') for x in pols if len(x) == 3]
             meta['polarizations'] = sorted(pols)
         elif meta['sensor'] in ['ERS1', 'ERS2']:
             meta['polarizations'] = ['VV']
         
-        meta['orbit'] = origin['PASS'][0]
-        start = datetime.strptime(origin['SENSING_START'], '%d-%b-%Y %H:%M:%S.%f')
-        meta['start'] = start.strftime('%Y%m%dT%H%M%S')
-        stop = datetime.strptime(origin['SENSING_STOP'], '%d-%b-%Y %H:%M:%S.%f')
-        meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
-        meta['spacing'] = (float(origin['RANGE_SPACING']), float(origin['AZIMUTH_SPACING']))
-        meta['looks'] = (float(origin['RANGE_LOOKS']), float(origin['AZIMUTH_LOOKS']))
-        meta['samples'] = int(origin['LINE_LENGTH'])
-        meta['lines'] = int(datasets['MDS1']['NUM_DSR'])
+        meta['orbit'] = origin['SPH']['PASS'][0]
+        meta['start'] = origin['MPH']['SENSING_START'].strftime('%Y%m%dT%H%M%S')
+        meta['stop'] = origin['MPH']['SENSING_STOP'].strftime('%Y%m%dT%H%M%S')
+        meta['spacing'] = (origin['SPH']['RANGE_SPACING'], origin['SPH']['AZIMUTH_SPACING'])
+        meta['looks'] = (origin['SPH']['RANGE_LOOKS'], origin['SPH']['AZIMUTH_LOOKS'])
+        meta['samples'] = origin['SPH']['LINE_LENGTH']
+        meta['lines'] = origin['DSD']['MDS1']['NUM_DSR']
         
-        meta['orbitNumber_abs'] = int(origin['ABS_ORBIT'])
-        meta['orbitNumber_rel'] = int(origin['REL_ORBIT'])
-        meta['cycleNumber'] = int(origin['CYCLE'])
+        meta['orbitNumber_abs'] = origin['MPH']['ABS_ORBIT']
+        meta['orbitNumber_rel'] = origin['MPH']['REL_ORBIT']
+        meta['cycleNumber'] = origin['MPH']['CYCLE']
+        meta['frameNumber'] = origin['MPH']['ABS_ORBIT']
         
-        meta['incidenceAngleMin'], meta['incidenceAngleMax'], \
-            meta['rangeResolution'], meta['azimuthResolution'], \
-            meta['neszNear'], meta['neszFar'] = \
-            get_angles_resolution(meta['sensor'], meta['acquisition_mode'],
-                                  origin['SWATH'], meta['start'])
-        meta['incidence'] = median([meta['incidenceAngleMin'], meta['incidenceAngleMax']])
+        incidence_nr, incidence_fr, \
+            resolution_rg, resolution_az, \
+            nesz_nr, nesz_fr = \
+            get_angles_resolution(sensor=meta['sensor'], mode=meta['acquisition_mode'],
+                                  swath_id=origin['SPH']['SWATH'], date=meta['start'])
+        
+        meta['incidence'] = (incidence_nr + incidence_fr) / 2
+        meta['incidence_nr'] = incidence_nr
+        meta['incidence_fr'] = incidence_fr
+        meta['resolution'] = (resolution_rg, resolution_az)
+        meta['nesz'] = (nesz_nr, nesz_fr)
         
         meta['projection'] = crsConvert(4326, 'wkt')
         
         return meta
+    
+    def geo_grid(self, outname=None, driver=None, overwrite=True):
+        """
+        get the geo grid as vector geometry
+
+        Parameters
+        ----------
+        outname: str
+            the name of the vector file to be written
+        driver: str
+            the output file format; needs to be defined if the format cannot
+            be auto-detected from the filename extension
+        overwrite: bool
+            overwrite an existing vector file?
+
+        Returns
+        -------
+        spatialist.vector.Vector or None
+            the vector object if `outname` is None, None otherwise
+
+        See also
+        --------
+        spatialist.vector.Vector.write
+        """
+        vec = Vector(driver='Memory')
+        vec.addlayer('geogrid', 4326, ogr.wkbPoint)
+        field_defs = [
+            ("swath", ogr.OFTString),
+            ("azimuthTime", ogr.OFTDateTime),
+            ("slantRangeTime", ogr.OFTReal),
+            ("line", ogr.OFTInteger),
+            ("pixel", ogr.OFTInteger),
+            ("incidenceAngle", ogr.OFTReal)
+        ]
+        for name, ftype in field_defs:
+            field = ogr.FieldDefn(name, ftype)
+            vec.layer.CreateField(field)
+        
+        for granule in self.meta['origin']['GEOLOCATION_GRID_ADS']:
+            line_first = granule['line_num']
+            line_last = granule['line_num'] + granule['num_lines'] - 1
+            for group in ['first', 'last']:
+                meta = {'swath': granule['swath_number'],
+                        'azimuthTime': granule[f'{group}_zero_doppler_time'],
+                        'line': line_first if group == 'first' else line_last}
+                tp = granule[f'{group}_line_tie_points']
+                for i in range(11):
+                    x = tp[i]['longitude']
+                    y = tp[i]['latitude']
+                    geom = ogr.Geometry(ogr.wkbPoint)
+                    geom.AddPoint(x, y)
+                    geom.FlattenTo2D()
+                    meta['slantRangeTime'] = tp[i]['slant_range_time']
+                    meta['pixel'] = tp[i]['sample_number']
+                    meta['incidenceAngle'] = tp[i]['incident_angle']
+                    vec.addfeature(geom, fields=meta)
+        geom = None
+        if outname is None:
+            return vec
+        else:
+            vec.write(outfile=outname, driver=driver, overwrite=overwrite)
     
     def unpack(self, directory, overwrite=False, exist_ok=False):
         base_file = os.path.basename(self.file).strip(r'\.zip|\.tar(?:\.gz|)')
@@ -2340,7 +2534,7 @@ class Archive(object):
     >>> from spatialist.ancillary import finder
     >>> dbfile = '/.../scenelist.db'
     >>> archive_s1 = '/.../sentinel1/GRD'
-    >>> scenes_s1 = finder(archive_s1, ['^S1[AB].*\.zip'], regex=True, recursive=True)
+    >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*.zip'], regex=True, recursive=True)
     >>> with Archive(dbfile) as archive:
     >>>     archive.insert(scenes_s1)
 
@@ -2377,7 +2571,7 @@ class Archive(object):
     >>> from spatialist.ancillary import finder
     >>> dbfile = 'scenelist_db'
     >>> archive_s1 = '/.../sentinel1/GRD'
-    >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*\.zip'], regex=True, recursive=True)
+    >>> scenes_s1 = finder(archive_s1, [r'^S1[AB].*.zip'], regex=True, recursive=True)
     >>> with Archive(dbfile, driver='postgres', user='user', password='password', host='host', port=5432) as archive:
     >>>     archive.insert(scenes_s1)
     
@@ -3222,7 +3416,7 @@ class Archive(object):
         # core SQL execution
         with self.engine.begin() as conn:
             query_rs = conn.exec_driver_sql(query)
-        
+            
             if processdir and os.path.isdir(processdir):
                 scenes = [x for x in query_rs
                           if len(finder(processdir, [x[-1]],
