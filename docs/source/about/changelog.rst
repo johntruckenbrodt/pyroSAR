@@ -1167,3 +1167,70 @@ GAMMA API
 ---------
 - :func:`~pyroSAR.gamma.util.convert2gamma`, :func:`~pyroSAR.gamma.util.correctOSV`: add file locking
 - fixed argument names of `isp.MLI_cat`
+
+0.32.0 | 2025-10-29
+===================
+
+SNAP API
+--------
+- :func:`~pyroSAR.snap.auxil.orb_parametrize`: improved ERS/ASAR orbit handling (more work necessary to always select the best available file, because all options are limited in time (e.g. use option 1 if possible, fall back to option 2 otherwise, etc.); needs a download functionality like :class:`pyroSAR.S1.auxil.OSV` to know which ones are available)
+- :func:`~pyroSAR.snap.util.geocode`:
+
+  + explicitly use 'Latest Auxiliary File' for Envisat calibration (just for readability, this is already the default value of the parsed node; other options: 'Product Auxiliary File', 'External Auxiliary File')
+  + leave calibration node polarizations field empty when processing all polarizations (otherwise processing may finish without errors but no product is being written; looks like a SNAP bug, also reported in `step-44830 <https://forum.step.esa.int/t/naming-of-source-bands/44830>`_)
+  + `Calibration` in/out band handling improvements
+
+    * select source bands based on sensor and acquisition mode (also described in `step-44830 <https://forum.step.esa.int/t/naming-of-source-bands/44830>`_)
+    * more explicit handling of output bands: all that are not needed set to `False`
+    * commented out output bands that are apparently not needed
+
+  + fixed sarsim-cc geocoding:
+
+    * old: `SAR-Simulation->Cross-Correlation->Terrain-Flattening->SARSim-Terrain-Correction` (does not work because `Terrain-Flattening` does not pass through any source layers)
+    * new: `SAR-Simulation->Cross-Correlation->Warp->Terrain-Flattening->Terrain-Correction`
+    * this reveals a flaw in current SNAP processing: the additional `Warp` step introduces unnecessary resampling, the created lookup table is not passed between operators and thus makes the process inefficient, the whole procedure only works with EPSG:4326 as map geometry thus, by the looks of it, requiring three forward geocoding steps (for `SAR-Simulation`, `Terrain-Flattening` and `Terrain-Correction`, respectively)
+
+- :func:`~pyroSAR.snap.auxil.groupbyWorkers`: add `Warp` operator to the group of its source node, because it cannot be executed alone (just like `ThermalNoiseRemoval`)
+- ancillary layer writing fix: a layover-shadow-mask can also be created by `SAR-Simulation`, but the output layer is named differently ('layover_shadow_mask' instead of 'layoverShadowMask' by `Terrain-Correction`); this must be handled correctly in :func:`pyroSAR.snap.auxil.writer`
+
+Drivers
+-------
+- :class:`~pyroSAR.drivers.ESA`:
+
+  + :meth:`~pyroSAR.drivers.ESA.scanMetadata`:
+
+    * read out all MPH, SPH, DSD and GEOLOCATION_GRID_ADS metadata and expose it via `meta['origin']`
+    * use absolute orbit number as `frameNumber` instead of product counter (which often seems to be 0)
+    * convert original metadata to Python types (int, float, datetime)
+    * renamed several meta attributes:
+
+      - `incidenceAngleMin` -> `incidence_nr`
+      - `incidenceAngleMax` -> `incidence_fr`
+      - `rangeResolution`, `azimuthResolution` -> `resolution` (tuple)
+      - `neszNear`, `neszFar` -> `nesz` (tuple)
+
+  + new method :meth:`~pyroSAR.drivers.ESA.geo_grid` (like for `SAFE`)
+  + corrected `acquisition_mode` for ASAR WSM, WSS
+  + added MR product type
+
+- :class:`~pyroSAR.drivers.BEAM_DIMAP`
+
+  + improved metadata parsing
+
+    * `incidenceAngleMidSwath` not always present, use `incidence_near` and `incidence_far` alternatively
+    * the cycle number may be named `orbit_cycle` or `CYCLE`
+    * for pyroSAR `frameNumber`, use `ABS_ORBIT`, not `data_take_id` as for Sentinel-1
+    * added further `meta` attributes: `swath`, `looks`
+    * always four `Polarizations` fields present, some may be set to None -> filtered out
+    * for Sentinel-1 the product and acquisition_mode attributes can be obtained from `ACQUISITION_MODE` and `PRODUCT_TYPE` respectively; for ASAR/ERS `ACQUISITION_MODE` is missing and `PRODUCT_TYPE` contains the original values, e.g. 'ASA_APP_1P' -> must be abstracted
+
+  + added MR product type
+
+- :class:`~pyroSAR.drivers.ID`
+
+  + added methods `start_dt` and `stop_dt` returning timezone-aware datetime objects
+
+Ancillary Tools
+---------------
+
+- :meth:`~pyroSAR.ancillary.multilook_factors`: fixed bug in returning 0 as range factor
