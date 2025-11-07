@@ -1234,3 +1234,10 @@ Ancillary Tools
 ---------------
 
 - :meth:`~pyroSAR.ancillary.multilook_factors`: fixed bug in returning 0 as range factor
+
+0.32.1 | 2025-11-06
+===================
+
+Auxiliary Data Handling
+-----------------------
+- class :class:`pyroSAR.S1.OSV`: lock local target files for download (to avoid multi-download and conflicts in parallel processes)
