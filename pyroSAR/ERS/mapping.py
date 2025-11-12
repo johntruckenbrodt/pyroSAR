@@ -1,3 +1,5 @@
+from typing import Literal
+
 RESOLUTION_NESZ = {
     'ERS1': {
         'IMP': {
@@ -249,7 +251,12 @@ RESOLUTION_NESZ = {
 }
 
 
-def get_resolution_nesz(sensor, mode, swath_id, date):
+def get_resolution_nesz(
+        sensor: Literal['ERS1', 'ERS2', 'ASAR'],
+        mode: Literal['APP', 'APS', 'IMP', 'IMS', 'WSM', 'WSS'],
+        swath_id: Literal['IS1', 'IS2', 'IS3', 'IS4', 'IS5', 'IS6', 'IS7', 'WS'],
+        date: str
+) -> tuple[int | float | None, int | float | None, int | float | None, int | float | None]:
     """
     Get acquisition characteristics not contained in the product metadata:
 
@@ -260,18 +267,17 @@ def get_resolution_nesz(sensor, mode, swath_id, date):
     
     Parameters
     ----------
-    sensor: {ERS1, ERS2, ASAR}
+    sensor:
         the satellite sensor
-    mode: {APP, APS, IMP, IMS, WSM}
+    mode:
         the sensor acquisition mode
-    swath_id: {IS1, IS2, IS3, IS4, IS5, IS6, IS7, WS}
+    swath_id:
         the sensor swath ID
-    date: str
+    date:
         the acquisition date formatted as YYYYmmdd/YYYYmmddTHHMMSS
 
     Returns
     -------
-    tuple[float]
         the attributes listed above
     """
     suffix = '_new' if mode == 'APP' and date > '20090528' else ''
