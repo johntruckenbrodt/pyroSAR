@@ -51,7 +51,7 @@ from osgeo.gdalconst import GA_ReadOnly
 
 from . import S1, patterns
 from .config import __LOCAL__
-from .ERS import passdb_query, get_angles_resolution
+from .ERS import passdb_query, get_resolution_nesz
 from .xml_util import getNamespaces
 
 from spatialist import crsConvert, sqlite3, Vector, bbox
@@ -1676,7 +1676,7 @@ class ESA(ID):
                         matchdict = match.groupdict()
                         val = val_convert(str(matchdict['value']).strip())
                         if matchdict['key'] in coord_keys:
-                            val *= 10**-6
+                            val *= 10 ** -6
                         origin[section][matchdict['key']] = val
             
             raw = []
@@ -1777,15 +1777,21 @@ class ESA(ID):
         meta['cycleNumber'] = origin['MPH']['CYCLE']
         meta['frameNumber'] = origin['MPH']['ABS_ORBIT']
         
-        incidence_nr, incidence_fr, \
-            resolution_rg, resolution_az, \
-            nesz_nr, nesz_fr = \
-            get_angles_resolution(sensor=meta['sensor'], mode=meta['acquisition_mode'],
-                                  swath_id=origin['SPH']['SWATH'], date=meta['start'])
+        incident_angles = []
+        for item in meta['origin']['GEOLOCATION_GRID_ADS']:
+            for key in ['first', 'last']:
+                pts = item[f'{key}_line_tie_points']
+                for pt in pts:
+                    incident_angles.append(pt['incident_angle'])
         
-        meta['incidence'] = (incidence_nr + incidence_fr) / 2
-        meta['incidence_nr'] = incidence_nr
-        meta['incidence_fr'] = incidence_fr
+        meta['incidence_nr'] = min(incident_angles)
+        meta['incidence_fr'] = max(incident_angles)
+        meta['incidence'] = (meta['incidence_nr'] + meta['incidence_fr']) / 2
+        
+        resolution_rg, resolution_az, nesz_nr, nesz_fr = \
+            get_resolution_nesz(sensor=meta['sensor'], mode=meta['acquisition_mode'],
+                                swath_id=origin['SPH']['SWATH'], date=meta['start'])
+        
         meta['resolution'] = (resolution_rg, resolution_az)
         meta['nesz'] = (nesz_nr, nesz_fr)
         
