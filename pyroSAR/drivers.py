@@ -1664,6 +1664,10 @@ class ESA(ID):
             
             pattern = r'(?P<key>[A-Z0-9_]+)\=(")?(?P<value>.*?)("|<|$)'
             origin = {'MPH': {}, 'SPH': {}, 'DSD': {}}
+            coord_keys = [f'{x}_{y}_{z}'
+                          for x in ['FIRST', 'LAST']
+                          for y in ['NEAR', 'MID', 'FAR']
+                          for z in ['LAT', 'LONG']]
             for section, content in {'MPH': mph, 'SPH': sph}.items():
                 lines = content.split('\n')
                 for line in lines:
@@ -1671,6 +1675,8 @@ class ESA(ID):
                     if match:
                         matchdict = match.groupdict()
                         val = val_convert(str(matchdict['value']).strip())
+                        if matchdict['key'] in coord_keys:
+                            val *= 10**-6
                         origin[section][matchdict['key']] = val
             
             raw = []
