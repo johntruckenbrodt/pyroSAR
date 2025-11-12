@@ -1680,11 +1680,13 @@ class ESA(ID):
             mph = obj.read(1247).decode('ascii')
             origin['MPH'] = decode(mph)
             
-            sph = obj.read(1059).decode('ascii')
-            origin['SPH'] = decode(sph)
-            
+            sph_size = origin['MPH']['SPH_SIZE']
             dsd_size = origin['MPH']['DSD_SIZE']
             dsd_num = origin['MPH']['NUM_DSD']
+            sph_descr_size = sph_size - dsd_size * dsd_num
+            
+            sph = obj.read(sph_descr_size).decode('ascii')
+            origin['SPH'] = decode(sph)
             
             datasets = {}
             for i in range(dsd_num):
