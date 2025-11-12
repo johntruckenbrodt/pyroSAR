@@ -1657,38 +1657,40 @@ class ESA(ID):
                         out = val
             return out
         
-        with self.getFileObj(self.file) as obj:
-            mph = obj.read(1247).decode('ascii')
-            sph = obj.read(1059).decode('ascii')
-            dsd = obj.read(5040).decode('ascii')
-            
+        def decode(raw):
             pattern = r'(?P<key>[A-Z0-9_]+)\=(")?(?P<value>.*?)("|<|$)'
-            origin = {'MPH': {}, 'SPH': {}, 'DSD': {}}
+            out = {}
             coord_keys = [f'{x}_{y}_{z}'
                           for x in ['FIRST', 'LAST']
                           for y in ['NEAR', 'MID', 'FAR']
                           for z in ['LAT', 'LONG']]
-            for section, content in {'MPH': mph, 'SPH': sph}.items():
-                lines = content.split('\n')
-                for line in lines:
-                    match = re.match(pattern, line)
-                    if match:
-                        matchdict = match.groupdict()
-                        val = val_convert(str(matchdict['value']).strip())
-                        if matchdict['key'] in coord_keys:
-                            val *= 10 ** -6
-                        origin[section][matchdict['key']] = val
-            
-            raw = []
-            lines = dsd.split('\n')
+            lines = raw.split('\n')
             for line in lines:
                 match = re.match(pattern, line)
                 if match:
                     matchdict = match.groupdict()
                     val = val_convert(str(matchdict['value']).strip())
-                    raw.append((matchdict['key'], val))
-            raw = [raw[i:i + 7] for i in range(0, len(raw), 7)]
-            datasets = {x.pop(0)[1]: {y[0]: y[1] for y in x} for x in raw}
+                    if matchdict['key'] in coord_keys:
+                        val *= 10 ** -6
+                    out[matchdict['key']] = val
+            return out
+        
+        with self.getFileObj(self.file) as obj:
+            origin = {}
+            mph = obj.read(1247).decode('ascii')
+            origin['MPH'] = decode(mph)
+            
+            sph = obj.read(1059).decode('ascii')
+            origin['SPH'] = decode(sph)
+            
+            dsd_size = origin['MPH']['DSD_SIZE']
+            dsd_num = origin['MPH']['NUM_DSD']
+            
+            datasets = {}
+            for i in range(dsd_num):
+                dsd = obj.read(dsd_size).decode('ascii')
+                dataset = decode(dsd)
+                datasets[dataset.pop('DS_NAME')] = dataset
             origin['DSD'] = datasets
             
             meta['origin'] = origin
