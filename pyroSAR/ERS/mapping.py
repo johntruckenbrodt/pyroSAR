@@ -235,6 +235,15 @@ RESOLUTION_NESZ = {
                 'nesz_fr': 23.5
             },
             'std_dev': 20
+        },
+        'WSS': {
+            'WS': {
+                'res_rg': None,
+                'res_az': None,
+                'nesz_nr': None,
+                'nesz_fr': None
+            },
+            'std_dev': None
         }
     }
 }
