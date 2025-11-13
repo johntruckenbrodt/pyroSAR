@@ -51,7 +51,7 @@ from osgeo.gdalconst import GA_ReadOnly
 
 from . import S1, patterns
 from .config import __LOCAL__
-from .ERS import passdb_query, get_angles_resolution
+from .ERS import passdb_query, get_resolution_nesz
 from .xml_util import getNamespaces
 
 from spatialist import crsConvert, sqlite3, Vector, bbox
@@ -1657,32 +1657,42 @@ class ESA(ID):
                         out = val
             return out
         
-        with self.getFileObj(self.file) as obj:
-            mph = obj.read(1247).decode('ascii')
-            sph = obj.read(1059).decode('ascii')
-            dsd = obj.read(5040).decode('ascii')
-            
+        def decode(raw):
             pattern = r'(?P<key>[A-Z0-9_]+)\=(")?(?P<value>.*?)("|<|$)'
-            origin = {'MPH': {}, 'SPH': {}, 'DSD': {}}
-            for section, content in {'MPH': mph, 'SPH': sph}.items():
-                lines = content.split('\n')
-                for line in lines:
-                    match = re.match(pattern, line)
-                    if match:
-                        matchdict = match.groupdict()
-                        val = val_convert(str(matchdict['value']).strip())
-                        origin[section][matchdict['key']] = val
-            
-            raw = []
-            lines = dsd.split('\n')
+            out = {}
+            coord_keys = [f'{x}_{y}_{z}'
+                          for x in ['FIRST', 'LAST']
+                          for y in ['NEAR', 'MID', 'FAR']
+                          for z in ['LAT', 'LONG']]
+            lines = raw.split('\n')
             for line in lines:
                 match = re.match(pattern, line)
                 if match:
                     matchdict = match.groupdict()
                     val = val_convert(str(matchdict['value']).strip())
-                    raw.append((matchdict['key'], val))
-            raw = [raw[i:i + 7] for i in range(0, len(raw), 7)]
-            datasets = {x.pop(0)[1]: {y[0]: y[1] for y in x} for x in raw}
+                    if matchdict['key'] in coord_keys:
+                        val *= 10 ** -6
+                    out[matchdict['key']] = val
+            return out
+        
+        with self.getFileObj(self.file) as obj:
+            origin = {}
+            mph = obj.read(1247).decode('ascii')
+            origin['MPH'] = decode(mph)
+            
+            sph_size = origin['MPH']['SPH_SIZE']
+            dsd_size = origin['MPH']['DSD_SIZE']
+            dsd_num = origin['MPH']['NUM_DSD']
+            sph_descr_size = sph_size - dsd_size * dsd_num
+            
+            sph = obj.read(sph_descr_size).decode('ascii')
+            origin['SPH'] = decode(sph)
+            
+            datasets = {}
+            for i in range(dsd_num):
+                dsd = obj.read(dsd_size).decode('ascii')
+                dataset = decode(dsd)
+                datasets[dataset.pop('DS_NAME')] = dataset
             origin['DSD'] = datasets
             
             meta['origin'] = origin
@@ -1771,15 +1781,21 @@ class ESA(ID):
         meta['cycleNumber'] = origin['MPH']['CYCLE']
         meta['frameNumber'] = origin['MPH']['ABS_ORBIT']
         
-        incidence_nr, incidence_fr, \
-            resolution_rg, resolution_az, \
-            nesz_nr, nesz_fr = \
-            get_angles_resolution(sensor=meta['sensor'], mode=meta['acquisition_mode'],
-                                  swath_id=origin['SPH']['SWATH'], date=meta['start'])
+        incident_angles = []
+        for item in meta['origin']['GEOLOCATION_GRID_ADS']:
+            for key in ['first', 'last']:
+                pts = item[f'{key}_line_tie_points']
+                for pt in pts:
+                    incident_angles.append(pt['incident_angle'])
         
-        meta['incidence'] = (incidence_nr + incidence_fr) / 2
-        meta['incidence_nr'] = incidence_nr
-        meta['incidence_fr'] = incidence_fr
+        meta['incidence_nr'] = min(incident_angles)
+        meta['incidence_fr'] = max(incident_angles)
+        meta['incidence'] = (meta['incidence_nr'] + meta['incidence_fr']) / 2
+        
+        resolution_rg, resolution_az, nesz_nr, nesz_fr = \
+            get_resolution_nesz(sensor=meta['sensor'], mode=meta['acquisition_mode'],
+                                swath_id=origin['SPH']['SWATH'], date=meta['start'])
+        
         meta['resolution'] = (resolution_rg, resolution_az)
         meta['nesz'] = (nesz_nr, nesz_fr)
         
