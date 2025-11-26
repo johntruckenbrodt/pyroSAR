@@ -1,7 +1,7 @@
 ###############################################################################
 # ancillary routines for software pyroSAR
 
-# Copyright (c) 2014-2024, the pyroSAR Developers.
+# Copyright (c) 2014-2025, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -24,6 +24,8 @@ import inspect
 from datetime import datetime
 from . import patterns
 from spatialist.ancillary import finder
+from dataclasses import dataclass
+from typing import Optional, Literal
 import logging
 
 log = logging.getLogger(__name__)
@@ -95,27 +97,37 @@ def groupbyTime(images, function, time):
     return [x[0] if len(x) == 1 else x for x in groups]
 
 
-def multilook_factors(source_rg, source_az, target, geometry, incidence):
+def multilook_factors(
+        source_rg: int | float,
+        source_az: int | float,
+        target: int | float,
+        geometry: Literal["SLANT_RANGE", "GROUND_RANGE"],
+        incidence: int | float
+) -> tuple[int, int]:
     """
     Compute multi-looking factors. A square pixel is approximated with
-    defined target ground range pixel spacing.
+    defined target ground range pixel spacing. The function computes a
+    cost for multilook factor combinations based on the difference between
+    the resulting spacing and the target spacing for range and azimuth
+    respectively and the difference between range and azimuth spacing.
+    Based on this cost, the optimal multilook factors are chosen.
+    Each of the three criteria is weighted equally.
     
     Parameters
     ----------
-    source_rg: int or float
+    source_rg:
         the range pixel spacing
-    source_az: int or float
+    source_az:
         the azimuth pixel spacing
-    target: int or float
+    target:
         the target pixel spacing of an approximately square pixel
-    geometry: str
+    geometry:
         the imaging geometry; either 'SLANT_RANGE' or 'GROUND_RANGE'
-    incidence: int or float
+    incidence:
         the angle of incidence
 
     Returns
     -------
-    tuple[int]
         the multi-looking factors as (range looks, azimuth looks)
     
     Examples
@@ -126,18 +138,69 @@ def multilook_factors(source_rg, source_az, target, geometry, incidence):
     >>> print(rlks, azlks)
     4 1
     """
-    azlks = int(round(float(target) / source_az))
-    azlks = max(1, azlks)
+    
+    @dataclass
+    class MultilookResult:
+        rglks: int
+        azlks: int
+        cost: float
+    
+    sp_az = source_az
     if geometry == 'SLANT_RANGE':
-        rlks = float(azlks) * source_az * sin(radians(incidence)) / source_rg
+        sp_rg = source_rg / sin(radians(incidence))
     elif geometry == 'GROUND_RANGE':
-        rlks = float(azlks) * source_az / source_rg
+        sp_rg = source_rg
     else:
         raise ValueError("parameter 'geometry' must be either "
                          "'SLANT_RANGE' or 'GROUND_RANGE'")
+    sp_target = max(sp_az, sp_rg, target)
     
-    rlks = max(1, int(round(rlks)))
-    return rlks, azlks
+    # determine inital ML factors
+    rglks_init = int(round(sp_target / sp_rg))
+    azlks_init = int(round(sp_target / sp_az))
+    
+    best: Optional[MultilookResult] = None
+    
+    # weights for the distance criteria
+    w_rg = 1.
+    w_az = 1.
+    w_sq = 1.
+    
+    # iterate over some range of ML factors to find the best
+    # combination.
+    for rglks in range(1, rglks_init + 6):
+        sp_rg_out = sp_rg * rglks
+        
+        for azlks in range(1, azlks_init + 6):
+            sp_az_out = sp_az * azlks
+            
+            # compute distances and cost
+            d_rg = abs(sp_rg_out - sp_target)
+            d_az = abs(sp_az_out - sp_target)
+            d_sq = abs(sp_rg_out - sp_az_out)
+            
+            cost = w_rg * d_rg + w_az * d_az + w_sq * d_sq
+            
+            candidate = MultilookResult(
+                rglks=rglks,
+                azlks=azlks,
+                cost=cost,
+            )
+            if best is None:
+                best = candidate
+            else:
+                # primary: minimize cost
+                if candidate.cost < best.cost:
+                    best = candidate
+                # secondary: minimize rglks+azlks
+                elif candidate.cost == best.cost:
+                    if (candidate.rglks + candidate.azlks) < (best.rglks + best.azlks):
+                        best = candidate
+    rglks = best.rglks
+    azlks = best.azlks
+    
+    log.debug(f'ground range spacing: ({sp_rg * rglks}, {sp_az * azlks})')
+    return rglks, azlks
 
 
 def seconds(filename):
