@@ -332,6 +332,7 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
     elif isinstance(threads, int):
         if threads == 1:
             multithread = False
+            gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
         elif threads > 1:
             multithread = True
             gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
