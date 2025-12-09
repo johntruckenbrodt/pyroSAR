@@ -343,6 +343,11 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
     else:
         raise TypeError("'threads' must be of type int, str or None. Is: {}".format(type(threads)))
     
+    if threads not in [1, None]:
+        log.info('Multithreading of computations is temporarily disabled. '
+                 'See https://github.com/OSGeo/gdal/issues/13464.')
+        gdal.SetConfigOption('GDAL_NUM_THREADS', '1')
+    
     gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': 'EPSG:{}'.format(epsg_in),
