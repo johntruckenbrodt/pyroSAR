@@ -124,7 +124,7 @@ def multilook_factors(
     geometry:
         the imaging geometry; either 'SLANT_RANGE' or 'GROUND_RANGE'
     incidence:
-        the angle of incidence
+        the angle of incidence in degrees
 
     Returns
     -------
@@ -155,7 +155,7 @@ def multilook_factors(
                          "'SLANT_RANGE' or 'GROUND_RANGE'")
     sp_target = max(sp_az, sp_rg, target)
     
-    # determine inital ML factors
+    # determine initial ML factors
     rglks_init = int(round(sp_target / sp_rg))
     azlks_init = int(round(sp_target / sp_az))
     
