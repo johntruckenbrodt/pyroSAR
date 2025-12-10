@@ -41,13 +41,14 @@ import zipfile as zf
 from datetime import datetime, timezone, timedelta
 from dateutil.parser import parse as dateparse
 from time import strptime, strftime
-from statistics import median
+from statistics import mean, median
 from itertools import groupby
 from PIL import Image
 
 import progressbar as pb
 from osgeo import gdal, osr, ogr
 from osgeo.gdalconst import GA_ReadOnly
+import numpy as np
 
 from . import S1, patterns
 from .config import __LOCAL__
@@ -840,21 +841,19 @@ class BEAM_DIMAP(ID):
         
         self.root = ET.parse(self.scene).getroot()
         
-        def get_by_name(attr, section='Abstracted_Metadata'):
+        def get_by_name(attr: list[str] | str, section: str = 'Abstracted_Metadata') -> str:
             msg = 'cannot get attribute "{}" from section "{}"'
             if isinstance(attr, list):
                 for i, item in enumerate(attr):
                     try:
                         return get_by_name(item, section=section)
                     except RuntimeError:
-                        if i <= len(attr):
-                            continue
-                        else:
-                            raise RuntimeError(msg.format('|'.join(attr), section))
+                        continue
+                raise RuntimeError(msg.format('|'.join(attr), section))
             else:
-                element = self.root.find('.//MDElem[@name="{}"]'.format(section))
-                out = element.find('.//MDATTR[@name="{}"]'.format(attr))
-                if out is None or out.text == '99999':
+                element = self.root.find(f'.//MDElem[@name="{section}"]')
+                out = element.find(f'.//MDATTR[@name="{attr}"]')
+                if out is None or out.text in ['99999', '99999.0']:
                     raise RuntimeError(msg.format(attr, section))
                 return out.text
         
@@ -917,15 +916,34 @@ class BEAM_DIMAP(ID):
                                  '%d-%b-%Y %H:%M:%S.%f')
         meta['stop'] = stop.strftime('%Y%m%dT%H%M%S')
         #################################################################################
-        # incidence angle
-        inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
-        if len(inc_elements) > 0:
-            incidence = [float(x.text) for x in inc_elements]
-            meta['incidence'] = median(incidence)
-        else:
-            inc_near = float(self.root.find('.//MDATTR[@name="incidence_near"]').text)
-            inc_far = float(self.root.find('.//MDATTR[@name="incidence_far"]').text)
-            meta['incidence'] = (inc_near + inc_far) / 2
+        # incident angle
+        # the incident angle is not stored consistently so several options are tried
+        while True:
+            # may be missing or set to '99999.0'
+            try:
+                inc_near = get_by_name('incidence_near', section=section)
+                inc_far = get_by_name('incidence_far', section=section)
+                incidence = (float(inc_near) + float(inc_far)) / 2
+                break
+            except RuntimeError:
+                pass
+            # this attribute might only apply to Sentinel-1
+            inc_elements = self.root.findall('.//MDATTR[@name="incidenceAngleMidSwath"]')
+            if len(inc_elements) > 0:
+                incidence = [float(x.text) for x in inc_elements]
+                incidence = mean(incidence)
+                break
+            # the tie point grids are no longer present in geocoded products
+            inc_grid = os.path.join(self.scene.replace('.dim', '.data'),
+                                    'tie_point_grids', 'incident_angle.img')
+            if os.path.isfile(inc_grid):
+                ras = gdal.Open(inc_grid)
+                arr = ras.ReadAsArray()
+                incidence = np.mean(arr[arr != 0])
+                ras = arr = None
+                break
+            raise ValueError('cannot read the incident angle')
+        meta['incidence'] = incidence
         #################################################################################
         # projection
         if self.root.find('.//WKT') is not None:
