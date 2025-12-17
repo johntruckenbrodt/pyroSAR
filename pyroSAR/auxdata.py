@@ -1,7 +1,7 @@
 ###############################################################################
 # tools for handling auxiliary data in software pyroSAR
 
-# Copyright (c) 2019-2024, the pyroSAR Developers.
+# Copyright (c) 2019-2025, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -1513,5 +1513,8 @@ def vrt_check_sources(fname):
         tree = etree.parse(fname)
         sources = [x.text for x in tree.findall('.//SourceFilename')]
         for source in sources:
+            if not os.path.isabs(source):
+                base_dir = os.path.dirname(fname)
+                source = os.path.normpath(os.path.join(base_dir, source))
             if not os.path.isfile(source):
                 raise RuntimeError(f'missing VRT source file: {source}')
