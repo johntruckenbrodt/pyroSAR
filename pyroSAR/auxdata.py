@@ -552,35 +552,33 @@ class DEMHandler:
         return ext_new
     
     @staticmethod
-    def __create_dummy_dem():
+    def __create_dummy_dem(filename, extent):
         """
-        Create a dummy file which spans the whole globe and is 1x1 pixels large to be as small as possible.
+        Create a dummy file which spans the given extent and
+        is 1x1 pixels large to be as small as possible.
         This file is used to create dummy DEMs over ocean.
-        
-        Returns
-        -------
-        str
-            the name of the file in the user's home directory: ~/.pyrosar/auxdata/dummy_dem.tif
         """
-        path = os.path.join(os.path.expanduser('~'), '.pyrosar', 'auxdata')
-        os.makedirs(name=path, exist_ok=True)
-        filename = os.path.join(path, 'dummy_dem.tif')
-        if not os.path.isfile(filename):
-            driver = gdal.GetDriverByName('GTiff')
-            dataset = driver.Create(filename, 1, 1, 1, 1)
-            geo = [-180, 360, 0, 90, 0, -180]
-            dataset.SetGeoTransform(geo)
-            dataset.SetProjection('EPSG:4326')
-            band = dataset.GetRasterBand(1)
-            band.SetNoDataValue(255)
-            mat = numpy.zeros(shape=(1, 1))
-            band.WriteArray(mat, 0, 0)
-            band.FlushCache()
-            del mat
-            band = None
-            dataset = None
-            driver = None
-        return filename
+        driver = gdal.GetDriverByName('GTiff')
+        dataset = driver.Create(filename, 1, 1, 1, 1)
+        geo = [
+            extent['xmin'],
+            extent['xmax'] - extent['xmin'],
+            0,
+            extent['ymax'],
+            0,
+            extent['ymin'] - extent['ymax']  # negative
+        ]
+        dataset.SetGeoTransform(geo)
+        dataset.SetProjection('EPSG:4326')
+        band = dataset.GetRasterBand(1)
+        band.SetNoDataValue(255)
+        mat = numpy.zeros(shape=(1, 1))
+        band.WriteArray(mat, 0, 0)
+        band.FlushCache()
+        del mat
+        band = None
+        dataset = None
+        driver = None
     
     @staticmethod
     def intrange(extent, step):
@@ -1104,19 +1102,21 @@ class DEMHandler:
             extent['ymax'] += shift_y
         
         # special case where no DEM tiles were found because the AOI is completely over ocean
-        if len(locals) == 0:
-            if vrt is not None:
-                # define a dummy file as source file; this file contains one pixel spanning the whole globe
-                # this pixel has value 0, nodata value is 255
-                locals = [self.__create_dummy_dem()]
-                datatype = self.config[dem_type]['datatype'][product]
-                src_nodata = 0  # define the data value as nodata, so it can be overwritten in the VRT
-                if product == 'dem':
-                    dst_nodata = 0
-                else:
-                    dst_nodata = self.config[dem_type]['nodata'][product]
-                # determine the target resolution based on minimum latitude
-                resolution = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
+        if len(locals) == 0 and vrt is not None:
+            # define a dummy file as source file
+            # his file contains one pixel with a value of 0
+            # nodata value is 255
+            tif = vrt.replace('.vrt', '_tmp.tif')
+            self.__create_dummy_dem(filename=tif, extent=extent)
+            locals = [tif]
+            datatype = self.config[dem_type]['datatype'][product]
+            src_nodata = 0  # define the data value as nodata, so it can be overwritten in the VRT
+            if product == 'dem':
+                dst_nodata = 0
+            else:
+                dst_nodata = self.config[dem_type]['nodata'][product]
+            # determine the target resolution based on minimum latitude
+            resolution = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
         
         # make sure all GETASSE30 tiles get an ENVI HDR file so that they are GDAL-readable
         if dem_type == 'GETASSE30':
