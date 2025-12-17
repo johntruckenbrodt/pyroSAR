@@ -1241,3 +1241,42 @@ Ancillary Tools
 Auxiliary Data Handling
 -----------------------
 - class :class:`pyroSAR.S1.OSV`: lock local target files for download (to avoid multi-download and conflicts in parallel processes)
+
+0.33.0 | 2025-12-17
+===================
+
+Drivers
+-------
+- :class:`~pyroSAR.drivers.ESA`:
+
+    + convert coordinates in `meta['origin']` to floats
+    + read incident angles directly from metadata, not from custom mapping `ANGLES_RESOLUTION` (from which they have been removed)
+    + `ERS.mapping` renaming:
+
+          * `ANGLES_RESOLUTION` -> `RESOLUTION_NESZ`
+          * `get_angles_resolution` -> `get_resolution_nesz`
+          * `range` -> `res_rg`
+          * `azimuth` -> `res_az`
+          * `nesz_near` -> `nesz_nr`
+          * `nesz_far` -> `nesz_fr`
+
+    + made code more robust by reading SPH and DSD sizes from MPH
+    + added WSS mode to `RESOLUTION_NESZ` (although all values are just `None` because they could not be found yet)
+    + simplified code and added typing
+
+- :class:`~pyroSAR.drivers.BEAM_DIMAP`:
+
+    + more robust incident angle reading
+
+SNAP API
+--------
+- support for SNAP 13
+
+Ancillary Tools
+---------------
+
+- :meth:`~pyroSAR.ancillary.multilook_factors`: complete reimplementation for more robustness
+
+Auxiliary Data Handling
+-----------------------
+- class :class:`pyroSAR.auxdata.DEMHandler`: handle ocean areas without DEM coverage using a dummy DEM spanning the target extent instead of the whole globe. The latter is no longer supported by GDAL.
