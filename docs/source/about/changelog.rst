@@ -1241,3 +1241,10 @@ Ancillary Tools
 Auxiliary Data Handling
 -----------------------
 - class :class:`pyroSAR.S1.OSV`: lock local target files for download (to avoid multi-download and conflicts in parallel processes)
+
+0.32.2 | 2025-12-17
+===================
+
+Auxiliary Data Handling
+-----------------------
+- class :class:`pyroSAR.auxdata.DEMHandler`: handle ocean areas without DEM coverage using a dummy DEM spanning the target extent instead of the whole globe. The latter is no longer supported by GDAL.
