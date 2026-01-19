@@ -1280,3 +1280,10 @@ Ancillary Tools
 Auxiliary Data Handling
 -----------------------
 - class :class:`pyroSAR.auxdata.DEMHandler`: handle ocean areas without DEM coverage using a dummy DEM spanning the target extent instead of the whole globe. The latter is no longer supported by GDAL.
+
+0.33.1 | 2026-01-19
+===================
+
+Drivers
+-------
+- :meth:`pyroSAR.drivers.SAFE.geo_grid`: fixed datetime handling bug by requiring spatialist>=0.16.2
