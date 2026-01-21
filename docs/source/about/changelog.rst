@@ -1287,3 +1287,10 @@ Auxiliary Data Handling
 Drivers
 -------
 - :meth:`pyroSAR.drivers.SAFE.geo_grid`: fixed datetime handling bug by requiring spatialist>=0.16.2
+
+0.33.2 | 2026-01-21
+===================
+
+Auxiliary Data Handling
+-----------------------
+- :meth:`S1.OSV.__catch_step_auxdata` do not stop if no file was found on first URL
