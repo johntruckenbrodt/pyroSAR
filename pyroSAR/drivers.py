@@ -1371,6 +1371,10 @@ class CEOS_PSR(ID):
         ################################################################################################################
         # read data set summary record
         
+        if meta['product'] == '1.5':
+            meta["heading"] = float(dataSetSummary[148:164])
+        else:
+            meta["heading"] = None
         scene_id = dataSetSummary[20:52].decode('ascii')
         
         if meta['sensor'] == 'PSR1':
