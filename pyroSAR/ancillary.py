@@ -452,6 +452,8 @@ class Lock(object):
     def __init__(self, target, soft=False, timeout=7200):
         if not hasattr(self, '_initialized'):
             self.target = os.path.abspath(os.path.expanduser(target))
+            if not os.path.isdir(os.path.dirname(self.target)):
+                raise OSError(f'parent directory of the lock target does not exist: {self.target}')
             if soft:
                 self.wait_for_file(self.target)
             used_id = str(uuid.uuid4())
