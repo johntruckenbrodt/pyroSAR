@@ -452,6 +452,8 @@ class Lock(object):
     def __init__(self, target, soft=False, timeout=7200):
         if not hasattr(self, '_initialized'):
             self.target = os.path.abspath(os.path.expanduser(target))
+            if soft:
+                self.wait_for_file(self.target)
             used_id = str(uuid.uuid4())
             self.lock = self.target + '.lock'
             self.error = self.target + '.error'
@@ -524,6 +526,57 @@ class Lock(object):
             del Lock._nesting_levels[self.target]
         else:
             log.debug(f'decrementing lock level on {self.target}')
+    
+    @staticmethod
+    def wait_for_file(path: str, timeout_s: float = 30.0,
+                      stable_s: float = 0.5, poll_s: float = 0.1) -> None:
+        """
+        Wait until `path` exists and appears stable (size/mtime not changing).
+        Designed for network/distributed FS (e.g., GPFS/Lustre/NFS).
+        
+        Parameters
+        ----------
+        path:
+            the path of the file/folder to wait for
+        timeout_s:
+            the maximum time in seconds to wait for the file/folder to appear
+        stable_s:
+            the time to wait until `path` is stable, i.e., no changes in :func:`os.stat`.
+        poll_s:
+            the polling interval in seconds
+
+        Returns
+        -------
+
+        """
+        deadline = time.time() + timeout_s
+        
+        # 1) wait for existence
+        while time.time() < deadline and not os.path.exists(path):
+            time.sleep(poll_s)
+        
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Timed out after {timeout_s}s waiting for: {path}")
+        
+        # 2) wait for stability (no more change in size or modification time)
+        last = None
+        stable_since = None
+        while time.time() < deadline:
+            st = os.stat(path)
+            cur = (st.st_size, st.st_mtime_ns)
+            now = time.time()
+            
+            if cur == last:
+                stable_since = stable_since or now
+                if now - stable_since >= stable_s:
+                    return
+            else:
+                stable_since = None
+                last = cur
+            
+            time.sleep(poll_s)
+        
+        raise TimeoutError(f"File did not stabilize within {timeout_s}s: {path}")
 
 
 class LockCollection(object):
