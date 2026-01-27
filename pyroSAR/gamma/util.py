@@ -388,7 +388,12 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 with Lock(outname):
                     if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
                         isp.par_S1_GRD(**pars)
-                        par2hdr(outname + '.par', outname + '.hdr')
+                        # the following locking was added to fix a FileNotFound error
+                        # on the par file (likely due to GPFS latency).
+                        with Lock(outname + '.par', soft=True):
+                            with Lock(outname + '.hdr'):
+                                if not os.path.isfile(outname + '.hdr'):
+                                    par2hdr(outname + '.par', outname + '.hdr')
             fnames.append(outname)
     
     elif cname == 'TSX':
