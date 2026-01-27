@@ -472,10 +472,10 @@ class Lock(object):
                     raise RuntimeError(msg.format(self.target))
                 try:
                     if self.soft and not os.path.isfile(self.lock):
-                        Path(self.used).touch(exist_ok=False)
+                        self._touch(self.used)
                         break
                     if not self.soft and not self.is_used():
-                        Path(self.lock).touch(exist_ok=False)
+                        self._touch(self.lock)
                         break
                 except FileExistsError:
                     pass
@@ -489,6 +489,24 @@ class Lock(object):
     
     def __exit__(self, exc_type, exc_value, traceback):
         self.remove(exc_type)
+    
+    @staticmethod
+    def _touch(path: str, timeout_s: float = 10.0, poll_s: float = 0.1):
+        """
+        Create a lock file and be tolerant to transient
+        FileNotFoundError on network/distributed filesystems
+        by retrying for some time.
+        """
+        p = Path(path)
+        deadline = time.time() + timeout_s
+        while True:
+            try:
+                p.touch(exist_ok=False)
+                return
+            except FileNotFoundError:
+                if time.time() >= deadline:
+                    raise
+                time.sleep(poll_s)
     
     def is_used(self):
         """
