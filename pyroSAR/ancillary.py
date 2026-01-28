@@ -433,7 +433,7 @@ class Lock(object):
     _instances = {}
     _nesting_levels = {}
     
-    def __new__(cls, target, soft=False, timeout=7200):
+    def __new__(cls, target, soft=False, **kwargs):
         target_abs = os.path.abspath(os.path.expanduser(target))
         if target_abs not in cls._instances:
             log.debug(f'creating lock instance for target {target_abs}')
