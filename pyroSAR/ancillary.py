@@ -451,6 +451,7 @@ class Lock(object):
     
     def __init__(self, target, soft=False, timeout=7200):
         if not hasattr(self, '_initialized'):
+            self.end = time.time() + timeout
             self.target = os.path.abspath(os.path.expanduser(target))
             self._wait_for_path(os.path.dirname(self.target))
             if soft:
@@ -463,10 +464,9 @@ class Lock(object):
             if os.path.isfile(self.error):
                 msg = 'cannot acquire lock on damaged target: {}'
                 raise RuntimeError(msg.format(self.target))
-            end = time.time() + timeout
             log.debug(f'trying to {"read" if self.soft else "write"}-lock {target}')
             while True:
-                if time.time() > end:
+                if time.time() > self.end:
                     msg = 'could not acquire lock due to timeout: {}'
                     raise RuntimeError(msg.format(self.target))
                 try:
@@ -489,26 +489,24 @@ class Lock(object):
     def __exit__(self, exc_type, exc_value, traceback):
         self.remove(exc_type)
     
-    @staticmethod
-    def _touch(path: str, timeout_s: float = 10.0, poll_s: float = 0.1):
+    def _touch(self, path: str, timeout_s: float = 10.0, poll_s: float = 0.1):
         """
         Create a lock file and be tolerant to transient
         FileNotFoundError on network/distributed filesystems
         by retrying for some time.
         """
         p = Path(path)
-        deadline = time.time() + timeout_s
+        end = min(time.time() + timeout_s, self.end)
         while True:
             try:
                 p.touch(exist_ok=False)
                 return
             except FileNotFoundError:
-                if time.time() >= deadline:
+                if time.time() >= end:
                     raise
                 time.sleep(poll_s)
     
-    @staticmethod
-    def _wait_for_path(path: str, timeout_s: float = 30.0,
+    def _wait_for_path(self, path: str, timeout_s: float = 30.0,
                        stable_s: float = 0.5, poll_s: float = 0.1) -> None:
         """
         Wait until `path` exists.
@@ -531,10 +529,10 @@ class Lock(object):
         -------
 
         """
-        deadline = time.time() + timeout_s
+        end = min(time.time() + timeout_s, self.end)
         
         # 1) wait for existence
-        while time.time() < deadline and not os.path.exists(path):
+        while time.time() < end and not os.path.exists(path):
             time.sleep(poll_s)
         
         if not os.path.exists(path):
@@ -544,7 +542,7 @@ class Lock(object):
         if os.path.isfile(path):
             last = None
             stable_since = None
-            while time.time() < deadline:
+            while time.time() < end:
                 st = os.stat(path)
                 cur = (st.st_size, st.st_mtime_ns)
                 now = time.time()
