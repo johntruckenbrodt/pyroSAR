@@ -489,14 +489,14 @@ class Lock(object):
     def __exit__(self, exc_type, exc_value, traceback):
         self.remove(exc_type)
     
-    def _touch(self, path: str, timeout_s: float = 10.0, poll_s: float = 0.1):
+    def _touch(self, path: str, timeout: float = 10.0, poll: float = 0.1):
         """
         Create a lock file and be tolerant to transient
         FileNotFoundError on network/distributed filesystems
         by retrying for some time.
         """
         p = Path(path)
-        end = min(time.time() + timeout_s, self.end)
+        end = min(time.time() + timeout, self.end)
         while True:
             try:
                 p.touch(exist_ok=False)
@@ -504,10 +504,10 @@ class Lock(object):
             except FileNotFoundError:
                 if time.time() >= end:
                     raise
-                time.sleep(poll_s)
+                time.sleep(poll)
     
-    def _wait_for_path(self, path: str, timeout_s: float = 30.0,
-                       stable_s: float = 0.5, poll_s: float = 0.1) -> None:
+    def _wait_for_path(self, path: str, timeout: float = 30.0,
+                       stable: float = 0.5, poll: float = 0.1) -> None:
         """
         Wait until `path` exists.
         In case `path` is an existing file, the function also waits until
@@ -518,25 +518,25 @@ class Lock(object):
         ----------
         path:
             the path of the file/folder to wait for
-        timeout_s:
+        timeout:
             the maximum time in seconds to wait for the file/folder to appear
-        stable_s:
+        stable:
             the time to wait until the file is stable.
-        poll_s:
+        poll:
             the polling interval in seconds
 
         Returns
         -------
 
         """
-        end = min(time.time() + timeout_s, self.end)
+        end = min(time.time() + timeout, self.end)
         
         # 1) wait for existence
         while time.time() < end and not os.path.exists(path):
-            time.sleep(poll_s)
+            time.sleep(poll)
         
         if not os.path.exists(path):
-            raise FileNotFoundError(f"Timed out after {timeout_s}s waiting for: {path}")
+            raise FileNotFoundError(f"Timed out after {timeout}s waiting for: {path}")
         
         # 2) wait for stability (no more change in size or modification time)
         if os.path.isfile(path):
@@ -549,15 +549,15 @@ class Lock(object):
                 
                 if cur == last:
                     stable_since = stable_since or now
-                    if now - stable_since >= stable_s:
+                    if now - stable_since >= stable:
                         return
                 else:
                     stable_since = None
                     last = cur
                 
-                time.sleep(poll_s)
+                time.sleep(poll)
             
-            raise TimeoutError(f"File did not stabilize within {timeout_s}s: {path}")
+            raise TimeoutError(f"File did not stabilize within {timeout}s: {path}")
     
     def is_used(self):
         """
