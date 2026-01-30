@@ -149,7 +149,7 @@ class ISPPar(object):
             # rounding to 60 s.
             self.date_dt = datetime(*self.date[:3])
             self.date_dt += timedelta(seconds=self.start_time)
-            self.date = self.date_dt.strftime('%Y-%m-%dT%H:%M:%S')
+            self.date = self.date_dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
     
     def __enter__(self):
         return self
