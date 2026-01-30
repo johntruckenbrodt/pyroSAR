@@ -1294,3 +1294,10 @@ Drivers
 Auxiliary Data Handling
 -----------------------
 - :meth:`S1.OSV.__catch_step_auxdata` do not stop if no file was found on first URL
+
+0.33.3 | 2026-01-30
+===================
+
+GAMMA API
+---------
+- :class:`pyroSAR.gamma.auxil.ISPPar`: fixed `date` attribute handling
