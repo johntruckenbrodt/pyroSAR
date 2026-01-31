@@ -15,6 +15,7 @@ import os
 import re
 import csv
 import ssl
+import json
 import numpy
 import fnmatch
 import ftplib
@@ -23,7 +24,7 @@ import zipfile as zf
 from lxml import etree
 from math import ceil, floor
 from urllib.parse import urlparse
-from lxml import etree as ET
+from collections import defaultdict
 from packaging import version
 from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import Lock
@@ -66,8 +67,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
 
         - 'Copernicus 30m Global DEM'
           
-          * info: https://copernicus-dem-30m.s3.amazonaws.com/readme.html
-          * url: https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/
+          * info: https://registry.opendata.aws/copernicus-dem
+          * url: https://copernicus-dem-30m-stac.s3.amazonaws.com
           * height reference: EGM2008
 
         - 'Copernicus 30m Global DEM II'
@@ -78,8 +79,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
         
         - 'Copernicus 90m Global DEM'
      
-          * info: https://copernicus-dem-90m.s3.amazonaws.com/readme.html
-          * url: https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com/
+          * info: https://registry.opendata.aws/copernicus-dem
+          * url: https://copernicus-dem-90m-stac.s3.amazonaws.com
           * height reference: EGM2008
         
         - 'Copernicus 90m Global DEM II'
@@ -631,22 +632,75 @@ class DEMHandler:
             if ymin <= abs(y) <= ymax:
                 return val
     
+    def __local_index(self, dem_type):
+        path = os.path.join(self.auxdatapath, 'dem', dem_type, 'index.json')
+        if not os.path.isfile(path):
+            log.debug(f"building local index for DEM type '{dem_type}'")
+            if dem_type == 'Copernicus 30m Global DEM':
+                catalog_json = "dem_cop_30.json"
+            elif dem_type == 'Copernicus 90m Global DEM':
+                catalog_json = "dem_cop_90.json"
+            else:
+                raise ValueError('unsupported DEM type: {}'.format(dem_type))
+            URL_STAC = self.config[dem_type]['url']
+            marker = None
+            out = defaultdict(defaultdict)
+            while True:
+                params = {}
+                if marker:
+                    params["marker"] = marker
+                r = requests.get(URL_STAC, params=params)
+                print(r.url)
+                root = etree.fromstring(r.content)
+                is_truncated = root.find(path="./IsTruncated",
+                                         namespaces=root.nsmap).text == "true"
+                items = [x.text for x in root.findall(path="./Contents/Key",
+                                                      namespaces=root.nsmap)]
+                if marker is None:
+                    del items[items.index(catalog_json)]
+                marker = items[-1]
+                items = sorted([URL_STAC + '/' + x for x in items])
+                URL = None
+                for item in items:
+                    if URL is None:
+                        content = requests.get(item).json()
+                        href = content['assets']['elevation']['href']
+                        URL = 'https://' + urlparse(href).netloc
+                    base = os.path.basename(item).replace('.json', '')
+                    lat = re.search('[NS][0-9]{2}', base).group()
+                    lon = re.search('[EW][0-9]{3}', base).group()
+                    prefix = f"{URL}/{base}_DEM"
+                    sub = {
+                        "dem": f"{prefix}/{base}_DEM.tif",
+                        "edm": f"{prefix}/AUXFILES/{base}_EDM.tif",
+                        "flm": f"{prefix}/AUXFILES/{base}_FLM.tif",
+                        "wbm": f"{prefix}/AUXFILES/{base}_WBM.tif",
+                        "hem": f"{prefix}/AUXFILES/{base}_HEM.tif"
+                    }
+                    out[lat][lon] = sub
+                if not is_truncated:
+                    break
+            with open(path, 'w') as f:
+                json.dump(out, f, indent=4)
+        with open(path, 'r') as f:
+            index = json.load(f)
+        return index
+    
     @staticmethod
-    def __retrieve(url, filenames, outdir, lock_timeout=600):
+    def __retrieve(urls, outdir, lock_timeout=600):
         # check that base URL is reachable
-        url_parse = urlparse(url)
+        url_parse = urlparse(urls[0])
         url_base = url_parse.scheme + '://' + url_parse.netloc
         r = requests.get(url_base)
         r.raise_for_status()
         r.close()
         
-        files = list(set(filenames))
+        urls = list(set(urls))
         os.makedirs(outdir, exist_ok=True)
         locals = []
-        n = len(files)
-        for i, file in enumerate(files):
-            remote = '{}/{}'.format(url, file)
-            local = os.path.join(outdir, os.path.basename(file))
+        n = len(urls)
+        for i, remote in enumerate(urls):
+            local = os.path.join(outdir, os.path.basename(remote))
             with Lock(local, timeout=lock_timeout):
                 if not os.path.isfile(local):
                     r = requests.get(remote)
@@ -767,7 +821,7 @@ class DEMHandler:
                                                     'wbm': 'Byte'},
                                        'authentication': True
                                        },
-            'Copernicus 30m Global DEM': {'url': 'https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com',
+            'Copernicus 30m Global DEM': {'url': 'https://copernicus-dem-30m-stac.s3.amazonaws.com',
                                           'nodata': {'dem': -32767.0,
                                                      'edm': 8,
                                                      'flm': 1,
@@ -823,7 +877,7 @@ class DEMHandler:
                              'wbm': 'Byte'},
                 'authentication': True
             },
-            'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com',
+            'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m-stac.s3.amazonaws.com',
                                           'nodata': {'dem': -32767.0,
                                                      'edm': 8,
                                                      'flm': 1,
@@ -1086,8 +1140,7 @@ class DEMHandler:
                                          password=password, port=port,
                                          lock_timeout=lock_timeout)
         else:
-            locals = self.__retrieve(url=self.config[dem_type]['url'],
-                                     filenames=candidates, outdir=outdir,
+            locals = self.__retrieve(urls=candidates, outdir=outdir,
                                      lock_timeout=lock_timeout)
         
         resolution = None
@@ -1153,7 +1206,7 @@ class DEMHandler:
     
     def remote_ids(self, extent, dem_type, product='dem', username=None, password=None):
         """
-        parse the names of the remote files overlapping with an area of interest
+        parse the names/URLs of the remote files overlapping with an area of interest
 
         Parameters
         ----------
@@ -1196,33 +1249,29 @@ class DEMHandler:
                 yf = ''
             return yf, xf
         
-        def cop_dem_remotes(extent, arcsecs, product='dem'):
+        def cop_dem_remotes(extent, product='dem'):
             lat, lon = self.intrange(extent, step=1)
             indices = [index(x, y, nx=3, ny=2)
                        for x in lon for y in lat]
-            base = 'Copernicus_DSM_COG_{res}_{0}_00_{1}_00'
-            skeleton = '{base}_DEM/{sub}{base}_{product}.tif'
-            sub = '' if product == 'dem' else 'AUXFILES/'
-            base = skeleton.format(base=base, sub=sub, product=product.upper())
-            candidates = [base.format(res=arcsecs, *item) for item in indices]
+            lookup = self.__local_index(dem_type=dem_type)
             remotes = []
-            for candidate in candidates:
-                response = requests.get(self.config[dem_type]['url'],
-                                        params={'prefix': candidate})
-                xml = ET.fromstring(response.content)
-                content = xml.findall('.//Contents', namespaces=xml.nsmap)
-                if len(content) > 0:
-                    remotes.append(candidate)
+            for y, x in indices:
+                try:
+                    remotes.append(lookup[y][x][product])
+                except KeyError:
+                    pass
             return remotes
         
         if dem_type == 'SRTM 1Sec HGT':
             lat, lon = self.intrange(extent, step=1)
-            remotes = ['{0}{1}.SRTMGL1.hgt.zip'.format(*index(x, y, nx=3, ny=2))
+            remotes = [self.config[dem_type]['url'] +
+                       '/{0}{1}.SRTMGL1.hgt.zip'.format(*index(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
         
         elif dem_type == 'GETASSE30':
             lat, lon = self.intrange(extent, step=15)
-            remotes = ['{0}{1}.zip'.format(*index(x, y, nx=3, ny=2, reverse=True))
+            remotes = [self.config[dem_type]['url'] +
+                       '/{0}{1}.zip'.format(*index(x, y, nx=3, ny=2, reverse=True))
                        for x in lon for y in lat]
         
         elif dem_type == 'TDX90m':
@@ -1249,7 +1298,9 @@ class DEMHandler:
                         int((60 - float(extent['ymax'])) // 5) + 2)
             lon = range(int((float(extent['xmin']) + 180) // 5) + 1,
                         int((float(extent['xmax']) + 180) // 5) + 2)
-            remotes = ['srtm_{:02d}_{:02d}.zip'.format(x, y) for x in lon for y in lat]
+            remotes = [self.config[dem_type]['url'] +
+                       '/srtm_{:02d}_{:02d}.zip'.format(x, y)
+                       for x in lon for y in lat]
         
         elif dem_type in ['Copernicus 10m EEA DEM',
                           'Copernicus 30m Global DEM II',
@@ -1320,12 +1371,8 @@ class DEMHandler:
                     if row[1] + row[2] in indices:
                         remotes.append(row[-1])
         
-        elif dem_type == 'Copernicus 30m Global DEM':
-            remotes = cop_dem_remotes(extent=extent, arcsecs=10, product=product)
-        
-        elif dem_type == 'Copernicus 90m Global DEM':
-            remotes = cop_dem_remotes(extent=extent, arcsecs=30, product=product)
-        
+        elif dem_type in ['Copernicus 30m Global DEM', 'Copernicus 90m Global DEM']:
+            remotes = cop_dem_remotes(extent=extent, product=product)
         else:
             raise ValueError('unknown demType: {}'.format(dem_type))
         
