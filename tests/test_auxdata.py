@@ -15,8 +15,8 @@ def test_handler(auxdata_dem_cases):
     with bbox({'xmin': -11.9, 'xmax': -11.5, 'ymin': -51.5, 'ymax': -51.1}, crs=4326) as box:
         with DEMHandler([box]) as handler:
             cases = [('AW3D30', ['S055W015/S052W012.tar.gz']),
-                     ('SRTM 1Sec HGT', ['S52W012.SRTMGL1.hgt.zip']),
-                     ('SRTM 3Sec', ['srtm_34_23.zip']),
+                     ('SRTM 1Sec HGT', ['https://step.esa.int/auxdata/dem/SRTMGL1/S52W012.SRTMGL1.hgt.zip']),
+                     ('SRTM 3Sec', ['https://download.esa.int/step/auxdata/dem/SRTM90/tiff/srtm_34_23.zip']),
                      # ('TDX90m', ['DEM/S52/W010/TDM1_DEM__30_S52W012.zip'])
                      ]
             for demType, reference in cases:
