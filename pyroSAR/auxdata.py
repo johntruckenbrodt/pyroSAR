@@ -1,7 +1,7 @@
 ###############################################################################
 # tools for handling auxiliary data in software pyroSAR
 
-# Copyright (c) 2019-2025, the pyroSAR Developers.
+# Copyright (c) 2019-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -46,9 +46,9 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
 
     Parameters
     ----------
-    geometries: list[spatialist.vector.Vector]
+    geometries: list[spatialist.vector.Vector] or None
         a list of :class:`spatialist.vector.Vector` geometries to obtain DEM data for;
-        CRS must be WGS84 LatLon (EPSG 4326)
+        CRS must be WGS84 LatLon (EPSG 4326). Can be set to None for global extent.
     demType: str
         the type of DEM to be used; current options:
 
@@ -405,18 +405,18 @@ class DEMHandler:
     
     Parameters
     ----------
-    geometries: list[spatialist.vector.Vector]
+    geometries: list[spatialist.vector.Vector] or None
         a list of geometries
     """
     
     def __init__(self, geometries):
-        if not isinstance(geometries, list):
+        if not (isinstance(geometries, list) or geometries is None):
             raise RuntimeError('geometries must be of type list')
         
-        for geometry in geometries:
-            if geometry.getProjection('epsg') != 4326:
-                raise RuntimeError('input geometry CRS must be WGS84 LatLon (EPSG 4326)')
-        
+        if geometries is not None:
+            for geometry in geometries:
+                if geometry.getProjection('epsg') != 4326:
+                    raise RuntimeError('input geometry CRS must be WGS84 LatLon (EPSG 4326)')
         self.geometries = geometries
         try:
             self.auxdatapath = ExamineSnap().auxdatapath
@@ -583,12 +583,14 @@ class DEMHandler:
     @staticmethod
     def intrange(extent, step):
         """
-        generate sequence of integer coordinates marking the tie points of the individual DEM tiles
+        generate a sequence of integer coordinates marking
+        the tie points of the individual DEM tiles.
         
         Parameters
         ----------
-        extent: dict
-            a dictionary with keys `xmin`, `xmax`, `ymin` and `ymax` with coordinates in EPSG:4326.
+        extent: dict or None
+            a dictionary with keys `xmin`, `xmax`, `ymin` and `ymax`
+            with coordinates in EPSG:4326 or None to use a global extent.
         step: int
             the sequence steps
 
@@ -597,12 +599,16 @@ class DEMHandler:
         tuple[range]
             the integer sequences as (latitude, longitude)
         """
-        lat = range(floor(float(extent['ymin']) / step) * step,
-                    ceil(float(extent['ymax']) / step) * step,
-                    step)
-        lon = range(floor(float(extent['xmin']) / step) * step,
-                    ceil(float(extent['xmax']) / step) * step,
-                    step)
+        if extent is None:
+            lat = range(-90, 90)
+            lon = range(-180, 180)
+        else:
+            lat = range(floor(float(extent['ymin']) / step) * step,
+                        ceil(float(extent['ymax']) / step) * step,
+                        step)
+            lon = range(floor(float(extent['xmin']) / step) * step,
+                        ceil(float(extent['xmax']) / step) * step,
+                        step)
         return lat, lon
     
     def __get_resolution(self, dem_type, y):
@@ -1058,12 +1064,17 @@ class DEMHandler:
         
         outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
         
-        candidates = []
-        for geo in self.geometries:
-            corners = self.__applybuffer(extent=geo.extent, buffer=buffer)
-            candidates.extend(self.remote_ids(extent=corners, dem_type=dem_type,
-                                              username=username, password=password,
-                                              product=product))
+        if self.geometries is not None:
+            candidates = []
+            for geo in self.geometries:
+                corners = self.__applybuffer(extent=geo.extent, buffer=buffer)
+                candidates.extend(self.remote_ids(extent=corners, dem_type=dem_type,
+                                                  username=username, password=password,
+                                                  product=product))
+        else:
+            candidates = self.remote_ids(extent=None, dem_type=dem_type,
+                                         username=username, password=password,
+                                         product=product)
         
         if self.config[dem_type]['url'].startswith('ftp'):
             port = 0
@@ -1146,8 +1157,9 @@ class DEMHandler:
 
         Parameters
         ----------
-        extent: dict
+        extent: dict or None
             the extent of the area of interest with keys xmin, xmax, ymin, ymax
+            or `None` to not set any spatial filter.
         dem_type: str
             the type fo DEM to be used
         product: str
