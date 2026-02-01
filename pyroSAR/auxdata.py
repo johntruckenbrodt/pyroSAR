@@ -1004,9 +1004,10 @@ class DEMHandler:
     def load(self, dem_type, vrt=None, buffer=None, username=None,
              password=None, product='dem', crop=True, lock_timeout=600):
         """
-        obtain DEM tiles for the given geometries and either return the file names in a list
-        or combine them into a VRT mosaic. The VRT is cropped to the combined extent of the geometries
-        but the pixel grid of the source files is preserved and no resampling/shifting is applied.
+        Download DEM tiles. The result is either returned in a list of file
+        names combined into a VRT mosaic. The VRT is cropped to the combined
+        extent of the geometries, but the pixel grid of the source files is
+        preserved and no resampling/shifting is applied.
         
         Parameters
         ----------
@@ -1093,7 +1094,7 @@ class DEMHandler:
               * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
               * 'wam': Water Indication Mask
         crop: bool
-            If a VRT is created, crop it to  spatial extent of the provided geometries
+            If a VRT is created, crop it to the spatial extent of the provided geometries
             or return the full extent of the DEM tiles? In the latter case, the common
             bounding box of the geometries is expanded so that the coordinates are
             multiples of the tile size of the respective DEM option.
