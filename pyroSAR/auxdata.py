@@ -1108,14 +1108,14 @@ class DEMHandler:
         """
         keys = self.config.keys()
         if dem_type not in keys:
-            raise RuntimeError("demType '{}' is not supported\n  "
-                               "possible options: '{}'"
-                               .format(dem_type, "', '".join(keys)))
+            raise RuntimeError(f"DEM type '{dem_type}' is not supported.\n  "
+                               f"possible options: '{"', '".join(keys)}'")
         
         products = self.config[dem_type]['pattern'].keys()
         if product not in products:
-            raise RuntimeError("product '{0}' not available for demType '{1}'\n"
-                               "  options: '{2}'".format(product, dem_type, "', '".join(products)))
+            raise RuntimeError(f"Product '{product}' is not available "
+                               f"for DEM type '{dem_type}'.\n"
+                               f"  options: '{"', '".join(products)}'")
         
         outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
         
