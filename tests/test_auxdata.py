@@ -41,6 +41,8 @@ def test_autoload(auxdata_dem_cases, travis, tmp_home):
             assert len(files) == 1
         files = dem_autoload([box], 'SRTM 1Sec HGT')
         assert len(files) == 1
+        files = dem_autoload([box], 'SRTM 1Sec HGT', offline=True)
+        assert len(files) == 1
         files = dem_autoload([box], 'SRTM 3Sec')
         assert len(files) == 1
         with pytest.raises(RuntimeError):

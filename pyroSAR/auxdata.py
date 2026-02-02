@@ -41,7 +41,8 @@ log = logging.getLogger(__name__)
 
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
-                 password=None, product='dem', crop=True, lock_timeout=600):
+                 password=None, product='dem', crop=True, lock_timeout=600,
+                 offline=False):
     """
     obtain all relevant DEM tiles for selected geometries and optionally mosaic them in a VRT.
 
@@ -181,6 +182,10 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
         crop to the provided geometries (or return the full extent of the DEM tiles)?
     lock_timeout: int
         how long to wait to acquire a lock on the downloaded files?
+    offline: bool
+        work offline? If `True`, only locally existing files are considered
+        and no online check is performed. If a file is missing, an error is
+        raised.
     
     Returns
     -------
@@ -229,7 +234,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
                             buffer=buffer,
                             product=product,
                             crop=crop,
-                            lock_timeout=lock_timeout)
+                            lock_timeout=lock_timeout,
+                            offline=offline)
 
 
 def dem_create(src, dst, t_srs=None, tr=None, threads=None,
@@ -687,13 +693,14 @@ class DEMHandler:
         return index
     
     @staticmethod
-    def __retrieve(urls, outdir, lock_timeout=600):
+    def __retrieve(urls, outdir, offline=False, lock_timeout=600):
         # check that base URL is reachable
-        url_parse = urlparse(urls[0])
-        url_base = url_parse.scheme + '://' + url_parse.netloc
-        r = requests.get(url_base)
-        r.raise_for_status()
-        r.close()
+        if not offline:
+            url_parse = urlparse(urls[0])
+            url_base = url_parse.scheme + '://' + url_parse.netloc
+            r = requests.get(url_base)
+            r.raise_for_status()
+            r.close()
         
         urls = list(set(urls))
         os.makedirs(outdir, exist_ok=True)
@@ -701,22 +708,26 @@ class DEMHandler:
         n = len(urls)
         for i, remote in enumerate(urls):
             local = os.path.join(outdir, os.path.basename(remote))
-            with Lock(local, timeout=lock_timeout):
-                if not os.path.isfile(local):
-                    r = requests.get(remote)
-                    # a tile might not exist over ocean
-                    if r.status_code == 404:
-                        r.close()
-                        continue
-                    msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
-                    log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local, r=remote))
-                    r.raise_for_status()
-                    with open(local, 'wb') as output:
-                        output.write(r.content)
-                    r.close()
+            if not os.path.isfile(local):
+                if offline:
+                    raise RuntimeError(f'file not found locally: {local}')
                 else:
-                    msg = '[{i: >{w}}/{n}] found local file: {l}'
-                    log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local))
+                    with Lock(local, timeout=lock_timeout):
+                        r = requests.get(remote)
+                        # a tile might not exist over the ocean
+                        if r.status_code == 404:
+                            r.close()
+                            continue
+                        msg = '[{i: >{w}}/{n}] {l} <<-- {r}'
+                        log.info(msg.format(i=i + 1, w=len(str(n)),
+                                            n=n, l=local, r=remote))
+                        r.raise_for_status()
+                        with open(local, 'wb') as output:
+                            output.write(r.content)
+                        r.close()
+            else:
+                msg = '[{i: >{w}}/{n}] found local file: {l}'
+                log.info(msg.format(i=i + 1, w=len(str(n)), n=n, l=local))
             if os.path.isfile(local):
                 locals.append(local)
         return sorted(locals)
@@ -1002,7 +1013,8 @@ class DEMHandler:
         }
     
     def load(self, dem_type, vrt=None, buffer=None, username=None,
-             password=None, product='dem', crop=True, lock_timeout=600):
+             password=None, product='dem', crop=True, lock_timeout=600,
+             offline=False):
         """
         Download DEM tiles. The result is either returned in a list of file
         names combined into a VRT mosaic. The VRT is cropped to the combined
@@ -1100,6 +1112,11 @@ class DEMHandler:
             multiples of the tile size of the respective DEM option.
         lock_timeout: int
             how long to wait to acquire a lock on the downloaded files?
+        offline: bool
+            work offline? For some DEM options a local index first needs to be
+            created in online mode. Once this index exists, it is used to determine
+            which tiles should exist and which are found locally. If a tile is missing,
+            an error is raised.
         
         Returns
         -------
@@ -1139,10 +1156,12 @@ class DEMHandler:
                                          filenames=candidates,
                                          outdir=outdir, username=username,
                                          password=password, port=port,
-                                         lock_timeout=lock_timeout)
+                                         lock_timeout=lock_timeout,
+                                         offline=offline)
         else:
             locals = self.__retrieve(urls=candidates, outdir=outdir,
-                                     lock_timeout=lock_timeout)
+                                     lock_timeout=lock_timeout,
+                                     offline=offline)
         
         resolution = None
         datatype = None
