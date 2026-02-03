@@ -1314,10 +1314,14 @@ class DEMHandler:
                                                       *index(x, y)))
         
         elif dem_type == 'SRTM 3Sec':
-            lat = range(int((60 - float(extent['ymin'])) // 5) + 1,
-                        int((60 - float(extent['ymax'])) // 5) + 2)
-            lon = range(int((float(extent['xmin']) + 180) // 5) + 1,
-                        int((float(extent['xmax']) + 180) // 5) + 2)
+            lat = range(
+                floor((60 - float(extent['ymax'])) / 5) + 1,
+                ceil((60 - float(extent['ymin'])) / 5) + 1
+            )
+            lon = range(
+                floor((float(extent['xmin']) + 180) / 5) + 1,
+                ceil((float(extent['xmax']) + 180) / 5) + 1
+            )
             remotes = [self.config[dem_type]['url'] +
                        '/srtm_{:02d}_{:02d}.zip'.format(x, y)
                        for x in lon for y in lat]
