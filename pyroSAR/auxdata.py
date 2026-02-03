@@ -1152,9 +1152,10 @@ class DEMHandler:
         
         products = self.config[dem_type]['pattern'].keys()
         if product not in products:
+            options = ', '.join(products)
             raise RuntimeError(f"Product '{product}' is not available "
                                f"for DEM type '{dem_type}'.\n"
-                               f"  options: '{", ".join(products)}'")
+                               f"  options: '{options}'")
         
         outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
         
