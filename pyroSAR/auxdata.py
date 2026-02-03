@@ -1147,8 +1147,9 @@ class DEMHandler:
         """
         keys = self.config.keys()
         if dem_type not in keys:
+            options = ', '.join(keys)
             raise RuntimeError(f"DEM type '{dem_type}' is not supported.\n  "
-                               f"possible options: '{"', '".join(keys)}'")
+                               f"possible options: '{options}'")
         
         products = self.config[dem_type]['pattern'].keys()
         if product not in products:
