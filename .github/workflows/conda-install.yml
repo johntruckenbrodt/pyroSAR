@@ -80,9 +80,15 @@ jobs:
           python-version: '3.12'
           environment-file: environment-dev.yml
           auto-activate-base: false
-      - uses: nyurik/action-setup-postgis@v2.2
-        with:
-          cached-dir: C:\downloads
+      - name: Install Postgres/PostGIS
+        run: conda install -y postgresql postgis
+      - name: Init and start Postgres
+        shell: bash
+        run: |
+          initdb -D pgdata -A trust
+          pg_ctl -D pgdata -l logfile -o "-p 5432" start
+          createdb testdb
+          psql -d testdb -c "CREATE EXTENSION postgis;"
       - name: Install ESA SNAP
         run: |
           curl -O https://download.esa.int/step/snap/%SNAP_VERSION%/installers/esa-snap_all_windows-%SNAP_VERSION%.0.exe
@@ -96,8 +102,8 @@ jobs:
         run: |
           pip install .
       - name: Test with pytest
-        run: |
-          pytest
+        run: pytest
         env:
           PGUSER: postgres
           PGPASSWORD: postgres
+          PGPORT: 5432
