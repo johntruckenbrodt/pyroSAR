@@ -28,10 +28,10 @@ jobs:
           - 5432:5432
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Python 3.10
+      - name: Set up python environment
         uses: mamba-org/setup-micromamba@v2
         with:
-          environment-file: environment.yml
+          environment-file: environment-dev.yml
           cache-environment: true
           init-shell: bash
           generate-run-shell: true
@@ -45,10 +45,6 @@ jobs:
           echo "$CONDA/bin" >> $GITHUB_PATH
           echo "$GITHUB_ACTION_PATH/esa-snap/bin" >> $GITHUB_PATH
           echo "PROJ_DATA=$CONDA/share/proj" >> $GITHUB_ENV
-      - name: Install python packages
-        run: |
-          micromamba install -y python=3.10 flake8 -n ps_test
-          micromamba env update --file environment-dev.yml -n ps_test
       - name: Lint with flake8
         run: |
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
@@ -82,7 +78,7 @@ jobs:
           activate-environment: ps_test_dev
           auto-update-conda: true
           python-version: '3.12'
-          environment-file: environment.yml
+          environment-file: environment-dev.yml
           auto-activate-base: false
       - uses: nyurik/action-setup-postgis@v2.2
         with:
@@ -96,9 +92,6 @@ jobs:
           echo %CONDA%\Scripts>> %GITHUB_PATH%
           echo C:\esa-snap\bin>> %GITHUB_PATH%
           echo PROJ_DATA=%CONDA%\share\proj>> %GITHUB_ENV%
-      - name: Install python packages
-        run: |
-          conda env update --file environment-dev.yml --name ps_test_dev
       - name: Install pyroSAR
         run: |
           pip install .
