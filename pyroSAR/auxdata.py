@@ -640,6 +640,7 @@ class DEMHandler:
     
     def __local_index(self, dem_type):
         path = os.path.join(self.auxdatapath, 'dem', dem_type, 'index.json')
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         if not os.path.isfile(path):
             if dem_type in ['Copernicus 30m Global DEM', 'Copernicus 90m Global DEM']:
                 log.debug(f"building local index for DEM type '{dem_type}'")
@@ -1153,7 +1154,7 @@ class DEMHandler:
         if product not in products:
             raise RuntimeError(f"Product '{product}' is not available "
                                f"for DEM type '{dem_type}'.\n"
-                               f"  options: '{"', '".join(products)}'")
+                               f"  options: '{", ".join(products)}'")
         
         outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
         
