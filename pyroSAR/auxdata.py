@@ -185,7 +185,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
     offline: bool
         work offline? If `True`, only locally existing files are considered
         and no online check is performed. If a file is missing, an error is
-        raised.
+        raised. For this to work, the function needs to be run in `online`
+        mode once to create a local index.
     
     Returns
     -------
@@ -642,76 +643,76 @@ class DEMHandler:
         path = os.path.join(self.auxdatapath, 'dem', dem_type, 'index.json')
         os.makedirs(os.path.dirname(path), exist_ok=True)
         if not os.path.isfile(path):
-            if dem_type in ['Copernicus 30m Global DEM', 'Copernicus 90m Global DEM']:
-                log.debug(f"building local index for DEM type '{dem_type}'")
-                if dem_type == 'Copernicus 30m Global DEM':
-                    catalog_json = "dem_cop_30.json"
-                elif dem_type == 'Copernicus 90m Global DEM':
-                    catalog_json = "dem_cop_90.json"
-                else:
-                    raise ValueError('unsupported DEM type: {}'.format(dem_type))
-                URL_STAC = self.config[dem_type]['url']
-                marker = None
-                out = defaultdict(defaultdict)
-                while True:
-                    params = {}
-                    if marker:
-                        params["marker"] = marker
-                    r = requests.get(URL_STAC, params=params)
-                    print(r.url)
-                    root = etree.fromstring(r.content)
-                    is_truncated = root.find(path="./IsTruncated",
-                                             namespaces=root.nsmap).text == "true"
-                    items = [x.text for x in root.findall(path="./Contents/Key",
-                                                          namespaces=root.nsmap)]
-                    if marker is None:
-                        del items[items.index(catalog_json)]
-                    marker = items[-1]
-                    items = sorted([URL_STAC + '/' + x for x in items])
-                    URL = None
+            with Lock(str(path)):
+                if dem_type in ['Copernicus 30m Global DEM',
+                                'Copernicus 90m Global DEM']:
+                    log.debug(f"building local index for DEM type '{dem_type}'")
+                    res = re.search('[39]0', dem_type).group()
+                    catalog_json = f"dem_cop_{res}.json"
+                    URL_STAC = self.config[dem_type]['url']
+                    marker = None
+                    out = defaultdict(defaultdict)
+                    while True:
+                        params = {}
+                        if marker:
+                            params["marker"] = marker
+                        r = requests.get(URL_STAC, params=params)
+                        print(r.url)
+                        root = etree.fromstring(r.content)
+                        is_truncated = root.find(path="./IsTruncated",
+                                                 namespaces=root.nsmap).text == "true"
+                        items = [x.text for x in root.findall(path="./Contents/Key",
+                                                              namespaces=root.nsmap)]
+                        if marker is None:
+                            del items[items.index(catalog_json)]
+                        marker = items[-1]
+                        items = sorted([URL_STAC + '/' + x for x in items])
+                        URL = None
+                        for item in items:
+                            if URL is None:
+                                content = requests.get(item).json()
+                                href = content['assets']['elevation']['href']
+                                URL = 'https://' + urlparse(href).netloc
+                            base = os.path.basename(item).replace('.json', '')
+                            lat = re.search('[NS][0-9]{2}', base).group()
+                            lon = re.search('[EW][0-9]{3}', base).group()
+                            prefix = f"{URL}/{base}_DEM"
+                            sub = {
+                                "dem": f"{prefix}/{base}_DEM.tif",
+                                "edm": f"{prefix}/AUXFILES/{base}_EDM.tif",
+                                "flm": f"{prefix}/AUXFILES/{base}_FLM.tif",
+                                "wbm": f"{prefix}/AUXFILES/{base}_WBM.tif",
+                                "hem": f"{prefix}/AUXFILES/{base}_HEM.tif"
+                            }
+                            out[lat][lon] = sub
+                        if not is_truncated:
+                            break
+                elif dem_type in ['GETASSE30', 'SRTM 1Sec HGT', 'SRTM 3Sec']:
+                    url = self.config[dem_type]['url']
+                    response = requests.get(url)
+                    response.raise_for_status()
+                    tree = html.fromstring(response.content)
+                    items = [f'{url}/{ln}'
+                             for ln in tree.xpath('//a/text()')
+                             if not ln.startswith('..')]
+                    out = defaultdict(defaultdict)
+                    patterns = {
+                        'GETASSE30': '(?P<lat>[0-9]{2}[NS])(?P<lon>[0-9]{3}[EW])',
+                        'SRTM 1Sec HGT': '(?P<lat>[NS][0-9]{2})(?P<lon>[EW][0-9]{3})',
+                        'SRTM 3Sec': '(?P<lon>[0-9]{2})_(?P<lat>[0-9]{2})'
+                    }
                     for item in items:
-                        if URL is None:
-                            content = requests.get(item).json()
-                            href = content['assets']['elevation']['href']
-                            URL = 'https://' + urlparse(href).netloc
-                        base = os.path.basename(item).replace('.json', '')
-                        lat = re.search('[NS][0-9]{2}', base).group()
-                        lon = re.search('[EW][0-9]{3}', base).group()
-                        prefix = f"{URL}/{base}_DEM"
-                        sub = {
-                            "dem": f"{prefix}/{base}_DEM.tif",
-                            "edm": f"{prefix}/AUXFILES/{base}_EDM.tif",
-                            "flm": f"{prefix}/AUXFILES/{base}_FLM.tif",
-                            "wbm": f"{prefix}/AUXFILES/{base}_WBM.tif",
-                            "hem": f"{prefix}/AUXFILES/{base}_HEM.tif"
-                        }
-                        out[lat][lon] = sub
-                    if not is_truncated:
-                        break
-            elif dem_type in ['GETASSE30', 'SRTM 1Sec HGT', 'SRTM 3Sec']:
-                url = self.config[dem_type]['url']
-                response = requests.get(url)
-                response.raise_for_status()
-                tree = html.fromstring(response.content)
-                items = [f'{url}/{ln}'
-                         for ln in tree.xpath('//a/text()')
-                         if not ln.startswith('..')]
-                out = defaultdict(defaultdict)
-                patterns = {
-                    'GETASSE30': '(?P<lat>[0-9]{2}[NS])(?P<lon>[0-9]{3}[EW])',
-                    'SRTM 1Sec HGT': '(?P<lat>[NS][0-9]{2})(?P<lon>[EW][0-9]{3})',
-                    'SRTM 3Sec': '(?P<lon>[0-9]{2})_(?P<lat>[0-9]{2})'
-                }
-                for item in items:
-                    base = os.path.basename(item)
-                    coord = re.search(patterns[dem_type], base).groupdict()
-                    out[coord['lat']][coord['lon']] = {'dem': item}
-            else:
-                raise RuntimeError(f"local indexing is not supported for DEM type {dem_type}")
-            with open(path, 'w') as f:
-                json.dump(out, f, indent=4)
-        with open(path, 'r') as f:
-            index = json.load(f)
+                        base = os.path.basename(item)
+                        coord = re.search(patterns[dem_type], base).groupdict()
+                        out[coord['lat']][coord['lon']] = {'dem': item}
+                else:
+                    raise RuntimeError(f"local indexing is not supported "
+                                       f"for DEM type {dem_type}")
+                with open(path, 'w') as f:
+                    json.dump(out, f, indent=4)
+        with Lock(str(path), soft=True):
+            with open(path, 'r') as f:
+                index = json.load(f)
         return index
     
     @staticmethod
@@ -1135,10 +1136,10 @@ class DEMHandler:
         lock_timeout: int
             how long to wait to acquire a lock on the downloaded files?
         offline: bool
-            work offline? For some DEM options a local index first needs to be
-            created in online mode. Once this index exists, it is used to determine
-            which tiles should exist and which are found locally. If a tile is missing,
-            an error is raised.
+            work offline? If `True`, only locally existing files are considered
+            and no online check is performed. If a file is missing, an error is
+            raised. For this to work, the function needs to be run in `online`
+            mode once to create a local index.
         
         Returns
         -------
