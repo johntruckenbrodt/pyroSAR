@@ -21,7 +21,7 @@ import fnmatch
 import ftplib
 import requests
 import zipfile as zf
-from lxml import etree
+from lxml import etree, html
 from math import ceil, floor
 from urllib.parse import urlparse
 from collections import defaultdict
@@ -103,7 +103,7 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
 
         - 'SRTM 3Sec'
 
-          * url: https://download.esa.int/step/auxdata/dem/SRTM90/tiff
+          * url: https://step.esa.int/auxdata/dem/SRTM90/tiff
           * height reference: EGM96
 
     vrt: str or None
@@ -641,51 +641,72 @@ class DEMHandler:
     def __local_index(self, dem_type):
         path = os.path.join(self.auxdatapath, 'dem', dem_type, 'index.json')
         if not os.path.isfile(path):
-            log.debug(f"building local index for DEM type '{dem_type}'")
-            if dem_type == 'Copernicus 30m Global DEM':
-                catalog_json = "dem_cop_30.json"
-            elif dem_type == 'Copernicus 90m Global DEM':
-                catalog_json = "dem_cop_90.json"
-            else:
-                raise ValueError('unsupported DEM type: {}'.format(dem_type))
-            URL_STAC = self.config[dem_type]['url']
-            marker = None
-            out = defaultdict(defaultdict)
-            while True:
-                params = {}
-                if marker:
-                    params["marker"] = marker
-                r = requests.get(URL_STAC, params=params)
-                print(r.url)
-                root = etree.fromstring(r.content)
-                is_truncated = root.find(path="./IsTruncated",
-                                         namespaces=root.nsmap).text == "true"
-                items = [x.text for x in root.findall(path="./Contents/Key",
-                                                      namespaces=root.nsmap)]
-                if marker is None:
-                    del items[items.index(catalog_json)]
-                marker = items[-1]
-                items = sorted([URL_STAC + '/' + x for x in items])
-                URL = None
+            if dem_type in ['Copernicus 30m Global DEM', 'Copernicus 90m Global DEM']:
+                log.debug(f"building local index for DEM type '{dem_type}'")
+                if dem_type == 'Copernicus 30m Global DEM':
+                    catalog_json = "dem_cop_30.json"
+                elif dem_type == 'Copernicus 90m Global DEM':
+                    catalog_json = "dem_cop_90.json"
+                else:
+                    raise ValueError('unsupported DEM type: {}'.format(dem_type))
+                URL_STAC = self.config[dem_type]['url']
+                marker = None
+                out = defaultdict(defaultdict)
+                while True:
+                    params = {}
+                    if marker:
+                        params["marker"] = marker
+                    r = requests.get(URL_STAC, params=params)
+                    print(r.url)
+                    root = etree.fromstring(r.content)
+                    is_truncated = root.find(path="./IsTruncated",
+                                             namespaces=root.nsmap).text == "true"
+                    items = [x.text for x in root.findall(path="./Contents/Key",
+                                                          namespaces=root.nsmap)]
+                    if marker is None:
+                        del items[items.index(catalog_json)]
+                    marker = items[-1]
+                    items = sorted([URL_STAC + '/' + x for x in items])
+                    URL = None
+                    for item in items:
+                        if URL is None:
+                            content = requests.get(item).json()
+                            href = content['assets']['elevation']['href']
+                            URL = 'https://' + urlparse(href).netloc
+                        base = os.path.basename(item).replace('.json', '')
+                        lat = re.search('[NS][0-9]{2}', base).group()
+                        lon = re.search('[EW][0-9]{3}', base).group()
+                        prefix = f"{URL}/{base}_DEM"
+                        sub = {
+                            "dem": f"{prefix}/{base}_DEM.tif",
+                            "edm": f"{prefix}/AUXFILES/{base}_EDM.tif",
+                            "flm": f"{prefix}/AUXFILES/{base}_FLM.tif",
+                            "wbm": f"{prefix}/AUXFILES/{base}_WBM.tif",
+                            "hem": f"{prefix}/AUXFILES/{base}_HEM.tif"
+                        }
+                        out[lat][lon] = sub
+                    if not is_truncated:
+                        break
+            elif dem_type in ['GETASSE30', 'SRTM 1Sec HGT', 'SRTM 3Sec']:
+                url = self.config[dem_type]['url']
+                response = requests.get(url)
+                response.raise_for_status()
+                tree = html.fromstring(response.content)
+                items = [f'{url}/{ln}'
+                         for ln in tree.xpath('//a/text()')
+                         if not ln.startswith('..')]
+                out = defaultdict(defaultdict)
+                patterns = {
+                    'GETASSE30': '(?P<lat>[0-9]{2}[NS])(?P<lon>[0-9]{3}[EW])',
+                    'SRTM 1Sec HGT': '(?P<lat>[NS][0-9]{2})(?P<lon>[EW][0-9]{3})',
+                    'SRTM 3Sec': '(?P<lon>[0-9]{2})_(?P<lat>[0-9]{2})'
+                }
                 for item in items:
-                    if URL is None:
-                        content = requests.get(item).json()
-                        href = content['assets']['elevation']['href']
-                        URL = 'https://' + urlparse(href).netloc
-                    base = os.path.basename(item).replace('.json', '')
-                    lat = re.search('[NS][0-9]{2}', base).group()
-                    lon = re.search('[EW][0-9]{3}', base).group()
-                    prefix = f"{URL}/{base}_DEM"
-                    sub = {
-                        "dem": f"{prefix}/{base}_DEM.tif",
-                        "edm": f"{prefix}/AUXFILES/{base}_EDM.tif",
-                        "flm": f"{prefix}/AUXFILES/{base}_FLM.tif",
-                        "wbm": f"{prefix}/AUXFILES/{base}_WBM.tif",
-                        "hem": f"{prefix}/AUXFILES/{base}_HEM.tif"
-                    }
-                    out[lat][lon] = sub
-                if not is_truncated:
-                    break
+                    base = os.path.basename(item)
+                    coord = re.search(patterns[dem_type], base).groupdict()
+                    out[coord['lat']][coord['lon']] = {'dem': item}
+            else:
+                raise RuntimeError(f"local indexing is not supported for DEM type {dem_type}")
             with open(path, 'w') as f:
                 json.dump(out, f, indent=4)
         with open(path, 'r') as f:
@@ -964,7 +985,7 @@ class DEMHandler:
                               'datatype': {'dem': 'Int16'},
                               'authentication': False
                               },
-            'SRTM 3Sec': {'url': 'https://download.esa.int/step/auxdata/dem/SRTM90/tiff',
+            'SRTM 3Sec': {'url': 'https://step.esa.int/auxdata/dem/SRTM90/tiff',
                           'nodata': {'dem': -32768.0},
                           'resolution': {'0-90': (5 / 6000, 5 / 6000)},
                           'tilesize': 5,
@@ -1254,7 +1275,13 @@ class DEMHandler:
                                "possible options: '{}'"
                                .format(dem_type, "', '".join(keys)))
         
-        def index(x=None, y=None, nx=3, ny=3, reverse=False):
+        def ids(
+                x: int | None = None,
+                y: int | None = None,
+                nx: int = 3,
+                ny: int = 3,
+                reverse: bool = False
+        ) -> tuple[str, str]:
             if reverse:
                 pattern = '{c:0{n}d}{id}'
             else:
@@ -1269,30 +1296,35 @@ class DEMHandler:
                 yf = ''
             return yf, xf
         
-        def cop_dem_remotes(extent, product='dem'):
-            lat, lon = self.intrange(extent, step=1)
-            indices = [index(x, y, nx=3, ny=2)
-                       for x in lon for y in lat]
+        def remotes_from_index(
+                indices: list[tuple[str, str]],
+                product: str | None
+        ) -> list[str]:
             lookup = self.__local_index(dem_type=dem_type)
             remotes = []
             for y, x in indices:
                 try:
-                    remotes.append(lookup[y][x][product])
+                    if product is None:
+                        remotes.append(lookup[y][x])
+                    else:
+                        remotes.append(lookup[y][x][product])
                 except KeyError:
                     pass
             return remotes
         
-        if dem_type == 'SRTM 1Sec HGT':
+        if dem_type in ['Copernicus 30m Global DEM',
+                        'Copernicus 90m Global DEM',
+                        'SRTM 1Sec HGT']:
             lat, lon = self.intrange(extent, step=1)
-            remotes = [self.config[dem_type]['url'] +
-                       '/{0}{1}.SRTMGL1.hgt.zip'.format(*index(x, y, nx=3, ny=2))
+            indices = [ids(x, y, nx=3, ny=2)
                        for x in lon for y in lat]
+            remotes = remotes_from_index(indices, product=product)
         
         elif dem_type == 'GETASSE30':
             lat, lon = self.intrange(extent, step=15)
-            remotes = [self.config[dem_type]['url'] +
-                       '/{0}{1}.zip'.format(*index(x, y, nx=3, ny=2, reverse=True))
+            indices = [ids(x, y, nx=3, ny=2, reverse=True)
                        for x in lon for y in lat]
+            remotes = remotes_from_index(indices, product=product)
         
         elif dem_type == 'TDX90m':
             lat, lon = self.intrange(extent, step=1)
@@ -1300,7 +1332,7 @@ class DEMHandler:
             for x in lon:
                 xr = abs(x) // 10 * 10
                 for y in lat:
-                    yf, xf = index(x=x, y=y, nx=3, ny=2)
+                    yf, xf = ids(x=x, y=y, nx=3, ny=2)
                     remotes.append('DEM/{y}/{hem}{xr:03d}/TDM1_DEM__30_{y}{x}.zip'
                                    .format(x=xf, xr=xr, y=yf, hem=xf[0]))
         
@@ -1310,8 +1342,8 @@ class DEMHandler:
             for x in lon:
                 for y in lat:
                     remotes.append(
-                        '{0}{1}/{2}{3}.tar.gz'.format(*index(x // 5 * 5, y // 5 * 5),
-                                                      *index(x, y)))
+                        '{0}{1}/{2}{3}.tar.gz'.format(*ids(x // 5 * 5, y // 5 * 5),
+                                                      *ids(x, y)))
         
         elif dem_type == 'SRTM 3Sec':
             lat = range(
@@ -1322,15 +1354,14 @@ class DEMHandler:
                 floor((float(extent['xmin']) + 180) / 5) + 1,
                 ceil((float(extent['xmax']) + 180) / 5) + 1
             )
-            remotes = [self.config[dem_type]['url'] +
-                       '/srtm_{:02d}_{:02d}.zip'.format(x, y)
-                       for x in lon for y in lat]
+            indices = [(f'{y:02d}', f'{x:02d}') for x in lon for y in lat]
+            remotes = remotes_from_index(indices, product=product)
         
         elif dem_type in ['Copernicus 10m EEA DEM',
                           'Copernicus 30m Global DEM II',
                           'Copernicus 90m Global DEM II']:
             lat, lon = self.intrange(extent, step=1)
-            indices = [''.join(index(x, y, nx=3, ny=2))
+            indices = [''.join(ids(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
             
             outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
@@ -1394,9 +1425,6 @@ class DEMHandler:
                 for row in stream:
                     if row[1] + row[2] in indices:
                         remotes.append(row[-1])
-        
-        elif dem_type in ['Copernicus 30m Global DEM', 'Copernicus 90m Global DEM']:
-            remotes = cop_dem_remotes(extent=extent, product=product)
         else:
             raise ValueError('unknown demType: {}'.format(dem_type))
         
