@@ -11,12 +11,11 @@ def test_handler(auxdata_dem_cases, tmp_home):
                 result = handler.remote_ids(dem_type=demType, extent=box.extent)
                 assert result == reference
     
-    with bbox({'xmin': -11.9, 'xmax': -11.5, 'ymin': -51.5, 'ymax': -51.1}, crs=4326) as box:
+    with bbox({'xmin': -58.9, 'xmax': -58.5, 'ymin': -51.5, 'ymax': -51.1}, crs=4326) as box:
         with DEMHandler([box]) as handler:
-            cases = [('AW3D30', ['S055W015/S052W012.tar.gz']),
-                     ('SRTM 1Sec HGT', ['https://step.esa.int/auxdata/dem/SRTMGL1/S52W012.SRTMGL1.hgt.zip']),
-                     ('SRTM 3Sec', ['https://download.esa.int/step/auxdata/dem/SRTM90/tiff/srtm_34_23.zip']),
-                     # ('TDX90m', ['DEM/S52/W010/TDM1_DEM__30_S52W012.zip'])
+            cases = [('AW3D30', ['S055W060/S052W059.tar.gz']),
+                     ('SRTM 1Sec HGT', ['https://step.esa.int/auxdata/dem/SRTMGL1/S52W059.SRTMGL1.hgt.zip']),
+                     ('SRTM 3Sec', ['https://step.esa.int/auxdata/dem/SRTM90/tiff/srtm_25_23.zip'])
                      ]
             for demType, reference in cases:
                 result = handler.remote_ids(dem_type=demType, extent=box.extent)
