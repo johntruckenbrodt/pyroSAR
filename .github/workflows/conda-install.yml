@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [ main ]
     types: [ opened, reopened, synchronize ]
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -93,6 +100,8 @@ jobs:
 
           # Remove Postgres lib dir from PATH (keeps server running!)
           CLEAN_PATH=$(echo "$PATH" | tr ':' '\n' | grep -v 'PostgreSQL/17/lib' | paste -sd:)
+          echo "PATH after cleanup:"
+          echo $CLEAN_PATH
           echo "PATH=$CLEAN_PATH" >> $GITHUB_ENV
       - name: Install ESA SNAP
         run: |
@@ -106,6 +115,9 @@ jobs:
       - name: Install pyroSAR
         run: |
           pip install .
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
       - name: Test with pytest
         run: |
           pytest
