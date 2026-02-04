@@ -75,12 +75,9 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    defaults:
-      run:
-        shell: cmd /C CALL {0}
     steps:
       - uses: actions/checkout@v6
-      - name: Set up python environment
+      - name: Set up micromamba environment
         uses: mamba-org/setup-micromamba@v2
         env:
           ACTIONS_STEP_DEBUG: true
@@ -91,47 +88,68 @@ jobs:
           generate-run-shell: true
           post-cleanup: 'all'
           log-level: debug
+
       - uses: nyurik/action-setup-postgis@v2.2
         with:
           cached-dir: C:\downloads
+
+      # ---------------- SNAP cache ----------------
       - name: Cache SNAP zip
         id: cache-snap
         uses: actions/cache@v4
         with:
           path: snap.zip
           key: snap-${{ env.SNAP_VERSION }}-windows
+
       - name: Download and install SNAP (cache miss)
         if: steps.cache-snap.outputs.cache-hit != 'true'
         shell: cmd
         run: |
           echo Downloading SNAP installer...
           curl -L -o snap.exe https://download.esa.int/step/snap/%SNAP_VERSION%/installers/esa-snap_all_windows-%SNAP_VERSION%.0.exe
-    
+
           echo Installing SNAP...
           start /wait snap.exe -q -dir C:\esa-snap
-    
+          
           echo Creating zip archive for cache...
           powershell Compress-Archive -Path C:\esa-snap -DestinationPath snap.zip
+
       - name: Restore SNAP from zip (cache hit)
         if: steps.cache-snap.outputs.cache-hit == 'true'
         shell: powershell
         run: |
           Write-Host "Unzipping cached SNAP..."
           Expand-Archive snap.zip C:\
-      - name: Set paths and variables
+
+      - name: Add SNAP to PATH
+        shell: powershell
         run: |
-          echo C:\esa-snap\bin>> %GITHUB_PATH%
+          echo "C:\esa-snap\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      # ---------------- Python steps (micromamba env) ----------------
+
+      - name: Verify micromamba python
+        shell: micromamba-shell {0}
+        run: |
+          where python
+          python -V
+          where pip
+
       - name: Install pyroSAR
+        shell: micromamba-shell {0}
         run: |
-          pip install .
-      - name: Setup tmate session
+          python -m pip install .
+
+      - name: Setup tmate session (debug)
         uses: mxschmitt/action-tmate@v3
         with:
-            limit-access-to-actor: true
+          limit-access-to-actor: true
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+
       - name: Test with pytest
+        shell: micromamba-shell {0}
         run: |
-          pytest
+          pytest -vv
         env:
           PGUSER: postgres
           PGPASSWORD: postgres
