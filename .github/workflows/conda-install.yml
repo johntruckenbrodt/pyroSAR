@@ -89,6 +89,7 @@ jobs:
       - uses: nyurik/action-setup-postgis@v2.2
         with:
           cached-dir: C:\downloads
+          postgres-version: 17
 
       # ---------------- SNAP cache ----------------
       - name: Cache SNAP zip
@@ -140,6 +141,22 @@ jobs:
       - name: Setup tmate session (debug)
         uses: mxschmitt/action-tmate@v3
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+
+      - name: Clean PATH from Postgres DLL pollution
+        shell: bash
+        run: |
+          echo "PATH before cleanup:"
+          echo "$PATH" | tr ':' '\n'
+
+          CLEAN_PATH=$(echo "$PATH" | tr ':' '\n' | grep -v 'POSTGR~1/17/bin' | paste -sd:)
+
+          # Ensure micromamba/conda DLLs are first
+          MAMBA_BIN="$CONDA_PREFIX/Library/bin"
+
+          echo "New PATH will be:"
+          echo "$MAMBA_BIN:$CLEAN_PATH" | tr ':' '\n'
+
+          echo "PATH=$MAMBA_BIN:$CLEAN_PATH" >> $GITHUB_ENV
 
       - name: Test with pytest
         shell: bash -el {0}
