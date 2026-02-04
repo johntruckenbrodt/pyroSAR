@@ -1,7 +1,7 @@
 ###############################################################################
 # ancillary routines for software pyroSAR
 
-# Copyright (c) 2014-2025, the pyroSAR Developers.
+# Copyright (c) 2014-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -433,7 +433,7 @@ class Lock(object):
     _instances = {}
     _nesting_levels = {}
     
-    def __new__(cls, target, soft=False, timeout=7200):
+    def __new__(cls, target, soft=False, **kwargs):
         target_abs = os.path.abspath(os.path.expanduser(target))
         if target_abs not in cls._instances:
             log.debug(f'creating lock instance for target {target_abs}')
@@ -451,7 +451,11 @@ class Lock(object):
     
     def __init__(self, target, soft=False, timeout=7200):
         if not hasattr(self, '_initialized'):
+            self.end = time.time() + timeout
             self.target = os.path.abspath(os.path.expanduser(target))
+            self._wait_for_path(os.path.dirname(self.target))
+            if soft:
+                self._wait_for_path(self.target)
             used_id = str(uuid.uuid4())
             self.lock = self.target + '.lock'
             self.error = self.target + '.error'
@@ -460,18 +464,17 @@ class Lock(object):
             if os.path.isfile(self.error):
                 msg = 'cannot acquire lock on damaged target: {}'
                 raise RuntimeError(msg.format(self.target))
-            end = time.time() + timeout
             log.debug(f'trying to {"read" if self.soft else "write"}-lock {target}')
             while True:
-                if time.time() > end:
+                if time.time() > self.end:
                     msg = 'could not acquire lock due to timeout: {}'
                     raise RuntimeError(msg.format(self.target))
                 try:
                     if self.soft and not os.path.isfile(self.lock):
-                        Path(self.used).touch(exist_ok=False)
+                        self._touch(self.used)
                         break
                     if not self.soft and not self.is_used():
-                        Path(self.lock).touch(exist_ok=False)
+                        self._touch(self.lock)
                         break
                 except FileExistsError:
                     pass
@@ -485,6 +488,76 @@ class Lock(object):
     
     def __exit__(self, exc_type, exc_value, traceback):
         self.remove(exc_type)
+    
+    def _touch(self, path: str, timeout: float = 10.0, poll: float = 0.1):
+        """
+        Create a lock file and be tolerant to transient
+        FileNotFoundError on network/distributed filesystems
+        by retrying for some time.
+        """
+        p = Path(path)
+        end = min(time.time() + timeout, self.end)
+        while True:
+            try:
+                p.touch(exist_ok=False)
+                return
+            except FileNotFoundError:
+                if time.time() >= end:
+                    raise
+                time.sleep(poll)
+    
+    def _wait_for_path(self, path: str, timeout: float = 30.0,
+                       stable: float = 0.5, poll: float = 0.1) -> None:
+        """
+        Wait until `path` exists.
+        In case `path` is an existing file, the function also waits until
+        it appears stable (size/mtime not changing).
+        Intended for network/distributed FS (e.g., GPFS/Lustre/NFS).
+
+        Parameters
+        ----------
+        path:
+            the path of the file/folder to wait for
+        timeout:
+            the maximum time in seconds to wait for the file/folder to appear
+        stable:
+            the time to wait until the file is stable.
+        poll:
+            the polling interval in seconds
+
+        Returns
+        -------
+
+        """
+        end = min(time.time() + timeout, self.end)
+        
+        # 1) wait for existence
+        while time.time() < end and not os.path.exists(path):
+            time.sleep(poll)
+        
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Timed out after {timeout}s waiting for: {path}")
+        
+        # 2) wait for stability (no more change in size or modification time)
+        if os.path.isfile(path):
+            last = None
+            stable_since = None
+            while time.time() < end:
+                st = os.stat(path)
+                cur = (st.st_size, st.st_mtime_ns)
+                now = time.time()
+                
+                if cur == last:
+                    stable_since = stable_since or now
+                    if now - stable_since >= stable:
+                        return
+                else:
+                    stable_since = None
+                    last = cur
+                
+                time.sleep(poll)
+            
+            raise TimeoutError(f"File did not stabilize within {timeout}s: {path}")
     
     def is_used(self):
         """
