@@ -75,41 +75,76 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    defaults:
-      run:
-        shell: cmd /C CALL {0}
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v3
+      - uses: actions/checkout@v6
+      - name: Set up micromamba environment
+        uses: mamba-org/setup-micromamba@v2
         with:
-          activate-environment: ps_test_dev
-          auto-update-conda: true
-          python-version: '3.12'
           environment-file: environment-dev.yml
-          auto-activate-base: false
+          cache-environment: true
+          init-shell: bash
+          generate-run-shell: true
+          post-cleanup: 'all'
+
       - uses: nyurik/action-setup-postgis@v2.2
         with:
           cached-dir: C:\downloads
-      - name: Install ESA SNAP
-        run: |
-          curl -O https://download.esa.int/step/snap/%SNAP_VERSION%/installers/esa-snap_all_windows-%SNAP_VERSION%.0.exe
-          start /wait esa-snap_all_windows-%SNAP_VERSION%.0.exe -q -dir C:\esa-snap
-      - name: Set paths and variables
-        run: |
-          echo %CONDA%\Scripts>> %GITHUB_PATH%
-          echo C:\esa-snap\bin>> %GITHUB_PATH%
-          echo PROJ_DATA=%CONDA%\share\proj>> %GITHUB_ENV%
-      - name: Install pyroSAR
-        run: |
-          pip install .
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
+
+      # ---------------- SNAP cache ----------------
+      - name: Cache SNAP zip
+        id: cache-snap
+        uses: actions/cache@v4
         with:
-            limit-access-to-actor: true
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
-      - name: Test with pytest
+          path: snap.zip
+          key: snap-${{ env.SNAP_VERSION }}-windows
+
+      - name: Download and install SNAP (cache miss)
+        if: steps.cache-snap.outputs.cache-hit != 'true'
+        shell: cmd
         run: |
-          pytest
+          echo Downloading SNAP installer...
+          curl -L -o snap.exe https://download.esa.int/step/snap/%SNAP_VERSION%/installers/esa-snap_all_windows-%SNAP_VERSION%.0.exe
+
+          echo Installing SNAP...
+          start /wait snap.exe -q -dir C:\esa-snap
+          
+          echo Creating zip archive for cache...
+          powershell Compress-Archive -Path C:\esa-snap -DestinationPath snap.zip
+
+      - name: Restore SNAP from zip (cache hit)
+        if: steps.cache-snap.outputs.cache-hit == 'true'
+        shell: powershell
+        run: |
+          Write-Host "Unzipping cached SNAP..."
+          Expand-Archive snap.zip C:\
+
+      - name: Add SNAP to PATH
+        shell: powershell
+        run: |
+          echo "C:\esa-snap\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      # ---------------- Python steps (micromamba env) ----------------
+
+      - name: Verify micromamba python
+        shell: bash -el {0}
+        run: |
+          where python
+          python -V
+          where pip
+
+      - name: Install pyroSAR
+        shell: bash -el {0}
+        run: |
+          python -m pip install .
+
+      - name: Setup tmate session (debug)
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+
+      - name: Test with pytest
+        shell: bash -el {0}
+        run: |
+          pytest -vv
         env:
           PGUSER: postgres
           PGPASSWORD: postgres
