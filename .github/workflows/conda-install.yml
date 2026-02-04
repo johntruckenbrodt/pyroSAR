@@ -90,10 +90,30 @@ jobs:
       - uses: nyurik/action-setup-postgis@v2.2
         with:
           cached-dir: C:\downloads
-      - name: Install ESA SNAP
+      - name: Cache SNAP zip
+        id: cache-snap
+        uses: actions/cache@v4
+        with:
+          path: snap.zip
+          key: snap-${{ env.SNAP_VERSION }}-windows
+      - name: Download and install SNAP (cache miss)
+        if: steps.cache-snap.outputs.cache-hit != 'true'
+        shell: cmd
         run: |
-          curl -O https://download.esa.int/step/snap/%SNAP_VERSION%/installers/esa-snap_all_windows-%SNAP_VERSION%.0.exe
-          start /wait esa-snap_all_windows-%SNAP_VERSION%.0.exe -q -dir C:\esa-snap
+          echo Downloading SNAP installer...
+          curl -L -o snap.exe https://download.esa.int/step/snap/%SNAP_VERSION%/installers/esa-snap_all_windows-%SNAP_VERSION%.0.exe
+    
+          echo Installing SNAP...
+          start /wait snap.exe -q -dir C:\esa-snap
+    
+          echo Creating zip archive for cache...
+          powershell Compress-Archive -Path C:\esa-snap -DestinationPath snap.zip
+      - name: Restore SNAP from zip (cache hit)
+        if: steps.cache-snap.outputs.cache-hit == 'true'
+        shell: powershell
+        run: |
+          Write-Host "Unzipping cached SNAP..."
+          Expand-Archive snap.zip C:\
       - name: Set paths and variables
         run: |
           echo %CONDA%\Scripts>> %GITHUB_PATH%
