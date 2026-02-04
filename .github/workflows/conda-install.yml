@@ -158,6 +158,11 @@ jobs:
 
           echo "PATH=$MAMBA_BIN:$CLEAN_PATH" >> $GITHUB_ENV
 
+      - name: Enable loader snaps for python
+        shell: bash
+        run: |
+          gflags /i python.exe +sls
+
       - name: Test with pytest
         shell: bash -el {0}
         run: |
@@ -165,3 +170,9 @@ jobs:
         env:
           PGUSER: postgres
           PGPASSWORD: postgres
+
+      - name: Show loader log
+        if: failure()
+        shell: bash
+        run: |
+          type C:\Windows\Debug\loader.log || true
