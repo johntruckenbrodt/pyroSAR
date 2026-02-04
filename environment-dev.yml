@@ -2,5 +2,23 @@ name: ps_test_dev
 channels:
   - conda-forge
 dependencies:
+  - gdal>=2.4
+  - geoalchemy2<0.14.0
+  - libgdal
+  - libspatialite>=5.1.0
+  - lxml
+  - numpy
+  - packaging
+  - pillow
+  - progressbar2
+  - psycopg2
+  - python>=3.10
+  - pyyaml
+  - requests
+  - shapely
+  - spatialist>=0.16.2
+  - sqlalchemy>=1.4,<2.0
+  - sqlalchemy-utils>=0.37,<0.42
   - coverage
   - pytest
+  - flake8

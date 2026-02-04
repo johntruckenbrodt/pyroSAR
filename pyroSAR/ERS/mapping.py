@@ -1,24 +1,22 @@
-ANGLES_RESOLUTION = {
+from typing import Literal
+
+RESOLUTION_NESZ = {
     'ERS1': {
         'IMP': {
             'IS2': {
-                'near': 20.1,
-                'far': 25.9,
-                'range': 25.04,
-                'azimuth': 21.51,
-                'nesz_near': 26.8,
-                'nesz_far': 26
+                'res_rg': 25.04,
+                'res_az': 21.51,
+                'nesz_nr': 26.8,
+                'nesz_fr': 26
             },
             'std_dev': 20
         },
         'IMS': {
             'IS2': {
-                'near': 20.1,
-                'far': 25.9,
-                'range': 5.32,
-                'azimuth': 9.66,
-                'nesz_near': 26.8,
-                'nesz_far': 26
+                'res_rg': 5.32,
+                'res_az': 9.66,
+                'nesz_nr': 26.8,
+                'nesz_fr': 26
             },
             'std_dev': 20
         }
@@ -26,23 +24,19 @@ ANGLES_RESOLUTION = {
     'ERS2': {
         'IMP': {
             'IS2': {
-                'near': 20.1,
-                'far': 25.9,
-                'range': 21.63,
-                'azimuth': 25.19,
-                'nesz_near': 23.1,
-                'nesz_far': 21.5
+                'res_rg': 21.63,
+                'res_az': 25.19,
+                'nesz_nr': 23.1,
+                'nesz_fr': 21.5
             },
             'std_dev': 20
         },
         'IMS': {
             'IS2': {
-                'near': 20.1,
-                'far': 25.9,
-                'range': 5.33,
-                'azimuth': 9.83,
-                'nesz_near': 23.1,
-                'nesz_far': 21.5
+                'res_rg': 5.33,
+                'res_az': 9.83,
+                'nesz_nr': 23.1,
+                'nesz_fr': 21.5
             },
             'std_dev': 20
         }
@@ -50,281 +44,243 @@ ANGLES_RESOLUTION = {
     'ASAR': {
         'IMP': {
             'IS1': {
-                'near': 14.7,
-                'far': 22.2,
-                'range': 30.86,
-                'azimuth': 22.14,
-                'nesz_near': 25.1,
-                'nesz_far': 19.2
+                'res_rg': 30.86,
+                'res_az': 22.14,
+                'nesz_nr': 25.1,
+                'nesz_fr': 19.2
             },
             'IS2': {
-                'near': 19.2,
-                'far': 26.1,
-                'range': 24.90,
-                'azimuth': 22.14,
-                'nesz_near': 21.8,
-                'nesz_far': 20.5
+                'res_rg': 24.90,
+                'res_az': 22.14,
+                'nesz_nr': 21.8,
+                'nesz_fr': 20.5
             },
             'IS3': {
-                'near': 25.7,
-                'far': 31.1,
-                'range': 24.84,
-                'azimuth': 22.14,
-                'nesz_near': 22.6,
-                'nesz_far': 20.5
+                'res_rg': 24.84,
+                'res_az': 22.14,
+                'nesz_nr': 22.6,
+                'nesz_fr': 20.5
             },
             'IS4': {
-                'near': 30.7,
-                'far': 36.1,
-                'range': 25.56,
-                'azimuth': 22.14,
-                'nesz_near': 22.3,
-                'nesz_far': 19.1
+                'res_rg': 25.56,
+                'res_az': 22.14,
+                'nesz_nr': 22.3,
+                'nesz_fr': 19.1
             },
             'IS5': {
-                'near': 35.7,
-                'far': 39.2,
-                'range': 25.73,
-                'azimuth': 22.14,
-                'nesz_near': 21.4,
-                'nesz_far': 19
+                'res_rg': 25.73,
+                'res_az': 22.14,
+                'nesz_nr': 21.4,
+                'nesz_fr': 19
             },
             'IS6': {
-                'near': 38.8,
-                'far': 42.7,
-                'range': 26.15,
-                'azimuth': 22.14,
-                'nesz_near': 24,
-                'nesz_far': 21.2
+                'res_rg': 26.15,
+                'res_az': 22.14,
+                'nesz_nr': 24,
+                'nesz_fr': 21.2
             },
             'IS7': {
-                'near': 42.4,
-                'far': 45.1,
-                'range': 26.59,
-                'azimuth': 22.14,
-                'nesz_near': 23,
-                'nesz_far': 20.4
+                'res_rg': 26.59,
+                'res_az': 22.14,
+                'nesz_nr': 23,
+                'nesz_fr': 20.4
             },
             'std_dev': 5
         },
         'IMS': {
             'IS1': {
-                'near': 14.7,
-                'far': 22.2,
-                'range': 5.77,
-                'azimuth': 8.43,
-                'nesz_near': 25.1,
-                'nesz_far': 19.2
+                'res_rg': 5.77,
+                'res_az': 8.43,
+                'nesz_nr': 25.1,
+                'nesz_fr': 19.2
             },
             'IS2': {
-                'near': 19.2,
-                'far': 26.1,
-                'range': 5.77,
-                'azimuth': 8.43,
-                'nesz_near': 21.8,
-                'nesz_far': 20.5
+                'res_rg': 5.77,
+                'res_az': 8.43,
+                'nesz_nr': 21.8,
+                'nesz_fr': 20.5
             },
             'IS3': {
-                'near': 25.7,
-                'far': 31.1,
-                'range': 5.77,
-                'azimuth': 8.43,
-                'nesz_near': 22.6,
-                'nesz_far': 20.5
+                'res_rg': 5.77,
+                'res_az': 8.43,
+                'nesz_nr': 22.6,
+                'nesz_fr': 20.5
             },
             'IS4': {
-                'near': 30.7,
-                'far': 36.1,
-                'range': 5.77,
-                'azimuth': 8.43,
-                'nesz_near': 22.3,
-                'nesz_far': 19.1
+                'res_rg': 5.77,
+                'res_az': 8.43,
+                'nesz_nr': 22.3,
+                'nesz_fr': 19.1
             },
             'IS5': {
-                'near': 35.7,
-                'far': 39.2,
-                'range': 5.77,
-                'azimuth': 8.43,
-                'nesz_near': 21.4,
-                'nesz_far': 19
+                'res_rg': 5.77,
+                'res_az': 8.43,
+                'nesz_nr': 21.4,
+                'nesz_fr': 19
             },
             'IS6': {
-                'near': 38.8,
-                'far': 42.7,
-                'range': 5.77,
-                'azimuth': 8.43,
-                'nesz_near': 24,
-                'nesz_far': 21.2
+                'res_rg': 5.77,
+                'res_az': 8.43,
+                'nesz_nr': 24,
+                'nesz_fr': 21.2
             },
             'IS7': {
-                'near': 42.4,
-                'far': 45.1,
-                'range': 5.77,
-                'azimuth': 8.43,
-                'nesz_near': 23,
-                'nesz_far': 20.4
+                'res_rg': 5.77,
+                'res_az': 8.43,
+                'nesz_nr': 23,
+                'nesz_fr': 20.4
             },
             'std_dev': 5
         },
         'APP': {
             'IS1': {
-                'near': 14.36,
-                'near-new': 14.36,
-                'far': 22.32,
-                'far-new': 22.32,
-                'range': 31.22,
-                'range-new': 31.22,
-                'azimuth': 27.45,
-                'nesz_near': 25.1,
-                'nesz_far': 19.2
+                'res_rg': 31.22,
+                'res_rg_new': 31.22,
+                'res_az': 27.45,
+                'nesz_nr': 25.1,
+                'nesz_fr': 19.2
             },
             'IS2': {
-                'near': 18.68,
-                'near-new': 20.3,
-                'far': 26.1,
-                'far-new': 26.22,
-                'range': 25.23,
-                'range-new': 24.10,
-                'azimuth': 27.45,
-                'nesz_near': 21.8,
-                'nesz_far': 20.5
+                'res_rg': 25.23,
+                'res_rg_new': 24.10,
+                'res_az': 27.45,
+                'nesz_nr': 21.8,
+                'nesz_fr': 20.5
             },
             'IS3': {
-                'near': 25.78,
-                'near-new': 26.73,
-                'far': 31.27,
-                'far-new': 31.27,
-                'range': 24.74,
-                'range-new': 24.30,
-                'azimuth': 27.45,
-                'nesz_near': 22.6,
-                'nesz_far': 20.5
+                'res_rg': 24.74,
+                'res_rg_new': 24.30,
+                'res_az': 27.45,
+                'nesz_nr': 22.6,
+                'nesz_fr': 20.5
             },
             'IS4': {
-                'near': 30.89,
-                'near-new': 31.28,
-                'far': 36.2,
-                'far-new': 36.2,
-                'range': 25.46,
-                'range-new': 25.30,
-                'azimuth': 27.45,
-                'nesz_near': 22.3,
-                'nesz_far': 19.1
+                'res_rg': 25.46,
+                'res_rg_new': 25.30,
+                'res_az': 27.45,
+                'nesz_nr': 22.3,
+                'nesz_fr': 19.1
             },
             'IS5': {
-                'near': 35.68,
-                'near-new': 36.81,
-                'far': 39.35,
-                'far-new': 39.35,
-                'range': 25.70,
-                'range-new': 25.35,
-                'azimuth': 27.45,
-                'nesz_near': 21.4,
-                'nesz_far': 19
+                'res_rg': 25.70,
+                'res_rg_new': 25.35,
+                'res_az': 27.45,
+                'nesz_nr': 21.4,
+                'nesz_fr': 19
             },
             'IS6': {
-                'near': 39.02,
-                'near-new': 39.61,
-                'far': 42.76,
-                'far-new': 42.76,
-                'range': 26.07,
-                'range-new': 25.90,
-                'azimuth': 27.45,
-                'nesz_near': 24,
-                'nesz_far': 21.2
+                'res_rg': 26.07,
+                'res_rg_new': 25.90,
+                'res_az': 27.45,
+                'nesz_nr': 24,
+                'nesz_fr': 21.2
             },
             'IS7': {
-                'near': 42.48,
-                'near-new': 43.3,
-                'far': 45.27,
-                'far-new': 45.27,
-                'range': 26.53,
-                'range-new': 26.32,
-                'azimuth': 27.45,
-                'nesz_near': 23,
-                'nesz_far': 20.4
+                'res_rg': 26.53,
+                'res_rg_new': 26.32,
+                'res_az': 27.45,
+                'nesz_nr': 23,
+                'nesz_fr': 20.4
             },
             'std_dev': 10
         },
         'APS': {
             'IS1': {
-                'near': 14.36,
-                'far': 22.32,
-                'range': 4.3,
-                'azimuth': 8.39,
-                'nesz_near': 25.1,
-                'nesz_far': 19.2
+                'res_rg': 4.3,
+                'res_az': 8.39,
+                'nesz_nr': 25.1,
+                'nesz_fr': 19.2
             },
             'IS2': {
-                'near': 18.68,
-                'far': 26.1,
-                'range': 4.3,
-                'azimuth': 8.39,
-                'nesz_near': 21.8,
-                'nesz_far': 20.5
+                'res_rg': 4.3,
+                'res_az': 8.39,
+                'nesz_nr': 21.8,
+                'nesz_fr': 20.5
             },
             'IS3': {
-                'near': 25.78,
-                'far': 31.27,
-                'range': 4.3,
-                'azimuth': 8.39,
-                'nesz_near': 22.6,
-                'nesz_far': 20.5
+                'res_rg': 4.3,
+                'res_az': 8.39,
+                'nesz_nr': 22.6,
+                'nesz_fr': 20.5
             },
             'IS4': {
-                'near': 30.89,
-                'far': 36.2,
-                'range': 4.3,
-                'azimuth': 8.39,
-                'nesz_near': 22.3,
-                'nesz_far': 19.1
+                'res_rg': 4.3,
+                'res_az': 8.39,
+                'nesz_nr': 22.3,
+                'nesz_fr': 19.1
             },
             'IS5': {
-                'near': 35.68,
-                'far': 39.35,
-                'range': 4.3,
-                'azimuth': 8.39,
-                'nesz_near': 21.4,
-                'nesz_far': 19
+                'res_rg': 4.3,
+                'res_az': 8.39,
+                'nesz_nr': 21.4,
+                'nesz_fr': 19
             },
             'IS6': {
-                'near': 39.02,
-                'far': 42.76,
-                'range': 4.3,
-                'azimuth': 8.39,
-                'nesz_near': 24,
-                'nesz_far': 21.2
+                'res_rg': 4.3,
+                'res_az': 8.39,
+                'nesz_nr': 24,
+                'nesz_fr': 21.2
             },
             'IS7': {
-                'near': 42.48,
-                'far': 45.27,
-                'range': 4.3,
-                'azimuth': 8.39,
-                'nesz_near': 23,
-                'nesz_far': 20.4
+                'res_rg': 4.3,
+                'res_az': 8.39,
+                'nesz_nr': 23,
+                'nesz_fr': 20.4
             },
             'std_dev': 10
         },
         'WSM': {
             'WS': {
-                'near': 14.21,
-                'far': 42.63,
-                'range': 150,
-                'azimuth': 150,
-                'nesz_near': 19.5,
-                'nesz_far': 23.5
+                'res_rg': 150,
+                'res_az': 150,
+                'nesz_nr': 19.5,
+                'nesz_fr': 23.5
             },
             'std_dev': 20
+        },
+        'WSS': {
+            'WS': {
+                'res_rg': None,
+                'res_az': None,
+                'nesz_nr': None,
+                'nesz_fr': None
+            },
+            'std_dev': None
         }
     }
 }
 
 
-def get_angles_resolution(sensor, mode, swath_id, date):
-    string_new = ''
-    if mode == 'APP' and date > '20090528':
-        string_new = '-new'
-    data = ANGLES_RESOLUTION[sensor][mode][swath_id]
-    return (data[f'near{string_new}'], data[f'far{string_new}'],
-            data[f'range{string_new}'], data['azimuth'],
-            data['nesz_near'], data['nesz_far'])
+def get_resolution_nesz(
+        sensor: Literal['ERS1', 'ERS2', 'ASAR'],
+        mode: Literal['APP', 'APS', 'IMP', 'IMS', 'WSM', 'WSS'],
+        swath_id: Literal['IS1', 'IS2', 'IS3', 'IS4', 'IS5', 'IS6', 'IS7', 'WS'],
+        date: str
+) -> tuple[int | float | None, int | float | None, int | float | None, int | float | None]:
+    """
+    Get acquisition characteristics not contained in the product metadata:
+
+    - range resolution
+    - azimuth resolution
+    - near range noise equivalent sigma zero (NESZ)
+    - far range NESZ
+    
+    Parameters
+    ----------
+    sensor:
+        the satellite sensor
+    mode:
+        the sensor acquisition mode
+    swath_id:
+        the sensor swath ID
+    date:
+        the acquisition date formatted as YYYYmmdd/YYYYmmddTHHMMSS
+
+    Returns
+    -------
+        the attributes listed above
+    """
+    suffix = '_new' if mode == 'APP' and date > '20090528' else ''
+    data = RESOLUTION_NESZ[sensor][mode][swath_id]
+    return (data[f'res_rg{suffix}'], data['res_az'],
+            data['nesz_nr'], data['nesz_fr'])

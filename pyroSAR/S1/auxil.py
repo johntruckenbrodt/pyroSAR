@@ -28,6 +28,7 @@ from osgeo import gdal
 from osgeo.gdalconst import GA_Update
 from . import linesimplify as ls
 from pyroSAR.examine import ExamineSnap
+from pyroSAR.ancillary import Lock
 import progressbar as pb
 
 from spatialist.ancillary import finder
@@ -250,8 +251,6 @@ class OSV(object):
                     response.raise_for_status()
                     result = response.text
                     files_sub = list(set(re.findall(self.pattern, result)))
-                    if len(files_sub) == 0:
-                        break
                     for file in files_sub:
                         match = re.match(self.pattern_fine, file)
                         start2 = datetime.strptime(match.group('start'), '%Y%m%dT%H%M%S')
@@ -394,7 +393,6 @@ class OSV(object):
              - 'S1B'
              - 'S1C'
              - 'S1D'
-             - ['S1A', 'S1B', 'S1C', 'S1D']
         osvtype: str
             the type of orbit files required
         start: str or None
@@ -601,34 +599,30 @@ class OSV(object):
             progress = None
         i = 0
         for remote, local, basename, auth in downloads:
-            response = requests.get(remote, auth=auth, timeout=self.timeout)
-            response.raise_for_status()
-            infile = response.content
-            
-            # use a tempfile to allow atomic writes in the case of
-            # parallel executions dependent on the same orbit files
-            fd, tmp_path = tempfile.mkstemp(prefix=os.path.basename(local), dir=os.path.dirname(local))
-            os.close(fd)
-            try:
-                if remote.endswith('.zip'):
-                    with zf.ZipFile(file=BytesIO(infile)) as tmp:
-                        members = tmp.namelist()
-                        target = [x for x in members if re.search(basename, x)][0]
-                        with zf.ZipFile(tmp_path, 'w') as outfile:
-                            outfile.writestr(data=tmp.read(target),
-                                             zinfo_or_arcname=basename)
-                else:
-                    with zf.ZipFile(file=tmp_path,
+            with Lock(local):
+                if not os.path.isfile(local):
+                    response = requests.get(remote, auth=auth, timeout=self.timeout)
+                    response.raise_for_status()
+                    infile = response.content
+                    try:
+                        if remote.endswith('.zip'):
+                            with zf.ZipFile(file=BytesIO(infile)) as tmp:
+                                members = tmp.namelist()
+                                target = [x for x in members if re.search(basename, x)][0]
+                                with zf.ZipFile(local, 'w') as outfile:
+                                    outfile.writestr(data=tmp.read(target),
+                                                     zinfo_or_arcname=basename)
+                        else:
+                            with zf.ZipFile(
+                                    file=local,
                                     mode='w',
-                                    compression=zf.ZIP_DEFLATED) \
-                            as outfile:
-                        outfile.writestr(zinfo_or_arcname=basename,
-                                         data=infile)
-                os.rename(tmp_path, local)
-            except Exception as e:
-                os.unlink(tmp_path)
-                raise
-            
+                                    compression=zf.ZIP_DEFLATED
+                            ) as outfile:
+                                outfile.writestr(zinfo_or_arcname=basename,
+                                                 data=infile)
+                    except Exception as e:
+                        os.remove(local)
+                        raise
             if pbar:
                 i += 1
                 progress.update(i)
