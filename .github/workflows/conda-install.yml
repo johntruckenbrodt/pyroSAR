@@ -129,14 +129,14 @@ jobs:
       # ---------------- Python steps (micromamba env) ----------------
 
       - name: Verify micromamba python
-        shell: micromamba-shell {0}
+        shell: bash
         run: |
           where python
           python -V
           where pip
 
       - name: Install pyroSAR
-        shell: micromamba-shell {0}
+        shell: bash
         run: |
           python -m pip install .
 
@@ -147,7 +147,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
 
       - name: Test with pytest
-        shell: micromamba-shell {0}
+        shell: bash
         run: |
           pytest -vv
         env:
