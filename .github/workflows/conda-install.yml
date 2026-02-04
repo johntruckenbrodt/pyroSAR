@@ -83,7 +83,17 @@ jobs:
       - uses: nyurik/action-setup-postgis@v2.2
         with:
           cached-dir: C:\downloads
-          postgres-version: '16'
+          postgres-version: '17'
+      - name: Remove Postgres DLLs from PATH
+        # Postgres DLLs conflict with the ones from conda
+        shell: bash
+        run: |
+          echo "PATH before cleanup:"
+          echo $PATH
+
+          # Remove Postgres lib dir from PATH (keeps server running!)
+          CLEAN_PATH=$(echo "$PATH" | tr ':' '\n' | grep -v 'PostgreSQL/17/lib' | paste -sd:)
+          echo "PATH=$CLEAN_PATH" >> $GITHUB_ENV
       - name: Install ESA SNAP
         run: |
           curl -O https://download.esa.int/step/snap/%SNAP_VERSION%/installers/esa-snap_all_windows-%SNAP_VERSION%.0.exe
