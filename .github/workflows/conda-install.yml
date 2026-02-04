@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [ main ]
     types: [ opened, reopened, synchronize ]
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -95,6 +102,9 @@ jobs:
       - name: Install pyroSAR
         run: |
           pip install .
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
       - name: Test with pytest
         run: |
           pytest
