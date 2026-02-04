@@ -19,8 +19,9 @@ def test_par(testdata, tmpdir):
     par2hdr(testdata['dempar'], hdrfile=hdrfile, modifications={'band_names': ['band1']}, nodata=0)
     assert os.path.isfile(hdrfile)
     with ISPPar(testdata['mlipar']) as par:
-        assert par.date == '2014-11-15T18:18:1.309100'
-        assert par.envidict()['acquisition_time'] == '2014-11-15T18:18:1.309100Z'
+        ref = '2014-11-15T18:18:01.309050'
+        assert par.date == ref
+        assert par.envidict()['acquisition_time'] == ref + 'Z'
         print(par)
 
 
