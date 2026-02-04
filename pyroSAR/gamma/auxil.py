@@ -1,7 +1,7 @@
 ###############################################################################
 # general GAMMA utilities
 
-# Copyright (c) 2014-2025, the pyroSAR Developers, Stefan Engelhardt.
+# Copyright (c) 2014-2026, the pyroSAR Developers, Stefan Engelhardt.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -17,7 +17,7 @@ import re
 import string
 import codecs
 import subprocess as sp
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from pyroSAR.examine import ExamineGamma
 from spatialist.ancillary import parse_literal, run, union, dissolve
@@ -144,11 +144,12 @@ class ISPPar(object):
             setattr(self, key, value)
         
         if hasattr(self, 'date'):
-            try:
-                self.date = '{}-{:02d}-{:02d}T{:02d}:{:02d}:{:02f}'.format(*self.date)
-            except:
-                # if only date available
-                self.date = '{}-{:02d}-{:02d}'.format(*self.date)
+            # the date field is rounded to four digits, so only the day is extracted
+            # and then the start_time field is added to be more precise and to avoid
+            # rounding to 60 s.
+            self.date_dt = datetime(*self.date[:3])
+            self.date_dt += timedelta(seconds=self.start_time)
+            self.date = self.date_dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
     
     def __enter__(self):
         return self
