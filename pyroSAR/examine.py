@@ -266,14 +266,14 @@ class ExamineSnap(object):
         else:
             return None
     
-    def get_version(self, module):
+    def get_version(self, module: str) -> dict[str, str]:
         """
         Read the version and date of different SNAP modules.
         This scans a file 'messages.log', which is re-written every time SNAP is started.
         
         Parameters
         ----------
-        module: str
+        module:
             one of the following
             
             - core
@@ -284,15 +284,14 @@ class ExamineSnap(object):
 
         Returns
         -------
-        dict
             a dictionary with keys 'version' and 'date'
         """
         # base search patterns for finding the right lines
-        patterns = {'core': r'org\.esa\.snap\.snap\.core',
-                    'desktop': r'org\.esa\.snap\.snap\.ui',
-                    'rstb': r'org\.csa\.rstb\.rstb\.kit',
-                    'opttbx': r'eu\.esa\.opt\.opttbx\.kit',
-                    'microwavetbx': r'eu\.esa\.microwavetbx\.microwavetbx\.kit'}
+        patterns = {'core': r'org.esa.snap.snap.core',
+                    'desktop': r'org.esa.snap.snap.ui',
+                    'rstb': r'org.csa.rstb.rstb.kit',
+                    'opttbx': r'eu.esa.opt.opttbx.kit',
+                    'microwavetbx': r'eu.esa.microwavetbx.microwavetbx.kit'}
         
         if module in patterns.keys():
             pattern = patterns[module]
@@ -314,22 +313,27 @@ class ExamineSnap(object):
         else:
             fname = os.path.join(path, 'var', 'log', 'messages.log')
         
+        msg = ''
         if not os.path.isfile(fname):
             try:
                 # This will start SNAP and immediately stop it because of the invalid argument.
                 # Currently, this seems to be the only way to create the messages.log file if it does not exist.
-                sp.check_call([self.path, '--nosplash', '--dummytest', '--console', 'suppress'])
-            except sp.CalledProcessError:
+                proc = sp.Popen(args=[self.path, '--nosplash', '--dummytest', '--console', 'suppress'],
+                                stdout=sp.PIPE, stderr=sp.PIPE, encoding='utf-8')
+                out, err = proc.communicate()
+            except sp.CalledProcessError as e:
+                msg = str(e)
                 pass
         
         if not os.path.isfile(fname):
-            raise RuntimeError("cannot find 'messages.log' to read SNAP module versions from.")
+            raise RuntimeError(msg + "\ncannot find 'messages.log' to read SNAP module versions from.")
         
         with open(fname, 'r') as m:
             content = m.read()
         match = re.search(pattern, content)
         if match is None:
-            raise RuntimeError('cannot read version information from {}.\nPlease restart SNAP.'.format(fname))
+            raise RuntimeError(f'cannot read version information from {fname}.'
+                               f'\nPlease restart SNAP.')
         return match.groupdict()
     
     @property
