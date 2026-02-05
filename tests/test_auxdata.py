@@ -31,13 +31,6 @@ def test_handler(auxdata_dem_cases):
 
 
 def test_autoload(auxdata_dem_cases, travis):
-    # delete all target files to test downloading them again
-    home = os.path.expanduser('~')
-    demdir = os.path.join(home, '.snap', 'auxdata', 'dem')
-    locals = [os.path.join(demdir, x, os.path.basename(y[0])) for x, y in auxdata_dem_cases]
-    for item in locals:
-        if os.path.isfile(item):
-            os.remove(item)
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
         # if the following is run in a loop, it is not possible to see which demType failed
         # Travis CI does not support ftp access;

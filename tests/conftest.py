@@ -59,7 +59,7 @@ def auxdata_dem_cases():
     return cases
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def tmp_home(monkeypatch, tmp_path):
     home = tmp_path / 'tmp_home'
     home.mkdir()

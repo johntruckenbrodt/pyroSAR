@@ -3,7 +3,7 @@ import pytest
 from pyroSAR.examine import ExamineSnap, SnapProperties
 
 
-def test_snap_config(tmpdir, tmp_home):
+def test_snap_config(tmpdir):
     conf_snap = ExamineSnap()
     conf = SnapProperties(path=os.path.dirname(conf_snap.etc))
     path = os.path.join(os.path.expanduser('~'), '.snap', 'etc', 'snap.properties')
