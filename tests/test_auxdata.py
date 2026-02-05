@@ -4,7 +4,7 @@ from pyroSAR.auxdata import dem_autoload, DEMHandler, dem_create
 
 from spatialist import bbox
 
-def test_handler(auxdata_dem_cases, tmp_home):
+def test_handler(auxdata_dem_cases):
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51.1, 'ymax': 51.5}, crs=4326) as box:
         with DEMHandler([box]) as handler:
             for demType, reference in auxdata_dem_cases:
@@ -28,7 +28,7 @@ def test_handler(auxdata_dem_cases, tmp_home):
             test = DEMHandler([box])
 
 
-def test_autoload(auxdata_dem_cases, travis, tmp_home):
+def test_autoload(auxdata_dem_cases, travis):
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
         # if the following is run in a loop, it is not possible to see which demType failed
         # Travis CI does not support ftp access;
@@ -50,7 +50,7 @@ def test_autoload(auxdata_dem_cases, travis, tmp_home):
             dem_autoload([box], 'AW3D30', product='foobar')
 
 
-def test_dem_create(tmpdir, tmp_home):
+def test_dem_create(tmpdir):
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
         with pytest.raises(RuntimeError):
             files = dem_autoload([box], 'foobar')
