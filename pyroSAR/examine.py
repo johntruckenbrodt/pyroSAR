@@ -313,20 +313,19 @@ class ExamineSnap(object):
         else:
             fname = os.path.join(path, 'var', 'log', 'messages.log')
         
-        msg = ''
+        err = ''
         if not os.path.isfile(fname):
             try:
                 # This will start SNAP and immediately stop it because of the invalid argument.
                 # Currently, this seems to be the only way to create the messages.log file if it does not exist.
                 proc = sp.Popen(args=[self.path, '--nosplash', '--dummytest', '--console', 'suppress'],
-                                stdout=sp.PIPE, stderr=sp.PIPE, encoding='utf-8')
+                                stdout=sp.PIPE, stderr=sp.PIPE, text=True, encoding='utf-8')
                 out, err = proc.communicate()
-            except sp.CalledProcessError as e:
-                msg = str(e)
+            except sp.CalledProcessError:
                 pass
         
         if not os.path.isfile(fname):
-            raise RuntimeError(msg + "\ncannot find 'messages.log' to read SNAP module versions from.")
+            raise RuntimeError(err + "\ncannot find 'messages.log' to read SNAP module versions from.")
         
         with open(fname, 'r') as m:
             content = m.read()
