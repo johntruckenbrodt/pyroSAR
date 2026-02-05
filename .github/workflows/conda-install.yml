@@ -95,7 +95,9 @@ jobs:
         id: cache-snap
         uses: actions/cache@v4
         with:
-          path: snap.zip
+          path: |
+            snap.zip
+            snap_user.zip
           key: snap-${{ env.SNAP_VERSION }}-windows
 
       - name: Download and install SNAP (cache miss)
@@ -110,6 +112,7 @@ jobs:
           
           echo Creating zip archive for cache...
           powershell Compress-Archive -Path C:\esa-snap -DestinationPath snap.zip
+          powershell Compress-Archive -Path %USERPROFILE%\.snap -DestinationPath snap_user.zip
 
       - name: Restore SNAP from zip (cache hit)
         if: steps.cache-snap.outputs.cache-hit == 'true'
@@ -117,6 +120,9 @@ jobs:
         run: |
           Write-Host "Unzipping cached SNAP..."
           Expand-Archive snap.zip C:\
+          
+          Write-Host "Restoring SNAP user directory..."
+          Expand-Archive snap_user.zip $env:USERPROFILE
 
       - name: Add SNAP to PATH
         shell: powershell
@@ -130,11 +136,11 @@ jobs:
       # ---------------- Python steps (micromamba env) ----------------
 
       - name: Verify micromamba python
-        shell: bash -el {0}
+        shell: powershell
         run: |
-          where python
-          python -V
-          where pip
+          Write-Host "===== snap.conf ====="
+          Get-Content C:\esa-snap\etc\snap.conf
+          Write-Host "====================="
 
       - name: Install pyroSAR
         shell: bash -el {0}

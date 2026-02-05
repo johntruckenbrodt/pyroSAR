@@ -1,6 +1,6 @@
 ###############################################################################
 # Examination of SAR processing software
-# Copyright (c) 2019-2024, the pyroSAR Developers.
+# Copyright (c) 2019-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
