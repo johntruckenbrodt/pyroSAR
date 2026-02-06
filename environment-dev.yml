@@ -22,3 +22,4 @@ dependencies:
   - coverage
   - pytest
   - flake8
+  - pytest-postgresql
