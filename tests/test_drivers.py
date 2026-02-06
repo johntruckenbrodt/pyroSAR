@@ -240,14 +240,11 @@ def test_archive2(tmpdir, testdata):
         db = pyroSAR.Archive(testdata['archive_old_bbox'])
 
 
-def test_archive_postgres(tmpdir, testdata):
-    pguser = os.environ.get('PGUSER')
-    pgpassword = os.environ.get('PGPASSWORD')
-    pgport = os.environ.get('PGPORT')
-    if pgport is not None:
-        pgport = int(pgport)
-    else:
-        pgport = 5432
+def test_archive_postgres(tmpdir, testdata,postgresql):
+ 
+    pguser = postgresql.info.user
+    pgport = postgresql.info.port
+    pgpassword = postgresql.info.password
     
     id = pyroSAR.identify(testdata['s1'])
     db = pyroSAR.Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword)
