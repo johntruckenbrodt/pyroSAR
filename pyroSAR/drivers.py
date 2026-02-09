@@ -1370,7 +1370,14 @@ class CEOS_PSR(ID):
                 meta['projection'] = crsConvert(4326, 'wkt')
         ################################################################################################################
         # read data set summary record
-        
+
+        if meta['product'] == '1.5':
+            meta["heading_scene"] = float(dataSetSummary[148:164])
+            meta["heading"] = float(dataSetSummary[468:476])
+        else:
+            meta["heading_scene"] = None
+            meta["heading"] = None
+            
         scene_id = dataSetSummary[20:52].decode('ascii')
         
         if meta['sensor'] == 'PSR1':
