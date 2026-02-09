@@ -266,11 +266,15 @@ class ExamineSnap(object):
         else:
             return None
     
-    def get_version(self, module: str) -> dict[str, str]:
+    def get_version(self, module: str) -> str:
         """
         Read the version and date of different SNAP modules.
-        This scans a file 'messages.log', which is re-written every time SNAP is started.
+        The following SNAP command is called to get the information:
         
+        .. code-block:: bash
+
+            snap --nosplash --nogui --modules --list --refresh
+    
         Parameters
         ----------
         module:
@@ -284,56 +288,42 @@ class ExamineSnap(object):
 
         Returns
         -------
-            a dictionary with keys 'version' and 'date'
+            the version number
         """
-        # base search patterns for finding the right lines
-        patterns = {'core': r'org.esa.snap.snap.core',
-                    'desktop': r'org.esa.snap.snap.ui',
-                    'rstb': r'org.csa.rstb.rstb.kit',
-                    'opttbx': r'eu.esa.opt.opttbx.kit',
-                    'microwavetbx': r'eu.esa.microwavetbx.microwavetbx.kit'}
+        patterns = {'core': 'org.esa.snap.snap.core',
+                    'desktop': 'org.esa.snap.snap.ui',
+                    'rstb': 'org.csa.rstb.rstb.kit',
+                    'opttbx': 'eu.esa.opt.opttbx.kit',
+                    'microwavetbx': 'eu.esa.microwavetbx.microwavetbx.kit'}
         
-        if module in patterns.keys():
-            pattern = patterns[module]
-            pattern += r' \[(?P<version>[0-9.]+) [0-9.]+ (?P<date>[0-9]{12})'
-        else:
-            raise RuntimeError('module not supported')
+        if module not in patterns.keys():
+            raise ValueError(f"'{module}' is not a valid module name. "
+                             f"Supported options: {patterns.keys()}")
         
-        system = platform.system()
-        if system in ['Linux', 'Darwin']:
-            path = os.path.join(os.path.expanduser('~'), '.snap', 'system')
-        elif system == 'Windows':
-            path = os.path.join(os.environ['APPDATA'], 'SNAP')
-        else:
-            raise RuntimeError('operating system not supported')
+        cmd = [self.path, '--nosplash', '--nogui', '--modules', '--list', '--refresh']
         
-        conda_env_path = os.environ.get('CONDA_PREFIX')
-        if conda_env_path is not None and conda_env_path in self.gpt:
-            fname = os.path.join(conda_env_path, 'snap', '.snap', 'system', 'var', 'log', 'messages.log')
-        else:
-            fname = os.path.join(path, 'var', 'log', 'messages.log')
+        proc = sp.Popen(args=cmd, stdout=sp.PIPE, stderr=sp.PIPE,
+                        text=True, encoding='utf-8', bufsize=1)
         
-        err = ''
-        if not os.path.isfile(fname):
-            try:
-                # This will start SNAP and immediately stop it because of the invalid argument.
-                # Currently, this seems to be the only way to create the messages.log file if it does not exist.
-                proc = sp.Popen(args=[self.path, '--nosplash', '--dummytest', '--console', 'suppress'],
-                                stdout=sp.PIPE, stderr=sp.PIPE, text=True, encoding='utf-8')
-                out, err = proc.communicate()
-            except sp.CalledProcessError:
-                pass
+        counter = 0
+        lines = []
+        for line in proc.stdout:
+            if line.startswith('---'):
+                counter += 1
+            else:
+                if counter == 1:
+                    lines.append(line.rstrip())
+            if counter == 2:
+                proc.terminate()
+        proc.wait()
         
-        if not os.path.isfile(fname):
-            raise RuntimeError(err + "\ncannot find 'messages.log' to read SNAP module versions from.")
-        
-        with open(fname, 'r') as m:
-            content = m.read()
-        match = re.search(pattern, content)
-        if match is None:
-            raise RuntimeError(f'cannot read version information from {fname}.'
-                               f'\nPlease restart SNAP.')
-        return match.groupdict()
+        for line in lines:
+            code, version, state = re.split(r'\s+', line)
+            if patterns[module] == code:
+                if state == 'Available':
+                    raise RuntimeError(f'{module} is not installed')
+                return version
+        raise RuntimeError(f"could not find version information for module '{module}'.")
     
     @property
     def auxdatapath(self):
