@@ -302,22 +302,31 @@ class ExamineSnap(object):
         
         cmd = [self.path, '--nosplash', '--nogui', '--modules', '--list', '--refresh']
         
-        proc = sp.Popen(args=cmd, stdout=sp.PIPE, stderr=sp.PIPE,
+        proc = sp.Popen(args=cmd, stdout=sp.PIPE, stderr=sp.STDOUT,
                         text=True, encoding='utf-8', bufsize=1)
         
         counter = 0
         lines = []
+        lines_info = []
         for line in proc.stdout:
+            line = line.rstrip()
+            lines.append(line)
             if line.startswith('---'):
                 counter += 1
             else:
                 if counter == 1:
-                    lines.append(line.rstrip())
+                    lines_info.append(line)
             if counter == 2:
                 proc.terminate()
         proc.wait()
         
-        for line in lines:
+        if proc.returncode != 0:
+            msg_snap = '\n'.join(lines)
+            raise RuntimeError(f"{msg_snap}\nSNAP exited with an error "
+                               f"trying to get version information for "
+                               f"module '{module}'.")
+        
+        for line in lines_info:
             code, version, state = re.split(r'\s+', line)
             if patterns[module] == code:
                 if state == 'Available':
