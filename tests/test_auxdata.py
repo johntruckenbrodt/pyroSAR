@@ -1,8 +1,8 @@
-# import os
-# import pytest
-# from pyroSAR.auxdata import dem_autoload, DEMHandler, dem_create
-#
-# from spatialist import bbox
+import os
+import pytest
+from pyroSAR.auxdata import dem_autoload, DEMHandler, dem_create
+
+from spatialist import bbox
 
 # def test_handler(auxdata_dem_cases):
 #     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51.1, 'ymax': 51.5}, crs=4326) as box:
