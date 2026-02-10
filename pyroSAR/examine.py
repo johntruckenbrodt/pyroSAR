@@ -320,14 +320,9 @@ class ExamineSnap(object):
                 proc.terminate()
         proc.wait()
         
-        if proc.returncode != 0:
-            msg_snap = '\n'.join(lines)
-            raise RuntimeError(f"{msg_snap}\nSNAP exited with an error "
-                               f"trying to get version information for "
-                               f"module '{module}'.")
-        
+        pattern = r'([a-z.]*)\s+([0-9.]+)\s+(.*)'
         for line in lines_info:
-            code, version, state = re.split(r'\s+', line)
+            code, version, state = re.search(pattern=pattern, string=line).groups()
             if patterns[module] == code:
                 if state == 'Available':
                     raise RuntimeError(f'{module} is not installed')
@@ -457,7 +452,7 @@ class SnapProperties(object):
     - `<SNAP installation directory>/etc`
     - `<user directory>/.snap/etc`
     
-    Configuration in the latter has higher priority and modified properties will
+    Configuration in the latter has higher priority, and modified properties will
     always be written there so that the installation directory is not modified.
 
     Parameters
