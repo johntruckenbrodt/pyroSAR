@@ -4,6 +4,7 @@ from pyroSAR.auxdata import dem_autoload, DEMHandler, dem_create
 
 from spatialist import bbox
 
+
 # def test_handler(auxdata_dem_cases):
 #     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51.1, 'ymax': 51.5}, crs=4326) as box:
 #         with DEMHandler([box]) as handler:
@@ -48,17 +49,17 @@ from spatialist import bbox
 #             files = dem_autoload([box], 'TDX90m')
 #         with pytest.raises(RuntimeError):
 #             dem_autoload([box], 'AW3D30', product='foobar')
-#
-#
-# def test_dem_create(tmpdir):
-#     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
-#         with pytest.raises(RuntimeError):
-#             files = dem_autoload([box], 'foobar')
-#         vrt = '/vsimem/test.vrt'
-#         dem_autoload([box], 'SRTM 3Sec', vrt=vrt)
-#     out = os.path.join(str(tmpdir), 'srtm.tif')
-#     dem_create(src=vrt, dst=out, t_srs=32632, tr=(90, 90), nodata=-32767)
-#     assert os.path.isfile(out)
+
+
+def test_dem_create(tmpdir):
+    with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
+        with pytest.raises(RuntimeError):
+            files = dem_autoload([box], 'foobar')
+        vrt = '/vsimem/test.vrt'
+        dem_autoload([box], 'SRTM 3Sec', vrt=vrt)
+    out = os.path.join(str(tmpdir), 'srtm.tif')
+    dem_create(src=vrt, dst=out, t_srs=32632, tr=(90, 90), nodata=-32767)
+    assert os.path.isfile(out)
 
 
 def test_intrange():
