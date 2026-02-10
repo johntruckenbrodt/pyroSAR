@@ -21,7 +21,7 @@ import fnmatch
 import ftplib
 import requests
 import zipfile as zf
-from lxml import etree, html
+from lxml import etree
 from math import ceil, floor
 from urllib.parse import urlparse
 from collections import defaultdict
@@ -690,11 +690,8 @@ class DEMHandler:
                     url = self.config[dem_type]['url']
                     response = requests.get(url)
                     response.raise_for_status()
-                    tree = html.fromstring(response.content)
-                    items = [f'{url}/{ln}'
-                             for ln in tree.xpath('//a/text()')
-                             if not ln.startswith('..')]
-                    out = defaultdict(defaultdict)
+                    items = re.findall(r'href="([^"]+)"', response.text)
+                    out = defaultdict(lambda: defaultdict)
                     patterns = {
                         'GETASSE30': '(?P<lat>[0-9]{2}[NS])(?P<lon>[0-9]{3}[EW])',
                         'SRTM 1Sec HGT': '(?P<lat>[NS][0-9]{2})(?P<lon>[EW][0-9]{3})',
