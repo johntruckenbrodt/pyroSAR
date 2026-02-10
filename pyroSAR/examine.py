@@ -446,8 +446,8 @@ class SnapProperties(object):
     SNAP configuration interface. This class enables reading and modifying
     SNAP configuration in properties files. Modified properties are directly
     written to the files.
-    Currently, the files `snap.properties` and `snap.auxdata.properties` are
-    supported. These files can be found in two locations:
+    Currently, the files `snap.properties`, `snap.auxdata.properties` and `snap.conf`
+    are supported. These files can be found in two locations:
     
     - `<SNAP installation directory>/etc`
     - `<user directory>/.snap/etc`
@@ -469,15 +469,23 @@ class SnapProperties(object):
     """
     
     def __init__(self, path):
-        self.pattern = r'^(?P<comment>#?)(?P<key>[\w\.]*)[ ]*=[ ]*(?P<value>.*)\n*'
+        self.pattern = r'^(?P<comment>#?)(?P<key>[\w\.]*)[ ]*=[ ]*"?(?P<value>[^"\n]*)"?\n*'
+        self.pattern_key_replace = r'^#?{}[ ]*=[ ]*(?P<value>.*)'
         self.properties_path = os.path.join(path, 'etc', 'snap.properties')
         self.auxdata_properties_path = os.path.join(path, 'etc', 'snap.auxdata.properties')
+        self.conf_path = os.path.join(path, 'etc', 'snap.conf')
         
         log.debug(f"reading {self.properties_path}")
         self.properties = self._to_dict(self.properties_path)
+        
+        log.debug(f"reading {self.auxdata_properties_path}")
         self.auxdata_properties = self._to_dict(self.auxdata_properties_path)
         
-        self._dicts = [self.properties, self.auxdata_properties]
+        log.debug(f"reading {self.conf_path}")
+        self.conf = self._to_dict(self.conf_path)
+        self.conf['default_options'] = self.conf['default_options'].split(' ')
+        
+        self._dicts = [self.properties, self.auxdata_properties, self.conf]
         
         # some properties need to be read from the default user path to
         # be visible to SNAP
@@ -490,48 +498,43 @@ class SnapProperties(object):
                     log.debug(f"updating keys {list(conf.keys())} from {default}")
                     self.properties.update(conf)
     
-    def __getitem__(self, key):
-        """
-        
-        Parameters
-        ----------
-        key: str
-        
-
-        Returns
-        -------
-
-        """
+    def __getitem__(
+            self,
+            key: str
+    ) -> int | float | str | list[str]:
         for section in self._dicts:
             if key in section:
-                return section[key]
+                return section[key].copy() \
+                    if hasattr(section[key], 'copy') \
+                    else section[key]
         raise KeyError(f'could not find key {key}')
     
-    def __setitem__(self, key, value):
-        """
-        
-        Parameters
-        ----------
-        key: str
-        value: Any
-
-        Returns
-        -------
-
-        """
+    def __setitem__(
+            self,
+            key: str,
+            value: int | float | str | list[str] | None
+    ) -> None:
+        if not (isinstance(value, (int, float, str, list)) or value is None):
+            raise TypeError(f'invalid type for key {key}: {type(value)}')
         if value == self[key] and isinstance(value, type(self[key])):
             return
         if key in self.properties:
             self.properties[key] = value
-        else:
+        elif key in self.auxdata_properties:
             self.auxdata_properties[key] = value
+        else:
+            self.conf[key] = value
         if value is not None:
+            if isinstance(value, list):
+                value = ' '.join(value)
             value = str(value).encode('unicode-escape').decode()
             value = value.replace(':', '\\:')
         if key in self.properties:
             path = self.userpath_properties
         elif key in self.auxdata_properties:
             path = self.userpath_auxdata_properties
+        elif key in self.conf:
+            path = self.userpath_conf
         else:
             raise KeyError(f'unknown key {key}')
         if os.path.isfile(path):
@@ -539,7 +542,7 @@ class SnapProperties(object):
                 content = f.read()
         else:
             content = ''
-        pattern = r'#?{}[ ]*=[ ]*(?P<value>.*)'.format(key)
+        pattern = self.pattern_key_replace.format(key)
         match = re.search(pattern, content)
         if match:
             repl = f'#{key} =' if value is None else f'{key} = {value}'
@@ -548,7 +551,7 @@ class SnapProperties(object):
             content += f'\n{key} = {value}'
         
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        log.debug(f"writing key '{key}' with value '{value}' to '{path}'")
+        log.debug(f"writing key '{key}' to '{path}'")
         with open(path, 'w') as f:
             f.write(content)
     
@@ -625,3 +628,8 @@ class SnapProperties(object):
     def userpath_properties(self):
         return os.path.join(os.path.expanduser('~'), '.snap',
                             'etc', 'snap.properties')
+    
+    @property
+    def userpath_conf(self):
+        return os.path.join(os.path.expanduser('~'), '.snap',
+                            'etc', 'snap.conf')
