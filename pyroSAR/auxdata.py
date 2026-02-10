@@ -657,7 +657,6 @@ class DEMHandler:
                         if marker:
                             params["marker"] = marker
                         r = requests.get(URL_STAC, params=params)
-                        print(r.url)
                         root = etree.fromstring(r.content)
                         is_truncated = root.find(path="./IsTruncated",
                                                  namespaces=root.nsmap).text == "true"
