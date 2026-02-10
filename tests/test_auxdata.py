@@ -5,13 +5,13 @@ from pyroSAR.auxdata import dem_autoload, DEMHandler, dem_create
 from spatialist import bbox
 
 
-# def test_handler(auxdata_dem_cases):
-#     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51.1, 'ymax': 51.5}, crs=4326) as box:
-#         with DEMHandler([box]) as handler:
-#             for demType, reference in auxdata_dem_cases:
-#                 result = handler.remote_ids(dem_type=demType, extent=box.extent)
-#                 assert result == reference
-#
+def test_handler(auxdata_dem_cases):
+    with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51.1, 'ymax': 51.5}, crs=4326) as box:
+        with DEMHandler([box]) as handler:
+            for demType, reference in auxdata_dem_cases:
+                result = handler.remote_ids(dem_type=demType, extent=box.extent)
+                assert result == reference
+
 #     with bbox({'xmin': -58.9, 'xmax': -58.5, 'ymin': -51.5, 'ymax': -51.1}, crs=4326) as box:
 #         with DEMHandler([box]) as handler:
 #             cases = [('AW3D30', ['S055W060/S052W059.tar.gz']),
@@ -51,15 +51,15 @@ from spatialist import bbox
 #             dem_autoload([box], 'AW3D30', product='foobar')
 
 
-def test_dem_create(tmpdir):
-    with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
-        with pytest.raises(RuntimeError):
-            files = dem_autoload([box], 'foobar')
-        vrt = '/vsimem/test.vrt'
-        dem_autoload([box], 'SRTM 3Sec', vrt=vrt)
-    out = os.path.join(str(tmpdir), 'srtm.tif')
-    dem_create(src=vrt, dst=out, t_srs=32632, tr=(90, 90), nodata=-32767)
-    assert os.path.isfile(out)
+# def test_dem_create(tmpdir):
+#     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
+#         with pytest.raises(RuntimeError):
+#             files = dem_autoload([box], 'foobar')
+#         vrt = '/vsimem/test.vrt'
+#         dem_autoload([box], 'SRTM 3Sec', vrt=vrt)
+#     out = os.path.join(str(tmpdir), 'srtm.tif')
+#     dem_create(src=vrt, dst=out, t_srs=32632, tr=(90, 90), nodata=-32767)
+#     assert os.path.isfile(out)
 
 
 def test_intrange():
