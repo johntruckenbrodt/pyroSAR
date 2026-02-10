@@ -1,6 +1,7 @@
 import os
 import pytest
 import platform
+from pyroSAR.examine import ExamineSnap
 
 
 @pytest.fixture
@@ -63,7 +64,15 @@ def auxdata_dem_cases():
 def tmp_home(monkeypatch, tmp_path):
     home = tmp_path / 'tmp_home'
     home.mkdir()
+    snap = home / '.snap'
     var = 'USERPROFILE' if platform.system() == 'Windows' else 'HOME'
     monkeypatch.setenv(var, str(home))
+    snap_config = ExamineSnap()
+    snap_config.userpath = str(snap)
+    snap_config.auxdatapath = str(snap / 'auxdata')
+    
     assert os.path.expanduser('~') == str(home)
+    default_opts = snap_config.snap_properties['default_options']
+    assert '-Dnetbeans.user' in default_opts
+    assert default_opts[default_opts.index('-Dnetbeans.user') + 1] == str(snap)
     yield home
