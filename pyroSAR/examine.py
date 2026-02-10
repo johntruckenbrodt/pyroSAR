@@ -327,7 +327,8 @@ class ExamineSnap(object):
                 if state == 'Available':
                     raise RuntimeError(f'{module} is not installed')
                 return version
-        raise RuntimeError(f"could not find version information for module '{module}'.")
+        raise RuntimeError(f"{'\n'.join(lines)}\nCould not find version "
+                           f"information for module '{module}'.")
     
     @property
     def auxdatapath(self):
