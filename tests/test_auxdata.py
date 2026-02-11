@@ -8,16 +8,16 @@ from spatialist import bbox
 def test_handler(auxdata_dem_cases):
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51.1, 'ymax': 51.5}, crs=4326) as box:
         with DEMHandler([box]) as handler:
+            assert isinstance(handler.auxdatapath, str)
             for demType, reference in auxdata_dem_cases:
                 result = handler.remote_ids(dem_type=demType, extent=box.extent)
                 assert result == reference
     
-    with bbox({'xmin': -11.9, 'xmax': -11.5, 'ymin': -51.5, 'ymax': -51.1}, crs=4326) as box:
+    with bbox({'xmin': -58.9, 'xmax': -58.5, 'ymin': -51.5, 'ymax': -51.1}, crs=4326) as box:
         with DEMHandler([box]) as handler:
-            cases = [('AW3D30', ['S055W015/S052W012.tar.gz']),
-                     ('SRTM 1Sec HGT', ['S52W012.SRTMGL1.hgt.zip']),
-                     ('SRTM 3Sec', ['srtm_34_23.zip']),
-                     # ('TDX90m', ['DEM/S52/W010/TDM1_DEM__30_S52W012.zip'])
+            cases = [('AW3D30', ['S055W060/S052W059.tar.gz']),
+                     ('SRTM 1Sec HGT', ['https://step.esa.int/auxdata/dem/SRTMGL1/S52W059.SRTMGL1.hgt.zip']),
+                     ('SRTM 3Sec', ['https://step.esa.int/auxdata/dem/SRTM90/tiff/srtm_25_23.zip'])
                      ]
             for demType, reference in cases:
                 result = handler.remote_ids(dem_type=demType, extent=box.extent)
@@ -42,6 +42,8 @@ def test_autoload(auxdata_dem_cases, travis):
             assert len(files) == 1
         files = dem_autoload([box], 'SRTM 1Sec HGT')
         assert len(files) == 1
+        files = dem_autoload([box], 'SRTM 1Sec HGT', offline=True)
+        assert len(files) == 1
         files = dem_autoload([box], 'SRTM 3Sec')
         assert len(files) == 1
         with pytest.raises(RuntimeError):
@@ -61,7 +63,7 @@ def test_dem_create(tmpdir):
     assert os.path.isfile(out)
 
 
-def test_remote_ids():
+def test_intrange():
     ext = {'xmin': 11, 'xmax': 12,
            'ymin': 51, 'ymax': 51.5}
     with bbox(ext, 4326) as box:

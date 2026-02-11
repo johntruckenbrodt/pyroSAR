@@ -52,11 +52,15 @@ def testdata(testdir):
 
 @pytest.fixture
 def auxdata_dem_cases():
-    cases = [('AW3D30', ['N050E010/N051E011.tar.gz']),
-             ('SRTM 1Sec HGT', ['N51E011.SRTMGL1.hgt.zip']),
-             ('SRTM 3Sec', ['srtm_39_02.zip']),
-             # ('TDX90m', ['DEM/N51/E010/TDM1_DEM__30_N51E011.zip'])
-             ]
+    cases = [
+        ('AW3D30', ['N050E010/N051E011.tar.gz']),
+        ('SRTM 1Sec HGT', ['https://step.esa.int/auxdata/dem/SRTMGL1/N51E011.SRTMGL1.hgt.zip']),
+        ('SRTM 3Sec', ['https://step.esa.int/auxdata/dem/SRTM90/tiff/srtm_39_02.zip']),
+        ('Copernicus 30m Global DEM', ['https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/'
+                                       'Copernicus_DSM_COG_10_N51_00_E011_00_DEM/'
+                                       'Copernicus_DSM_COG_10_N51_00_E011_00_DEM.tif'])
+        # ('TDX90m', ['DEM/N51/E010/TDM1_DEM__30_N51E011.zip'])
+    ]
     return cases
 
 
