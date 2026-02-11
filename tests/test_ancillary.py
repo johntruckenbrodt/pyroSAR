@@ -171,6 +171,7 @@ def test_lock(tmpdir):
             with Lock(f1, soft=True):
                 assert os.path.isfile(f1 + '.lock')
     
+    # cannot nest write-lock in read-lock
     with Lock(f1, soft=True):
         with pytest.raises(RuntimeError):
             with Lock(f1):
@@ -183,3 +184,13 @@ def test_lock(tmpdir):
     except RuntimeError as e:
         lock.remove(exc_type=type(e))
     assert os.path.isfile(f1 + '.error')
+    # cannot acquire lock on a damaged target
+    with pytest.raises(RuntimeError):
+        lock = Lock(f1)
+    os.remove(f1 + '.error')
+    
+    # cannot acquire lock if there is a (simulated) lock
+    Path(f1 + '.lock').touch()
+    with pytest.raises(RuntimeError):
+        lock2 = Lock(f1, timeout=5)
+    os.remove(f1 + '.lock')
