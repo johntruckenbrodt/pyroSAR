@@ -574,18 +574,13 @@ class Lock(object):
     
     def remove(self, exc_type=None):
         """
-        Remove the acquired soft/hard lock
-        
-        Returns
-        -------
-
+        Remove the acquired soft/hard lock or rename it to an error lock.
         """
         Lock._nesting_levels[self.target] -= 1
         if Lock._nesting_levels[self.target] == 0:
-            if not self.soft and exc_type is not None:
-                if os.path.exists(self.target):
-                    os.rename(self.lock, self.error)
-                    log.debug(f'placed error-lock on {self.target}')
+            if not self.soft and exc_type is not None and os.path.exists(self.target):
+                os.rename(self.lock, self.error)
+                log.debug(f'placed error-lock on {self.target}')
             else:
                 if self.soft:
                     os.remove(self.used)
