@@ -120,3 +120,7 @@ dev_*
 
 # OSX tempfiles
 .DS_Store
+
+# VSCODE 
+.vscode/
+tests/.vscode/
