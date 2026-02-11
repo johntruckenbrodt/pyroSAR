@@ -89,6 +89,7 @@ jobs:
       - uses: nyurik/action-setup-postgis@v2.2
         with:
           cached-dir: C:\downloads
+          postgres-version: 17
 
       # ---------------- SNAP cache ----------------
       - name: Cache SNAP zip
