@@ -10,3 +10,4 @@ dependencies:
   - sphinxcontrib-bibtex>=2.2
   - sphinxcontrib-svg2pdfconverter
   - cairosvg
+  - sphinx-autodoc-typehints

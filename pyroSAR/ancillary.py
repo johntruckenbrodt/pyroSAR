@@ -25,27 +25,30 @@ from datetime import datetime
 from . import patterns
 from spatialist.ancillary import finder
 from dataclasses import dataclass
-from typing import Optional, Literal
+from typing import Optional, Literal, Self, Callable, Any
+from types import TracebackType
 import logging
 
 log = logging.getLogger(__name__)
 
 
-def groupby(images, attribute):
+def groupby(
+        images: list[str],
+        attribute: str
+) -> list[list[str]]:
     """
     group a list of images by a metadata attribute
     
     Parameters
     ----------
-    images: list[str]
+    images:
         the names of the images to be sorted
-    attribute: str
+    attribute:
         the name of the attribute used for sorting;
         see :func:`parse_datasetname` for options
     
     Returns
     -------
-    list[list[str]]
         a list of sub-lists containing the grouped images
     """
     images_sort = sorted(images, key=lambda x: re.search(patterns.pyrosar, x).group(attribute))
@@ -62,22 +65,25 @@ def groupby(images, attribute):
     return out
 
 
-def groupbyTime(images, function, time):
+def groupbyTime(
+        images: list[str],
+        function: Callable[[str], Any],
+        time: int | float
+) -> list[list[str]]:
     """
     function to group images by their acquisition time difference
 
     Parameters
     ----------
-    images: list[str]
+    images:
         a list of image names
-    function: function
+    function:
         a function to derive the time from the image names; see e.g. :func:`seconds`
-    time: int or float
+    time:
         a time difference in seconds by which to group the images
 
     Returns
     -------
-    list[list[str]]
         a list of sub-lists containing the grouped images
     """
     # sort images by time stamp
@@ -203,7 +209,7 @@ def multilook_factors(
     return rglks, azlks
 
 
-def seconds(filename):
+def seconds(filename: str) -> float:
     """
     function to extract time in seconds from a file name.
     the format must follow a fixed pattern: YYYYmmddTHHMMSS
@@ -211,12 +217,11 @@ def seconds(filename):
 
     Parameters
     ----------
-    filename: str
+    filename:
         the name of a file from which to extract the time from
 
     Returns
     -------
-    float
         the difference between the time stamp in filename and Jan 01 1900 in seconds
     """
     # return mktime(strptime(re.findall('[0-9T]{15}', filename)[0], '%Y%m%dT%H%M%S'))
@@ -224,20 +229,22 @@ def seconds(filename):
     return td.total_seconds()
 
 
-def parse_datasetname(name, parse_date=False):
+def parse_datasetname(
+        name: str,
+        parse_date: bool = False
+) -> dict[str, str | None | list[str] | datetime]:
     """
     Parse the name of a pyroSAR processing product and extract its metadata components as dictionary
     
     Parameters
     ----------
-    name: str
+    name:
         the name of the file to be parsed
-    parse_date: bool
+    parse_date:
         parse the start date to a :class:`~datetime.datetime` object or just return the string?
     
     Returns
     -------
-    dict
         the metadata attributes
     
     Examples
@@ -265,15 +272,19 @@ def parse_datasetname(name, parse_date=False):
     return out
 
 
-def find_datasets(directory, recursive=False, **kwargs):
+def find_datasets(
+        directory: str,
+        recursive: bool = False,
+        **kwargs
+) -> list[str]:
     """
     find pyroSAR datasets in a directory based on their metadata
     
     Parameters
     ----------
-    directory: str
+    directory:
         the name of the directory to be searched
-    recursive: bool
+    recursive:
         search the directory recursively into subdirectories?
     kwargs:
         Metadata attributes for filtering the scene list supplied as `key=value`. e.g. `sensor='S1A'`.
@@ -285,7 +296,6 @@ def find_datasets(directory, recursive=False, **kwargs):
     
     Returns
     -------
-    list of str
         the file names found in the directory and filtered by metadata attributes
     
     Examples
@@ -312,54 +322,56 @@ def find_datasets(directory, recursive=False, **kwargs):
     return selection
 
 
-def getargs(func):
+def getargs(func: Callable[..., Any]) -> list[str]:
     """
     get the arguments of a function
     
     Parameters
     ----------
-    func: function
+    func:
         the function to be checked
 
     Returns
     -------
-    list or str
         the argument names
     """
     return sorted(inspect.getfullargspec(func).args)
 
 
-def hasarg(func, arg):
+def hasarg(func: Callable[..., Any], arg: str) -> bool:
     """
     simple check whether a function takes a parameter as input
     
     Parameters
     ----------
-    func: function
+    func:
         the function to be checked
-    arg: str
+    arg:
         the argument name to be found
 
     Returns
     -------
-    bool
         does the function take this as argument?
     """
     return arg in getargs(func)
 
 
-def windows_fileprefix(func, path, exc_info):
+def windows_fileprefix(
+        func: Callable[[str], object],
+        path: str,
+        exc_info: tuple[type[BaseException], BaseException, TracebackType | None],
+) -> None:
     """
     Helper function for :func:`shutil.rmtree` to exceed Windows' file name length limit of 256 characters.
     See `here <https://stackoverflow.com/questions/36219317/pathname-too-long-to-open>`_ for details.
 
     Parameters
     ----------
-    func: function
+    func:
         the function to be executed, i.e. :func:`shutil.rmtree`
-    path: str
+    path:
         the path to be deleted
-    exc_info: tuple
+    exc_info:
         execution info as returned by :func:`sys.exc_info`
 
     Returns
@@ -400,8 +412,9 @@ class Lock(object):
     lock may be acquired whilst usage locks exist. On error usage locks are simply
     deleted.
     
-    The class supports nested locks. One function might lock a file and another
-    function called inside it will reuse this lock if it tries to lock the file.
+    The class supports nested locks. One function might lock a file, and another
+    function called in the same process will reuse this lock if it tries to lock
+    the file.
     
     It may happen that lock files remain when a process is killed by HPC schedulers
     like Slurm because in this case the process is not ended by Python. Optimally,
@@ -423,17 +436,22 @@ class Lock(object):
 
     Parameters
     ----------
-    target: str
+    target:
         the file/folder to lock
-    soft: bool
+    soft:
         lock the file/folder only for reading (and not for modification)?
-    timeout: int
+    timeout:
         the time in seconds to retry acquiring a lock
     """
     _instances = {}
     _nesting_levels = {}
     
-    def __new__(cls, target, soft=False, timeout=7200):
+    def __new__(
+            cls,
+            target: str,
+            soft: bool = False,
+            timeout: int = 7200
+    ) -> Self:
         target_abs = os.path.abspath(os.path.expanduser(target))
         if target_abs not in cls._instances:
             log.debug(f'creating lock instance for target {target_abs}')
@@ -449,7 +467,12 @@ class Lock(object):
             log.debug(f'reusing lock instance for target {target_abs}')
         return cls._instances[target_abs]
     
-    def __init__(self, target, soft=False, timeout=7200):
+    def __init__(
+            self,
+            target: str,
+            soft: bool = False,
+            timeout: int = 7200
+    ) -> None:
         if not hasattr(self, '_initialized'):
             self.target = os.path.abspath(os.path.expanduser(target))
             used_id = str(uuid.uuid4())
@@ -480,26 +503,30 @@ class Lock(object):
             self._initialized = True
         Lock._nesting_levels[self.target] += 1
     
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
     
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+    ) -> None:
         self.remove(exc_type)
     
-    def is_used(self):
+    def is_used(self) -> bool:
         """
         Does any usage lock exist?
-        
-        Returns
-        -------
-        bool
         """
         base = os.path.basename(self.target)
         folder = os.path.dirname(self.target)
         files = list(Path(folder).glob(base + '.used*'))
         return len(files) > 0
     
-    def remove(self, exc_type=None):
+    def remove(
+            self,
+            exc_type: type[BaseException] | None = None
+    ) -> None:
         """
         Remove the acquired soft/hard lock or rename it to an error lock.
         """
@@ -527,20 +554,30 @@ class LockCollection(object):
 
     Parameters
     ----------
-    targets: list[str]
+    targets:
         the files/folders to lock
-    soft: bool
+    soft:
         lock the files/folders only for reading (and not for modification)?
-    timeout: int
+    timeout:
         the time in seconds to retry acquiring a lock
     """
     
-    def __init__(self, targets, soft=False, timeout=7200):
+    def __init__(
+            self,
+            targets: list[str],
+            soft: bool = False,
+            timeout: int = 7200
+    ):
         self.locks = [Lock(x, soft=soft, timeout=timeout) for x in targets]
     
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
     
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+    ) -> None:
         for lock in reversed(self.locks):
             lock.__exit__(exc_type, exc_value, traceback)
