@@ -691,16 +691,18 @@ class DEMHandler:
                     response = requests.get(url)
                     response.raise_for_status()
                     items = re.findall(r'href="([^"]+)"', response.text)
-                    out = defaultdict(lambda: defaultdict)
+                    out = defaultdict(lambda: defaultdict(dict))
                     patterns = {
                         'GETASSE30': '(?P<lat>[0-9]{2}[NS])(?P<lon>[0-9]{3}[EW])',
                         'SRTM 1Sec HGT': '(?P<lat>[NS][0-9]{2})(?P<lon>[EW][0-9]{3})',
                         'SRTM 3Sec': '(?P<lon>[0-9]{2})_(?P<lat>[0-9]{2})'
                     }
                     for item in items:
-                        base = os.path.basename(item)
-                        coord = re.search(patterns[dem_type], base).groupdict()
-                        out[coord['lat']][coord['lon']] = {'dem': item}
+                        if item == '../':
+                            continue
+                        link = url.rstrip('/') + '/' + item
+                        coord = re.search(patterns[dem_type], item).groupdict()
+                        out[coord['lat']][coord['lon']] = {'dem': link}
                 else:
                     raise RuntimeError(f"local indexing is not supported "
                                        f"for DEM type {dem_type}")
