@@ -1,7 +1,7 @@
 ###############################################################################
 # ancillary routines for software pyroSAR
 
-# Copyright (c) 2014-2025, the pyroSAR Developers.
+# Copyright (c) 2014-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -501,18 +501,13 @@ class Lock(object):
     
     def remove(self, exc_type=None):
         """
-        Remove the acquired soft/hard lock
-        
-        Returns
-        -------
-
+        Remove the acquired soft/hard lock or rename it to an error lock.
         """
         Lock._nesting_levels[self.target] -= 1
         if Lock._nesting_levels[self.target] == 0:
-            if not self.soft and exc_type is not None:
-                if os.path.exists(self.target):
-                    os.rename(self.lock, self.error)
-                    log.debug(f'placed error-lock on {self.target}')
+            if not self.soft and exc_type is not None and os.path.exists(self.target):
+                os.rename(self.lock, self.error)
+                log.debug(f'placed error-lock on {self.target}')
             else:
                 if self.soft:
                     os.remove(self.used)
