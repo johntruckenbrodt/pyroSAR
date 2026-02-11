@@ -240,7 +240,6 @@ def test_archive2(tmpdir, testdata):
         db = pyroSAR.Archive(testdata['archive_old_bbox'])
 
 
-@pytest.mark.skipif(platform.system() == 'Windows', reason='temporarily disabled')
 def test_archive_postgres(tmpdir, testdata):
     pguser = os.environ.get('PGUSER')
     pgpassword = os.environ.get('PGPASSWORD')
