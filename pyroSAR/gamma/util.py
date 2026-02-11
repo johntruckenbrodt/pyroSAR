@@ -1,7 +1,7 @@
 ###############################################################################
 # universal core routines for processing SAR images with GAMMA
 
-# Copyright (c) 2014-2026, the pyroSAR Developers.
+# Copyright (c) 2014-2023, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -388,12 +388,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 with Lock(outname):
                     if do_execute(pars, ['MLI', 'MLI_par'], exist_ok):
                         isp.par_S1_GRD(**pars)
-                        # the following locking was added to fix a FileNotFound error
-                        # on the par file (likely due to GPFS latency).
-                        with Lock(outname + '.par', soft=True):
-                            with Lock(outname + '.hdr'):
-                                if not os.path.isfile(outname + '.hdr'):
-                                    par2hdr(outname + '.par', outname + '.hdr')
+                        par2hdr(outname + '.par', outname + '.hdr')
             fnames.append(outname)
     
     elif cname == 'TSX':
