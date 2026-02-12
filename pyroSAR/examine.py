@@ -1,6 +1,6 @@
 ###############################################################################
 # Examination of SAR processing software
-# Copyright (c) 2019-2024, the pyroSAR Developers.
+# Copyright (c) 2019-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -13,9 +13,9 @@
 import json
 import os
 import shutil
-import platform
 import re
 import warnings
+import platform
 import subprocess as sp
 import importlib.resources
 
@@ -45,6 +45,7 @@ class ExamineSnap(object):
     :class:`~pyroSAR.examine.SnapProperties` or the properties :attr:`~pyroSAR.examine.ExamineSnap.userpath` and
     :attr:`~pyroSAR.examine.ExamineSnap.auxdatapath`.
     """
+    _version_dict = None
     
     def __init__(self):
         # update legacy config files
@@ -96,6 +97,10 @@ class ExamineSnap(object):
         
         # update the config file: this scans for config changes and re-writes the config file if any are found
         self.__update_config()
+        
+        if ExamineSnap._version_dict is None:
+            ExamineSnap._version_dict = self.__read_version_dict()
+        self.version_dict = ExamineSnap._version_dict
     
     def __getattr__(self, item):
         if item in ['path', 'gpt']:
@@ -217,6 +222,42 @@ class ExamineSnap(object):
                     # log.info('setting attribute {}'.format(attr))
                     setattr(self, attr, val)
     
+    def __read_version_dict(self):
+        log.debug('reading SNAP version information')
+        out = {}
+        
+        cmd = [self.path, '--nosplash', '--nogui', '--modules',
+               '--list', '--refresh']
+        if platform.system() == 'Windows':
+            cmd.extend(['--console', 'suppress'])
+        
+        proc = sp.Popen(args=cmd, stdout=sp.PIPE, stderr=sp.STDOUT,
+                        text=True, encoding='utf-8', bufsize=1)
+        
+        counter = 0
+        lines = []
+        lines_info = []
+        for line in proc.stdout:
+            line = line.rstrip()
+            lines.append(line)
+            if line.startswith('---'):
+                counter += 1
+            else:
+                if counter == 1:
+                    lines_info.append(line)
+            if counter == 2:
+                proc.terminate()
+        proc.wait()
+        
+        pattern = r'([a-z.]*)\s+([0-9.]+)\s+(.*)'
+        for line in lines_info:
+            code, version, state = re.search(pattern=pattern, string=line).groups()
+            out[code] = {'version': version, 'state': state}
+        if len(out) == 0:
+            raise RuntimeError(f'{"\n".join(lines)}\ncould not '
+                               f'read SNAP version information')
+        return out
+    
     def __update_config(self):
         for section in self.sections:
             if section not in __config__.sections:
@@ -266,14 +307,18 @@ class ExamineSnap(object):
         else:
             return None
     
-    def get_version(self, module):
+    def get_version(self, module: str) -> str:
         """
         Read the version and date of different SNAP modules.
-        This scans a file 'messages.log', which is re-written every time SNAP is started.
+        The following SNAP command is called to get the information:
         
+        .. code-block:: bash
+
+            snap --nosplash --nogui --modules --list --refresh --console suppress
+    
         Parameters
         ----------
-        module: str
+        module:
             one of the following
             
             - core
@@ -284,53 +329,27 @@ class ExamineSnap(object):
 
         Returns
         -------
-        dict
-            a dictionary with keys 'version' and 'date'
+            the version number
         """
-        # base search patterns for finding the right lines
-        patterns = {'core': r'org\.esa\.snap\.snap\.core',
-                    'desktop': r'org\.esa\.snap\.snap\.ui',
-                    'rstb': r'org\.csa\.rstb\.rstb\.kit',
-                    'opttbx': r'eu\.esa\.opt\.opttbx\.kit',
-                    'microwavetbx': r'eu\.esa\.microwavetbx\.microwavetbx\.kit'}
+        log.debug(f"reading version information for module '{module}'")
+        patterns = {'core': 'org.esa.snap.snap.core',
+                    'desktop': 'org.esa.snap.snap.ui',
+                    'rstb': 'org.csa.rstb.rstb.kit',
+                    'opttbx': 'eu.esa.opt.opttbx.kit',
+                    'microwavetbx': 'eu.esa.microwavetbx.microwavetbx.kit'}
         
-        if module in patterns.keys():
-            pattern = patterns[module]
-            pattern += r' \[(?P<version>[0-9.]+) [0-9.]+ (?P<date>[0-9]{12})'
-        else:
-            raise RuntimeError('module not supported')
+        if module not in patterns.keys():
+            raise ValueError(f"'{module}' is not a valid module name. "
+                             f"Supported options: {patterns.keys()}")
         
-        system = platform.system()
-        if system in ['Linux', 'Darwin']:
-            path = os.path.join(os.path.expanduser('~'), '.snap', 'system')
-        elif system == 'Windows':
-            path = os.path.join(os.environ['APPDATA'], 'SNAP')
-        else:
-            raise RuntimeError('operating system not supported')
-        
-        conda_env_path = os.environ.get('CONDA_PREFIX')
-        if conda_env_path is not None and conda_env_path in self.gpt:
-            fname = os.path.join(conda_env_path, 'snap', '.snap', 'system', 'var', 'log', 'messages.log')
-        else:
-            fname = os.path.join(path, 'var', 'log', 'messages.log')
-        
-        if not os.path.isfile(fname):
-            try:
-                # This will start SNAP and immediately stop it because of the invalid argument.
-                # Currently, this seems to be the only way to create the messages.log file if it does not exist.
-                sp.check_call([self.path, '--nosplash', '--dummytest', '--console', 'suppress'])
-            except sp.CalledProcessError:
-                pass
-        
-        if not os.path.isfile(fname):
-            raise RuntimeError("cannot find 'messages.log' to read SNAP module versions from.")
-        
-        with open(fname, 'r') as m:
-            content = m.read()
-        match = re.search(pattern, content)
-        if match is None:
-            raise RuntimeError('cannot read version information from {}.\nPlease restart SNAP.'.format(fname))
-        return match.groupdict()
+        for k, v in self.version_dict.items():
+            if patterns[module] == k:
+                if v['state'] == 'Available':
+                    raise RuntimeError(f'{module} is not installed')
+                log.debug(f'version is {v['version']}')
+                return v['version']
+        raise RuntimeError(f"Could not find version "
+                           f"information for module '{module}'.")
     
     @property
     def auxdatapath(self):
@@ -449,13 +468,13 @@ class SnapProperties(object):
     SNAP configuration interface. This class enables reading and modifying
     SNAP configuration in properties files. Modified properties are directly
     written to the files.
-    Currently, the files `snap.properties` and `snap.auxdata.properties` are
-    supported. These files can be found in two locations:
+    Currently, the files `snap.properties`, `snap.auxdata.properties` and `snap.conf`
+    are supported. These files can be found in two locations:
     
     - `<SNAP installation directory>/etc`
     - `<user directory>/.snap/etc`
     
-    Configuration in the latter has higher priority and modified properties will
+    Configuration in the latter has higher priority, and modified properties will
     always be written there so that the installation directory is not modified.
 
     Parameters
@@ -472,15 +491,35 @@ class SnapProperties(object):
     """
     
     def __init__(self, path):
-        self.pattern = r'^(?P<comment>#?)(?P<key>[\w\.]*)[ ]*=[ ]*(?P<value>.*)\n*'
-        self.properties_path = os.path.join(path, 'etc', 'snap.properties')
-        self.auxdata_properties_path = os.path.join(path, 'etc', 'snap.auxdata.properties')
+        self.pattern = r'^(?P<comment>#?)(?P<key>[\w\.]*)[ ]*=[ ]*"?(?P<value>[^"\n]*)"?\n*'
+        self.pattern_key_replace = r'#?{}[ ]*=[ ]*(?P<value>.*)'
         
+        self.properties_path = os.path.join(path, 'etc', 'snap.properties')
         log.debug(f"reading {self.properties_path}")
         self.properties = self._to_dict(self.properties_path)
-        self.auxdata_properties = self._to_dict(self.auxdata_properties_path)
+        self.properties.update(self._to_dict(self.userpath_properties))
         
-        self._dicts = [self.properties, self.auxdata_properties]
+        self.auxdata_properties_path = os.path.join(path, 'etc', 'snap.auxdata.properties')
+        log.debug(f"reading {self.auxdata_properties_path}")
+        self.auxdata_properties = self._to_dict(self.auxdata_properties_path)
+        self.auxdata_properties.update(self._to_dict(self.userpath_auxdata_properties))
+        
+        self.conf_path = os.path.join(path, 'etc', 'snap.conf')
+        log.debug(f"reading {self.conf_path}")
+        str_split = {'default_options': ' '}
+        self.conf = self._to_dict(path=self.conf_path, str_split=str_split)
+        self.conf.update(self._to_dict(self.userpath_conf, str_split=str_split))
+        
+        self._dicts = [self.properties, self.auxdata_properties, self.conf]
+        
+        # removing this because of
+        # "RuntimeError: OpenJDK 64-Bit Server VM warning: Options
+        # -Xverify:none and -noverify were deprecated in JDK 13 and will
+        # likely be removed in a future release."
+        if '-J-Xverify:none' in self.conf['default_options']:
+            opts = self.conf['default_options'].copy()
+            opts.remove('-J-Xverify:none')
+            self['default_options'] = opts
         
         # some properties need to be read from the default user path to
         # be visible to SNAP
@@ -493,48 +532,43 @@ class SnapProperties(object):
                     log.debug(f"updating keys {list(conf.keys())} from {default}")
                     self.properties.update(conf)
     
-    def __getitem__(self, key):
-        """
-        
-        Parameters
-        ----------
-        key: str
-        
-
-        Returns
-        -------
-
-        """
+    def __getitem__(
+            self,
+            key: str
+    ) -> int | float | str | list[str]:
         for section in self._dicts:
             if key in section:
-                return section[key]
+                return section[key].copy() \
+                    if hasattr(section[key], 'copy') \
+                    else section[key]
         raise KeyError(f'could not find key {key}')
     
-    def __setitem__(self, key, value):
-        """
-        
-        Parameters
-        ----------
-        key: str
-        value: Any
-
-        Returns
-        -------
-
-        """
+    def __setitem__(
+            self,
+            key: str,
+            value: int | float | str | list[str] | None
+    ) -> None:
+        if not (isinstance(value, (int, float, str, list)) or value is None):
+            raise TypeError(f'invalid type for key {key}: {type(value)}')
         if value == self[key] and isinstance(value, type(self[key])):
             return
         if key in self.properties:
             self.properties[key] = value
-        else:
+        elif key in self.auxdata_properties:
             self.auxdata_properties[key] = value
+        else:
+            self.conf[key] = value
         if value is not None:
+            if isinstance(value, list):
+                value = ' '.join(value)
             value = str(value).encode('unicode-escape').decode()
             value = value.replace(':', '\\:')
         if key in self.properties:
             path = self.userpath_properties
         elif key in self.auxdata_properties:
             path = self.userpath_auxdata_properties
+        elif key in self.conf:
+            path = self.userpath_conf
         else:
             raise KeyError(f'unknown key {key}')
         if os.path.isfile(path):
@@ -542,7 +576,7 @@ class SnapProperties(object):
                 content = f.read()
         else:
             content = ''
-        pattern = r'#?{}[ ]*=[ ]*(?P<value>.*)'.format(key)
+        pattern = self.pattern_key_replace.format(key)
         match = re.search(pattern, content)
         if match:
             repl = f'#{key} =' if value is None else f'{key} = {value}'
@@ -551,20 +585,30 @@ class SnapProperties(object):
             content += f'\n{key} = {value}'
         
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        log.debug(f"writing key '{key}' with value '{value}' to '{path}'")
+        log.debug(f"writing key '{key}' to '{path}'")
         with open(path, 'w') as f:
             f.write(content)
     
-    def _to_dict(self, path):
+    def _to_dict(
+            self,
+            path: str,
+            str_split: dict[str, str] | None=None
+    ) -> dict[str, int | float | str | None | list[str]]:
         """
+        Read a properties file into a dictionary.
+        Converts values into basic python types
         
         Parameters
         ----------
-        path: str
+        path:
+            the path to the properties file
+        str_split:
+            a dictionary with properties as keys and splitting characters as values
+            to split a string into a list of strings
 
         Returns
         -------
-        dict
+            the dictionary with the properties
         """
         out = {}
         if os.path.isfile(path):
@@ -573,8 +617,14 @@ class SnapProperties(object):
                     if re.search(self.pattern, line):
                         match = re.match(re.compile(self.pattern), line)
                         comment, key, value = match.groups()
-                        value = self._string_convert(value)
-                        out[key] = value if comment == '' else None
+                        if comment == '':
+                            if str_split is not None and key in str_split.keys():
+                                value = value.split(str_split[key])
+                            else:
+                                value = self._string_convert(value)
+                            out[key] = value
+                        else:
+                            out[key] = None
         return out
     
     @staticmethod
@@ -628,3 +678,8 @@ class SnapProperties(object):
     def userpath_properties(self):
         return os.path.join(os.path.expanduser('~'), '.snap',
                             'etc', 'snap.properties')
+    
+    @property
+    def userpath_conf(self):
+        return os.path.join(os.path.expanduser('~'), '.snap',
+                            'etc', 'snap.conf')

@@ -89,7 +89,7 @@ def parse_node(name, use_existing=True):
     {'selectedPolarisations': None, 'removeThermalNoise': 'true', 'reIntroduceThermalNoise': 'false'}
     """
     snap = ExamineSnap()
-    version = snap.get_version('microwavetbx')['version']
+    version = snap.get_version('microwavetbx')
     name = name if name.endswith('.xml') else name + '.xml'
     operator = os.path.splitext(name)[0]
     nodepath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')

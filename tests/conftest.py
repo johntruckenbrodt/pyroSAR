@@ -1,6 +1,9 @@
 import os
+import shutil
 import pytest
 import platform
+from pathlib import Path
+from pyroSAR.examine import ExamineSnap
 
 
 @pytest.fixture
@@ -63,11 +66,31 @@ def auxdata_dem_cases():
     return cases
 
 
-@pytest.fixture
-def tmp_home(monkeypatch, tmp_path):
-    home = tmp_path / 'tmp_home'
-    home.mkdir()
-    var = 'USERPROFILE' if platform.system() == 'Windows' else 'HOME'
-    monkeypatch.setenv(var, str(home))
+@pytest.fixture(scope='session', autouse=True)
+def tmp_home(tmp_path_factory):
+    home = tmp_path_factory.mktemp('home')
+    snap = home / '.snap'
+    
+    if platform.system() == 'Windows':
+        roaming_snap = Path(os.environ['APPDATA']) / 'SNAP'
+        var_home = 'USERPROFILE'
+        roaming = home / 'AppData' / 'Roaming'
+        local = home / 'AppData' / 'Local'
+        roaming.mkdir(parents=True, exist_ok=True)
+        if roaming_snap.exists():
+            shutil.copytree(roaming_snap, roaming / 'SNAP')
+        local.mkdir(parents=True, exist_ok=True)
+        os.environ['APPDATA'] = str(roaming)
+        os.environ['LOCALAPPDATA'] = str(local)
+        os.environ['HOME'] = str(home)
+    else:
+        var_home = 'HOME'
+    os.environ[var_home] = str(home)
+    
     assert os.path.expanduser('~') == str(home)
-    yield home
+    
+    snap_config = ExamineSnap()
+    snap_config.userpath = str(snap)
+    snap_config.auxdatapath = str(snap / 'auxdata')
+    
+    return home
