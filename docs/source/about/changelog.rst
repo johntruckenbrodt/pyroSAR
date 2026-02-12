@@ -1301,3 +1301,20 @@ Auxiliary Data Handling
 GAMMA API
 ---------
 - :class:`pyroSAR.gamma.auxil.ISPPar`: fixed `date` attribute handling
+
+0.34.0 | 2026-02-12
+===================
+
+Drivers
+-------
+- :class:`~pyroSAR.drivers.CEOS_PSR`: add new `meta` attributes `heading` and `heading_scene`
+
+Auxiliary Data Handling
+-----------------------
+- enable global search (the parameter `geometries` is now optional)
+- generation of local indices to avoid web traffic
+- option to work in offline mode
+
+Ancillary Tools
+---------------
+- class :class:`~pyroSAR.ancillary.Lock`: fixed bug where lock file would remain on error if target does not exist
