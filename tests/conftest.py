@@ -77,7 +77,8 @@ def tmp_home(tmp_path_factory):
         roaming = home / 'AppData' / 'Roaming'
         local = home / 'AppData' / 'Local'
         roaming.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(roaming_snap, roaming / 'SNAP')
+        if roaming_snap.exists():
+            shutil.copytree(roaming_snap, roaming / 'SNAP')
         local.mkdir(parents=True, exist_ok=True)
         os.environ['APPDATA'] = str(roaming)
         os.environ['LOCALAPPDATA'] = str(local)
