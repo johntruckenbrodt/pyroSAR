@@ -15,6 +15,7 @@ import os
 import shutil
 import re
 import warnings
+import platform
 import subprocess as sp
 import importlib.resources
 
@@ -226,7 +227,9 @@ class ExamineSnap(object):
         out = {}
         
         cmd = [self.path, '--nosplash', '--nogui', '--modules',
-               '--list', '--refresh', '--console', 'suppress']
+               '--list', '--refresh']
+        if platform.system() == 'Windows':
+            cmd.extend(['--console', 'suppress'])
         
         proc = sp.Popen(args=cmd, stdout=sp.PIPE, stderr=sp.STDOUT,
                         text=True, encoding='utf-8', bufsize=1)
