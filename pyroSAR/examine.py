@@ -254,7 +254,8 @@ class ExamineSnap(object):
             code, version, state = re.search(pattern=pattern, string=line).groups()
             out[code] = {'version': version, 'state': state}
         if len(out) == 0:
-            raise RuntimeError(f'{"\n".join(lines)}\ncould not '
+            snap_msg = "\n".join(lines)
+            raise RuntimeError(f'{snap_msg}\ncould not '
                                f'read SNAP version information')
         return out
     
@@ -346,7 +347,7 @@ class ExamineSnap(object):
             if patterns[module] == k:
                 if v['state'] == 'Available':
                     raise RuntimeError(f'{module} is not installed')
-                log.debug(f'version is {v['version']}')
+                log.debug(f'version is {v["version"]}')
                 return v['version']
         raise RuntimeError(f"Could not find version "
                            f"information for module '{module}'.")
