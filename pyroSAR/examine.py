@@ -44,6 +44,7 @@ class ExamineSnap(object):
     :class:`~pyroSAR.examine.SnapProperties` or the properties :attr:`~pyroSAR.examine.ExamineSnap.userpath` and
     :attr:`~pyroSAR.examine.ExamineSnap.auxdatapath`.
     """
+    _version_dict = None
     
     def __init__(self):
         # update legacy config files
@@ -95,6 +96,10 @@ class ExamineSnap(object):
         
         # update the config file: this scans for config changes and re-writes the config file if any are found
         self.__update_config()
+        
+        if ExamineSnap._version_dict is None:
+            ExamineSnap._version_dict = self.__read_version_dict()
+        self.version_dict = ExamineSnap._version_dict
     
     def __getattr__(self, item):
         if item in ['path', 'gpt']:
@@ -216,6 +221,37 @@ class ExamineSnap(object):
                     # log.info('setting attribute {}'.format(attr))
                     setattr(self, attr, val)
     
+    def __read_version_dict(self):
+        log.debug('reading SNAP version information')
+        out = {}
+        
+        cmd = [self.path, '--nosplash', '--nogui', '--modules',
+               '--list', '--refresh', '--console', 'suppress']
+        
+        proc = sp.Popen(args=cmd, stdout=sp.PIPE, stderr=sp.STDOUT,
+                        text=True, encoding='utf-8', bufsize=1)
+        
+        counter = 0
+        lines = []
+        lines_info = []
+        for line in proc.stdout:
+            line = line.rstrip()
+            lines.append(line)
+            if line.startswith('---'):
+                counter += 1
+            else:
+                if counter == 1:
+                    lines_info.append(line)
+            if counter == 2:
+                proc.terminate()
+        proc.wait()
+        
+        pattern = r'([a-z.]*)\s+([0-9.]+)\s+(.*)'
+        for line in lines_info:
+            code, version, state = re.search(pattern=pattern, string=line).groups()
+            out[code] = {'version': version, 'state': state}
+        return out
+    
     def __update_config(self):
         for section in self.sections:
             if section not in __config__.sections:
@@ -300,36 +336,13 @@ class ExamineSnap(object):
             raise ValueError(f"'{module}' is not a valid module name. "
                              f"Supported options: {patterns.keys()}")
         
-        cmd = [self.path, '--nosplash', '--nogui', '--modules',
-               '--list', '--refresh', '--console', 'suppress']
-        
-        proc = sp.Popen(args=cmd, stdout=sp.PIPE, stderr=sp.STDOUT,
-                        text=True, encoding='utf-8', bufsize=1)
-        
-        counter = 0
-        lines = []
-        lines_info = []
-        for line in proc.stdout:
-            line = line.rstrip()
-            lines.append(line)
-            if line.startswith('---'):
-                counter += 1
-            else:
-                if counter == 1:
-                    lines_info.append(line)
-            if counter == 2:
-                proc.terminate()
-        proc.wait()
-        
-        pattern = r'([a-z.]*)\s+([0-9.]+)\s+(.*)'
-        for line in lines_info:
-            code, version, state = re.search(pattern=pattern, string=line).groups()
-            if patterns[module] == code:
-                if state == 'Available':
+        for k, v in self.version_dict.items():
+            if patterns[module] == k:
+                if v['state'] == 'Available':
                     raise RuntimeError(f'{module} is not installed')
-                log.debug(f'version is {version}')
-                return version
-        raise RuntimeError(f"{'\n'.join(lines)}\nCould not find version "
+                log.debug(f'version is {v['version']}')
+                return v['version']
+        raise RuntimeError(f"Could not find version "
                            f"information for module '{module}'.")
     
     @property
