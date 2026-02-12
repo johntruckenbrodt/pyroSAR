@@ -13,7 +13,6 @@
 import json
 import os
 import shutil
-import platform
 import re
 import warnings
 import subprocess as sp
@@ -273,7 +272,7 @@ class ExamineSnap(object):
         
         .. code-block:: bash
 
-            snap --nosplash --nogui --modules --list --refresh
+            snap --nosplash --nogui --modules --list --refresh --console suppress
     
         Parameters
         ----------
@@ -290,6 +289,7 @@ class ExamineSnap(object):
         -------
             the version number
         """
+        log.debug(f"reading version information for module '{module}'")
         patterns = {'core': 'org.esa.snap.snap.core',
                     'desktop': 'org.esa.snap.snap.ui',
                     'rstb': 'org.csa.rstb.rstb.kit',
@@ -300,7 +300,8 @@ class ExamineSnap(object):
             raise ValueError(f"'{module}' is not a valid module name. "
                              f"Supported options: {patterns.keys()}")
         
-        cmd = [self.path, '--nosplash', '--nogui', '--modules', '--list', '--refresh']
+        cmd = [self.path, '--nosplash', '--nogui', '--modules',
+               '--list', '--refresh', '--console', 'suppress']
         
         proc = sp.Popen(args=cmd, stdout=sp.PIPE, stderr=sp.STDOUT,
                         text=True, encoding='utf-8', bufsize=1)
@@ -326,6 +327,7 @@ class ExamineSnap(object):
             if patterns[module] == code:
                 if state == 'Available':
                     raise RuntimeError(f'{module} is not installed')
+                log.debug(f'version is {version}')
                 return version
         raise RuntimeError(f"{'\n'.join(lines)}\nCould not find version "
                            f"information for module '{module}'.")
