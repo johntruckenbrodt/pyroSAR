@@ -232,20 +232,22 @@ def seconds(filename: str) -> float:
 def parse_datasetname(
         name: str,
         parse_date: bool = False
-) -> dict[str, str | None | list[str] | datetime]:
+) -> dict[str, str | None | list[str] | datetime] | None:
     """
-    Parse the name of a pyroSAR processing product and extract its metadata components as dictionary
+    Parse the name of a pyroSAR processing product
     
     Parameters
     ----------
     name:
         the name of the file to be parsed
     parse_date:
-        parse the start date to a :class:`~datetime.datetime` object or just return the string?
+        parse the start date to a :class:`~datetime.datetime`
+        object or just return the string?
     
     Returns
     -------
-        the metadata attributes
+        the metadata attributes parsed from the file name or
+        None if the file name does not match the pattern.
     
     Examples
     --------
