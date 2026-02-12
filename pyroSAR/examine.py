@@ -622,14 +622,6 @@ class SnapProperties(object):
     @userpath.setter
     def userpath(self, value):
         self['snap.userdir'] = value
-        
-        opts = self['default_options']
-        if '-Dnetbeans.user' in opts:
-            index = opts.index('-Dnetbeans.user')
-            opts[index + 1] = value
-        else:
-            opts.extend(['-Dnetbeans.user', value])
-        self['default_options'] = opts
     
     @property
     def userpath_auxdata_properties(self):
