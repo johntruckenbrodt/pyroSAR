@@ -125,18 +125,14 @@ jobs:
         run: |
           echo "C:\esa-snap\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Verify SNAP installation
-        shell: bash -el {0}
-        run: which snap64
-
       # ---------------- Python steps (micromamba env) ----------------
 
       - name: Verify micromamba python
-        shell: powershell
+        shell: bash -el {0}
         run: |
-          Write-Host "===== snap.conf ====="
-          Get-Content C:\esa-snap\etc\snap.conf
-          Write-Host "====================="
+          where python
+          python -V
+          where pip
 
       - name: Install pyroSAR
         shell: bash -el {0}
