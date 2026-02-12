@@ -96,7 +96,8 @@ jobs:
         id: cache-snap
         uses: actions/cache@v4
         with:
-          path: snap.zip
+          path: |
+            snap.zip
           key: snap-${{ env.SNAP_VERSION }}-windows
 
       - name: Download and install SNAP (cache miss)
