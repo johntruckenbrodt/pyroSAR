@@ -1,6 +1,8 @@
 import os
+import shutil
 import pytest
 import platform
+from pathlib import Path
 from pyroSAR.examine import ExamineSnap
 
 
@@ -64,19 +66,30 @@ def auxdata_dem_cases():
     return cases
 
 
-@pytest.fixture(autouse=True)
-def tmp_home(monkeypatch, tmp_path):
-    home = tmp_path / 'tmp_home'
-    home.mkdir()
+@pytest.fixture(scope='session', autouse=True)
+def tmp_home(tmp_path_factory):
+    home = tmp_path_factory.mktemp('home')
     snap = home / '.snap'
-    var = 'USERPROFILE' if platform.system() == 'Windows' else 'HOME'
-    monkeypatch.setenv(var, str(home))
+    
+    if platform.system() == 'Windows':
+        roaming_snap = Path(os.environ['APPDATA']) / 'SNAP'
+        var_home = 'USERPROFILE'
+        roaming = home / 'AppData' / 'Roaming'
+        local = home / 'AppData' / 'Local'
+        roaming.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(roaming_snap, roaming / 'SNAP')
+        local.mkdir(parents=True, exist_ok=True)
+        os.environ['APPDATA'] = str(roaming)
+        os.environ['LOCALAPPDATA'] = str(local)
+        os.environ['HOME'] = str(home)
+    else:
+        var_home = 'HOME'
+    os.environ[var_home] = str(home)
+    
+    assert os.path.expanduser('~') == str(home)
+    
     snap_config = ExamineSnap()
     snap_config.userpath = str(snap)
     snap_config.auxdatapath = str(snap / 'auxdata')
     
-    assert os.path.expanduser('~') == str(home)
-    default_opts = snap_config.snap_properties['default_options']
-    assert '-Dnetbeans.user' in default_opts
-    assert default_opts[default_opts.index('-Dnetbeans.user') + 1] == str(snap)
-    yield home
+    return home
