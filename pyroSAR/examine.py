@@ -250,6 +250,9 @@ class ExamineSnap(object):
         for line in lines_info:
             code, version, state = re.search(pattern=pattern, string=line).groups()
             out[code] = {'version': version, 'state': state}
+        if len(out) == 0:
+            raise RuntimeError(f'{"\n".join(lines)}\ncould not '
+                               f'read SNAP version information')
         return out
     
     def __update_config(self):
