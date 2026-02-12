@@ -568,16 +568,26 @@ class SnapProperties(object):
         with open(path, 'w') as f:
             f.write(content)
     
-    def _to_dict(self, path):
+    def _to_dict(
+            self,
+            path: str,
+            str_split: dict[str, str] | None=None
+    ) -> dict[str, int | float | str | None | list[str]]:
         """
+        Read a properties file into a dictionary.
+        Converts values into basic python types
         
         Parameters
         ----------
-        path: str
+        path:
+            the path to the properties file
+        str_split:
+            a dictionary with properties as keys and splitting characters as values
+            to split a string into a list of strings
 
         Returns
         -------
-        dict
+            the dictionary with the properties
         """
         out = {}
         if os.path.isfile(path):
@@ -586,8 +596,14 @@ class SnapProperties(object):
                     if re.search(self.pattern, line):
                         match = re.match(re.compile(self.pattern), line)
                         comment, key, value = match.groups()
-                        value = self._string_convert(value)
-                        out[key] = value if comment == '' else None
+                        if comment == '':
+                            if str_split is not None and key in str_split.keys():
+                                value = value.split(str_split[key])
+                            else:
+                                value = self._string_convert(value)
+                            out[key] = value
+                        else:
+                            out[key] = None
         return out
     
     @staticmethod
