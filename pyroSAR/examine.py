@@ -471,7 +471,8 @@ class SnapProperties(object):
     
     def __init__(self, path):
         self.pattern = r'^(?P<comment>#?)(?P<key>[\w\.]*)[ ]*=[ ]*"?(?P<value>[^"\n]*)"?\n*'
-        self.pattern_key_replace = r'^#?{}[ ]*=[ ]*(?P<value>.*)'
+        self.pattern_key_replace = r'#?{}[ ]*=[ ]*(?P<value>.*)'
+        
         self.properties_path = os.path.join(path, 'etc', 'snap.properties')
         self.auxdata_properties_path = os.path.join(path, 'etc', 'snap.auxdata.properties')
         self.conf_path = os.path.join(path, 'etc', 'snap.conf')
