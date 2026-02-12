@@ -474,18 +474,20 @@ class SnapProperties(object):
         self.pattern_key_replace = r'#?{}[ ]*=[ ]*(?P<value>.*)'
         
         self.properties_path = os.path.join(path, 'etc', 'snap.properties')
-        self.auxdata_properties_path = os.path.join(path, 'etc', 'snap.auxdata.properties')
-        self.conf_path = os.path.join(path, 'etc', 'snap.conf')
-        
         log.debug(f"reading {self.properties_path}")
         self.properties = self._to_dict(self.properties_path)
+        self.properties.update(self._to_dict(self.userpath_properties))
         
+        self.auxdata_properties_path = os.path.join(path, 'etc', 'snap.auxdata.properties')
         log.debug(f"reading {self.auxdata_properties_path}")
         self.auxdata_properties = self._to_dict(self.auxdata_properties_path)
+        self.auxdata_properties.update(self._to_dict(self.userpath_auxdata_properties))
         
+        self.conf_path = os.path.join(path, 'etc', 'snap.conf')
         log.debug(f"reading {self.conf_path}")
-        self.conf = self._to_dict(self.conf_path)
-        self.conf['default_options'] = self.conf['default_options'].split(' ')
+        str_split = {'default_options': ' '}
+        self.conf = self._to_dict(path=self.conf_path, str_split=str_split)
+        self.conf.update(self._to_dict(self.userpath_conf, str_split=str_split))
         
         self._dicts = [self.properties, self.auxdata_properties, self.conf]
         
