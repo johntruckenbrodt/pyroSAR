@@ -1331,4 +1331,11 @@ SNAP API
 
 SNAP API
 --------
-- :class:`pyroSAR.examine.ExamineSnap`: restore Python 3.10 compatibility
+- :class:`pyroSAR.examine.ExamineSnap`: restore Python 3.10 compatibility (f-string parsing issue)
+
+0.34.2 | 2026-02-13
+===================
+
+Ancillary Tools
+---------------
+- restored Python 3.10 compatibility (import `typing_extensions.Self` instead of `typing.Self` if necessary)
