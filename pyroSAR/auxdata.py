@@ -714,7 +714,14 @@ class DEMHandler:
         return index
     
     @staticmethod
-    def __retrieve(urls, outdir, offline=False, lock_timeout=600):
+    def __retrieve(
+            urls: list[str],
+            outdir: str,
+            offline: bool = False,
+            lock_timeout: int = 600
+    ) -> list[str]:
+        if len(urls) == 0:
+            return []
         # check that base URL is reachable
         if not offline:
             url_parse = urlparse(urls[0])
