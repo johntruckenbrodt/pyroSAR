@@ -14,6 +14,9 @@ from pyroSAR.examine import ExamineSnap
 def test_installation():
     reg = ExamineSnap()
     assert os.path.isfile(reg.gpt)
+    for module in ['core', 'desktop', 'rstb', 'opttbx', 'microwavetbx']:
+        version = reg.get_version(module=module)
+        assert isinstance(version, str)
 
 
 def test_consistency():

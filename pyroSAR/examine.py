@@ -97,10 +97,6 @@ class ExamineSnap(object):
         
         # update the config file: this scans for config changes and re-writes the config file if any are found
         self.__update_config()
-        
-        if ExamineSnap._version_dict is None:
-            ExamineSnap._version_dict = self.__read_version_dict()
-        self.version_dict = ExamineSnap._version_dict
     
     def __getattr__(self, item):
         if item in ['path', 'gpt']:
@@ -332,6 +328,9 @@ class ExamineSnap(object):
         -------
             the version number
         """
+        if ExamineSnap._version_dict is None:
+            ExamineSnap._version_dict = self.__read_version_dict()
+        
         log.debug(f"reading version information for module '{module}'")
         patterns = {'core': 'org.esa.snap.snap.core',
                     'desktop': 'org.esa.snap.snap.ui',
@@ -343,7 +342,7 @@ class ExamineSnap(object):
             raise ValueError(f"'{module}' is not a valid module name. "
                              f"Supported options: {patterns.keys()}")
         
-        for k, v in self.version_dict.items():
+        for k, v in ExamineSnap._version_dict.items():
             if patterns[module] == k:
                 if v['state'] == 'Available':
                     raise RuntimeError(f'{module} is not installed')
@@ -593,7 +592,7 @@ class SnapProperties(object):
     def _to_dict(
             self,
             path: str,
-            str_split: dict[str, str] | None=None
+            str_split: dict[str, str] | None = None
     ) -> dict[str, int | float | str | None | list[str]]:
         """
         Read a properties file into a dictionary.
