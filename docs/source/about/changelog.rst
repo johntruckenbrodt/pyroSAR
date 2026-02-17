@@ -1339,3 +1339,14 @@ SNAP API
 Ancillary Tools
 ---------------
 - restored Python 3.10 compatibility (import `typing_extensions.Self` instead of `typing.Self` if necessary)
+
+0.34.3 | 2026-02-17
+===================
+
+SNAP API
+--------
+- :class:`pyroSAR.examine.ExamineSnap`: do not call SNAP to read version info in `__init__`
+
+Auxiliary Data Handling
+-----------------------
+- handle empty URL lists in `DEMHandler.__retrieve`
