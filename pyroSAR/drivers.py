@@ -325,7 +325,7 @@ class ID(object):
             geom.CloseRings()
         exterior = points = None
         
-        bbox = Vector(driver='Memory')
+        bbox = Vector(driver='MEM')
         bbox.addlayer('geometry', srs, geom.GetGeometryType())
         bbox.addfield('area', ogr.OFTReal)
         bbox.addfeature(geom, fields={'area': geom.Area()})
@@ -1851,7 +1851,7 @@ class ESA(ID):
         --------
         spatialist.vector.Vector.write
         """
-        vec = Vector(driver='Memory')
+        vec = Vector(driver='MEM')
         vec.addlayer('geogrid', 4326, ogr.wkbPoint)
         field_defs = [
             ("swath", ogr.OFTString),
@@ -1992,7 +1992,7 @@ class SAFE(ID):
         groups = groupby(sorted(annotations, key=key), key=key)
         annotations = [list(value) for key, value in groups][0]
         
-        vec = Vector(driver='Memory')
+        vec = Vector(driver='MEM')
         vec.addlayer('geogrid', 4326, ogr.wkbPoint25D)
         field_defs = [
             ("swath", ogr.OFTString),

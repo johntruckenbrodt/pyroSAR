@@ -1573,7 +1573,13 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
         # do not apply mask if it only contains 1 (valid data)
         if len(mask[mask == 0]) == 0:
             break
-        ras = gdal.Open(img, GA_Update)
+        
+        # ensure usage of ENVI driver for .img files
+        ras = gdal.OpenEx(
+            img,
+            gdal.OF_RASTER | gdal.OF_UPDATE,
+            allowed_drivers=["ENVI"]
+        )
         band = ras.GetRasterBand(1)
         band.WriteArray(array)
         band.FlushCache()
