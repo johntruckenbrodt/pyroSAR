@@ -1350,3 +1350,15 @@ SNAP API
 Auxiliary Data Handling
 -----------------------
 - handle empty URL lists in `DEMHandler.__retrieve`
+
+0.34.4 | 2026-03-03
+===================
+
+SNAP API
+--------
+- :func:`pyroSAR.snap.auxil.erode_edges`: explictly open BEAM-DIMAP .img files with the ENVI driver.
+  This was necessary because GDAL 3.12 introduces a new `MiraMonRaster` driver, which is used per default for .img files.
+
+Drivers
+-------
+- use `MEM` instead of `Memory` as driver for creating in-memory :class:`spatialist.vector.Vector` objects. `Memory` has been deprecated.
