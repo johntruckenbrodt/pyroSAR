@@ -452,7 +452,7 @@ def process(cmd, outdir=None, logfile=None, logpath=None,
     # create an environment containing the locations of all GAMMA submodules to be passed to the subprocess calls
     gammaenv = os.environ.copy()
     gammaenv['GAMMA_HOME'] = gamma_home
-    out, err = run([ExamineGamma().gdal_config, '--datadir'], void=False)
+    returncode, out, err = run([ExamineGamma().gdal_config, '--datadir'], void=False)
     gammaenv['GDAL_DATA'] = out.strip()
     for module in ['DIFF', 'DISP', 'IPTA', 'ISP', 'LAT']:
         loc = os.path.join(gammaenv['GAMMA_HOME'], module)
@@ -464,8 +464,9 @@ def process(cmd, outdir=None, logfile=None, logpath=None,
                     gammaenv['PATH'] += os.pathsep + subloc
     
     # execute the command
-    out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False, errorpass=True, env=gammaenv)
-    gammaErrorHandler(out, err)
+    returncode, out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist,
+                               void=False, errorpass=True, env=gammaenv)
+    gammaErrorHandler(returncode, out, err)
     if not void:
         return out, err
 

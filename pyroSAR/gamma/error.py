@@ -1,7 +1,7 @@
 ###############################################################################
 # interface for translating GAMMA errors messages into Python error types
 
-# Copyright (c) 2015-2019, the pyroSAR Developers.
+# Copyright (c) 2015-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -13,16 +13,24 @@
 ###############################################################################
 
 import re
+import signal
 
 
-def gammaErrorHandler(out, err):
+def gammaErrorHandler(returncode: int, out: str, err: str) -> None:
     """
-    Function to raise errors in Python. This function is not intended for direct use, but as part of function gamma.util.process
-    Args:
-        out: the stdout message returned by a subprocess call of a gamma command
-        err: the stderr message returned by a subprocess call of a gamma command
+    Function to raise errors in Python. This function is not intended
+    for direct use but as part of function :func:`pyroSAR.gamma.auxil.process`.
+    
+    Parameters
+    ----------
+    returncode:
+        the subprocess return code
+    out:
+        the stdout message returned by a subprocess call of a gamma command
+    err:
+        the stderr message returned by a subprocess call of a gamma command
 
-    Raises: IOError | ValueError | RuntimeError | None
+    Raises: IOError | ValueError | RuntimeError
 
     """
     
@@ -59,26 +67,33 @@ def gammaErrorHandler(out, err):
                    'cannot create ISP image parameter file': OSError}
     
     # check if the error message is known and throw the mapped error from knownErrors accordingly.
-    # Otherwise throw an GammaUnknownError.
-    # The actual message is passed to the error and thus visible for backtracing
-    if len(errormessages) > 0:
-        errormessage = errormessages[-1]
-        err_out = '\n\n'.join([re.sub('ERROR[: ]*', '', x) for x in errormessages])
-        for error in knownErrors:
-            if re.search(error, errormessage):
-                errortype = knownErrors[error]
-                if errortype:
-                    raise errortype(err_out)
-                else:
-                    return
+    # Otherwise raise a RuntimeError if killed by a signal and a GammaUnknownError in all other cases.
+    # The actual message is passed to the error and thus visible for backtracing.
+    if returncode != 0:
+        if len(errormessages) > 0:
+            errormessage = errormessages[-1]
+            err_out = '\n\n'.join([re.sub('ERROR[: ]*', '', x) for x in errormessages])
+            for error in knownErrors:
+                if re.search(error, errormessage):
+                    errortype = knownErrors[error]
+                    if errortype:
+                        raise errortype(err_out)
+                    else:
+                        return
+        else:
+            err_out = f'failed with return code {returncode}'
+            if returncode < 0:
+                # handle signal kills like SIGSEGV (segmentation fault)
+                sig = signal.Signals(-returncode)
+                raise RuntimeError(err_out + f' ({sig.name})')
         raise GammaUnknownError(err_out)
 
 
 class GammaUnknownError(Exception):
     """
     This is a general error, which is raised if the error message is not yet integrated
-    into the known errors of function gammaErrorHandler.
-    If this error occurs the message should be included in function gammaErrorHandler.
+    into the known errors of function :func:`gammaErrorHandler`.
+    If this error occurs, the message should be included in this function.
     """
     
     def __init__(self, errormessage):
