@@ -227,8 +227,14 @@ class ExamineSnap(object):
         if platform.system() == 'Windows':
             cmd.extend(['--console', 'suppress'])
         
+        # fix Exception in thread "main" java.awt.AWTError: Can't connect to
+        # X11 window server using 'xyz' as the value of the DISPLAY variable.
+        env = os.environ.copy()
+        env['DISPLAY'] = ''
+        
         proc = sp.Popen(args=cmd, stdout=sp.PIPE, stderr=sp.STDOUT,
-                        text=True, encoding='utf-8', bufsize=1)
+                        text=True, encoding='utf-8', bufsize=1,
+                        env=env)
         
         counter = 0
         lines = []
