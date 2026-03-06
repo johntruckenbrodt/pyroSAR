@@ -1362,3 +1362,14 @@ SNAP API
 Drivers
 -------
 - use `MEM` instead of `Memory` as driver for creating in-memory :class:`spatialist.vector.Vector` objects. `Memory` has been deprecated.
+
+0.34.5 | 2026-03-06
+===================
+
+SNAP API
+--------
+- :meth:`pyroSAR.examine.ExamineSnap.get_version`: fixed bug where the X11 environment variable `DISPLAY` was preventing SNAP to start
+
+GAMMA API
+---------
+- handle subprocess signal kills like segmentation fault (SIGSEGV). Before these were just passed through, now a `RuntimeError` is raised.
