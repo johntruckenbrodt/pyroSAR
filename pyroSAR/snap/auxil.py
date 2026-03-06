@@ -108,7 +108,7 @@ def parse_node(name, use_existing=True):
             
             cmd = [gpt, operator, '-h']
             
-            out, err = run(cmd=cmd, void=False)
+            returncode, out, err = run(cmd=cmd, void=False)
             
             if re.search('Unknown operator', out + err):
                 raise RuntimeError("unknown operator '{}'".format(operator))

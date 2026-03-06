@@ -439,7 +439,7 @@ class ExamineGamma(object):
                                  getattr(self, 'home')).group('version')
         
         try:
-            out, err = run(['which', 'gdal-config'], void=False)
+            returncode, out, err = run(['which', 'gdal-config'], void=False)
             gdal_config = out.strip('\n')
             self.gdal_config = gdal_config
         except sp.CalledProcessError:
