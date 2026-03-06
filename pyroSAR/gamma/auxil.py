@@ -466,7 +466,7 @@ def process(cmd, outdir=None, logfile=None, logpath=None,
     # execute the command
     returncode, out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist,
                                void=False, errorpass=True, env=gammaenv)
-    gammaErrorHandler(out, err)
+    gammaErrorHandler(returncode, out, err)
     if not void:
         return out, err
 
