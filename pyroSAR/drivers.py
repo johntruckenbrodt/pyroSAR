@@ -2899,7 +2899,7 @@ class Archive(object):
                 scenes = session.query(self.Duplicates.scene)
             else:
                 raise ValueError("parameter 'table' must either be 'data' or 'duplicates'")
-        files = [self.encode(x[0]) for x in scenes]
+        files = [self.to_str(x[0]) for x in scenes]
         return [x for x in files if not os.path.isfile(x)]
     
     def insert(self, scene_in, pbar=False, test=False):
@@ -3052,9 +3052,9 @@ class Archive(object):
             self.drop_element(scene, with_duplicates=True)
     
     @staticmethod
-    def encode(string, encoding='utf-8'):
-        if not isinstance(string, str) and hasattr(string, 'encode'):
-            return string.encode(encoding)
+    def to_str(string: str | bytes, encoding: str = 'utf-8') -> str:
+        if isinstance(string, bytes):
+            return string.decode(encoding)
         else:
             return string
     
@@ -3132,11 +3132,12 @@ class Archive(object):
         with self.Session() as session:
             # ORM query, get all scenes locations
             scenes_data = session.query(self.Data.scene)
-            registered = [os.path.basename(self.encode(x[0])) for x in scenes_data]
+            registered = [os.path.basename(self.to_str(x[0])) for x in scenes_data]
             scenes_duplicates = session.query(self.Duplicates.scene)
-        duplicates = [os.path.basename(self.encode(x[0])) for x in scenes_duplicates]
+        duplicates = [os.path.basename(self.to_str(x[0])) for x in scenes_duplicates]
         names = [item.scene if isinstance(item, ID) else item for item in scenelist]
-        filtered = [x for x, y in zip(scenelist, names) if os.path.basename(y) not in registered + duplicates]
+        filtered = [x for x, y in zip(scenelist, names)
+                    if os.path.basename(y) not in registered + duplicates]
         return filtered
     
     def get_colnames(self, table='data'):
@@ -3152,7 +3153,7 @@ class Archive(object):
         table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
         col_names = table_info.c.keys()
         
-        return sorted([self.encode(x) for x in col_names])
+        return sorted([self.to_str(x) for x in col_names])
     
     def get_tablenames(self, return_all=False):
         """
@@ -3179,7 +3180,7 @@ class Archive(object):
                       'virts_geometry_columns', 'virts_geometry_columns_auth', 'virts_geometry_columns_field_infos',
                       'virts_geometry_columns_statistics', 'data_licenses', 'KNN']
         # get tablenames from metadata
-        tables = sorted([self.encode(x) for x in self.meta.tables.keys()])
+        tables = sorted([self.to_str(x) for x in self.meta.tables.keys()])
         if return_all:
             return tables
         else:
@@ -3201,7 +3202,7 @@ class Archive(object):
         with self.Session() as session:
             # ORM query, get all directories
             scenes = session.query(self.Data.scene)
-        registered = [os.path.dirname(self.encode(x[0])) for x in scenes]
+        registered = [os.path.dirname(self.to_str(x[0])) for x in scenes]
         return list(set(registered))
     
     def import_outdated(self, dbfile):
@@ -3469,11 +3470,16 @@ class Archive(object):
             for x in scenes:
                 # If only one return value was requested, append just that value
                 if len(return_values) == 1:
-                    ret.append(self.encode(x[0]))
+                    ret.append(self.to_str(x[0]))
                 else:
                     # If multiple return values were requested, append a tuple of all values
-                    ret.append(tuple(self.encode(val) for val in x[:-1]))  # Exclude outname_base
-        
+                    values = []
+                    for k, v in zip(return_values, x[:-1]):  # Exclude outname_base
+                        if k == 'geometry_wkb':
+                            values.append(v)
+                        else:
+                            values.append(self.to_str(v))
+                    ret.append(tuple(values))
         return ret
     
     def select_duplicates(self, outname_base=None, scene=None, value='id'):
@@ -3523,7 +3529,7 @@ class Archive(object):
             
             ret = []
             for x in scenes:
-                ret.append(self.encode(x[key]))
+                ret.append(self.to_str(x[key]))
         
         return ret
     
