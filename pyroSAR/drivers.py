@@ -18,6 +18,7 @@ Orbit State Vector files as well as archiving scenes in a database.
 The :class:`ID` class and its subclasses allow easy and standardized access to the metadata of
 images from different SAR sensors.
 """
+from __future__ import annotations
 
 import sys
 import gc
@@ -71,6 +72,9 @@ import socket
 import time
 import platform
 import logging
+
+from typing import Any, Literal
+from types import TracebackType
 
 log = logging.getLogger(__name__)
 
@@ -1370,14 +1374,14 @@ class CEOS_PSR(ID):
                 meta['projection'] = crsConvert(4326, 'wkt')
         ################################################################################################################
         # read data set summary record
-
+        
         if meta['product'] == '1.5':
             meta["heading_scene"] = float(dataSetSummary[148:164])
             meta["heading"] = float(dataSetSummary[468:476])
         else:
             meta["heading_scene"] = None
             meta["heading"] = None
-            
+        
         scene_id = dataSetSummary[20:52].decode('ascii')
         
         if meta['sensor'] == 'PSR1':
@@ -2544,26 +2548,27 @@ class Archive(object):
 
     Parameters
     ----------
-    dbfile: str
-        the filename for the SpatiaLite database. This might either point to an existing database or will be created otherwise.
-        If postgres is set to True, this will be the name for the PostgreSQL database.
-    custom_fields: dict or None
+    dbfile:
+        the filename for the SpatiaLite database. This might either point to an
+        existing database or will be created otherwise. If postgres is set to True,
+        this will be the name for the PostgreSQL database.
+    custom_fields:
         a dictionary containing additional non-standard database column names and data types;
         the names must be attributes of the SAR scenes to be inserted (i.e. id.attr) or keys in their meta attribute
         (i.e. id.meta['attr'])
-    postgres: bool
+    postgres:
         enable postgres driver for the database. Default: False
-    user: str
+    user:
         required for postgres driver: username to access the database. Default: 'postgres'
-    password: str
+    password:
         required for postgres driver: password to access the database. Default: '1234'
-    host: str
+    host:
         required for postgres driver: host where the database is hosted. Default: 'localhost'
-    port: int
+    port:
         required for postgres driver: port number to the database. Default: 5432
-    cleanup: bool
+    cleanup:
         check whether all registered scenes exist and remove missing entries?
-    legacy: bool
+    legacy:
         open an outdated database in legacy mode to import into a new database.
         Opening an outdated database without legacy mode will throw a RuntimeError.
 
@@ -2593,7 +2598,7 @@ class Archive(object):
     >>> outdir = '/path/to/processed/results'
     >>> maxdate = '20171231T235959'
     >>> selection_proc = archive.select(vectorobject=site, processdir=outdir,
-    >>>                                 maxdate=maxdate, sensor=('S1A', 'S1B'),
+    >>>                                 maxdate=maxdate, sensor=['S1A', 'S1B'],
     >>>                                 product='GRD', acquisition_mode='IW', vv=1)
     >>> archive.close()
 
@@ -2626,9 +2631,18 @@ class Archive(object):
     >>>         db.import_outdated(db_old)
     """
     
-    def __init__(self, dbfile, custom_fields=None, postgres=False, user='postgres',
-                 password='1234', host='localhost', port=5432, cleanup=True,
-                 legacy=False):
+    def __init__(
+            self,
+            dbfile: str,
+            custom_fields: dict[str, Any] | None = None,
+            postgres: bool = False,
+            user: str = 'postgres',
+            password: str = '1234',
+            host: str = 'localhost',
+            port: int = 5432,
+            cleanup: bool = True,
+            legacy: bool = False
+    ):
         
         if dbfile.endswith('.csv'):
             raise RuntimeError("Please create a new Archive database and import the"
@@ -2728,19 +2742,22 @@ class Archive(object):
             self.cleanup()
             sys.stdout.flush()
     
-    def add_tables(self, tables):
+    def add_tables(
+            self,
+            tables: Table | list[Table],
+    ) -> None:
         """
         Add tables to the database per :class:`sqlalchemy.schema.Table`
         Tables provided here will be added to the database.
-        
+
         .. note::
-        
+
             Columns using Geometry must have setting management=True for SQLite,
             for example: ``geometry = Column(Geometry('POLYGON', management=True, srid=4326))``
-        
+
         Parameters
         ----------
-        tables: :class:`sqlalchemy.schema.Table` or list[:class:`sqlalchemy.schema.Table`]
+        tables:
             The table(s) to be added to the database.
         """
         created = []
@@ -2760,7 +2777,7 @@ class Archive(object):
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(self.engine, reflect=True)
     
-    def __init_data_table(self):
+    def __init_data_table(self) -> None:
         if sql_inspect(self.engine).has_table('data'):
             self.data_schema = Table('data', self.meta, autoload_with=self.engine)
             return
@@ -2800,7 +2817,7 @@ class Archive(object):
         
         self.data_schema.create(self.engine)
     
-    def __init_duplicates_table(self):
+    def __init_duplicates_table(self) -> None:
         # create tables if not existing
         if sql_inspect(self.engine).has_table('duplicates'):
             self.duplicates_schema = Table('duplicates', self.meta, autoload_with=self.engine)
@@ -2814,10 +2831,10 @@ class Archive(object):
         self.duplicates_schema.create(self.engine)
     
     @staticmethod
-    def __load_spatialite(dbapi_conn, connection_record):
+    def __load_spatialite(dbapi_conn: sqlite3.Connection, connection_record: Any) -> None:
         """
         loads the spatialite extension for SQLite, not to be used outside the init()
-        
+
         Parameters
         ----------
         dbapi_conn:
@@ -2843,18 +2860,18 @@ class Archive(object):
         else:
             dbapi_conn.load_extension('mod_spatialite')
     
-    def __prepare_insertion(self, scene):
+    def __prepare_insertion(self, scene: str | ID) -> Any:
         """
         read scene metadata and parse a string for inserting it into the database
 
         Parameters
         ----------
-        scene: str or ID
+        scene:
             a SAR scene
 
         Returns
         -------
-        object of class Data, insert string
+            object of class Data
         """
         id = scene if isinstance(scene, ID) else identify(scene)
         pols = [x.lower() for x in id.polarizations]
@@ -2883,12 +2900,16 @@ class Archive(object):
         
         return insertion  # return the Data object
     
-    def __select_missing(self, table):
+    def __select_missing(self, table: str) -> list[str]:
         """
+
+        Parameters
+        ----------
+        table:
+            the name of the table
 
         Returns
         -------
-        list[str]
             the names of all scenes, which are no longer stored in their registered location
         """
         with self.Session() as session:
@@ -2902,17 +2923,22 @@ class Archive(object):
         files = [self.to_str(x[0]) for x in scenes]
         return [x for x in files if not os.path.isfile(x)]
     
-    def insert(self, scene_in, pbar=False, test=False):
+    def insert(
+            self,
+            scene_in: str | ID | list[str | ID],
+            pbar: bool = False,
+            test: bool = False
+    ) -> None:
         """
         Insert one or many scenes into the database
 
         Parameters
         ----------
-        scene_in: str or ID or list[str or ID]
+        scene_in:
             a SAR scene or a list of scenes to be inserted
-        pbar: bool
+        pbar:
             show a progress bar?
-        test: bool
+        test:
             should the insertion only be tested or directly be committed to the database?
         """
         
@@ -2985,18 +3011,17 @@ class Archive(object):
         message = '{0} duplicate{1} registered'
         log.info(message.format(counter_duplicates, '' if counter_duplicates == 1 else 's'))
     
-    def is_registered(self, scene):
+    def is_registered(self, scene: str | ID) -> bool:
         """
         Simple check if a scene is already registered in the database.
 
         Parameters
         ----------
-        scene: str or ID
+        scene:
             the SAR scene
 
         Returns
         -------
-        bool
             is the scene already registered?
         """
         id = scene if isinstance(scene, ID) else identify(scene)
@@ -3014,18 +3039,17 @@ class Archive(object):
             in_dup = len(exists_duplicates) != 0
         return in_data or in_dup
     
-    def __is_registered_in_duplicates(self, scene):
+    def __is_registered_in_duplicates(self, scene: str | ID) -> bool:
         """
         Simple check if a scene is already registered in the database.
 
         Parameters
         ----------
-        scene: str or ID
+        scene:
             the SAR scene
 
         Returns
         -------
-        bool
             is the scene already registered?
         """
         id = scene if isinstance(scene, ID) else identify(scene)
@@ -3038,13 +3062,9 @@ class Archive(object):
             in_dup = len(exists_duplicates) != 0
         return in_dup
     
-    def cleanup(self):
+    def cleanup(self) -> None:
         """
         Remove all scenes from the database, which are no longer stored in their registered location
-
-        Returns
-        -------
-
         """
         missing = self.__select_missing('data')
         for scene in missing:
@@ -3058,22 +3078,19 @@ class Archive(object):
         else:
             return string
     
-    def export2shp(self, path, table='data'):
+    def export2shp(self, path: str, table: str = 'data') -> None:
         """
         export the database to a shapefile
 
         Parameters
         ----------
-        path: str
+        path:
             the path of the shapefile to be written.
             This will overwrite other files with the same name.
             If a folder is given in path it is created if not existing.
             If the file extension is missing '.shp' is added.
-        table: str
+        table:
             the table to write to the shapefile; either 'data' (default) or 'duplicates'
-        
-        Returns
-        -------
         """
         if table not in self.get_tablenames():
             log.warning('Only data and duplicates can be exported!')
@@ -3110,19 +3127,19 @@ class Archive(object):
                              SQLStatement=f'SELECT {sel_tables} FROM {table}',
                              SQLDialect=self.driver)
     
-    def filter_scenelist(self, scenelist):
+    def filter_scenelist(self, scenelist: list[str | ID]) -> list[str | ID]:
         """
         Filter a list of scenes by file names already registered in the database.
 
         Parameters
         ----------
-        scenelist: list[str or ID]
+        scenelist:
             the scenes to be filtered
 
         Returns
         -------
-        list[ID]
-            the file names of the scenes whose basename is not yet registered in the database
+            The objects of `scenelist` for all scenes whose basename
+            is not yet registered in the database.
 
         """
         for item in scenelist:
@@ -3140,34 +3157,32 @@ class Archive(object):
                     if os.path.basename(y) not in registered + duplicates]
         return filtered
     
-    def get_colnames(self, table='data'):
+    def get_colnames(self, table: str = 'data') -> list[str]:
         """
         Return the names of all columns of a table.
 
         Returns
         -------
-        list[str]
             the column names of the chosen table
         """
-        # get all columns of one table, but shows geometry columns not correctly
+        # get all columns of `table`, but shows geometry columns not correctly
         table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
         col_names = table_info.c.keys()
         
         return sorted([self.to_str(x) for x in col_names])
     
-    def get_tablenames(self, return_all=False):
+    def get_tablenames(self, return_all: bool = False) -> list[str]:
         """
         Return the names of all tables in the database
-        
+
         Parameters
         ----------
-        return_all: bool
+        return_all:
             only gives tables data and duplicates on default.
             Set to True to get all other tables and views created automatically.
 
         Returns
         -------
-        list[str]
             the table names
         """
         #  TODO: make this dynamic
@@ -3190,13 +3205,12 @@ class Archive(object):
                     ret.append(i)
             return ret
     
-    def get_unique_directories(self):
+    def get_unique_directories(self) -> list[str]:
         """
         Get a list of directories containing registered scenes
 
         Returns
         -------
-        list[str]
             the directory names
         """
         with self.Session() as session:
@@ -3205,18 +3219,14 @@ class Archive(object):
         registered = [os.path.dirname(self.to_str(x[0])) for x in scenes]
         return list(set(registered))
     
-    def import_outdated(self, dbfile):
+    def import_outdated(self, dbfile: str | Archive) -> None:
         """
         import an older database
 
         Parameters
         ----------
-        dbfile: str or Archive
+        dbfile:
             the old database. If this is a string, the name of a CSV file is expected.
-
-        Returns
-        -------
-
         """
         if isinstance(dbfile, str) and dbfile.endswith('csv'):
             with open(dbfile) as csvfile:
@@ -3239,7 +3249,7 @@ class Archive(object):
         else:
             raise RuntimeError("'dbfile' must either be a CSV file name or an Archive object")
     
-    def move(self, scenelist, directory, pbar=False):
+    def move(self, scenelist: list[str], directory: str, pbar: bool = False) -> None:
         """
         Move a list of files while keeping the database entries up to date.
         If a scene is registered in the database (in either the data or duplicates table),
@@ -3247,15 +3257,12 @@ class Archive(object):
 
         Parameters
         ----------
-        scenelist: list[str]
+        scenelist:
             the file locations
-        directory: str
+        directory:
             a folder to which the files are moved
-        pbar: bool
+        pbar:
             show a progress bar?
-
-        Returns
-        -------
         """
         if not os.path.isdir(directory):
             os.mkdir(directory)
@@ -3482,23 +3489,27 @@ class Archive(object):
                     ret.append(tuple(values))
         return ret
     
-    def select_duplicates(self, outname_base=None, scene=None, value='id'):
+    def select_duplicates(
+            self,
+            outname_base: str | None = None,
+            scene: str | None = None,
+            value: Literal["id", "scene"] = "id"
+    ) -> list[str]:
         """
         Select scenes from the duplicates table. In case both `outname_base` and `scene` are set to None all scenes in
         the table are returned, otherwise only those that match the attributes `outname_base` and `scene` if they are not None.
 
         Parameters
         ----------
-        outname_base: str
+        outname_base:
             the basename of the scene
-        scene: str
+        scene:
             the scene name
-        value: str
+        value:
             the return value; either 'id' or 'scene'
 
         Returns
         -------
-        list[str]
             the selected scene(s)
         """
         if value == 'id':
@@ -3534,13 +3545,12 @@ class Archive(object):
         return ret
     
     @property
-    def size(self):
+    def size(self) -> tuple[int, int]:
         """
         get the number of scenes registered in the database
 
         Returns
         -------
-        tuple[int]
             the number of scenes in (1) the main table and (2) the duplicates table
         """
         # ORM query
@@ -3549,34 +3559,36 @@ class Archive(object):
             r2 = session.query(self.Duplicates.outname_base).count()
         return r1, r2
     
-    def __enter__(self):
+    def __enter__(self) -> Archive:
         return self
     
-    def close(self):
+    def close(self) -> None:
         """
         close the database connection
         """
         self.engine.dispose()
         gc.collect(generation=2)  # this was added as a fix for win PermissionError when deleting sqlite.db files.
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_val: BaseException | None,
+            exc_tb: TracebackType | None
+    ) -> None:
         self.close()
     
-    def drop_element(self, scene, with_duplicates=False):
+    def drop_element(self, scene: str, with_duplicates: bool = False) -> None:
         """
         Drop a scene from the data table.
-        If duplicates table contains matching entry, it will be moved to the data table.
+        If the duplicates table contains a matching entry, it will be moved to the data table.
 
         Parameters
         ----------
-        scene: str
+        scene:
             a SAR scene
-        with_duplicates: bool
+        with_duplicates:
             True: delete matching entry in duplicates table
             False: move matching entry from duplicates into data table
-
-        Returns
-        -------
         """
         # save outname_base from to be deleted entry
         search = self.data_schema.select().where(self.data_schema.c.scene == scene)
@@ -3628,17 +3640,14 @@ class Archive(object):
         
         log.info(return_sentence + '!')
     
-    def drop_table(self, table):
+    def drop_table(self, table: str) -> None:
         """
         Drop a table from the database.
 
         Parameters
         ----------
-        table: str
+        table:
             the table name
-
-        Returns
-        -------
         """
         if table in self.get_tablenames(return_all=True):
             # this removes the idx tables and entries in geometry_columns for sqlite databases
@@ -3659,22 +3668,21 @@ class Archive(object):
         self.Base.prepare(self.engine, reflect=True)
     
     @staticmethod
-    def __is_open(ip, port):
+    def __is_open(ip: str, port: str | int) -> bool:
         """
         Checks server connection, from Ben Curtis (github: Fmstrat)
 
         Parameters
         ----------
-        ip: str
+        ip:
             ip of the server
-        port: str or int
+        port:
             port of the server
 
         Returns
         -------
-        bool:
             is the server reachable?
-            
+
         """
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(3)
@@ -3687,20 +3695,19 @@ class Archive(object):
         finally:
             s.close()
     
-    def __check_host(self, ip, port):
+    def __check_host(self, ip: str, port: str | int) -> bool:
         """
         Calls __is_open() on ip and port, from Ben Curtis (github: Fmstrat)
 
         Parameters
         ----------
-        ip: str
+        ip:
             ip of the server
-        port: str or int
+        port:
             port of the server
 
         Returns
         -------
-        bool:
             is the server reachable?
         """
         ipup = False
