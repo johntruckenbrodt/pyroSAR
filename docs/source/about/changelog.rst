@@ -1373,3 +1373,16 @@ SNAP API
 GAMMA API
 ---------
 - handle subprocess signal kills like segmentation fault (SIGSEGV). Before these were just passed through, now a `RuntimeError` is raised.
+
+0.35.0 | 2026-03-09
+===================
+
+Archive
+-------
+- new module :mod:`pyroSAR.archive` extracted from :mod:`pyroSAR.drivers`
+- new protocol class :class:`pyroSAR.archive.SceneArchive` to establish an interface for scene search classes (inherited by :class:`pyroSAR.archive.Archive`).
+- method `Archive.encode` has been renamed to :meth:`~pyroSAR.archive.Archive.to_str` and has been reimplemented to be more predictable
+
+Drivers
+-------
+- :class:`~pyroSAR.drivers.ID`: deleted method `export2sqlite`
