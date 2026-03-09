@@ -28,7 +28,7 @@ from datetime import datetime
 import progressbar as pb
 
 from types import TracebackType
-from typing import Any, Literal
+from typing import Any, Protocol, runtime_checkable, Literal
 
 from osgeo import gdal
 
@@ -53,7 +53,86 @@ log = logging.getLogger(__name__)
 gdal.UseExceptions()
 
 
-class Archive(object):
+@runtime_checkable
+class SceneArchive(Protocol):
+    """
+    Common interface for scene archive backends.
+
+    Implementations may represent local databases, STAC catalogs, remote APIs,
+    or other scene repositories, but should expose a consistent `select`
+    method and support context-manager usage.
+    """
+    
+    def __enter__(self) -> SceneArchive:
+        """
+        Enter the archive context.
+        """
+        ...
+    
+    def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_val: BaseException | None,
+            exc_tb: TracebackType | None,
+    ) -> None:
+        """
+        Exit the archive context and release resources if necessary.
+        """
+        ...
+    
+    def close(self) -> None:
+        """
+        Release open resources.
+
+        Implementations that do not hold resources may implement this as a no-op.
+        """
+        ...
+    
+    def select(
+            self,
+            sensor: str | list[str] | None = None,
+            product: str | list[str] | None = None,
+            acquisition_mode: str | list[str] | None = None,
+            mindate: str | datetime | None = None,
+            maxdate: str | datetime | None = None,
+            vectorobject: Vector | None = None,
+            date_strict: bool = True,
+            return_value: str | list[str] = "scene",
+            **kwargs: Any,
+    ) -> list[Any]:
+        """
+        Select scenes matching the query parameters.
+
+        Parameters
+        ----------
+        sensor:
+            One sensor or a list of sensors.
+        product:
+            One product type or a list of product types.
+        acquisition_mode:
+            One acquisition mode or a list of acquisition modes.
+        mindate:
+            Minimum acquisition date/time.
+        maxdate:
+            Maximum acquisition date/time.
+        vectorobject:
+            Spatial search geometry.
+        date_strict:
+            Whether date filtering should be strict.
+        return_value:
+            One return field or a list of return fields.
+        **kwargs:
+            Backend-specific optional query arguments.
+
+        Returns
+        -------
+            The query result. Implementations may return a list of scalar values or
+            tuples depending on `return_value`.
+        """
+        ...
+
+
+class Archive(SceneArchive):
     """
     Utility for storing SAR image metadata in a database
 
