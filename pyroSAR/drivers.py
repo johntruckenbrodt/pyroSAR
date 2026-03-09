@@ -368,19 +368,6 @@ class ID(object):
         metadata['uuid'] = title
         return metadata
     
-    def export2sqlite(self, dbfile):
-        """
-        Export relevant metadata to an SQLite database
-
-        Parameters
-        ----------
-        dbfile: str
-            the database file
-
-        """
-        with Archive(dbfile) as archive:
-            archive.insert(self)
-    
     def examine(self, include_folders=False):
         """
         check whether any items in the SAR scene structure (i.e. files/folders) match the regular expression pattern

@@ -139,7 +139,6 @@ def test_getFileObj(tmpdir, testdata):
 
 
 def test_scene(tmpdir, testdata):
-    dbfile = os.path.join(str(tmpdir), 'scenes.db')
     id = pyroSAR.identify(testdata['s1'])
     assert isinstance(id.export2dict(), dict)
     with pytest.raises(RuntimeError):
@@ -149,7 +148,6 @@ def test_scene(tmpdir, testdata):
     assert id.is_processed(str(tmpdir)) is False
     id.unpack(str(tmpdir), overwrite=True)
     assert id.compression is None
-    id.export2sqlite(dbfile)
     with pytest.raises(RuntimeError):
         id.getGammaImages()
     assert id.getGammaImages(id.scene) == []
