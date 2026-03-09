@@ -20,7 +20,6 @@ Drivers
         SAFE
         TSX
         TDM
-        Archive
 
     .. rubric:: functions
 
@@ -32,4 +31,3 @@ Drivers
         filter_processed
         getFileObj
         parse_date
-        drop_archive
