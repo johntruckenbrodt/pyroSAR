@@ -88,8 +88,8 @@ class SceneArchive(Protocol):
         """
         ...
     
+    @staticmethod
     def select(
-            self,
             sensor: str | list[str] | None = None,
             product: str | list[str] | None = None,
             acquisition_mode: str | list[str] | None = None,
@@ -97,8 +97,7 @@ class SceneArchive(Protocol):
             maxdate: str | datetime | None = None,
             vectorobject: Vector | None = None,
             date_strict: bool = True,
-            return_value: str | list[str] = "scene",
-            **kwargs: Any,
+            return_value: str | list[str] = "scene"
     ) -> list[Any]:
         """
         Select scenes matching the query parameters.
@@ -934,7 +933,7 @@ class Archive(SceneArchive):
             the maximum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
         vectorobject:
             a geometry with which the scenes need to overlap. The object may only contain one feature.
-        date_strict: bool
+        date_strict:
             treat dates as strict limits or also allow flexible limits to incorporate scenes
             whose acquisition period overlaps with the defined limit?
 
@@ -1203,7 +1202,11 @@ class Archive(SceneArchive):
     ) -> None:
         self.close()
     
-    def drop_element(self, scene: str, with_duplicates: bool = False) -> None:
+    def drop_element(
+            self,
+            scene: str,
+            with_duplicates: bool = False
+    ) -> None:
         """
         Drop a scene from the data table.
         If the duplicates table contains a matching entry, it will be moved to the data table.
