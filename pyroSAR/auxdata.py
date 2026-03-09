@@ -1386,7 +1386,7 @@ class DEMHandler:
                         out.extend(ftp_search(ftp, target + item))
                 else:
                     if target.endswith('DEM.tar'):
-                        out.append(target.encode('latin-1').decode('utf-8'))
+                        out.append(target.to_str('latin-1').decode('utf-8'))
                 return out
             
             def ftp_connect(host, path, username, password, port=990):
