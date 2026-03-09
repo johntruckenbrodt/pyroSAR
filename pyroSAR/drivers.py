@@ -3312,48 +3312,59 @@ class Archive(object):
         if len(double) > 0:
             log.info('The following scenes already exist at the target location:\n{}'.format('\n'.join(double)))
     
-    def select(self, vectorobject=None, mindate=None, maxdate=None, date_strict=True,
-               processdir=None, recursive=False, polarizations=None, return_value="scene", **args):
+    def select(
+            self,
+            mindate: str | datetime | None = None,
+            maxdate: str | datetime | None = None,
+            vectorobject: Vector | None = None,
+            date_strict: bool = True,
+            processdir: str | None = None,
+            recursive: bool = False,
+            polarizations: list[str] | None = None,
+            return_value: str | list[str] = "scene",
+            **kwargs: Any
+    ) -> list[str | bytes] | list[tuple[str | bytes]]:
         """
         select scenes from the database
 
         Parameters
         ----------
-        vectorobject: :class:`~spatialist.vector.Vector` or None
-            a geometry with which the scenes need to overlap. The object may only contain one feature.
-        mindate: str or datetime.datetime or None
+        mindate:
             the minimum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
-        maxdate: str or datetime.datetime or None
+        maxdate:
             the maximum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
+        vectorobject:
+            a geometry with which the scenes need to overlap. The object may only contain one feature.
         date_strict: bool
             treat dates as strict limits or also allow flexible limits to incorporate scenes
             whose acquisition period overlaps with the defined limit?
 
             - strict: start >= mindate & stop <= maxdate
             - not strict: stop >= mindate & start <= maxdate
-        processdir: str or None
+        processdir:
             A directory to be scanned for already processed scenes;
             the selected scenes will be filtered to those that have not yet been processed. Default: None
-        recursive: bool
+        recursive:
             (only if `processdir` is not None) should also the subdirectories of the `processdir` be scanned?
-        polarizations: list[str] or None
+        polarizations:
             a list of polarization strings, e.g. ['HH', 'VV']
-        return_value: str or List[str]
+        return_value:
             the query return value(s). Options:
-            
+
             - `geometry_wkb`: the scene's footprint geometry formatted as WKB
             - `geometry_wkt`: the scene's footprint geometry formatted as WKT
             - `mindate`: the acquisition start datetime in UTC formatted as YYYYmmddTHHMMSS
             - `maxdate`: the acquisition end datetime in UTC formatted as YYYYmmddTHHMMSS
             - all further database column names (see :meth:`~Archive.get_colnames()`)
-        **args:
+            
+        **kwargs:
             any further arguments (columns), which are registered in the database. See :meth:`~Archive.get_colnames()`
 
         Returns
         -------
-        List[str] or List[tuple[str]]
-            If a single return_value is specified: list of values for that attribute
-            If multiple return_values are specified: list of tuples containing the requested attributes
+            If a single return_value is specified: list of values for that attribute.
+            If multiple return_values are specified: list of tuples containing the requested attributes.
+            The return value type is bytes for `geometry_wkb` and str for all others.
         """
         # Convert return_value to list if it's a string
         if isinstance(return_value, str):
@@ -3387,8 +3398,8 @@ class Archive(object):
                    f"return values: {invalid_str}")
             raise ValueError(msg)
         
-        arg_valid = [x for x in args.keys() if x in self.get_colnames()]
-        arg_invalid = [x for x in args.keys() if x not in self.get_colnames()]
+        arg_valid = [x for x in kwargs.keys() if x in self.get_colnames()]
+        arg_invalid = [x for x in kwargs.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
             log.info('the following arguments will be ignored as they are not registered in the data base: {}'.format(
                 ', '.join(arg_invalid)))
@@ -3396,12 +3407,12 @@ class Archive(object):
         vals = []
         for key in arg_valid:
             if key == 'scene':
-                arg_format.append('''scene LIKE '%%{0}%%' '''.format(os.path.basename(args[key])))
+                arg_format.append('''scene LIKE '%%{0}%%' '''.format(os.path.basename(kwargs[key])))
             else:
-                if isinstance(args[key], (float, int, str)):
-                    arg_format.append("""{0}='{1}'""".format(key, args[key]))
-                elif isinstance(args[key], (tuple, list)):
-                    arg_format.append("""{0} IN ('{1}')""".format(key, "', '".join(map(str, args[key]))))
+                if isinstance(kwargs[key], (float, int, str)):
+                    arg_format.append("""{0}='{1}'""".format(key, kwargs[key]))
+                elif isinstance(kwargs[key], (tuple, list)):
+                    arg_format.append("""{0} IN ('{1}')""".format(key, "', '".join(map(str, kwargs[key]))))
         
         if mindate:
             if isinstance(mindate, datetime):
