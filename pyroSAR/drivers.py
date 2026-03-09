@@ -3720,27 +3720,24 @@ class Archive(object):
         return ipup
 
 
-def drop_archive(archive):
+def drop_archive(archive: Archive) -> None:
     """
     drop (delete) a scene database
-    
+
     Parameters
     ----------
-    archive: pyroSAR.drivers.Archive
+    archive:
         the database to be deleted
 
-    Returns
-    -------
-    
     See Also
     --------
     :func:`sqlalchemy_utils.functions.drop_database()`
-    
+
     Examples
     --------
     >>> pguser = os.environ.get('PGUSER')
     >>> pgpassword = os.environ.get('PGPASSWORD')
-    
+
     >>> db = Archive('test', postgres=True, port=5432, user=pguser, password=pgpassword)
     >>> drop_archive(db)
     """
