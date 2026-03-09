@@ -1,6 +1,6 @@
 ###############################################################################
 # Reading and Organizing system for SAR images
-# Copyright (c) 2016-2025, the pyroSAR Developers.
+# Copyright (c) 2016-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -3314,6 +3314,9 @@ class Archive(object):
     
     def select(
             self,
+            sensor: str | list[str] | None = None,
+            product: str | list[str] | None = None,
+            acquisition_mode: str | list[str] | None = None,
             mindate: str | datetime | None = None,
             maxdate: str | datetime | None = None,
             vectorobject: Vector | None = None,
@@ -3329,6 +3332,12 @@ class Archive(object):
 
         Parameters
         ----------
+        sensor:
+            the satellite sensor(s)
+        product:
+            the product type(s)
+        acquisition_mode:
+            the sensor's acquisition mode(s)
         mindate:
             the minimum acquisition date; strings must be in format YYYYmmddTHHMMSS; default: None
         maxdate:
@@ -3401,18 +3410,34 @@ class Archive(object):
         arg_valid = [x for x in kwargs.keys() if x in self.get_colnames()]
         arg_invalid = [x for x in kwargs.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
-            log.info('the following arguments will be ignored as they are not registered in the data base: {}'.format(
-                ', '.join(arg_invalid)))
+            log.info(f"the following arguments will be ignored as they are not "
+                     f"registered in the data base: {', '.join(arg_invalid)}")
+        
+        def convert_general(k: str, v: Any) -> str:
+            if isinstance(v, (float, int, str)):
+                return f"""{k}='{v}'"""
+            elif isinstance(v, (tuple, list)):
+                v_str = "', '".join(map(str, v))
+                return f"""{k} IN ('{v_str}')"""
+            else:
+                raise TypeError(f"unsupported type for '{k}': {type(v)}")
+        
         arg_format = []
         vals = []
         for key in arg_valid:
             if key == 'scene':
                 arg_format.append('''scene LIKE '%%{0}%%' '''.format(os.path.basename(kwargs[key])))
             else:
-                if isinstance(kwargs[key], (float, int, str)):
-                    arg_format.append("""{0}='{1}'""".format(key, kwargs[key]))
-                elif isinstance(kwargs[key], (tuple, list)):
-                    arg_format.append("""{0} IN ('{1}')""".format(key, "', '".join(map(str, kwargs[key]))))
+                arg_format.append(convert_general(key, kwargs[key]))
+        
+        if sensor:
+            arg_format.append(convert_general('sensor', sensor))
+        
+        if product:
+            arg_format.append(convert_general('product', product))
+        
+        if acquisition_mode:
+            arg_format.append(convert_general('acquisition_mode', acquisition_mode))
         
         if mindate:
             if isinstance(mindate, datetime):
