@@ -299,9 +299,10 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
         shutil.rmtree(tmpdir)
 
 
-def dem_import(src, dst, geoid=None, logpath=None, outdir=None):
+def dem_import(src, dst, geoid=None, logpath=None, outdir=None, shellscript=None):
     """
-    convert an existing DEM in GDAL-readable format to GAMMA format including optional geoid-ellipsoid conversion.
+    convert an existing DEM in GDAL-readable format to GAMMA
+    format including optional geoid-ellipsoid conversion.
     
     Parameters
     ----------
@@ -319,7 +320,9 @@ def dem_import(src, dst, geoid=None, logpath=None, outdir=None):
         a directory to write logfiles to
     outdir: str or None
         the directory to execute the command in
-
+    shellscript: str or None
+        a file to write the GAMMA commands to in shell format
+    
     Returns
     -------
 
@@ -349,17 +352,20 @@ def dem_import(src, dst, geoid=None, logpath=None, outdir=None):
                       gflg=gflg,
                       geoid='-',
                       logpath=logpath,
-                      outdir=outdir)
+                      outdir=outdir,
+                      shellscript=shellscript)
     else:
         # new approach enabling an arbitrary target CRS EPSG code
         diff.create_dem_par(DEM_par=dst_base + '.par',
                             inlist=[''] * 9,
-                            EPSG=epsg)
+                            EPSG=epsg,
+                            shellscript=shellscript)
         dem_import_pars = {'input_DEM': src,
                            'DEM': dst,
                            'DEM_par': dst_base + '.par',
                            'logpath': logpath,
-                           'outdir': outdir}
+                           'outdir': outdir,
+                           'shellscript': shellscript}
         if gflg == 2:
             home = ExamineGamma().home
             if geoid == 'EGM96':
