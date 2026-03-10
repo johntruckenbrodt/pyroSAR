@@ -285,6 +285,7 @@ class Namespace(object):
     >>> print(n.pix_geo)
     '/path/S1A__IW___A_20180829T170631_pix_geo'
     """
+    
     def __init__(self, directory, basename):
         self.__base = basename
         self.__outdir = directory
@@ -393,32 +394,40 @@ def par2hdr(parfile, hdrfile, modifications=None, nodata=None):
         hdr(items, hdrfile)
 
 
-def process(cmd, outdir=None, logfile=None, logpath=None,
-            inlist=None, void=True, shellscript=None):
+def process(
+        cmd: list[str],
+        outdir: str | None = None,
+        logfile: str | None = None,
+        logpath: str | None = None,
+        inlist: list[str] | None = None,
+        void: bool = True,
+        shellscript: str | None = None
+) -> tuple[str, str] | None:
     """
     wrapper function to execute GAMMA commands via module :mod:`subprocess`
 
     Parameters
     ----------
-    cmd: list[str]
-        the command line arguments
-    outdir: str
-        the directory to execute the command in
-    logfile: str
-        a file to write the command log to; overrides parameter logpath
-    logpath: str
-        a directory to write logfiles to; the file will be named {GAMMA command}.log, e.g. gc_map.log;
-        is overridden by parameter logfile
-    inlist: list
-        a list of values, which is passed as interactive inputs via stdin
-    void: bool
-        return the stdout and stderr messages?
-    shellscript: str
-        a file to write the GAMMA commands to in shell format
+    cmd:
+        The command line arguments.
+    outdir:
+        The directory to execute the command in. This directory is also set
+        as environment variable in `shellscript`.
+    logfile:
+        A file to write the command log to. Overrides parameter `logpath`.
+    logpath:
+        A directory to write logfiles to. The file will be named
+        {GAMMA command}.log, e.g. gc_map.log.
+        Overrides parameter `logfile`.
+    inlist:
+        A list of values, which is passed as interactive inputs via `stdin`.
+    void:
+        Return the `stdout` and `stderr` messages?
+    shellscript:
+        A file to write the GAMMA commands to in shell format.
 
     Returns
     -------
-    tuple of str or None
         the stdout and stderr messages if void is False, otherwise None
     """
     if logfile is not None:
