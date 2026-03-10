@@ -81,7 +81,7 @@ def gammaErrorHandler(returncode: int, out: str, err: str) -> None:
                     else:
                         return
         else:
-            err_out = f'failed with return code {returncode}'
+            err_out = f'{err}\nfailed with return code {returncode}'
             if returncode < 0:
                 # handle signal kills like SIGSEGV (segmentation fault)
                 sig = signal.Signals(-returncode)
