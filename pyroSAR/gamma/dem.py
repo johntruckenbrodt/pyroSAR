@@ -299,33 +299,36 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
         shutil.rmtree(tmpdir)
 
 
-def dem_import(src, dst, geoid=None, logpath=None, outdir=None, shellscript=None):
+def dem_import(
+        src: str,
+        dst: str,
+        geoid: str | None = None,
+        logpath: str | None = None,
+        outdir: str | None = None,
+        shellscript: str | None = None
+) -> None:
     """
     convert an existing DEM in GDAL-readable format to GAMMA
     format including optional geoid-ellipsoid conversion.
     
     Parameters
     ----------
-    src: str
+    src:
         the input DEM
-    dst: str
+    dst:
         the output DEM
-    geoid: str or None
+    geoid:
         the geoid height reference of `src`; supported options:
         
         - 'EGM96'
         - 'EGM2008'
         - None: assume WGS84 ellipsoid heights and do not convert heights
-    logpath: str or None
+    logpath:
         a directory to write logfiles to
-    outdir: str or None
+    outdir:
         the directory to execute the command in
-    shellscript: str or None
+    shellscript:
         a file to write the GAMMA commands to in shell format
-    
-    Returns
-    -------
-
     """
     with raster.Raster(src) as ras:
         epsg = ras.epsg
