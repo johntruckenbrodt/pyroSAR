@@ -378,7 +378,7 @@ def dem_import(
             elif geoid == 'EGM2008':
                 geoid_file = os.path.join(home, 'DIFF', 'scripts', 'egm2008-5.dem')
             else:
-                raise RuntimeError('conversion of {} geoid is not supported by GAMMA'.format(geoid))
+                raise RuntimeError(f"conversion of '{geoid}' geoid is not supported by GAMMA")
             dem_import_pars['geoid'] = geoid_file
             dem_import_pars['geoid_par'] = geoid_file + '_par'
         
