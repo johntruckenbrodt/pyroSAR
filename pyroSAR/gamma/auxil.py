@@ -435,17 +435,21 @@ def process(cmd, outdir=None, logfile=None, logpath=None,
         if inlist is not None:
             line += ' <<< $"{}"'.format('\n'.join([str(x) for x in inlist]) + '\n')
         with open(shellscript, 'r+') as sh:
+            content = sh.read()
+            sh.seek(0)
+            disclaimer = 'This script was created automatically by pyroSAR'
+            is_new = re.search(disclaimer, content) is None
+            if is_new:
+                ts = datetime.now().strftime('%a %b %d %H:%M:%S %Y')
+                sh.write(f'# {disclaimer} on {ts}\n\n')
+                sh.write('GAMMA_HOME={}\n\n'.format(gamma_home))
+                sh.write(content)
+            line = line.replace(gamma_home, '$GAMMA_HOME')
             if outdir is not None:
-                content = sh.read()
-                sh.seek(0)
-                is_new = re.search('this script was created automatically by pyroSAR', content) is None
-                if is_new:
-                    ts = datetime.now().strftime('%a %b %d %H:%M:%S %Y')
-                    sh.write('# this script was created automatically by pyroSAR on {}\n\n'.format(ts))
-                    sh.write('export base={}\n'.format(outdir))
-                    sh.write('export GAMMA_HOME={}\n\n'.format(gamma_home))
-                    sh.write(content)
-                line = line.replace(outdir, '$base').replace(gamma_home, '$GAMMA_HOME')
+                line = line.replace(outdir, '$OUTDIR')
+                outdirs = re.findall('OUTDIR=(.*)\n', content)
+                if len(outdirs) == 0 or outdir != outdirs[-1]:
+                    line = f"OUTDIR={outdir}\n\n{line}"
             sh.seek(0, 2)  # set pointer to the end of the file
             sh.write(line + '\n\n')
     
