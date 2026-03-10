@@ -362,6 +362,8 @@ def dem_import(
         diff.create_dem_par(DEM_par=dst_base + '.par',
                             inlist=[''] * 9,
                             EPSG=epsg,
+                            logpath=logpath,
+                            outdir=outdir,
                             shellscript=shellscript)
         dem_import_pars = {'input_DEM': src,
                            'DEM': dst,
