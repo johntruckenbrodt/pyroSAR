@@ -1386,3 +1386,31 @@ Archive
 Drivers
 -------
 - :class:`~pyroSAR.drivers.ID`: deleted method `export2sqlite`
+
+0.36.0 | 2026-03-10
+===================
+
+GAMMA API
+---------
+
+- :func:`pyroSAR.gamma.dem.dem_import`:
+
+    + add `shellscript` argument
+    + consistently pass `logpath`, `outdir` and `shellscript` to GAMMA commands
+
+- :func:`pyroSAR.gamma.auxil.process`:
+
+    + replace environment variable `base` in the `shellscript` with `OUTDIR` and corrected its usage.
+      Before, the value of `outdir` in the command was just replaced with `$base`.
+      This lead to wrong scripts whenever different values for `outdir` were passed to `process`.
+      Now, no global variable is set and `OUTDIR` is redefined whenever the value of `outdir` changes, e.g.
+
+      .. code-block:: bash
+
+          OUTDIR=/xyz
+          command1 $OUTDIR
+          command2 $OUTDIR
+          OUTDIR=/abc
+          command3 $OUTDIR
+
+    + bugfix: the file header and the declaration of `GAMMA_HOME` are now written to the file even if `outdir=None`
