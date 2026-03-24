@@ -1414,3 +1414,11 @@ GAMMA API
           command3 $OUTDIR
 
     + bugfix: the file header and the declaration of `GAMMA_HOME` are now written to the file even if `outdir=None`
+
+0.36.1 | 2026-03-24
+===================
+
+GAMMA API
+---------
+
+- :func:`pyroSAR.gamma.util.convert2gamma`: fix error in not removing thermal noise due to GAMMA interface change
