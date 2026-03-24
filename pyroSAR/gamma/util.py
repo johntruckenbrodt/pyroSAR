@@ -34,7 +34,7 @@ from ..S1 import OSV
 from ..drivers import ID, identify_many
 from . import ISPPar, Namespace, par2hdr
 from ..ancillary import multilook_factors, hasarg, groupby, Lock
-from pyroSAR.examine import ExamineSnap
+from pyroSAR.examine import ExamineSnap, ExamineGamma
 from .auxil import do_execute
 
 import logging
@@ -336,11 +336,15 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
             
             product = match.group('product')
             
-            # specify noise calibration file
-            # L1 GRD product: thermal noise already subtracted, specify xml_noise to add back thermal noise
-            # SLC products: specify noise file to remove noise
-            # xml_noise = '-': noise file not specified
-            if (S1_tnr and product == 'slc') or (not S1_tnr and product == 'grd'):
+            # In versions released before July 2015, it was assumed that noise was already
+            # removed in GRDs and specifying the XML file meant adding it back to the data.
+            version = ExamineGamma().version
+            if version < '20150701':
+                c = (S1_tnr and product == 'slc') or (not S1_tnr and product == 'grd')
+            else:
+                c = S1_tnr
+            
+            if c:
                 xml_noise = os.path.join(id.scene, 'annotation', 'calibration', 'noise-' + base)
             else:
                 xml_noise = '-'
