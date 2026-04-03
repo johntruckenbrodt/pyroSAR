@@ -1,7 +1,7 @@
 ###############################################################################
 # universal core routines for processing SAR images with GAMMA
 
-# Copyright (c) 2014-2023, the pyroSAR Developers.
+# Copyright (c) 2014-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -1141,20 +1141,16 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         shutil.rmtree(tmpdir)
 
 
-def lat_linear_to_db(data_in, data_out):
+def lat_linear_to_db(data_in: str, data_out: str) -> None:
     """
     Alternative to LAT module command linear_to_dB.
 
     Parameters
     ----------
-    data_in: str
+    data_in
         the input data file
-    data_out: str
+    data_out
         the output data file
-
-    Returns
-    -------
-
     """
     with Raster(data_in) as ras:
         a1 = ras.array()
@@ -1169,22 +1165,18 @@ def lat_linear_to_db(data_in, data_out):
         os.remove(item)
 
 
-def lat_product(data_in1, data_in2, data_out):
+def lat_product(data_in1: str, data_in2: str, data_out: str) -> None:
     """
     Alternative to LAT module command product.
 
     Parameters
     ----------
-    data_in1: str
+    data_in1
         input data file 1
-    data_in2: str
+    data_in2
         input data file 2
-    data_out: str
+    data_out
         the output data file
-
-    Returns
-    -------
-
     """
     with Raster(data_in1) as ras:
         a1 = ras.array()
@@ -1203,22 +1195,18 @@ def lat_product(data_in1, data_in2, data_out):
             os.remove(item)
 
 
-def lat_ratio(data_in1, data_in2, data_out):
+def lat_ratio(data_in1: str, data_in2: str, data_out: str) -> None:
     """
     Alternative to LAT module command ratio.
 
     Parameters
     ----------
-    data_in1: str
+    data_in1
         input data file 1
-    data_in2: str
+    data_in2
         input data file 2
-    data_out: str
+    data_out
         the output data file
-
-    Returns
-    -------
-
     """
     with Raster(data_in1) as ras:
         a1 = ras.array()
