@@ -1157,6 +1157,7 @@ def lat_linear_to_db(data_in: str, data_out: str) -> None:
         a1[a1 <= 0] = np.nan
         out = 10 * np.log10(a1)
         tmp = data_out + '_tmp'
+        out[~np.isfinite(out)] = 0
         ras.write(outname=tmp, array=out, format='ENVI',
                   nodata=0, dtype='float32')
     disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
@@ -1186,6 +1187,7 @@ def lat_product(data_in1: str, data_in2: str, data_out: str) -> None:
         a2[a2 == 0] = np.nan
         out = a1 * a2
         tmp = data_out + '_tmp'
+        out[~np.isfinite(out)] = 0
         ras.write(outname=tmp, array=out, format='ENVI',
                   nodata=0, dtype='float32')
     disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
@@ -1216,6 +1218,7 @@ def lat_ratio(data_in1: str, data_in2: str, data_out: str) -> None:
         a2[a2 == 0] = np.nan
         out = a1 / a2
         tmp = data_out + '_tmp'
+        out[~np.isfinite(out)] = 0
         ras.write(outname=tmp, array=out, format='ENVI',
                   nodata=0, dtype='float32')
     disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
