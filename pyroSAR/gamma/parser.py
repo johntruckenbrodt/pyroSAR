@@ -13,9 +13,10 @@
 ###############################################################################
 import os
 import re
+from shutil import which
 import subprocess as sp
 from collections import Counter
-from spatialist.ancillary import finder, which, dissolve
+from spatialist.ancillary import finder, dissolve
 
 from pyroSAR.examine import ExamineGamma
 
