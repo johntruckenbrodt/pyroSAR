@@ -1422,3 +1422,17 @@ GAMMA API
 ---------
 
 - :func:`pyroSAR.gamma.util.convert2gamma`: fix error in not removing thermal noise due to GAMMA interface change
+
+0.36.2 | 2026-04-20
+===================
+
+GAMMA API
+---------
+
+- Do not write `nan` to output files and remove written files on error for:
+
+    + :func:`pyroSAR.gamma.util.lat_linear_to_db`
+    + :func:`pyroSAR.gamma.util.lat_product`
+    + :func:`pyroSAR.gamma.util.lat_ratio`
+
+- Replace usage of removed function :func:`spatialist.ancillary.which`
