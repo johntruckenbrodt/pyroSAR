@@ -709,8 +709,6 @@ class Archive(SceneArchive):
         elif self.driver == 'postgresql':
             srcDS = ("PG:host='{host}' port='{port}' user='{username}' dbname='{database}' "
                      "password='{password}' active_schema=public").format(**self.url_dict)
-            print('url_dict:', repr(self.url_dict))
-            print('srcDS', repr(srcDS))
         else:
             raise RuntimeError('unknown archive driver')
         
