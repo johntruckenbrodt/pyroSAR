@@ -22,4 +22,5 @@ dependencies:
   - coverage
   - pytest
   - flake8
-  - pytest-postgresql
+  - pytest-postgresql  # [not win]
+  - postgis  # [not win]
