@@ -227,8 +227,14 @@ class ExamineSnap(object):
         if platform.system() == 'Windows':
             cmd.extend(['--console', 'suppress'])
         
+        # fix Exception in thread "main" java.awt.AWTError: Can't connect to
+        # X11 window server using 'xyz' as the value of the DISPLAY variable.
+        env = os.environ.copy()
+        env['DISPLAY'] = ''
+        
         proc = sp.Popen(args=cmd, stdout=sp.PIPE, stderr=sp.STDOUT,
-                        text=True, encoding='utf-8', bufsize=1)
+                        text=True, encoding='utf-8', bufsize=1,
+                        env=env)
         
         counter = 0
         lines = []
@@ -433,7 +439,7 @@ class ExamineGamma(object):
                                  getattr(self, 'home')).group('version')
         
         try:
-            out, err = run(['which', 'gdal-config'], void=False)
+            returncode, out, err = run(['which', 'gdal-config'], void=False)
             gdal_config = out.strip('\n')
             self.gdal_config = gdal_config
         except sp.CalledProcessError:

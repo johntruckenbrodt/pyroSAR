@@ -1,7 +1,7 @@
 ###############################################################################
 # universal core routines for processing SAR images with GAMMA
 
-# Copyright (c) 2014-2023, the pyroSAR Developers.
+# Copyright (c) 2014-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -34,7 +34,7 @@ from ..S1 import OSV
 from ..drivers import ID, identify_many
 from . import ISPPar, Namespace, par2hdr
 from ..ancillary import multilook_factors, hasarg, groupby, Lock
-from pyroSAR.examine import ExamineSnap
+from pyroSAR.examine import ExamineSnap, ExamineGamma
 from .auxil import do_execute
 
 import logging
@@ -336,11 +336,15 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
             
             product = match.group('product')
             
-            # specify noise calibration file
-            # L1 GRD product: thermal noise already subtracted, specify xml_noise to add back thermal noise
-            # SLC products: specify noise file to remove noise
-            # xml_noise = '-': noise file not specified
-            if (S1_tnr and product == 'slc') or (not S1_tnr and product == 'grd'):
+            # In versions released before July 2015, it was assumed that noise was already
+            # removed in GRDs and specifying the XML file meant adding it back to the data.
+            version = ExamineGamma().version
+            if version < '20150701':
+                c = (S1_tnr and product == 'slc') or (not S1_tnr and product == 'grd')
+            else:
+                c = S1_tnr
+            
+            if c:
                 xml_noise = os.path.join(id.scene, 'annotation', 'calibration', 'noise-' + base)
             else:
                 xml_noise = '-'
@@ -1137,100 +1141,107 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         shutil.rmtree(tmpdir)
 
 
-def lat_linear_to_db(data_in, data_out):
+def _delete_product(path):
+    for item in [path, path + '.hdr', path + '.aux.xml']:
+        if os.path.isfile(item):
+            os.remove(item)
+
+
+def lat_linear_to_db(data_in: str, data_out: str) -> None:
     """
     Alternative to LAT module command linear_to_dB.
 
     Parameters
     ----------
-    data_in: str
+    data_in
         the input data file
-    data_out: str
+    data_out
         the output data file
-
-    Returns
-    -------
-
     """
-    with Raster(data_in) as ras:
-        a1 = ras.array()
-        a1[a1 <= 0] = np.nan
-        out = 10 * np.log10(a1)
-        tmp = data_out + '_tmp'
-        ras.write(outname=tmp, array=out, format='ENVI',
-                  nodata=0, dtype='float32')
-    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
-    shutil.copy(src=data_in + '.hdr', dst=data_out + '.hdr')
-    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
-        os.remove(item)
+    tmp = data_out + '_tmp'
+    try:
+        with Raster(data_in) as ras:
+            a1 = ras.array()
+            a1[a1 <= 0] = np.nan
+            out = 10 * np.log10(a1)
+            out[~np.isfinite(out)] = 0
+            ras.write(outname=tmp, array=out, format='ENVI',
+                      nodata=0, dtype='float32')
+        disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
+        shutil.copy(src=data_in + '.hdr', dst=data_out + '.hdr')
+    except Exception:
+        _delete_product(data_out)
+        raise
+    finally:
+        _delete_product(tmp)
 
 
-def lat_product(data_in1, data_in2, data_out):
+def lat_product(data_in1: str, data_in2: str, data_out: str) -> None:
     """
     Alternative to LAT module command product.
 
     Parameters
     ----------
-    data_in1: str
+    data_in1
         input data file 1
-    data_in2: str
+    data_in2
         input data file 2
-    data_out: str
+    data_out
         the output data file
-
-    Returns
-    -------
-
     """
-    with Raster(data_in1) as ras:
-        a1 = ras.array()
-        a1[a1 == 0] = np.nan
-    with Raster(data_in2) as ras:
-        a2 = ras.array()
-        a2[a2 == 0] = np.nan
-        out = a1 * a2
-        tmp = data_out + '_tmp'
-        ras.write(outname=tmp, array=out, format='ENVI',
-                  nodata=0, dtype='float32')
-    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
-    shutil.copy(src=data_in1 + '.hdr', dst=data_out + '.hdr')
-    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
-        if os.path.isfile(item):
-            os.remove(item)
+    tmp = data_out + '_tmp'
+    try:
+        with Raster(data_in1) as ras:
+            a1 = ras.array()
+            a1[a1 == 0] = np.nan
+        with Raster(data_in2) as ras:
+            a2 = ras.array()
+            a2[a2 == 0] = np.nan
+            out = a1 * a2
+            out[~np.isfinite(out)] = 0
+            ras.write(outname=tmp, array=out, format='ENVI',
+                      nodata=0, dtype='float32')
+        disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
+        shutil.copy(src=data_in2 + '.hdr', dst=data_out + '.hdr')
+    except Exception:
+        _delete_product(data_out)
+        raise
+    finally:
+        _delete_product(tmp)
 
 
-def lat_ratio(data_in1, data_in2, data_out):
+def lat_ratio(data_in1: str, data_in2: str, data_out: str) -> None:
     """
     Alternative to LAT module command ratio.
 
     Parameters
     ----------
-    data_in1: str
+    data_in1
         input data file 1
-    data_in2: str
+    data_in2
         input data file 2
-    data_out: str
+    data_out
         the output data file
-
-    Returns
-    -------
-
     """
-    with Raster(data_in1) as ras:
-        a1 = ras.array()
-        a1[a1 == 0] = np.nan
-    with Raster(data_in2) as ras:
-        a2 = ras.array()
-        a2[a2 == 0] = np.nan
-        out = a1 / a2
-        tmp = data_out + '_tmp'
-        ras.write(outname=tmp, array=out, format='ENVI',
-                  nodata=0, dtype='float32')
-    disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
-    shutil.copy(src=data_in1 + '.hdr', dst=data_out + '.hdr')
-    for item in [tmp, tmp + '.hdr', tmp + '.aux.xml']:
-        if os.path.isfile(item):
-            os.remove(item)
+    tmp = data_out + '_tmp'
+    try:
+        with Raster(data_in1) as ras:
+            a1 = ras.array()
+            a1[a1 == 0] = np.nan
+        with Raster(data_in2) as ras:
+            a2 = ras.array()
+            a2[a2 == 0] = np.nan
+            out = a1 / a2
+            out[~np.isfinite(out)] = 0
+            ras.write(outname=tmp, array=out, format='ENVI',
+                      nodata=0, dtype='float32')
+        disp.swap_bytes(infile=tmp, outfile=data_out, swap_type=4)
+        shutil.copy(src=data_in1 + '.hdr', dst=data_out + '.hdr')
+    except Exception:
+        _delete_product(data_out)
+        raise
+    finally:
+        _delete_product(tmp)
 
 
 def multilook(infile, outfile, spacing, rlks=None, azlks=None,

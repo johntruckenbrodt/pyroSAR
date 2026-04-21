@@ -16,7 +16,7 @@ dependencies:
   - pyyaml
   - requests
   - shapely
-  - spatialist>=0.16.2
+  - spatialist>=0.17.0
   - sqlalchemy>=1.4,<2.0
   - sqlalchemy-utils>=0.37,<0.42
   - coverage

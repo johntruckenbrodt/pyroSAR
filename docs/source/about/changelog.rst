@@ -1350,3 +1350,89 @@ SNAP API
 Auxiliary Data Handling
 -----------------------
 - handle empty URL lists in `DEMHandler.__retrieve`
+
+0.34.4 | 2026-03-03
+===================
+
+SNAP API
+--------
+- :func:`pyroSAR.snap.auxil.erode_edges`: explictly open BEAM-DIMAP .img files with the ENVI driver.
+  This was necessary because GDAL 3.12 introduces a new `MiraMonRaster` driver, which is used per default for .img files.
+
+Drivers
+-------
+- use `MEM` instead of `Memory` as driver for creating in-memory :class:`spatialist.vector.Vector` objects. `Memory` has been deprecated.
+
+0.34.5 | 2026-03-06
+===================
+
+SNAP API
+--------
+- :meth:`pyroSAR.examine.ExamineSnap.get_version`: fixed bug where the X11 environment variable `DISPLAY` was preventing SNAP to start
+
+GAMMA API
+---------
+- handle subprocess signal kills like segmentation fault (SIGSEGV). Before these were just passed through, now a `RuntimeError` is raised.
+
+0.35.0 | 2026-03-09
+===================
+
+Archive
+-------
+- new module :mod:`pyroSAR.archive` extracted from :mod:`pyroSAR.drivers`
+- new protocol class :class:`pyroSAR.archive.SceneArchive` to establish an interface for scene search classes (inherited by :class:`pyroSAR.archive.Archive`).
+- method `Archive.encode` has been renamed to :meth:`~pyroSAR.archive.Archive.to_str` and has been reimplemented to be more predictable
+
+Drivers
+-------
+- :class:`~pyroSAR.drivers.ID`: deleted method `export2sqlite`
+
+0.36.0 | 2026-03-10
+===================
+
+GAMMA API
+---------
+
+- :func:`pyroSAR.gamma.dem.dem_import`:
+
+    + add `shellscript` argument
+    + consistently pass `logpath`, `outdir` and `shellscript` to GAMMA commands
+
+- :func:`pyroSAR.gamma.auxil.process`:
+
+    + replace environment variable `base` in the `shellscript` with `OUTDIR` and corrected its usage.
+      Before, the value of `outdir` in the command was just replaced with `$base`.
+      This lead to wrong scripts whenever different values for `outdir` were passed to `process`.
+      Now, no global variable is set and `OUTDIR` is redefined whenever the value of `outdir` changes, e.g.
+
+      .. code-block:: bash
+
+          OUTDIR=/xyz
+          command1 $OUTDIR
+          command2 $OUTDIR
+          OUTDIR=/abc
+          command3 $OUTDIR
+
+    + bugfix: the file header and the declaration of `GAMMA_HOME` are now written to the file even if `outdir=None`
+
+0.36.1 | 2026-03-24
+===================
+
+GAMMA API
+---------
+
+- :func:`pyroSAR.gamma.util.convert2gamma`: fix error in not removing thermal noise due to GAMMA interface change
+
+0.36.2 | 2026-04-20
+===================
+
+GAMMA API
+---------
+
+- Do not write `nan` to output files and remove written files on error for:
+
+    + :func:`pyroSAR.gamma.util.lat_linear_to_db`
+    + :func:`pyroSAR.gamma.util.lat_product`
+    + :func:`pyroSAR.gamma.util.lat_ratio`
+
+- Replace usage of removed function :func:`spatialist.ancillary.which`
