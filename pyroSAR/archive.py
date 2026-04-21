@@ -707,8 +707,8 @@ class Archive(SceneArchive):
         if self.driver == 'sqlite':
             srcDS = self.dbfile
         elif self.driver == 'postgresql':
-            srcDS = ("PG:host={host} port={port} user={username} dbname={database} "
-                     "password={password} active_schema=public").format(**self.url_dict)
+            srcDS = ("PG:host='{host}' port='{port}' user='{username}' dbname='{database}' "
+                     "password='{password}' active_schema=public").format(**self.url_dict)
             print('url_dict:', repr(self.url_dict))
             print('srcDS', repr(srcDS))
         else:
