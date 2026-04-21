@@ -273,8 +273,9 @@ class Archive(SceneArchive):
                 'keepalives_count': 5}
         
         # create engine, containing URL and driver
-        log.debug('starting DB engine for {}'.format(URL.create(**self.url_dict)))
         self.url = URL.create(**self.url_dict)
+        log.debug(f'starting DB engine for {self.url}')
+        
         # https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS
         self.engine = create_engine(url=self.url, echo=False,
                                     connect_args=connect_args)
