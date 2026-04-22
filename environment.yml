@@ -3,7 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - gdal>=2.4
-  - geoalchemy2<0.14.0
+  - geoalchemy2>=0.14.0
   - libgdal
   - libspatialite>=5.1.0
   - lxml
@@ -17,5 +17,5 @@ dependencies:
   - requests
   - shapely
   - spatialist>=0.17.0
-  - sqlalchemy>=1.4,<2.0
-  - sqlalchemy-utils>=0.37,<0.42
+  - sqlalchemy>=1.4
+  - sqlalchemy-utils>=0.37,<0.42 # 0.42 drop database issue https://github.com/kvesteri/sqlalchemy-utils/issues/791

@@ -14,7 +14,7 @@ metadata = MetaData()
 mytable = Table('mytable', metadata,
                 Column('mytable_id', Integer, primary_key=True),
                 Column('value', String(50)),
-                Column('shape', Geometry('POLYGON', management=True, srid=4326)))
+                Column('shape', Geometry('POLYGON', srid=4326)))
 
 
 @pytest.fixture()

@@ -18,7 +18,7 @@ mytable = Table('mytable', metadata,
                 Column('mytable_id', Integer, primary_key=True),
                 Column('value', String(50)),
                 Column('shape', Geometry(geometry_type='POLYGON',
-                                         management=True, srid=4326)))
+                                         srid=4326)))
 
 
 def test_archive(tmpdir, testdata):
@@ -103,7 +103,7 @@ def test_archive2(tmpdir, testdata):
         db = Archive(testdata['archive_old_bbox'])
 
 
-def test_archive_postgres(tmpdir, testdata):
+def test_archive_postgres(tmpdir, testdata,postgresql):
     pguser = os.environ.get('PGUSER')
     pgpassword = os.environ.get('PGPASSWORD')
     pgport = os.environ.get('PGPORT')
