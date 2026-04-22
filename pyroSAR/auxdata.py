@@ -355,6 +355,7 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
     if threads not in [1, None]:
         log.info('Multithreading of computations is temporarily disabled. '
                  'See https://github.com/OSGeo/gdal/issues/13464.')
+        multithread = False
         gdal.SetConfigOption('GDAL_NUM_THREADS', '1')
     
     gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
