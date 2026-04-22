@@ -22,3 +22,5 @@ dependencies:
   - coverage
   - pytest
   - flake8
+  - sel(unix): pytest-postgresql
+  - sel(unix): postgis

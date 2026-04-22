@@ -103,14 +103,10 @@ def test_archive2(tmpdir, testdata):
         db = Archive(testdata['archive_old_bbox'])
 
 
-def test_archive_postgres(tmpdir, testdata,postgresql):
-    pguser = os.environ.get('PGUSER')
-    pgpassword = os.environ.get('PGPASSWORD')
-    pgport = os.environ.get('PGPORT')
-    if pgport is not None:
-        pgport = int(pgport)
-    else:
-        pgport = 5432
+def test_archive_postgres(tmpdir, testdata, pg_conn):
+    pguser = pg_conn.info.user
+    pgport = pg_conn.info.port
+    pgpassword = pg_conn.info.password
     
     id = identify(testdata['s1'])
     db = Archive('test', postgres=True, port=pgport, user=pguser, password=pgpassword)
