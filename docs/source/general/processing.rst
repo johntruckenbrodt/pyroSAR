@@ -27,7 +27,7 @@ Database Handling
 =================
 
 Now that we have made ourselves familiar with the scene, we can import its metadata into an SQLite database using class
-:class:`~pyroSAR.drivers.Archive`:
+:class:`~pyroSAR.archive.Archive`:
 
 .. code-block:: python
 

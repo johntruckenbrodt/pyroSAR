@@ -89,7 +89,7 @@ def parse_node(name, use_existing=True):
     {'selectedPolarisations': None, 'removeThermalNoise': 'true', 'reIntroduceThermalNoise': 'false'}
     """
     snap = ExamineSnap()
-    version = snap.get_version('microwavetbx')['version']
+    version = snap.get_version('microwavetbx')
     name = name if name.endswith('.xml') else name + '.xml'
     operator = os.path.splitext(name)[0]
     nodepath = os.path.join(os.path.expanduser('~'), '.pyrosar', 'snap', 'nodes')
@@ -108,7 +108,7 @@ def parse_node(name, use_existing=True):
             
             cmd = [gpt, operator, '-h']
             
-            out, err = run(cmd=cmd, void=False)
+            returncode, out, err = run(cmd=cmd, void=False)
             
             if re.search('Unknown operator', out + err):
                 raise RuntimeError("unknown operator '{}'".format(operator))
@@ -1573,7 +1573,13 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
         # do not apply mask if it only contains 1 (valid data)
         if len(mask[mask == 0]) == 0:
             break
-        ras = gdal.Open(img, GA_Update)
+        
+        # ensure usage of ENVI driver for .img files
+        ras = gdal.OpenEx(
+            img,
+            gdal.OF_RASTER | gdal.OF_UPDATE,
+            allowed_drivers=["ENVI"]
+        )
         band = ras.GetRasterBand(1)
         band.WriteArray(array)
         band.FlushCache()

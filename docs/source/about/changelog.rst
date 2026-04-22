@@ -1241,3 +1241,198 @@ Ancillary Tools
 Auxiliary Data Handling
 -----------------------
 - class :class:`pyroSAR.S1.OSV`: lock local target files for download (to avoid multi-download and conflicts in parallel processes)
+
+0.33.0 | 2025-12-17
+===================
+
+Drivers
+-------
+- :class:`~pyroSAR.drivers.ESA`:
+
+    + convert coordinates in `meta['origin']` to floats
+    + read incident angles directly from metadata, not from custom mapping `ANGLES_RESOLUTION` (from which they have been removed)
+    + `ERS.mapping` renaming:
+
+          * `ANGLES_RESOLUTION` -> `RESOLUTION_NESZ`
+          * `get_angles_resolution` -> `get_resolution_nesz`
+          * `range` -> `res_rg`
+          * `azimuth` -> `res_az`
+          * `nesz_near` -> `nesz_nr`
+          * `nesz_far` -> `nesz_fr`
+
+    + made code more robust by reading SPH and DSD sizes from MPH
+    + added WSS mode to `RESOLUTION_NESZ` (although all values are just `None` because they could not be found yet)
+    + simplified code and added typing
+
+- :class:`~pyroSAR.drivers.BEAM_DIMAP`:
+
+    + more robust incident angle reading
+
+SNAP API
+--------
+- support for SNAP 13
+
+Ancillary Tools
+---------------
+
+- :meth:`~pyroSAR.ancillary.multilook_factors`: complete reimplementation for more robustness
+
+Auxiliary Data Handling
+-----------------------
+- class :class:`pyroSAR.auxdata.DEMHandler`: handle ocean areas without DEM coverage using a dummy DEM spanning the target extent instead of the whole globe. The latter is no longer supported by GDAL.
+
+0.33.1 | 2026-01-19
+===================
+
+Drivers
+-------
+- :meth:`pyroSAR.drivers.SAFE.geo_grid`: fixed datetime handling bug by requiring spatialist>=0.16.2
+
+0.33.2 | 2026-01-21
+===================
+
+Auxiliary Data Handling
+-----------------------
+- :meth:`S1.OSV.__catch_step_auxdata` do not stop if no file was found on first URL
+
+0.33.3 | 2026-01-30
+===================
+
+GAMMA API
+---------
+- :class:`pyroSAR.gamma.auxil.ISPPar`: fixed `date` attribute handling
+
+0.34.0 | 2026-02-12
+===================
+
+Drivers
+-------
+- :class:`~pyroSAR.drivers.CEOS_PSR`: add new `meta` attributes `heading` and `heading_scene`
+
+Auxiliary Data Handling
+-----------------------
+- enable global search (the parameter `geometries` is now optional)
+- generation of local indices to reduce web traffic
+- option to work in offline mode
+
+Ancillary Tools
+---------------
+- class :class:`~pyroSAR.ancillary.Lock`: fixed bug where lock file would remain on error if target does not exist
+
+SNAP API
+--------
+- :meth:`pyroSAR.examine.ExamineSnap.get_version`: more robust mechanism to read version information.
+  Only the version is returned as string now (instead of a dictionary with version and release date).
+
+- :meth:`pyroSAR.examine.SnapProperties`: support for `snap.conf` files
+
+0.34.1 | 2026-02-12
+===================
+
+SNAP API
+--------
+- :class:`pyroSAR.examine.ExamineSnap`: restore Python 3.10 compatibility (f-string parsing issue)
+
+0.34.2 | 2026-02-13
+===================
+
+Ancillary Tools
+---------------
+- restored Python 3.10 compatibility (import `typing_extensions.Self` instead of `typing.Self` if necessary)
+
+0.34.3 | 2026-02-17
+===================
+
+SNAP API
+--------
+- :class:`pyroSAR.examine.ExamineSnap`: do not call SNAP to read version info in `__init__`
+
+Auxiliary Data Handling
+-----------------------
+- handle empty URL lists in `DEMHandler.__retrieve`
+
+0.34.4 | 2026-03-03
+===================
+
+SNAP API
+--------
+- :func:`pyroSAR.snap.auxil.erode_edges`: explictly open BEAM-DIMAP .img files with the ENVI driver.
+  This was necessary because GDAL 3.12 introduces a new `MiraMonRaster` driver, which is used per default for .img files.
+
+Drivers
+-------
+- use `MEM` instead of `Memory` as driver for creating in-memory :class:`spatialist.vector.Vector` objects. `Memory` has been deprecated.
+
+0.34.5 | 2026-03-06
+===================
+
+SNAP API
+--------
+- :meth:`pyroSAR.examine.ExamineSnap.get_version`: fixed bug where the X11 environment variable `DISPLAY` was preventing SNAP to start
+
+GAMMA API
+---------
+- handle subprocess signal kills like segmentation fault (SIGSEGV). Before these were just passed through, now a `RuntimeError` is raised.
+
+0.35.0 | 2026-03-09
+===================
+
+Archive
+-------
+- new module :mod:`pyroSAR.archive` extracted from :mod:`pyroSAR.drivers`
+- new protocol class :class:`pyroSAR.archive.SceneArchive` to establish an interface for scene search classes (inherited by :class:`pyroSAR.archive.Archive`).
+- method `Archive.encode` has been renamed to :meth:`~pyroSAR.archive.Archive.to_str` and has been reimplemented to be more predictable
+
+Drivers
+-------
+- :class:`~pyroSAR.drivers.ID`: deleted method `export2sqlite`
+
+0.36.0 | 2026-03-10
+===================
+
+GAMMA API
+---------
+
+- :func:`pyroSAR.gamma.dem.dem_import`:
+
+    + add `shellscript` argument
+    + consistently pass `logpath`, `outdir` and `shellscript` to GAMMA commands
+
+- :func:`pyroSAR.gamma.auxil.process`:
+
+    + replace environment variable `base` in the `shellscript` with `OUTDIR` and corrected its usage.
+      Before, the value of `outdir` in the command was just replaced with `$base`.
+      This lead to wrong scripts whenever different values for `outdir` were passed to `process`.
+      Now, no global variable is set and `OUTDIR` is redefined whenever the value of `outdir` changes, e.g.
+
+      .. code-block:: bash
+
+          OUTDIR=/xyz
+          command1 $OUTDIR
+          command2 $OUTDIR
+          OUTDIR=/abc
+          command3 $OUTDIR
+
+    + bugfix: the file header and the declaration of `GAMMA_HOME` are now written to the file even if `outdir=None`
+
+0.36.1 | 2026-03-24
+===================
+
+GAMMA API
+---------
+
+- :func:`pyroSAR.gamma.util.convert2gamma`: fix error in not removing thermal noise due to GAMMA interface change
+
+0.36.2 | 2026-04-20
+===================
+
+GAMMA API
+---------
+
+- Do not write `nan` to output files and remove written files on error for:
+
+    + :func:`pyroSAR.gamma.util.lat_linear_to_db`
+    + :func:`pyroSAR.gamma.util.lat_product`
+    + :func:`pyroSAR.gamma.util.lat_ratio`
+
+- Replace usage of removed function :func:`spatialist.ancillary.which`

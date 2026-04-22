@@ -251,8 +251,6 @@ class OSV(object):
                     response.raise_for_status()
                     result = response.text
                     files_sub = list(set(re.findall(self.pattern, result)))
-                    if len(files_sub) == 0:
-                        break
                     for file in files_sub:
                         match = re.match(self.pattern_fine, file)
                         start2 = datetime.strptime(match.group('start'), '%Y%m%dT%H%M%S')
@@ -395,7 +393,6 @@ class OSV(object):
              - 'S1B'
              - 'S1C'
              - 'S1D'
-             - ['S1A', 'S1B', 'S1C', 'S1D']
         osvtype: str
             the type of orbit files required
         start: str or None

@@ -9,3 +9,4 @@ sphinx_rtd_theme
 sphinxcontrib-bibtex
 sphinxcontrib-svg2pdfconverter
 cairosvg
+sphinx-autodoc-typehints

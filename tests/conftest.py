@@ -1,6 +1,11 @@
 import os
+import sys
+import shutil
 import pytest
+import psycopg2
 import platform
+from pathlib import Path
+from pyroSAR.examine import ExamineSnap
 
 
 @pytest.fixture
@@ -51,19 +56,76 @@ def testdata(testdir):
 
 @pytest.fixture
 def auxdata_dem_cases():
-    cases = [('AW3D30', ['N050E010/N051E011.tar.gz']),
-             ('SRTM 1Sec HGT', ['N51E011.SRTMGL1.hgt.zip']),
-             ('SRTM 3Sec', ['srtm_39_02.zip']),
-             # ('TDX90m', ['DEM/N51/E010/TDM1_DEM__30_N51E011.zip'])
-             ]
+    cases = [
+        ('AW3D30', ['N050E010/N051E011.tar.gz']),
+        ('SRTM 1Sec HGT', ['https://step.esa.int/auxdata/dem/SRTMGL1/N51E011.SRTMGL1.hgt.zip']),
+        ('SRTM 3Sec', ['https://step.esa.int/auxdata/dem/SRTM90/tiff/srtm_39_02.zip']),
+        ('Copernicus 30m Global DEM', ['https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/'
+                                       'Copernicus_DSM_COG_10_N51_00_E011_00_DEM/'
+                                       'Copernicus_DSM_COG_10_N51_00_E011_00_DEM.tif'])
+        # ('TDX90m', ['DEM/N51/E010/TDM1_DEM__30_N51E011.zip'])
+    ]
     return cases
 
 
-@pytest.fixture
-def tmp_home(monkeypatch, tmp_path):
-    home = tmp_path / 'tmp_home'
-    home.mkdir()
-    var = 'USERPROFILE' if platform.system() == 'Windows' else 'HOME'
-    monkeypatch.setenv(var, str(home))
+@pytest.fixture(scope='session', autouse=True)
+def tmp_home(tmp_path_factory):
+    home = tmp_path_factory.mktemp('home')
+    snap = home / '.snap'
+    
+    if platform.system() == 'Windows':
+        roaming_snap = Path(os.environ['APPDATA']) / 'SNAP'
+        var_home = 'USERPROFILE'
+        roaming = home / 'AppData' / 'Roaming'
+        local = home / 'AppData' / 'Local'
+        roaming.mkdir(parents=True, exist_ok=True)
+        if roaming_snap.exists():
+            shutil.copytree(roaming_snap, roaming / 'SNAP')
+        local.mkdir(parents=True, exist_ok=True)
+        os.environ['APPDATA'] = str(roaming)
+        os.environ['LOCALAPPDATA'] = str(local)
+        os.environ['HOME'] = str(home)
+    else:
+        var_home = 'HOME'
+    os.environ[var_home] = str(home)
+    
     assert os.path.expanduser('~') == str(home)
-    yield home
+    
+    snap_config = ExamineSnap()
+    snap_config.userpath = str(snap)
+    snap_config.auxdatapath = str(snap / 'auxdata')
+    
+    return home
+
+
+if sys.platform != "win32":
+    from pytest_postgresql import factories
+    
+    # On Linux/macOS: let pytest-postgresql manage the server
+    postgresql_proc = factories.postgresql_proc()
+    postgresql = factories.postgresql('postgresql_proc')
+    
+    
+    @pytest.fixture
+    def pg_conn(postgresql):
+        yield postgresql
+
+else:
+    # On Windows: connect to an already running PostgreSQL service
+    @pytest.fixture
+    def pg_conn():
+        user = os.environ.get('PGUSER', 'postgres')
+        password = os.environ.get('PGPASSWORD', 'PGPASSWORD')
+        port = int(os.environ.get('PGPORT', '5432'))
+        
+        conn = psycopg2.connect(
+            host='127.0.0.1',
+            port=port,
+            user=user,
+            password=password,
+            dbname='postgres',
+        )
+        try:
+            yield conn
+        finally:
+            conn.close()

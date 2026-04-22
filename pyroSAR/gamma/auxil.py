@@ -1,7 +1,7 @@
 ###############################################################################
 # general GAMMA utilities
 
-# Copyright (c) 2014-2025, the pyroSAR Developers, Stefan Engelhardt.
+# Copyright (c) 2014-2026, the pyroSAR Developers, Stefan Engelhardt.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -17,7 +17,7 @@ import re
 import string
 import codecs
 import subprocess as sp
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from pyroSAR.examine import ExamineGamma
 from spatialist.ancillary import parse_literal, run, union, dissolve
@@ -144,11 +144,12 @@ class ISPPar(object):
             setattr(self, key, value)
         
         if hasattr(self, 'date'):
-            try:
-                self.date = '{}-{:02d}-{:02d}T{:02d}:{:02d}:{:02f}'.format(*self.date)
-            except:
-                # if only date available
-                self.date = '{}-{:02d}-{:02d}'.format(*self.date)
+            # the date field is rounded to four digits, so only the day is extracted
+            # and then the start_time field is added to be more precise and to avoid
+            # rounding to 60 s.
+            self.date_dt = datetime(*self.date[:3])
+            self.date_dt += timedelta(seconds=self.start_time)
+            self.date = self.date_dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
     
     def __enter__(self):
         return self
@@ -284,6 +285,7 @@ class Namespace(object):
     >>> print(n.pix_geo)
     '/path/S1A__IW___A_20180829T170631_pix_geo'
     """
+    
     def __init__(self, directory, basename):
         self.__base = basename
         self.__outdir = directory
@@ -392,32 +394,40 @@ def par2hdr(parfile, hdrfile, modifications=None, nodata=None):
         hdr(items, hdrfile)
 
 
-def process(cmd, outdir=None, logfile=None, logpath=None,
-            inlist=None, void=True, shellscript=None):
+def process(
+        cmd: list[str],
+        outdir: str | None = None,
+        logfile: str | None = None,
+        logpath: str | None = None,
+        inlist: list[str] | None = None,
+        void: bool = True,
+        shellscript: str | None = None
+) -> tuple[str, str] | None:
     """
     wrapper function to execute GAMMA commands via module :mod:`subprocess`
 
     Parameters
     ----------
-    cmd: list[str]
-        the command line arguments
-    outdir: str
-        the directory to execute the command in
-    logfile: str
-        a file to write the command log to; overrides parameter logpath
-    logpath: str
-        a directory to write logfiles to; the file will be named {GAMMA command}.log, e.g. gc_map.log;
-        is overridden by parameter logfile
-    inlist: list
-        a list of values, which is passed as interactive inputs via stdin
-    void: bool
-        return the stdout and stderr messages?
-    shellscript: str
-        a file to write the GAMMA commands to in shell format
+    cmd:
+        The command line arguments.
+    outdir:
+        The directory to execute the command in. This directory is also set
+        as environment variable in `shellscript`.
+    logfile:
+        A file to write the command log to. Overrides parameter `logpath`.
+    logpath:
+        A directory to write logfiles to. The file will be named
+        {GAMMA command}.log, e.g. gc_map.log.
+        Overrides parameter `logfile`.
+    inlist:
+        A list of values, which is passed as interactive inputs via `stdin`.
+    void:
+        Return the `stdout` and `stderr` messages?
+    shellscript:
+        A file to write the GAMMA commands to in shell format.
 
     Returns
     -------
-    tuple of str or None
         the stdout and stderr messages if void is False, otherwise None
     """
     if logfile is not None:
@@ -434,24 +444,28 @@ def process(cmd, outdir=None, logfile=None, logpath=None,
         if inlist is not None:
             line += ' <<< $"{}"'.format('\n'.join([str(x) for x in inlist]) + '\n')
         with open(shellscript, 'r+') as sh:
+            content = sh.read()
+            sh.seek(0)
+            disclaimer = 'This script was created automatically by pyroSAR'
+            is_new = re.search(disclaimer, content) is None
+            if is_new:
+                ts = datetime.now().strftime('%a %b %d %H:%M:%S %Y')
+                sh.write(f'# {disclaimer} on {ts}\n\n')
+                sh.write('GAMMA_HOME={}\n\n'.format(gamma_home))
+                sh.write(content)
+            line = line.replace(gamma_home, '$GAMMA_HOME')
             if outdir is not None:
-                content = sh.read()
-                sh.seek(0)
-                is_new = re.search('this script was created automatically by pyroSAR', content) is None
-                if is_new:
-                    ts = datetime.now().strftime('%a %b %d %H:%M:%S %Y')
-                    sh.write('# this script was created automatically by pyroSAR on {}\n\n'.format(ts))
-                    sh.write('export base={}\n'.format(outdir))
-                    sh.write('export GAMMA_HOME={}\n\n'.format(gamma_home))
-                    sh.write(content)
-                line = line.replace(outdir, '$base').replace(gamma_home, '$GAMMA_HOME')
+                line = line.replace(outdir, '$OUTDIR')
+                outdirs = re.findall('OUTDIR=(.*)\n', content)
+                if len(outdirs) == 0 or outdir != outdirs[-1]:
+                    line = f"OUTDIR={outdir}\n\n{line}"
             sh.seek(0, 2)  # set pointer to the end of the file
             sh.write(line + '\n\n')
     
     # create an environment containing the locations of all GAMMA submodules to be passed to the subprocess calls
     gammaenv = os.environ.copy()
     gammaenv['GAMMA_HOME'] = gamma_home
-    out, err = run([ExamineGamma().gdal_config, '--datadir'], void=False)
+    returncode, out, err = run([ExamineGamma().gdal_config, '--datadir'], void=False)
     gammaenv['GDAL_DATA'] = out.strip()
     for module in ['DIFF', 'DISP', 'IPTA', 'ISP', 'LAT']:
         loc = os.path.join(gammaenv['GAMMA_HOME'], module)
@@ -463,8 +477,9 @@ def process(cmd, outdir=None, logfile=None, logpath=None,
                     gammaenv['PATH'] += os.pathsep + subloc
     
     # execute the command
-    out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist, void=False, errorpass=True, env=gammaenv)
-    gammaErrorHandler(out, err)
+    returncode, out, err = run(cmd, outdir=outdir, logfile=log, inlist=inlist,
+                               void=False, errorpass=True, env=gammaenv)
+    gammaErrorHandler(returncode, out, err)
     if not void:
         return out, err
 

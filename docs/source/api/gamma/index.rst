@@ -8,3 +8,4 @@ GAMMA
     auxil
     dem
     api
+    error
