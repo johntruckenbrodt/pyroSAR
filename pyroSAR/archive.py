@@ -273,8 +273,9 @@ class Archive(SceneArchive):
                 'keepalives_count': 5}
         
         # create engine, containing URL and driver
-        log.debug('starting DB engine for {}'.format(URL.create(**self.url_dict)))
         self.url = URL.create(**self.url_dict)
+        log.debug(f'starting DB engine for {self.url}')
+        
         # https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS
         self.engine = create_engine(url=self.url, echo=False,
                                     connect_args=connect_args)
@@ -706,8 +707,8 @@ class Archive(SceneArchive):
         if self.driver == 'sqlite':
             srcDS = self.dbfile
         elif self.driver == 'postgresql':
-            srcDS = """PG:host={host} port={port} user={username}
-            dbname={database} password={password} active_schema=public""".format(**self.url_dict)
+            srcDS = ("PG:host='{host}' port='{port}' user='{username}' dbname='{database}' "
+                     "password='{password}' active_schema=public").format(**self.url_dict)
         else:
             raise RuntimeError('unknown archive driver')
         
