@@ -2,6 +2,7 @@
 
 #Testing requirements
 pytest
+pytest-postgresql
 
 #Documentation requirements
 sphinx

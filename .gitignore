@@ -121,6 +121,9 @@ dev_*
 # OSX tempfiles
 .DS_Store
 
-# VSCODE 
+# VSCODE
 .vscode/
 tests/.vscode/
+
+# coverage
+lcov.info
