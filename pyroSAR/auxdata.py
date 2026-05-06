@@ -300,7 +300,8 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
         be set as they are controlled internally:
         
         - `xRes`, `yRes`: controlled via argument `tr`
-        - `srcSRS`, `dstSRS`: controlled via the CRS of `src` and arguments `t_srs`, `geoid`, `geoid_convert`
+        - `srcSRS`, `dstSRS`: controlled via the CRS of `src` and arguments
+          `t_srs`, `geoid`, `geoid_convert`
         - `srcNodata`, `dstNodata`: controlled via argument `nodata`
         - `outputType`: controlled via argument `dtype`
         - `multithread` controlled via argument `threads`
@@ -333,13 +334,14 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
             pass
     if isinstance(threads, str):
         if threads != 'ALL_CPUS':
-            raise ValueError("unsupported value for 'threads': '{}'".format(threads))
+            raise ValueError(f"unsupported value for 'threads': '{threads}'")
         else:
             multithread = True
             gdal.SetConfigOption('GDAL_NUM_THREADS', threads)
     elif isinstance(threads, int):
         if threads == 1:
             multithread = False
+            gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
         elif threads > 1:
             multithread = True
             gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
@@ -348,12 +350,18 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
     elif threads is None:
         multithread = True
     else:
-        raise TypeError("'threads' must be of type int, str or None. Is: {}".format(type(threads)))
+        raise TypeError(f"'threads' must be of type int, str or None. Is: {type(threads)}")
+    
+    if threads not in [1, None]:
+        log.info('Multithreading of computations is temporarily disabled. '
+                 'See https://github.com/OSGeo/gdal/issues/13464.')
+        multithread = False
+        gdal.SetConfigOption('GDAL_NUM_THREADS', '1')
     
     gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
                      'srcNodata': nodata, 'dstNodata': nodata,
-                     'srcSRS': 'EPSG:{}'.format(epsg_in),
-                     'dstSRS': 'EPSG:{}'.format(epsg_out),
+                     'srcSRS': f'EPSG:{epsg_in}',
+                     'dstSRS': f'EPSG:{epsg_out}',
                      'resampleAlg': resampleAlg,
                      'xRes': tr[0], 'yRes': tr[1],
                      'targetAlignedPixels': True}
@@ -366,7 +374,7 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
                       'EGM2008': 3855}
         if geoid in geoid_epsg.keys():
             epsg = geoid_epsg[geoid]
-            gdalwarp_args['srcSRS'] += '+{}'.format(epsg)
+            gdalwarp_args['srcSRS'] += f'+{epsg}'
             # the following line is a workaround for older GDAL versions that did not
             # support compound EPSG codes. See https://github.com/OSGeo/gdal/pull/4639.
             if version.parse(gdal.__version__) < version.parse('3.4.0'):
@@ -385,14 +393,14 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
         if key not in locked:
             gdalwarp_args[key] = val
         else:
-            msg = "argument '{}' cannot be set via kwargs as it is set internally."
-            raise RuntimeError(msg.format(key))
+            msg = f"argument '{key}' cannot be set via kwargs as it is set internally."
+            raise RuntimeError(msg)
     try:
         if not os.path.isfile(dst):
             message = 'creating mosaic'
             crs = gdalwarp_args['dstSRS']
             if crs != 'EPSG:4326':
-                message += ' and reprojecting to {}'.format(crs)
+                message += f' and reprojecting to {crs}'
             log.info(f'{message}: {dst}')
             gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
         else:
