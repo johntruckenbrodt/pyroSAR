@@ -20,6 +20,7 @@ import numpy
 import fnmatch
 import ftplib
 import requests
+import psutil
 import zipfile as zf
 from lxml import etree
 from math import ceil, floor
@@ -311,9 +312,12 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
 
     """
     
-    vrt_check_sources(src)
-    
+
     with Raster(src) as ras:
+        src_format = ras.format
+        if src_format == 'VRT' :
+            vrt_check_sources(src)
+            expecteFileSize = ras.bands * ras.rows *  ras.cols * (int("".join(filter(str.isdigit, ras.dtype))) // 8)
         if nodata is None:
             nodata = ras.nodata
         if tr is None:
@@ -324,27 +328,18 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
         epsg_out = epsg_in
     else:
         epsg_out = crsConvert(t_srs, 'epsg')
-    
+
     threads_system = gdal.GetConfigOption('GDAL_NUM_THREADS')
-    if threads is None:
-        threads = threads_system
-        try:
-            threads = int(threads)
-        except (ValueError, TypeError):
-            pass
     if isinstance(threads, str):
         if threads != 'ALL_CPUS':
             raise ValueError(f"unsupported value for 'threads': '{threads}'")
         else:
             multithread = True
-            gdal.SetConfigOption('GDAL_NUM_THREADS', threads)
     elif isinstance(threads, int):
         if threads == 1:
             multithread = False
-            gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
         elif threads > 1:
             multithread = True
-            gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
         else:
             raise ValueError("if 'threads' is of type int, it must be >= 1")
     elif threads is None:
@@ -352,19 +347,35 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
     else:
         raise TypeError(f"'threads' must be of type int, str or None. Is: {type(threads)}")
     
-    if threads not in [1, None]:
-        log.info('Multithreading of computations is temporarily disabled. '
-                 'See https://github.com/OSGeo/gdal/issues/13464.')
-        multithread = False
-        gdal.SetConfigOption('GDAL_NUM_THREADS', '1')
-    
+    if (threads not in [1, None]) and (src_format == 'VRT') and ( version.parse(gdal.__version__) < version.parse('3.12.1') ):
+        log.info('using multithreading for VRT warping is erronous for smaller GDAL Versions. '
+                 '( See https://github.com/OSGeo/gdal/issues/13464. )'
+                 'VRT dataset is transformed to memory TIF file prior to warping' )
+        # check free memory for TIFF file creation
+        memory = psutil.virtual_memory()
+        usedMemory = expecteFileSize * 100 / memory.available
+
+        if usedMemory  > 80 :
+           log.warn(f"Warning low memory for warping file {expecteFileSize} {memory.available} {usedMemory}")
+
+        memName = "/vsimem/mem.tif"
+
+        # disable multithreaded gdal.Translate (GDAL_NUM_THREADS = None). prevent erronous VRT treatment
+        gdal.SetConfigOption('GDAL_NUM_THREADS', None)
+
+        memDS = gdal.Translate(memName,src,format='GTiff')
+        src = memName
+    else :
+        memDS = None
+                
     gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': f'EPSG:{epsg_in}',
                      'dstSRS': f'EPSG:{epsg_out}',
                      'resampleAlg': resampleAlg,
                      'xRes': tr[0], 'yRes': tr[1],
-                     'targetAlignedPixels': True}
+                     'targetAlignedPixels': True,
+                     'warpOptions' : {"NUM_THREADS" : f"{threads}"}}
     
     if dtype is not None:
         gdalwarp_args['outputType'] = Dtype(dtype).gdalint
@@ -410,6 +421,13 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
             os.remove(dst)
         raise
     finally:
+        if memDS is not None :
+            # Close the temporary dataset (releases the Dataset object)
+            memDS = None
+
+            # Delete the in-memory "file" to free RAM
+            gdal.Unlink(memName)
+
         gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
 
 
