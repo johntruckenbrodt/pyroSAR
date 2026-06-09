@@ -4,6 +4,7 @@ numpy
 packaging
 pillow
 progressbar2
+psutil
 psycopg2
 pyyaml
 requests
