@@ -621,20 +621,20 @@ class DEMHandler:
             lon = list(range(-180, 180))
         else:
             lat = list(range(floor(float(extent['ymin']) / step) * step,
-                        ceil(float(extent['ymax']) / step) * step,
-                        step))
+                             ceil(float(extent['ymax']) / step) * step,
+                             step))
             if extent['xmin'] > extent['xmax']:
                 lon1 = range(floor(float(extent['xmin']) / step) * step,
-                            ceil(180. / step) * step,
-                            step)
+                             ceil(180. / step) * step,
+                             step)
                 lon2 = range(floor(-180. / step) * step,
                              ceil(float(extent['xmax']) / step) * step,
                              step)
                 lon = list(lon1) + list(lon2)
             else:
                 lon = list(range(floor(float(extent['xmin']) / step) * step,
-                            ceil(float(extent['xmax']) / step) * step,
-                            step))
+                                 ceil(float(extent['xmax']) / step) * step,
+                                 step))
         return lat, lon
     
     def __get_resolution(self, dem_type, y):
@@ -1295,7 +1295,7 @@ class DEMHandler:
 
         Returns
         -------
-        str
+        list[str]
             the sorted names of the remote files
         """
         keys = self.config.keys()
@@ -1379,10 +1379,23 @@ class DEMHandler:
                 floor((60 - float(extent['ymax'])) / 5) + 1,
                 ceil((60 - float(extent['ymin'])) / 5) + 1
             )
-            lon = range(
-                floor((float(extent['xmin']) + 180) / 5) + 1,
-                ceil((float(extent['xmax']) + 180) / 5) + 1
-            )
+            
+            if extent['xmin'] > extent['xmax']:
+                lon1 = range(
+                    floor((float(extent['xmin']) + 180) / 5) + 1,
+                    ceil((180. + 180) / 5) + 1
+                )
+                lon2 = range(
+                    floor((-180 + 180) / 5) + 1,
+                    ceil((float(extent['xmax']) + 180) / 5) + 1
+                )
+                lon = list(lon1) + list(lon2)
+            else:
+                lon = range(
+                    floor((float(extent['xmin']) + 180) / 5) + 1,
+                    ceil((float(extent['xmax']) + 180) / 5) + 1
+                )
+            
             indices = [(f'{y:02d}', f'{x:02d}') for x in lon for y in lat]
             remotes = remotes_from_index(indices, product=product)
         
