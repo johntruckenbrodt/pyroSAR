@@ -255,8 +255,8 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
     
     Parameters
     ----------
-    src: str
-        the input dataset, e.g. a VRT from function :func:`dem_autoload`
+    src: str | list[str]
+        the input dataset(s) as returned by :func:`dem_autoload`.
     dst: str
         the output dataset
     t_srs: None, int, str or osgeo.osr.SpatialReference
@@ -311,9 +311,10 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
 
     """
     
-    vrt_check_sources(src)
+    if isinstance(src, str):
+        vrt_check_sources(src)
     
-    with Raster(src) as ras:
+    with Raster(src[0] if isinstance(src, list) else src) as ras:
         if nodata is None:
             nodata = ras.nodata
         if tr is None:
@@ -1071,7 +1072,8 @@ class DEMHandler:
         dem_type: str
             the type fo DEM to be used
         vrt: str or None
-            an optional GDAL VRT file created from the obtained DEM tiles
+            an optional GDAL VRT file created from the obtained DEM tiles.
+            NOTE: VRTs are not suited for geometries crossing the antimeridian.
         buffer: int or float or None
             a buffer in degrees to add around the individual geometries
         username: str or None
@@ -1166,7 +1168,7 @@ class DEMHandler:
         Returns
         -------
         list[str] or None
-            the names of the obtained files or None if a VRT file was defined
+            the names of the obtained files or None if a VRT file was defined with `vrt`.
         """
         keys = self.config.keys()
         if dem_type not in keys:
