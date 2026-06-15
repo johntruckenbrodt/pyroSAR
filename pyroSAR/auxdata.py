@@ -42,9 +42,13 @@ log = logging.getLogger(__name__)
 
 def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
                  password=None, product='dem', crop=True, lock_timeout=600,
-                 offline=False):
+                 offline=False, return_fname=True):
     """
-    obtain all relevant DEM tiles for selected geometries and optionally mosaic them in a VRT.
+    Obtain all relevant DEM tiles for selected geometries.
+    The tiles are optionally mosaicked into a VRT file.
+    Otherwise, the tiles are returned as file path list.
+    With `return_fname` it can be controlled whether the zip file path
+    or a path inside the zip including GDAL VSI directive is returned.
 
     Parameters
     ----------
@@ -107,7 +111,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
           * height reference: EGM96
 
     vrt: str or None
-        an optional GDAL VRT file created from the obtained DEM tiles
+        an optional GDAL VRT file created from the obtained DEM tiles.
+        Setting this to None lets the function return the file paths.
     buffer: int, float, None
         a buffer in degrees to add around the individual geometries
     username: str or None
@@ -187,6 +192,10 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
         and no online check is performed. If a file is missing, an error is
         raised. For this to work, the function needs to be run in `online`
         mode once to create a local index.
+    return_fname: bool
+        return the file name including GDAL VSI directive (or just the path to the downloaded product)?
+        E.g. `/vsizip/srtm_72_02.zip/srtm_72_02.tif` vs. `/srtm_72_02.zip`.
+        Only applies if `vrt=None`.
     
     Returns
     -------
@@ -236,7 +245,8 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
                             product=product,
                             crop=crop,
                             lock_timeout=lock_timeout,
-                            offline=offline)
+                            offline=offline,
+                            return_fname=return_fname)
 
 
 def dem_create(src, dst, t_srs=None, tr=None, threads=None,
