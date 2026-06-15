@@ -475,7 +475,7 @@ class DEMHandler:
                             return vsi + content[0]
     
     @staticmethod
-    def __buildvrt(tiles, vrtfile, pattern, vsi, extent, src_nodata=None,
+    def __buildvrt(tiles, vrtfile, extent, src_nodata=None,
                    dst_nodata=None, hide_nodata=False, resolution=None,
                    tap=True, dst_datatype=None):
         """
@@ -488,14 +488,11 @@ class DEMHandler:
             a list of DEM files or compressed archives containing DEM files
         vrtfile: str
             the output VRT filename
-        pattern: str
-            the search pattern for finding DEM tiles in compressed archives
-        vsi: str or None
-            the GDAL VSI directive to prepend the DEM tile name, e.g. /vsizip/ or /vsitar/
-        extent: dict
+        extent: dict[str, int | float]
             a dictionary with keys `xmin`, `ymin`, `xmax` and `ymax`
         src_nodata: int or float or None
-            the nodata value of the source DEM tiles; default None: read the value from the first item in `tiles`
+            The nodata value of the source DEM tiles.
+            Default None: read the value from the first item in `tiles`.
         dst_nodata: int or float or None
             the nodata value of the output VRT file.
             Default None: do not define a nodata value and use `src_nodata` instead.
@@ -514,11 +511,7 @@ class DEMHandler:
         -------
 
         """
-        if vsi is not None and not tiles[0].endswith('.tif'):
-            locals = [vsi + x for x in dissolve([finder(x, [pattern]) for x in tiles])]
-        else:
-            locals = tiles
-        with Raster(locals[0]) as ras:
+        with Raster(tiles[0]) as ras:
             if src_nodata is None:
                 src_nodata = ras.nodata
             if resolution is None:
@@ -534,7 +527,7 @@ class DEMHandler:
         opts['outputBounds'] = (extent['xmin'], extent['ymin'],
                                 extent['xmax'], extent['ymax'])
         
-        gdalbuildvrt(src=locals, dst=vrtfile, **opts)
+        gdalbuildvrt(src=tiles, dst=vrtfile, **opts)
         if dst_datatype is not None:
             datatype = Dtype(dst_datatype).gdalstr
             tree = etree.parse(source=vrtfile)
@@ -1060,7 +1053,7 @@ class DEMHandler:
     
     def load(self, dem_type, vrt=None, buffer=None, username=None,
              password=None, product='dem', crop=True, lock_timeout=600,
-             offline=False):
+             offline=False, return_fname=True):
         """
         Download DEM tiles. The result is either returned in a list of file
         names or combined into a VRT mosaic. The VRT is cropped to the combined
@@ -1164,6 +1157,10 @@ class DEMHandler:
             and no online check is performed. If a file is missing, an error is
             raised. For this to work, the function needs to be run in `online`
             mode once to create a local index.
+        return_fname: bool
+            return the file name including GDAL VSI directive (or just the path to the downloaded product)?
+            E.g. `/vsizip/srtm_72_02.zip/srtm_72_02.tif` vs. `/srtm_72_02.zip`.
+            Only applies if `vrt=None`.
         
         Returns
         -------
@@ -1257,22 +1254,27 @@ class DEMHandler:
             for item in locals:
                 getasse30_hdr(item)
         
+        vsi = self.config[dem_type]['vsi']
+        pattern = self.config[dem_type]['pattern'][product]
+        if vsi is not None and not locals[0].endswith('.tif'):
+            tiles = [vsi + x for x in dissolve([finder(x, [pattern]) for x in locals])]
+        else:
+            tiles = locals
+        
         if vrt is not None:
             if src_nodata is None:
                 src_nodata = self.config[dem_type]['nodata'][product]
             if dst_nodata is None:
                 dst_nodata = 0 if product == 'dem' else None
             
-            self.__buildvrt(tiles=locals, vrtfile=vrt,
-                            pattern=self.config[dem_type]['pattern'][product],
-                            vsi=self.config[dem_type]['vsi'],
+            self.__buildvrt(tiles=tiles, vrtfile=vrt,
                             extent=extent,
                             src_nodata=src_nodata, dst_nodata=dst_nodata,
                             hide_nodata=True,
                             resolution=resolution,
                             tap=tap, dst_datatype=datatype)
         else:
-            return locals
+            return tiles if return_fname else locals
     
     def remote_ids(self, extent, dem_type, product='dem', username=None, password=None):
         """
