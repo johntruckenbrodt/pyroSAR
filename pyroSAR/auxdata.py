@@ -612,19 +612,28 @@ class DEMHandler:
 
         Returns
         -------
-        tuple[range]
+        tuple[list[int]]
             the integer sequences as (latitude, longitude)
         """
         if extent is None:
-            lat = range(-90, 90)
-            lon = range(-180, 180)
+            lat = list(range(-90, 90))
+            lon = list(range(-180, 180))
         else:
-            lat = range(floor(float(extent['ymin']) / step) * step,
+            lat = list(range(floor(float(extent['ymin']) / step) * step,
                         ceil(float(extent['ymax']) / step) * step,
-                        step)
-            lon = range(floor(float(extent['xmin']) / step) * step,
-                        ceil(float(extent['xmax']) / step) * step,
-                        step)
+                        step))
+            if extent['xmin'] > extent['xmax']:
+                lon1 = range(floor(float(extent['xmin']) / step) * step,
+                            ceil(180. / step) * step,
+                            step)
+                lon2 = range(floor(-180. / step) * step,
+                             ceil(float(extent['xmax']) / step) * step,
+                             step)
+                lon = list(lon1) + list(lon2)
+            else:
+                lon = list(range(floor(float(extent['xmin']) / step) * step,
+                            ceil(float(extent['xmax']) / step) * step,
+                            step))
         return lat, lon
     
     def __get_resolution(self, dem_type, y):
@@ -1053,7 +1062,7 @@ class DEMHandler:
              offline=False):
         """
         Download DEM tiles. The result is either returned in a list of file
-        names combined into a VRT mosaic. The VRT is cropped to the combined
+        names or combined into a VRT mosaic. The VRT is cropped to the combined
         extent of the geometries, but the pixel grid of the source files is
         preserved and no resampling/shifting is applied.
         
@@ -1177,7 +1186,8 @@ class DEMHandler:
         if self.geometries is not None:
             candidates = []
             for geo in self.geometries:
-                corners = self.__applybuffer(extent=geo.extent, buffer=buffer)
+                corners = self.__applybuffer(extent=geo.get_extent(split_antimeridian=True),
+                                             buffer=buffer)
                 candidates.extend(self.remote_ids(extent=corners, dem_type=dem_type,
                                                   username=username, password=password,
                                                   product=product))
