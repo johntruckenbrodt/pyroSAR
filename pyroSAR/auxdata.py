@@ -84,7 +84,7 @@ def dem_autoload(
         a list of :class:`spatialist.vector.Vector` geometries to obtain DEM data for;
         CRS must be WGS84 LatLon (EPSG 4326). Can be set to `None` for global extent.
     demType
-        the type of DEM to be used; current options:
+        the type of DEM to be used. Options:
 
         - 'AW3D30' (ALOS Global Digital Surface Model "ALOS World 3D - 30m")
 
@@ -1141,7 +1141,8 @@ class DEMHandler:
         password
             the download account password
         product
-            the sub-product to extract from the DEM product
+            the sub-product to extract from the DEM product. Options:
+            
              - 'AW3D30'
              
               * 'dem': the actual Digital Elevation Model
