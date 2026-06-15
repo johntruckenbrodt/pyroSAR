@@ -641,7 +641,7 @@ class DEMHandler:
         driver = None
     
     @staticmethod
-    def intrange(extent: EXT | None, step: int) -> tuple[range, range]:
+    def intrange(extent: EXT, step: int) -> tuple[range, range]:
         """
         generate a sequence of integer coordinates marking
         the tie points of the individual DEM tiles.
@@ -658,16 +658,12 @@ class DEMHandler:
         -------
             the integer sequences as (latitude, longitude)
         """
-        if extent is None:
-            lat = range(-90, 90)
-            lon = range(-180, 180)
-        else:
-            lat = range(floor(float(extent['ymin']) / step) * step,
-                        ceil(float(extent['ymax']) / step) * step,
-                        step)
-            lon = range(floor(float(extent['xmin']) / step) * step,
-                        ceil(float(extent['xmax']) / step) * step,
-                        step)
+        lat = range(floor(float(extent['ymin']) / step) * step,
+                    ceil(float(extent['ymax']) / step) * step,
+                    step)
+        lon = range(floor(float(extent['xmin']) / step) * step,
+                    ceil(float(extent['xmax']) / step) * step,
+                    step)
         return lat, lon
     
     def __get_resolution(
@@ -1253,7 +1249,8 @@ class DEMHandler:
                                                   username=username, password=password,
                                                   product=product))
         else:
-            candidates = self.remote_ids(extent=None, dem_type=dem_type,
+            extent = {'xmin': -180, 'xmax': 180, 'ymin': -90, 'ymax': 90}
+            candidates = self.remote_ids(extent=extent, dem_type=dem_type,
                                          username=username, password=password,
                                          product=product)
         
@@ -1335,7 +1332,7 @@ class DEMHandler:
     
     def remote_ids(
             self,
-            extent: EXT | None,
+            extent: EXT,
             dem_type: str,
             product: str = 'dem',
             username: str | None = None,
@@ -1350,7 +1347,7 @@ class DEMHandler:
             the extent of the area of interest with keys xmin, xmax, ymin, ymax
             or `None` to not set any spatial filter.
         dem_type
-            the type fo DEM to be used
+            the type of DEM to be used
         product
             the sub-product to extract from the DEM product. Only needed for DEM options 'Copernicus 30m Global DEM'
             and 'Copernicus 90m Global DEM' and ignored otherwise.
