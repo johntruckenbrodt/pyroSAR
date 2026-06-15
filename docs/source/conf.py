@@ -19,7 +19,7 @@ version = '.'.join(version_full.split('.')[:2])
 # release is automatically added to the latex document title and header
 release = version
 
-autodoc_mock_imports = ['osgeo', 'sqlalchemy', 'sqlalchemy_utils', 'geoalchemy2',
+autodoc_mock_imports = ['sqlalchemy', 'sqlalchemy_utils', 'geoalchemy2',
                         'lxml', 'progressbar', 'spatialist']
 
 # If your documentation needs a minimal Sphinx version, state it here.

@@ -15,6 +15,7 @@ import os
 import re
 import csv
 import ssl
+import socket
 import json
 import numpy
 import fnmatch
@@ -29,20 +30,52 @@ from packaging import version
 from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import Lock
 from spatialist.raster import Raster, Dtype
-from spatialist.vector import bbox
+from spatialist.vector import bbox, Vector
 from spatialist.ancillary import dissolve, finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
-from osgeo import gdal
+from osgeo import gdal, osr
+
+from typing import TypeAlias, Self, Any, TypedDict, Literal
 
 import logging
 
 log = logging.getLogger(__name__)
 
+# typing
+CRS: TypeAlias = int | str | osr.SpatialReference
+EXT: TypeAlias = dict[str, int | float]
 
-def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
-                 password=None, product='dem', crop=True, lock_timeout=600,
-                 offline=False, return_fname=True):
+
+class DEMConfig(TypedDict, total=False):
+    """
+    DEM configuration template
+    """
+    url: str
+    nodata: dict[str, int | float | None]
+    resolution: dict[str, tuple[float, float]]
+    tilesize: int
+    area_or_point: Literal["area", "point"]
+    vsi: str | None
+    port: int
+    pattern: dict[str, str]
+    datatype: dict[str, Literal["Byte", "Int16", "UInt16", "Float32"]]
+    authentication: bool
+
+
+def dem_autoload(
+        geometries: list[Vector] | None,
+        demType: str,
+        vrt: str | None = None,
+        buffer: int | float | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        product: str = 'dem',
+        crop: bool = True,
+        lock_timeout: int = 600,
+        offline: bool = False,
+        return_fname:bool=True
+) -> list[str] | None:
     """
     Obtain all relevant DEM tiles for selected geometries.
     The tiles are optionally mosaicked into a VRT file.
@@ -52,11 +85,11 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
 
     Parameters
     ----------
-    geometries: list[spatialist.vector.Vector] or None
+    geometries
         a list of :class:`spatialist.vector.Vector` geometries to obtain DEM data for;
-        CRS must be WGS84 LatLon (EPSG 4326). Can be set to None for global extent.
-    demType: str
-        the type of DEM to be used; current options:
+        CRS must be WGS84 LatLon (EPSG 4326). Can be set to `None` for global extent.
+    demType
+        the type of DEM to be used. Options:
 
         - 'AW3D30' (ALOS Global Digital Surface Model "ALOS World 3D - 30m")
 
@@ -110,16 +143,16 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
           * url: https://step.esa.int/auxdata/dem/SRTM90/tiff
           * height reference: EGM96
 
-    vrt: str or None
+    vrt
         an optional GDAL VRT file created from the obtained DEM tiles.
         Setting this to None lets the function return the file paths.
-    buffer: int, float, None
+    buffer
         a buffer in degrees to add around the individual geometries
-    username: str or None
+    username
         (optional) the username for services requiring registration
-    password: str or None
+    password
         (optional) the password for the registration account
-    product: str
+    product
         the sub-product to extract from the DEM product.
         The following options are available for the respective DEM types:
         
@@ -183,11 +216,11 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
         
           * 'dem': the actual Digital Elevation Model
     
-    crop: bool
+    crop
         crop to the provided geometries (or return the full extent of the DEM tiles)?
-    lock_timeout: int
+    lock_timeout
         how long to wait to acquire a lock on the downloaded files?
-    offline: bool
+    offline
         work offline? If `True`, only locally existing files are considered
         and no online check is performed. If a file is missing, an error is
         raised. For this to work, the function needs to be run in `online`
@@ -199,7 +232,6 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
     
     Returns
     -------
-    list[str] or None
         the names of the obtained files or None if a VRT file was defined
     
     Examples
@@ -249,10 +281,20 @@ def dem_autoload(geometries, demType, vrt=None, buffer=None, username=None,
                             return_fname=return_fname)
 
 
-def dem_create(src, dst, t_srs=None, tr=None, threads=None,
-               geoid_convert=False, geoid='EGM96', nodata=None,
-               resampleAlg='bilinear', dtype=None, pbar=False,
-               **kwargs):
+def dem_create(
+        src: str | list[str],
+        dst: str,
+        t_srs: CRS | None = None,
+        tr: tuple[int | float] | None = None,
+        threads: int | str | None = None,
+        geoid_convert: bool = False,
+        geoid: str = 'EGM96',
+        nodata: int | float | str | None = None,
+        resampleAlg: str = 'bilinear',
+        dtype: str | None = None,
+        pbar: bool = False,
+        **kwargs
+) -> None:
     """
     Create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid.
     This is basically a convenience wrapper around :func:`osgeo.gdal.Warp` via :func:`spatialist.auxil.gdalwarp`.
@@ -265,17 +307,17 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
     
     Parameters
     ----------
-    src: str | list[str]
+    src
         the input dataset(s) as returned by :func:`dem_autoload`.
-    dst: str
+    dst
         the output dataset
-    t_srs: None, int, str or osgeo.osr.SpatialReference
+    t_srs
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default (None): use the crs of ``src``.
-    tr: None or tuple[int or float]
+    tr
         the target resolution as (xres, yres)
-    threads: int, str or None
+    threads
         the number of threads to use. Possible values:
         
          - Default `None`: use the value of `GDAL_NUM_THREADS` without modification. If `GDAL_NUM_THREADS` is None,
@@ -284,25 +326,25 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
            If 1, multithreading is turned off.
          - `ALL_CPUS`: special string to use all cores/CPUs of the computer; will also temporarily
            modify `GDAL_NUM_THREADS`.
-    geoid_convert: bool
+    geoid_convert
         convert geoid heights?
-    geoid: str
+    geoid
         the geoid model to be corrected, only used if ``geoid_convert == True``; current options:
         
          - 'EGM96'
          - 'EGM2008'
-    nodata: int or float or str or None
+    nodata
         the no data value of the source and destination files.
         Can be used if no source nodata value can be read or to override it.
         A special string 'None' can be used to skip reading the value from the source file.
-    resampleAlg: str
+    resampleAlg
         the resampling algorithm tu be used. See here for options:
         https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r
-    dtype: str or None
+    dtype
         override the data type of the written file; Default None: use same type as source data.
         Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
         See :class:`spatialist.raster.Dtype`.
-    pbar: bool
+    pbar
         add a progressbar?
     **kwargs
         additional keyword arguments to be passed to :func:`spatialist.auxil.gdalwarp`.
@@ -315,10 +357,6 @@ def dem_create(src, dst, t_srs=None, tr=None, threads=None,
         - `srcNodata`, `dstNodata`: controlled via argument `nodata`
         - `outputType`: controlled via argument `dtype`
         - `multithread` controlled via argument `threads`
-    
-    Returns
-    -------
-
     """
     
     if isinstance(src, str):
@@ -432,11 +470,11 @@ class DEMHandler:
     
     Parameters
     ----------
-    geometries: list[spatialist.vector.Vector] or None
+    geometries
         a list of geometries
     """
     
-    def __init__(self, geometries):
+    def __init__(self, geometries: list[Vector] | None) -> None:
         if not (isinstance(geometries, list) or geometries is None):
             raise RuntimeError('geometries must be of type list')
         
@@ -450,14 +488,14 @@ class DEMHandler:
         except AttributeError:
             self.auxdatapath = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
     
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         return
     
     @staticmethod
-    def __applybuffer(extent, buffer):
+    def __applybuffer(extent: EXT, buffer: int | float | None) -> EXT:
         ext = dict(extent)
         if buffer is not None:
             ext['xmin'] -= buffer
@@ -466,7 +504,7 @@ class DEMHandler:
             ext['ymax'] += buffer
         return ext
     
-    def __find_first(self, dem_type, product):
+    def __find_first(self, dem_type: str, product: str) -> str | None:
         outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
         vsi = self.config[dem_type]['vsi']
         pattern = fnmatch.translate(self.config[dem_type]['pattern'][product])
@@ -485,41 +523,45 @@ class DEMHandler:
                             return vsi + content[0]
     
     @staticmethod
-    def __buildvrt(tiles, vrtfile, extent, src_nodata=None,
-                   dst_nodata=None, hide_nodata=False, resolution=None,
-                   tap=True, dst_datatype=None):
+    def __buildvrt(
+            tiles: list[str],
+            vrtfile: str,
+            extent: EXT,
+            src_nodata: int | float | None = None,
+            dst_nodata: int | float | None = None,
+            hide_nodata: bool = False,
+            resolution: tuple[int | float, int | float] | None = None,
+            tap: bool = True,
+            dst_datatype: int | str | None = None
+    ) -> None:
         """
         Build a VRT mosaic from DEM tiles. The VRT is cropped to the specified `extent` but the pixel grid
         of the source files is preserved and no resampling/shifting is applied.
         
         Parameters
         ----------
-        tiles: list[str]
+        tiles
             a list of DEM files or compressed archives containing DEM files
-        vrtfile: str
+        vrtfile
             the output VRT filename
-        extent: dict[str, int | float]
+        extent
             a dictionary with keys `xmin`, `ymin`, `xmax` and `ymax`
-        src_nodata: int or float or None
+        src_nodata
             The nodata value of the source DEM tiles.
             Default None: read the value from the first item in `tiles`.
-        dst_nodata: int or float or None
+        dst_nodata
             the nodata value of the output VRT file.
             Default None: do not define a nodata value and use `src_nodata` instead.
-        hide_nodata: bool
+        hide_nodata
             hide the nodata value of the output VRT file?
-        resolution: tuple[int or float] or None
+        resolution
             the spatial resolution (X, Y) of the source DEM tiles.
             Default None: read the value from the first item in `tiles`
-        tap: bool
+        tap
             align target pixels?
-        dst_datatype: int or str or None
+        dst_datatype
             the VRT data type as supported by :class:`spatialist.raster.Dtype`.
             Default None: use the same data type as the source files.
-        
-        Returns
-        -------
-
         """
         with Raster(tiles[0]) as ras:
             if src_nodata is None:
@@ -546,16 +588,17 @@ class DEMHandler:
             tree.write(file=vrtfile, pretty_print=True,
                        xml_declaration=False, encoding='utf-8')
     
-    def __commonextent(self, buffer=None):
+    def __commonextent(self, buffer: int | float | None = None) -> EXT:
         """
         
         Parameters
         ----------
-        buffer: int or float or None
+        buffer
+            a buffer to add to the common extent
 
         Returns
         -------
-        dict
+            the common extent of all geometries
         """
         ext_new = {}
         for geo in self.geometries:
@@ -572,7 +615,7 @@ class DEMHandler:
         return ext_new
     
     @staticmethod
-    def __create_dummy_dem(filename, extent):
+    def __create_dummy_dem(filename: str, extent: EXT) -> None:
         """
         Create a dummy file which spans the given extent and
         is 1x1 pixels large to be as small as possible.
@@ -601,22 +644,21 @@ class DEMHandler:
         driver = None
     
     @staticmethod
-    def intrange(extent, step):
+    def intrange(extent: EXT | None, step: int) -> tuple[list[int]]:
         """
         generate a sequence of integer coordinates marking
         the tie points of the individual DEM tiles.
         
         Parameters
         ----------
-        extent: dict or None
+        extent
             a dictionary with keys `xmin`, `xmax`, `ymin` and `ymax`
             with coordinates in EPSG:4326 or None to use a global extent.
-        step: int
+        step
             the sequence steps
 
         Returns
         -------
-        tuple[list[int]]
             the integer sequences as (latitude, longitude)
         """
         if extent is None:
@@ -640,27 +682,31 @@ class DEMHandler:
                                  step))
         return lat, lon
     
-    def __get_resolution(self, dem_type, y):
+    def __get_resolution(
+            self,
+            dem_type: str, y: int | float
+    ) -> tuple[float, float]:
         """
         
         Parameters
         ----------
-        dem_type: str
+        dem_type
             the DEM type
-        y: int or float
+        y
             the latitude for which to get the resolution
 
         Returns
         -------
-        tuple
             (xres, yres)
         """
         for key, val in self.config[dem_type]['resolution'].items():
-            ymin, ymax = [int(y) for y in key.split('-')]
+            ymin, ymax = [int(yr) for yr in key.split('-')]
             if ymin <= abs(y) <= ymax:
                 return val
+        raise RuntimeError(f"could not get resolution for DEM type "
+                           f"'{dem_type}' and latitude '{y}'.")
     
-    def __local_index(self, dem_type):
+    def __local_index(self, dem_type: str) -> dict[str, dict[str, dict[str, str]]]:
         path = os.path.join(self.auxdatapath, 'dem', dem_type, 'index.json')
         os.makedirs(os.path.dirname(path), exist_ok=True)
         if not os.path.isfile(path):
@@ -672,7 +718,7 @@ class DEMHandler:
                     catalog_json = f"dem_cop_{res}.json"
                     URL_STAC = self.config[dem_type]['url']
                     marker = None
-                    out = defaultdict(defaultdict)
+                    out = defaultdict(lambda: defaultdict(dict[str, str]))
                     while True:
                         params = {}
                         if marker:
@@ -712,7 +758,7 @@ class DEMHandler:
                     response = requests.get(url)
                     response.raise_for_status()
                     items = re.findall(r'href="([^"]+)"', response.text)
-                    out = defaultdict(lambda: defaultdict(dict))
+                    out = defaultdict(lambda: defaultdict(dict[str, str]))
                     patterns = {
                         'GETASSE30': '(?P<lat>[0-9]{2}[NS])(?P<lon>[0-9]{3}[EW])',
                         'SRTM 1Sec HGT': '(?P<lat>[NS][0-9]{2})(?P<lon>[EW][0-9]{3})',
@@ -782,8 +828,16 @@ class DEMHandler:
         return sorted(locals)
     
     @staticmethod
-    def __retrieve_ftp(url, filenames, outdir, username, password,
-                       port=0, offline=False, lock_timeout=600):
+    def __retrieve_ftp(
+            url: str,
+            filenames: list[str],
+            outdir: str,
+            username: str | None,
+            password: str | None,
+            port: int = 0,
+            offline: bool = False,
+            lock_timeout: int = 600
+    ) -> list[str]:
         files = list(set(filenames))
         os.makedirs(outdir, exist_ok=True)
         
@@ -791,6 +845,8 @@ class DEMHandler:
         timeout = 100
         if not offline:
             if parsed.scheme == 'ftpes':
+                if username is None or password is None:
+                    raise ValueError('Either username or password are set to None')
                 ftp = ftplib.FTP_TLS(host=parsed.netloc, timeout=timeout)
                 try:
                     ftp.login(username, password)  # login anonymously before securing control channel
@@ -798,6 +854,8 @@ class DEMHandler:
                     raise RuntimeError(str(e))
                 ftp.prot_p()  # switch to secure data connection.. IMPORTANT! Otherwise, only the user and password is encrypted and not all the file data.
             elif parsed.scheme == 'ftps':
+                if username is None or password is None:
+                    raise ValueError('Either username or password are set to None')
                 ftp = ImplicitFTP_TLS()
                 ftp.connect(host=parsed.netloc, timeout=timeout, port=port)
                 ftp.login(username, password)
@@ -835,7 +893,10 @@ class DEMHandler:
         return sorted(locals)
     
     @property
-    def config(self):
+    def config(self) -> dict[str, DEMConfig]:
+        """
+        Get DEM configuration options.
+        """
         return {
             'AW3D30': {'url': 'ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804',
                        'nodata': {'dem': -9999,
@@ -1061,9 +1122,19 @@ class DEMHandler:
             #            }
         }
     
-    def load(self, dem_type, vrt=None, buffer=None, username=None,
-             password=None, product='dem', crop=True, lock_timeout=600,
-             offline=False, return_fname=True):
+    def load(
+            self,
+            dem_type: str,
+            vrt: str | None = None,
+            buffer: int | float | None = None,
+            username: str | None = None,
+            password: str | None = None,
+            product: str = 'dem',
+            crop: bool = True,
+            lock_timeout: int = 600,
+            offline: bool = False,
+            return_fname:bool=True
+    ) -> list[str] | None:
         """
         Download DEM tiles. The result is either returned in a list of file
         names or combined into a VRT mosaic. The VRT is cropped to the combined
@@ -1072,19 +1143,20 @@ class DEMHandler:
         
         Parameters
         ----------
-        dem_type: str
+        dem_type
             the type fo DEM to be used
-        vrt: str or None
+        vrt
             an optional GDAL VRT file created from the obtained DEM tiles.
             NOTE: VRTs are not suited for geometries crossing the antimeridian.
-        buffer: int or float or None
+        buffer
             a buffer in degrees to add around the individual geometries
-        username: str or None
+        username
             the download account username
-        password: str or None
+        password
             the download account password
-        product: str
-            the sub-product to extract from the DEM product
+        product
+            the sub-product to extract from the DEM product. Options:
+            
              - 'AW3D30'
              
               * 'dem': the actual Digital Elevation Model
@@ -1155,14 +1227,14 @@ class DEMHandler:
               * 'hem': Height Error Map
               * 'lsm': Layover and Shadow Mask, based on SRTM C-band and Globe DEM data
               * 'wam': Water Indication Mask
-        crop: bool
+        crop
             If a VRT is created, crop it to the spatial extent of the provided geometries
             or return the full extent of the DEM tiles? In the latter case, the common
             bounding box of the geometries is expanded so that the coordinates are
             multiples of the tile size of the respective DEM option.
-        lock_timeout: int
+        lock_timeout
             how long to wait to acquire a lock on the downloaded files?
-        offline: bool
+        offline
             work offline? If `True`, only locally existing files are considered
             and no online check is performed. If a file is missing, an error is
             raised. For this to work, the function needs to be run in `online`
@@ -1174,7 +1246,6 @@ class DEMHandler:
         
         Returns
         -------
-        list[str] or None
             the names of the obtained files or None if a VRT file was defined with `vrt`.
         """
         keys = self.config.keys()
@@ -1286,28 +1357,34 @@ class DEMHandler:
         else:
             return tiles if return_fname else locals
     
-    def remote_ids(self, extent, dem_type, product='dem', username=None, password=None):
+    def remote_ids(
+            self,
+            extent: EXT | None,
+            dem_type: str,
+            product: str = 'dem',
+            username: str | None = None,
+            password: str | None = None
+    ) -> list[str]:
         """
         parse the names/URLs of the remote files overlapping with an area of interest
 
         Parameters
         ----------
-        extent: dict or None
+        extent
             the extent of the area of interest with keys xmin, xmax, ymin, ymax
             or `None` to not set any spatial filter.
-        dem_type: str
+        dem_type
             the type fo DEM to be used
-        product: str
+        product
             the sub-product to extract from the DEM product. Only needed for DEM options 'Copernicus 30m Global DEM'
             and 'Copernicus 90m Global DEM' and ignored otherwise.
-        username: str or None
+        username
             the download account username
-        password: str or None
+        password
             the download account password
 
         Returns
         -------
-        list[str]
             the sorted names of the remote files
         """
         keys = self.config.keys()
@@ -1485,18 +1562,14 @@ class DEMHandler:
         return sorted(remotes)
 
 
-def getasse30_hdr(fname):
+def getasse30_hdr(fname: str) -> None:
     """
     create an ENVI HDR file for zipped GETASSE30 DEM tiles
     
     Parameters
     ----------
-    fname: str
+    fname
         the name of the zipped tile
-
-    Returns
-    -------
-
     """
     basename = os.path.basename(fname)
     pattern = r'(?P<lat>[0-9]{2})' \
@@ -1535,18 +1608,18 @@ def getasse30_hdr(fname):
                 zip.writestr(hdr, str(obj))
 
 
-def get_dem_options(require_auth=None):
+def get_dem_options(require_auth: bool | None = None) -> list[str]:
     """
     Get the names of all supported DEM type options.
     
     Parameters
     ----------
-    require_auth: bool or None
-        only return options that do/don't require authentication. Default None: return all options.
+    require_auth
+        Only return options that do/don't require authentication.
+        Default None: return all options.
 
     Returns
     -------
-    list[str]
         the names of the DEM options
     """
     out = []
@@ -1563,18 +1636,18 @@ def get_dem_options(require_auth=None):
             return sorted(out)
 
 
-def get_egm_lookup(geoid, software):
+def get_egm_lookup(geoid: str, software: str) -> None:
     """
     Download lookup tables for converting EGM geoid heights to WGS84 ellipsoid heights.
     
     Parameters
     ----------
-    geoid: str
+    geoid
         the geoid model; current options:
         
         - SNAP: 'EGM96'
         - PROJ: 'EGM96', 'EGM2008'
-    software: str
+    software
         the software for which to download the EGM lookup
         
         - SNAP: default directory: ``~/.snap/auxdata/dem/egm96``; URL:
@@ -1584,10 +1657,6 @@ def get_egm_lookup(geoid, software):
         
           * https://cdn.proj.org/us_nga_egm96_15.tif
           * https://cdn.proj.org/us_nga_egm08_25.tif
-
-    Returns
-    -------
-
     """
     if software == 'SNAP':
         try:
@@ -1640,35 +1709,32 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
     taken from https://stackoverflow.com/a/36049814
     """
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self._sock = None
+        self._sock: ssl.SSLSocket | None = None
     
     @property
-    def sock(self):
+    def sock(self) -> ssl.SSLSocket | None:
         """Return the socket."""
         return self._sock
     
     @sock.setter
-    def sock(self, value):
+    def sock(self, value: socket.socket | ssl.SSLSocket | None):
         """When modifying the socket, ensure that it is ssl wrapped."""
         if value is not None and not isinstance(value, ssl.SSLSocket):
             value = self.context.wrap_socket(value)
         self._sock = value
 
 
-def vrt_check_sources(fname):
+def vrt_check_sources(fname: str) -> None:
     """
     check the sanity of all source files of a given VRT.
-    Currently does not check in-memory VRTs.
+    Currently, does not check in-memory VRTs.
     
     Parameters
     ----------
-    fname: str
+    fname
         the VRT file name
-
-    Returns
-    -------
     
     Raises
     ------
@@ -1678,6 +1744,8 @@ def vrt_check_sources(fname):
         tree = etree.parse(fname)
         sources = [x.text for x in tree.findall('.//SourceFilename')]
         for source in sources:
+            if source is None:
+                raise ValueError('encountered None value as source file name')
             if not os.path.isabs(source):
                 base_dir = os.path.dirname(fname)
                 source = os.path.normpath(os.path.join(base_dir, source))

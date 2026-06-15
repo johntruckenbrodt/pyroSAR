@@ -2,7 +2,8 @@ name: ps_doc
 channels:
   - conda-forge
 dependencies:
-  - python>=3.10
+  - gdal>=2.4
+  - python>=3.11
   - matplotlib
   - numpy
   - sphinx
