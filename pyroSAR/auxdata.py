@@ -597,6 +597,8 @@ class DEMHandler:
         -------
             the common extent of all geometries
         """
+        if self.geometries is None:
+            return self.__extent_global
         ext_new = {}
         for geo in self.geometries:
             if len(ext_new.keys()) == 0:
@@ -639,6 +641,10 @@ class DEMHandler:
         band = None
         dataset = None
         driver = None
+    
+    @property
+    def __extent_global(self) -> EXT:
+        return {'xmin': -180, 'xmax': 180, 'ymin': -90, 'ymax': 90}
     
     @staticmethod
     def intrange(extent: EXT, step: int) -> tuple[range, range]:
@@ -1249,8 +1255,7 @@ class DEMHandler:
                                                   username=username, password=password,
                                                   product=product))
         else:
-            extent = {'xmin': -180, 'xmax': 180, 'ymin': -90, 'ymax': 90}
-            candidates = self.remote_ids(extent=extent, dem_type=dem_type,
+            candidates = self.remote_ids(extent=self.__extent_global, dem_type=dem_type,
                                          username=username, password=password,
                                          product=product)
         
@@ -1277,12 +1282,16 @@ class DEMHandler:
         extent = self.__commonextent(buffer=buffer)
         aop = self.config[dem_type]['area_or_point']
         res = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
+        
+        # expand the extent to multiples of the DEM tile size
         if not crop:
             f = self.config[dem_type]['tilesize']
             extent['xmin'] = floor(extent['xmin'] / f) * f
             extent['ymin'] = floor(extent['ymin'] / f) * f
             extent['xmax'] = ceil(extent['xmax'] / f) * f
             extent['ymax'] = ceil(extent['ymax'] / f) * f
+        
+        # shift coordinates from upper left corner (area) to center (point)
         if aop == 'point':
             shift_x = res[0] / 2
             shift_y = res[1] / 2
