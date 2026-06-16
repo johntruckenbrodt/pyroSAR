@@ -722,7 +722,7 @@ class DEMHandler:
                         if marker is None:
                             del items[items.index(catalog_json)]
                         marker = items[-1]
-                        items = sorted([URL_STAC + '/' + x for x in items])
+                        items = sorted([URL_STAC + '/' + x for x in items if x is not None])
                         URL = None
                         for item in items:
                             if URL is None:
