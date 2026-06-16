@@ -21,6 +21,7 @@ import numpy
 import fnmatch
 import ftplib
 import requests
+import psutil
 import zipfile as zf
 from lxml import etree
 from math import ceil, floor
@@ -363,6 +364,10 @@ def dem_create(
         vrt_check_sources(src)
     
     with Raster(src[0] if isinstance(src, list) else src) as ras:
+        src_format = ras.format
+        if src_format == 'VRT' :
+            vrt_check_sources(src)
+            expecteFileSize = ras.bands * ras.rows *  ras.cols * (int("".join(filter(str.isdigit, ras.dtype))) // 8)
         if nodata is None:
             nodata = ras.nodata
         if tr is None:
@@ -373,27 +378,18 @@ def dem_create(
         epsg_out = epsg_in
     else:
         epsg_out = crsConvert(t_srs, 'epsg')
-    
+
     threads_system = gdal.GetConfigOption('GDAL_NUM_THREADS')
-    if threads is None:
-        threads = threads_system
-        try:
-            threads = int(threads)
-        except (ValueError, TypeError):
-            pass
     if isinstance(threads, str):
         if threads != 'ALL_CPUS':
             raise ValueError(f"unsupported value for 'threads': '{threads}'")
         else:
             multithread = True
-            gdal.SetConfigOption('GDAL_NUM_THREADS', threads)
     elif isinstance(threads, int):
         if threads == 1:
             multithread = False
-            gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
         elif threads > 1:
             multithread = True
-            gdal.SetConfigOption('GDAL_NUM_THREADS', str(threads))
         else:
             raise ValueError("if 'threads' is of type int, it must be >= 1")
     elif threads is None:
@@ -401,19 +397,35 @@ def dem_create(
     else:
         raise TypeError(f"'threads' must be of type int, str or None. Is: {type(threads)}")
     
-    if threads not in [1, None]:
-        log.info('Multithreading of computations is temporarily disabled. '
-                 'See https://github.com/OSGeo/gdal/issues/13464.')
-        multithread = False
-        gdal.SetConfigOption('GDAL_NUM_THREADS', '1')
-    
+    if (threads not in [1, None]) and (src_format == 'VRT') and ( version.parse(gdal.__version__) < version.parse('3.12.1') ):
+        log.info('using multithreading for VRT warping is erronous for smaller GDAL Versions. '
+                 '( See https://github.com/OSGeo/gdal/issues/13464. )'
+                 'VRT dataset is transformed to memory TIF file prior to warping' )
+        # check free memory for TIFF file creation
+        memory = psutil.virtual_memory()
+        usedMemory = expecteFileSize * 100 / memory.available
+
+        if usedMemory  > 80 :
+           log.warn(f"Warning low memory for warping file {expecteFileSize} {memory.available} {usedMemory}")
+
+        memName = "/vsimem/mem.tif"
+
+        # disable multithreaded gdal.Translate (GDAL_NUM_THREADS = None). prevent erronous VRT treatment
+        gdal.SetConfigOption('GDAL_NUM_THREADS', None)
+
+        memDS = gdal.Translate(memName,src,format='GTiff')
+        src = memName
+    else :
+        memDS = None
+        
     gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': f'EPSG:{epsg_in}',
                      'dstSRS': f'EPSG:{epsg_out}',
                      'resampleAlg': resampleAlg,
                      'xRes': tr[0], 'yRes': tr[1],
-                     'targetAlignedPixels': True}
+                     'targetAlignedPixels': True,
+                     'warpOptions' : {"NUM_THREADS" : f"{threads}"}}
     
     if dtype is not None:
         gdalwarp_args['outputType'] = Dtype(dtype).gdalint
@@ -459,6 +471,13 @@ def dem_create(
             os.remove(dst)
         raise
     finally:
+        if memDS is not None :
+            # Close the temporary dataset (releases the Dataset object)
+            memDS = None
+
+            # Delete the in-memory "file" to free RAM
+            gdal.Unlink(memName)
+
         gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
 
 
@@ -600,6 +619,8 @@ class DEMHandler:
         -------
             the common extent of all geometries
         """
+        if self.geometries is None:
+            return self.__extent_global
         ext_new = {}
         for geo in self.geometries:
             if len(ext_new.keys()) == 0:
@@ -643,8 +664,12 @@ class DEMHandler:
         dataset = None
         driver = None
     
+    @property
+    def __extent_global(self) -> EXT:
+        return {'xmin': -180, 'xmax': 180, 'ymin': -90, 'ymax': 90}
+    
     @staticmethod
-    def intrange(extent: EXT | None, step: int) -> tuple[list[int]]:
+    def intrange(extent: EXT, step: int) -> tuple[list[int], list[int]]:
         """
         generate a sequence of integer coordinates marking
         the tie points of the individual DEM tiles.
@@ -661,25 +686,21 @@ class DEMHandler:
         -------
             the integer sequences as (latitude, longitude)
         """
-        if extent is None:
-            lat = list(range(-90, 90))
-            lon = list(range(-180, 180))
+        lat = list(range(floor(float(extent['ymin']) / step) * step,
+                         ceil(float(extent['ymax']) / step) * step,
+                         step))
+        if extent['xmin'] > extent['xmax']:
+            lon1 = range(floor(float(extent['xmin']) / step) * step,
+                         ceil(180. / step) * step,
+                         step)
+            lon2 = range(floor(-180. / step) * step,
+                         ceil(float(extent['xmax']) / step) * step,
+                         step)
+            lon = list(lon1) + list(lon2)
         else:
-            lat = list(range(floor(float(extent['ymin']) / step) * step,
-                             ceil(float(extent['ymax']) / step) * step,
-                             step))
-            if extent['xmin'] > extent['xmax']:
-                lon1 = range(floor(float(extent['xmin']) / step) * step,
-                             ceil(180. / step) * step,
-                             step)
-                lon2 = range(floor(-180. / step) * step,
+            lon = list(range(floor(float(extent['xmin']) / step) * step,
                              ceil(float(extent['xmax']) / step) * step,
-                             step)
-                lon = list(lon1) + list(lon2)
-            else:
-                lon = list(range(floor(float(extent['xmin']) / step) * step,
-                                 ceil(float(extent['xmax']) / step) * step,
-                                 step))
+                             step))
         return lat, lon
     
     def __get_resolution(
@@ -732,7 +753,7 @@ class DEMHandler:
                         if marker is None:
                             del items[items.index(catalog_json)]
                         marker = items[-1]
-                        items = sorted([URL_STAC + '/' + x for x in items])
+                        items = sorted([URL_STAC + '/' + x for x in items if x is not None])
                         URL = None
                         for item in items:
                             if URL is None:
@@ -1272,7 +1293,7 @@ class DEMHandler:
                                                   username=username, password=password,
                                                   product=product))
         else:
-            candidates = self.remote_ids(extent=None, dem_type=dem_type,
+            candidates = self.remote_ids(extent=self.__extent_global, dem_type=dem_type,
                                          username=username, password=password,
                                          product=product)
         
@@ -1299,12 +1320,16 @@ class DEMHandler:
         extent = self.__commonextent(buffer=buffer)
         aop = self.config[dem_type]['area_or_point']
         res = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
+        
+        # expand the extent to multiples of the DEM tile size
         if not crop:
             f = self.config[dem_type]['tilesize']
             extent['xmin'] = floor(extent['xmin'] / f) * f
             extent['ymin'] = floor(extent['ymin'] / f) * f
             extent['xmax'] = ceil(extent['xmax'] / f) * f
             extent['ymax'] = ceil(extent['ymax'] / f) * f
+        
+        # shift coordinates from upper left corner (area) to center (point)
         if aop == 'point':
             shift_x = res[0] / 2
             shift_y = res[1] / 2
@@ -1359,7 +1384,7 @@ class DEMHandler:
     
     def remote_ids(
             self,
-            extent: EXT | None,
+            extent: EXT,
             dem_type: str,
             product: str = 'dem',
             username: str | None = None,
@@ -1374,7 +1399,7 @@ class DEMHandler:
             the extent of the area of interest with keys xmin, xmax, ymin, ymax
             or `None` to not set any spatial filter.
         dem_type
-            the type fo DEM to be used
+            the type of DEM to be used
         product
             the sub-product to extract from the DEM product. Only needed for DEM options 'Copernicus 30m Global DEM'
             and 'Copernicus 90m Global DEM' and ignored otherwise.

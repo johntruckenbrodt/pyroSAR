@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from builtins import str
 from io import BytesIO
+from typing import Any, Literal, TypeAlias
 
 import abc
 import ast
@@ -58,19 +59,24 @@ import logging
 
 log = logging.getLogger(__name__)
 
+Number: TypeAlias = int | float
+Coordinate: TypeAlias = tuple[float, float]
+Coordinates: TypeAlias = list[Coordinate]
+MetaDict: TypeAlias = dict[str, Any]
+BoundingBox: TypeAlias = dict[Literal['xmin', 'xmax', 'ymin', 'ymax'], float]
 
-def identify(scene):
+
+def identify(scene: str) -> ID:
     """
     identify a SAR scene and return the appropriate metadata handler object
 
     Parameters
     ----------
-    scene: str
+    scene
         a file or directory name
 
     Returns
     -------
-    pyroSAR.drivers.ID
         a pyroSAR metadata handler
     
     Examples
@@ -100,8 +106,8 @@ def identify(scene):
     if not os.path.exists(scene):
         raise OSError("No such file or directory: '{}'".format(scene))
     
-    def get_subclasses(c):
-        subclasses = c.__subclasses__()
+    def get_subclasses(c: type[ID]) -> list[type[ID]]:
+        subclasses: list[type[ID]] = c.__subclasses__()
         for subclass in subclasses.copy():
             subclasses.extend(get_subclasses(subclass))
         return list(set(subclasses))
@@ -114,25 +120,29 @@ def identify(scene):
     raise RuntimeError('data format not supported')
 
 
-def identify_many(scenes, pbar=False, sortkey=None, cores=1):
+def identify_many(
+        scenes: list[str | ID],
+        pbar: bool = False,
+        sortkey: str | None = None,
+        cores: int = 1
+) -> list[ID]:
     """
     wrapper function for returning metadata handlers of all valid scenes in a list,
     similar to function :func:`~pyroSAR.drivers.identify`.
 
     Parameters
     ----------
-    scenes: list[str or ID]
+    scenes
         the file names of the scenes to be identified
-    pbar: bool
+    pbar
         adds a progressbar if True
-    sortkey: str or None
+    sortkey
         sort the handler object list by an attribute
-    cores: int
+    cores
         the number of cores to parallelize identification
     
     Returns
     -------
-    list[ID]
         a list of pyroSAR metadata handlers
     
     Examples
@@ -142,7 +152,7 @@ def identify_many(scenes, pbar=False, sortkey=None, cores=1):
     >>> ids = identify_many(files, pbar=False, sortkey='start')
     """
     
-    def handler(scene):
+    def handler(scene: str | ID) -> ID | None:
         if isinstance(scene, ID):
             return scene
         else:
@@ -176,7 +186,11 @@ def identify_many(scenes, pbar=False, sortkey=None, cores=1):
     return idlist
 
 
-def filter_processed(scenelist, outdir, recursive=False):
+def filter_processed(
+        scenelist: list[ID],
+        outdir: str,
+        recursive: bool = False
+) -> list[ID]:
     """
     Filter a list of pyroSAR objects to those that have not yet been processed and stored in the defined directory.
     The search for processed scenes is either done in the directory only or recursively into subdirectories.
@@ -184,16 +198,15 @@ def filter_processed(scenelist, outdir, recursive=False):
 
     Parameters
     ----------
-    scenelist: list[ID]
+    scenelist
         a list of pyroSAR objects
-    outdir: str
+    outdir
         the processing directory
-    recursive: bool
+    recursive
         scan `outdir` recursively into subdirectories?
 
     Returns
     -------
-    list[ID]
         a list of those scenes, which have not been processed yet
     """
     return [x for x in scenelist if not x.is_processed(outdir, recursive)]
@@ -201,10 +214,10 @@ def filter_processed(scenelist, outdir, recursive=False):
 
 class ID(object):
     """
-    Abstract class for SAR meta data handlers
+    Abstract class for SAR metadata handlers
     """
     
-    def __init__(self, metadict):
+    def __init__(self, metadict: MetaDict) -> None:
         """
         to be called by the __init__methods of the format drivers
         scans a metadata dictionary and registers entries with a standardized name as object attributes
@@ -216,10 +229,10 @@ class ID(object):
         for item in self.locals:
             setattr(self, item, metadict[item])
     
-    def __getattr__(self, item):
+    def __getattr__(self, item: str) -> Any:
         raise AttributeError("object has no attribute '{}'".format(item))
     
-    def __str__(self):
+    def __str__(self) -> str:
         lines = ['pyroSAR ID object of type {}'.format(self.__class__.__name__)]
         for item in sorted(self.locals):
             value = getattr(self, item)
@@ -231,27 +244,32 @@ class ID(object):
             lines.append(line)
         return '\n'.join(lines)
     
-    def bbox(self, outname=None, driver=None, overwrite=True, buffer=None):
+    def bbox(
+            self,
+            outname: str | None = None,
+            driver: str | None = None,
+            overwrite: bool = True,
+            buffer: Number | tuple[Number, Number] | None = None
+    ) -> Vector | None:
         """
         get the bounding box of a scene. The result is either returned as
         vector object or written to a file.
 
         Parameters
         ----------
-        outname: str
+        outname
             the name of the vector file to be written
-        driver: str
+        driver
             the output file format; needs to be defined if the format cannot
             be auto-detected from the filename extension
-        overwrite: bool
+        overwrite
             overwrite an existing vector file?
-        buffer: None or int or float or tuple[int or float]
+        buffer:
             a buffer to add around `coordinates`. Default None: do not add
             a buffer. A tuple is interpreted as (x buffer, y buffer).
 
         Returns
         -------
-        ~spatialist.vector.Vector or None
             the vector object if `outname` is None and None otherwise
         
         See Also
@@ -266,23 +284,27 @@ class ID(object):
                  outname=outname, driver=driver, overwrite=overwrite,
                  buffer=buffer)
     
-    def geometry(self, outname=None, driver=None, overwrite=True):
+    def geometry(
+            self,
+            outname: str | None = None,
+            driver: str | None = None,
+            overwrite: bool = True
+    ) -> Vector | None:
         """
         get the footprint geometry of a scene either as a vector object or written to a file
 
         Parameters
         ----------
-        outname: str
+        outname
             the name of the vector file to be written
-        driver: str
+        driver
             the output file format; needs to be defined if the format cannot
             be auto-detected from the filename extension
-        overwrite: bool
+        overwrite
             overwrite an existing vector file?
 
         Returns
         -------
-        ~spatialist.vector.Vector or None
             the vector object if `outname` is None, None otherwise
         
         See also
@@ -320,13 +342,12 @@ class ID(object):
             bbox.write(outfile=outname, driver=driver, overwrite=overwrite)
     
     @property
-    def compression(self):
+    def compression(self) -> Literal['zip', 'tar'] | None:
         """
-        check whether a scene is compressed into an tarfile or zipfile or not at all
+        check whether a scene is compressed into a tarfile or zipfile or not at all
 
         Returns
         -------
-        str or None
             either 'zip', 'tar' or None
         """
         if os.path.isdir(self.scene):
@@ -338,7 +359,7 @@ class ID(object):
         else:
             return None
     
-    def export2dict(self):
+    def export2dict(self) -> MetaDict:
         """
         Return the uuid and the metadata that is defined in `self.locals` as a dictionary
         """
@@ -348,18 +369,15 @@ class ID(object):
         metadata['uuid'] = title
         return metadata
     
-    def examine(self, include_folders=False):
+    def examine(self, include_folders: bool = False) -> None:
         """
         check whether any items in the SAR scene structure (i.e. files/folders) match the regular expression pattern
         defined by the class. On success the item is registered in the object as attribute `file`.
 
         Parameters
         ----------
-        include_folders: bool
+        include_folders
             also match folder (or just files)?
-
-        Returns
-        -------
 
         Raises
         -------
@@ -373,20 +391,20 @@ class ID(object):
         else:
             raise RuntimeError('file ambiguity detected:\n{}'.format('\n'.join(files)))
     
-    def findfiles(self, pattern, include_folders=False):
+    def findfiles(self, pattern: str, include_folders: bool = False) -> str | list[str]:
         """
         find files in the scene archive, which match a pattern.
 
         Parameters
         ----------
-        pattern: str
+        pattern
             the regular expression to match
-        include_folders: bool
+        include_folders
              also match folders (or just files)?
+        
         Returns
         -------
-        list[str]
-            the matched file names
+            the matched file name(s)
         
         See Also
         --------
@@ -408,13 +426,12 @@ class ID(object):
         
         return files
     
-    def gdalinfo(self):
+    def gdalinfo(self) -> MetaDict:
         """
         read metadata directly from the GDAL SAR image drivers
 
         Returns
         -------
-        dict
             the metadata attributes
         """
         files = self.findfiles(r'(?:\.[NE][12]$|DAT_01\.001$|product\.xml|manifest\.safe$)')
@@ -430,7 +447,7 @@ class ID(object):
         else:
             raise RuntimeError('file type not supported')
         
-        meta = {}
+        meta: dict[str, Any] = {}
         
         ext_lookup = {'.N1': 'ASAR', '.E1': 'ERS1', '.E2': 'ERS2'}
         extension = os.path.splitext(header)[1]
@@ -454,18 +471,17 @@ class ID(object):
             except ValueError:
                 pass
             
-            if re.search('LAT|LONG', entry[0]):
+            if re.search(pattern='LAT|LONG', string=str(entry[0])):
                 entry[1] /= 1000000.
-            meta[entry[0]] = entry[1]
+            meta[str(entry[0])] = entry[1]
         return meta
     
-    def getCorners(self):
+    def getCorners(self) -> BoundingBox:
         """
         Get the bounding box corner coordinates
 
         Returns
         -------
-        dict
             the corner coordinates as a dictionary with keys `xmin`, `ymin`, `xmax`, `ymax`
         """
         if 'coordinates' not in self.meta.keys():
@@ -475,34 +491,32 @@ class ID(object):
         lon = [x[0] for x in coordinates]
         return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
     
-    def getFileObj(self, filename):
+    def getFileObj(self, filename: str) -> BytesIO:
         """
         Load a file into a readable file object.
 
         Parameters
         ----------
-        filename: str
+        filename
             the name of a file in the scene archive, easiest to get with method :meth:`~ID.findfiles`
 
         Returns
         -------
-        io.BytesIO
             a file pointer object
         """
-        return getFileObj(self.scene, filename)
+        return getFileObj(scene=self.scene, filename=filename)
     
-    def getGammaImages(self, directory=None):
+    def getGammaImages(self, directory: str | None = None) -> list[str]:
         """
         list all files processed by GAMMA
 
         Parameters
         ----------
-        directory: str or None
+        directory
             the directory to be scanned; if left empty the object attribute `gammadir` is scanned
 
         Returns
         -------
-        list[str]
             the file names of the images processed by GAMMA
 
         Raises
@@ -518,13 +532,12 @@ class ID(object):
         return [x for x in finder(directory, [self.outname_base()], regex=True) if
                 not re.search(r'\.(?:par|hdr|aux\.xml|swp|sh)$', x)]
     
-    def getHGT(self):
+    def getHGT(self) -> list[str]:
         """
         get the names of all SRTM HGT tiles overlapping with the SAR scene
 
         Returns
         -------
-        list[str]
             names of the SRTM HGT tiles
         """
         
@@ -544,28 +557,31 @@ class ID(object):
         # concatenate all formatted latitudes and longitudes with each other as final product
         return [x + y + '.hgt' for x in lat for y in lon]
     
-    def is_processed(self, outdir, recursive=False):
+    def is_processed(self, outdir: str, recursive: bool = False) -> bool:
         """
         check whether a scene has already been processed and stored in the defined output directory
         (and subdirectories if scanned recursively)
 
         Parameters
         ----------
-        outdir: str
+        outdir
             the directory to be checked
+        recursive
+            also scan subdirectories for output?
 
         Returns
         -------
-        bool
             does an image matching the scene pattern exist?
         """
         if os.path.isdir(outdir):
             # '{}.*tif$'.format(self.outname_base())
-            return len(finder(outdir, [self.outname_base()], regex=True, recursive=recursive)) != 0
+            result = finder(target=outdir, matchlist=[self.outname_base()],
+                            regex=True, recursive=recursive)
+            return len(result) != 0
         else:
             return False
     
-    def outname_base(self, extensions=None):
+    def outname_base(self, extensions: list[str] | None = None) -> str:
         """
         parse a string containing basic information about the scene in standardized format.
         Currently, this id contains the sensor (4 digits), acquisition mode (4 digits), orbit (1 digit)
@@ -573,13 +589,12 @@ class ID(object):
         
         Parameters
         ----------
-        extensions: list[str] or None
+        extensions
             the names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
+        
         Returns
         -------
-        str
-            a standardized name unique to the scene
-            
+            a standardized name unique to the scene   
         """
         
         fields = ('{:_<4}'.format(self.sensor),
@@ -593,38 +608,34 @@ class ID(object):
         return out
     
     @staticmethod
-    def parse_date(x):
+    def parse_date(x: str | datetime) -> str:
         """
         this function gathers known time formats provided in the different SAR products and converts them to a common
         standard of the form YYYYMMDDTHHMMSS.
 
         Parameters
         ----------
-        x: str
+        x
             the time stamp
 
         Returns
         -------
-        str
             the converted time stamp in format YYYYmmddTHHMMSS
         """
         return parse_date(x)
     
     @abc.abstractmethod
-    def quicklook(self, outname, format='kmz'):
+    def quicklook(self, outname: str, format: str = 'kmz') -> None:
         """
         export a quick look image of the scene
 
         Parameters
         ----------
-        outname: str
+        outname
             the name of the output file
-        format: str
+        format
             the format of the file to write;
             currently only kmz is supported
-
-        Returns
-        -------
 
         Examples
         --------
@@ -657,18 +668,14 @@ class ID(object):
         out = datetime.strptime(self.stop, '%Y%m%dT%H%M%S')
         return out.replace(tzinfo=timezone.utc)
     
-    def summary(self):
+    def summary(self) -> None:
         """
         print the set of standardized scene metadata attributes
-
-        Returns
-        -------
-
         """
         print(self.__str__())
     
     @abc.abstractmethod
-    def scanMetadata(self):
+    def scanMetadata(self) -> MetaDict:
         """
         scan SAR scenes for metadata attributes.
         The returned dictionary is registered as attribute `meta` by the class upon object initialization.
@@ -677,51 +684,48 @@ class ID(object):
 
         Returns
         -------
-        dict
             the derived attributes
 
         """
         raise NotImplementedError
     
     @abc.abstractmethod
-    def unpack(self, directory, overwrite=False, exist_ok=False):
+    def unpack(self, directory: str, overwrite: bool = False, exist_ok: bool = False) -> None:
         """
         Unpack the SAR scene into a defined directory.
 
         Parameters
         ----------
-        directory: str
+        directory
             the base directory into which the scene is unpacked
-        overwrite: bool
+        overwrite
             overwrite an existing unpacked scene?
-        exist_ok: bool
+        exist_ok
             allow existing output files and do not create new ones?
-
-        Returns
-        -------
-
         """
         raise NotImplementedError
     
-    def _unpack(self, directory, offset=None, overwrite=False, exist_ok=False):
+    def _unpack(
+            self,
+            directory: str,
+            offset: str | None = None,
+            overwrite: bool = False,
+            exist_ok: bool = False
+    ) -> None:
         """
         general function for unpacking scene archives; to be called by implementations of ID.unpack.
         Will reset object attributes `scene` and `file` to point to the locations of the unpacked scene
         
         Parameters
         ----------
-        directory: str
+        directory
             the name of the directory in which the files are written
-        offset: str
+        offset
             an archive directory offset; to be defined if only a subdirectory is to be unpacked (see e.g. TSX.unpack)
-        overwrite: bool
+        overwrite
             should an existing directory be overwritten?
-        exist_ok: bool
+        exist_ok
             do not attempt unpacking if the target directory already exists? Ignored if ``overwrite==True``
-        
-        Returns
-        -------
-        
         """
         do_unpack = True
         if os.path.isdir(directory):
@@ -796,7 +800,7 @@ class BEAM_DIMAP(ID):
         * SNAP supported sensors
     """
     
-    def __init__(self, scene):
+    def __init__(self, scene: str) -> None:
         
         if not scene.lower().endswith('.dim'):
             raise RuntimeError('Scene format is not BEAM-DIMAP')
@@ -807,7 +811,7 @@ class BEAM_DIMAP(ID):
         
         super(BEAM_DIMAP, self).__init__(self.meta)
     
-    def scanMetadata(self):
+    def scanMetadata(self) -> MetaDict:
         meta = dict()
         
         self.root = ET.parse(self.scene).getroot()
@@ -937,7 +941,7 @@ class BEAM_DIMAP(ID):
         #################################################################################
         return meta
     
-    def unpack(self, directory, overwrite=False, exist_ok=False):
+    def unpack(self, directory: str, overwrite: bool = False, exist_ok: bool = False) -> None:
         raise RuntimeError('unpacking of BEAM-DIMAP products is not supported')
 
 
@@ -954,7 +958,7 @@ class CEOS_ERS(ID):
         (`ESA 1998 <https://earth.esa.int/documents/10174/1597298/SAR05E.pdf>`_)
     """
     
-    def __init__(self, scene):
+    def __init__(self, scene: str) -> None:
         self.pattern = patterns.ceos_ers
         
         self.pattern_pid = r'(?P<sat_id>(?:SAR|ASA))_' \
@@ -970,7 +974,7 @@ class CEOS_ERS(ID):
         # register the standardized meta attributes as object attributes
         super(CEOS_ERS, self).__init__(self.meta)
     
-    def unpack(self, directory, overwrite=False, exist_ok=False):
+    def unpack(self, directory: str, overwrite: bool = False, exist_ok: bool = False) -> None:
         if self.sensor in ['ERS1', 'ERS2']:
             base_file = re.sub(r'\.PS$', '', os.path.basename(self.file))
             base_dir = os.path.basename(directory.strip('/'))
@@ -981,7 +985,7 @@ class CEOS_ERS(ID):
         else:
             raise NotImplementedError('sensor {} not implemented yet'.format(self.sensor))
     
-    def scanMetadata(self):
+    def scanMetadata(self) -> MetaDict:
         meta = dict()
         
         match = re.match(re.compile(self.pattern), os.path.basename(self.file))
@@ -1121,7 +1125,7 @@ class CEOS_PSR(ID):
             * VBD: Scan SAR wide mode Dual polarization
     """
     
-    def __init__(self, scene):
+    def __init__(self, scene: str) -> None:
         
         self.scene = os.path.realpath(scene)
         
@@ -1141,13 +1145,13 @@ class CEOS_PSR(ID):
         # register the standardized meta attributes as object attributes
         super(CEOS_PSR, self).__init__(self.meta)
     
-    def _getLeaderfileContent(self):
+    def _getLeaderfileContent(self) -> bytes:
         led_obj = self.getFileObj(self.led_filename)
         led = led_obj.read()
         led_obj.close()
         return led
     
-    def _img_get_coordinates(self):
+    def _img_get_coordinates(self) -> Coordinates:
         img_filename = self.findfiles('IMG')[0]
         img_obj = self.getFileObj(img_filename)
         imageFileDescriptor = img_obj.read(720)
@@ -1172,7 +1176,7 @@ class CEOS_PSR(ID):
         
         return list(zip(lon, lat))
     
-    def _parseSummary(self):
+    def _parseSummary(self) -> MetaDict:
         try:
             summary_file = self.getFileObj(self.findfiles('summary|workreport')[0])
         except IndexError:
@@ -1185,10 +1189,10 @@ class CEOS_PSR(ID):
         return summary
     
     @property
-    def led_filename(self):
+    def led_filename(self) -> str:
         return self.findfiles(self.pattern)[0]
     
-    def scanMetadata(self):
+    def scanMetadata(self) -> MetaDict:
         ################################################################################################################
         # read leader (LED) file
         led = self._getLeaderfileContent()
@@ -1430,7 +1434,7 @@ class CEOS_PSR(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False, exist_ok=False):
+    def unpack(self, directory: str, overwrite: bool = False, exist_ok: bool = False) -> None:
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
 
@@ -1452,7 +1456,7 @@ class EORC_PSR(ID):
             * WBD: Scan SAR nominal [14MHz] mode Dual polarization
     """
     
-    def __init__(self, scene):
+    def __init__(self, scene: str) -> None:
         
         self.scene = os.path.realpath(scene)
         
@@ -1465,14 +1469,14 @@ class EORC_PSR(ID):
         # register the standardized meta attributes as object attributes
         super(EORC_PSR, self).__init__(self.meta)
     
-    def _getHeaderfileContent(self):
+    def _getHeaderfileContent(self) -> list[str]:
         head_obj = self.getFileObj(self.header_filename)
         head = head_obj.read().decode('utf-8')
         head = list(head.split('\n'))
         head_obj.close()
         return head
     
-    def _img_get_coordinates(self):
+    def _img_get_coordinates(self) -> Coordinates:
         img_filename = self.findfiles('IMG')[0]
         img_obj = self.getFileObj(img_filename)
         imageFileDescriptor = img_obj.read(720)
@@ -1497,11 +1501,11 @@ class EORC_PSR(ID):
         
         return list(zip(lon, lat))
     
-    def _parseFacter_m(self):
+    def _parseFacter_m(self) -> list[str]:
         try:
             facter_file = self.findfiles('facter_m.dat')[0]
         except IndexError:
-            return {}
+            return []
         facter_obj = self.getFileObj(facter_file)
         facter_m = facter_obj.read().decode('utf-8')
         facter_m = list(facter_m.split('\n'))
@@ -1509,10 +1513,10 @@ class EORC_PSR(ID):
         return facter_m
     
     @property
-    def header_filename(self):
+    def header_filename(self) -> str:
         return self.findfiles(self.pattern)[0]
     
-    def scanMetadata(self):
+    def scanMetadata(self) -> MetaDict:
         ################################################################################################################
         # read header (HDR) file
         header = self._getHeaderfileContent()
@@ -1581,7 +1585,7 @@ class EORC_PSR(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False, exist_ok=False):
+    def unpack(self, directory: str, overwrite: bool = False, exist_ok: bool = False) -> None:
         outdir = os.path.join(directory, os.path.basename(self.file).replace('LED-', ''))
         self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
 
@@ -1596,7 +1600,7 @@ class ESA(ID):
         * ERS2
     """
     
-    def __init__(self, scene):
+    def __init__(self, scene: str) -> None:
         
         self.pattern = patterns.esa
         self.pattern_pid = r'(?P<sat_id>(?:SAR|ASA))_' \
@@ -1615,7 +1619,7 @@ class ESA(ID):
         # register the standardized meta attributes as object attributes
         super(ESA, self).__init__(self.meta)
     
-    def scanMetadata(self):
+    def scanMetadata(self) -> MetaDict:
         match = re.match(re.compile(self.pattern), os.path.basename(self.file))
         match2 = re.match(re.compile(self.pattern_pid), match.group('product_id'))
         
@@ -1639,7 +1643,7 @@ class ESA(ID):
         else:
             raise RuntimeError(f"unsupported acquisition mode: '{meta['acquisition_mode']}'")
         
-        def val_convert(val):
+        def val_convert(val: str) -> int | float | datetime | str:
             try:
                 out = int(val)
             except ValueError:
@@ -1653,7 +1657,7 @@ class ESA(ID):
                         out = val
             return out
         
-        def decode(raw):
+        def decode(raw: str) -> dict[str, Any]:
             pattern = r'(?P<key>[A-Z0-9_]+)\=(")?(?P<value>.*?)("|<|$)'
             out = {}
             coord_keys = [f'{x}_{y}_{z}'
@@ -1799,23 +1803,27 @@ class ESA(ID):
         
         return meta
     
-    def geo_grid(self, outname=None, driver=None, overwrite=True):
+    def geo_grid(
+            self,
+            outname: str | None = None,
+            driver: str | None = None,
+            overwrite: bool = True
+    ) -> Vector | None:
         """
         get the geo grid as vector geometry
 
         Parameters
         ----------
-        outname: str
+        outname
             the name of the vector file to be written
-        driver: str
+        driver
             the output file format; needs to be defined if the format cannot
             be auto-detected from the filename extension
-        overwrite: bool
+        overwrite
             overwrite an existing vector file?
 
         Returns
         -------
-        spatialist.vector.Vector or None
             the vector object if `outname` is None, None otherwise
 
         See also
@@ -1860,7 +1868,7 @@ class ESA(ID):
         else:
             vec.write(outfile=outname, driver=driver, overwrite=overwrite)
     
-    def unpack(self, directory, overwrite=False, exist_ok=False):
+    def unpack(self, directory: str, overwrite: bool = False, exist_ok: bool = False) -> None:
         base_file = os.path.basename(self.file).strip(r'\.zip|\.tar(?:\.gz|)')
         base_dir = os.path.basename(directory.strip('/'))
         
@@ -1884,7 +1892,7 @@ class SAFE(ID):
         * MPC-0243 Masking "No-value" Pixels on GRD Products generated by the Sentinel-1 ESA IPF
     """
     
-    def __init__(self, scene):
+    def __init__(self, scene: str) -> None:
         
         self.scene = os.path.realpath(scene)
         
@@ -1914,44 +1922,45 @@ class SAFE(ID):
         
         self.gammafiles = {'slc': [], 'pri': [], 'grd': []}
     
-    def removeGRDBorderNoise(self, method='pyroSAR'):
+    def removeGRDBorderNoise(self, method: Literal['pyroSAR', 'ESA'] | str = 'pyroSAR') -> None:
         """
         mask out Sentinel-1 image border noise.
         
         Parameters
         ----------
-        method: str
+        method
             the border noise removal method to be applied; one of the following:
             
              - 'ESA': the pure implementation as described by ESA
              - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
 
-        Returns
-        -------
-        
         See Also
         --------
         :func:`~pyroSAR.S1.removeGRDBorderNoise`
         """
         S1.removeGRDBorderNoise(self, method=method)
     
-    def geo_grid(self, outname=None, driver=None, overwrite=True):
+    def geo_grid(
+            self,
+            outname: str | None = None,
+            driver: str | None = None,
+            overwrite: bool = True
+    ) -> Vector | None:
         """
         get the geo grid as vector geometry
 
         Parameters
         ----------
-        outname: str
+        outname
             the name of the vector file to be written
-        driver: str
+        driver
             the output file format; needs to be defined if the format cannot
             be auto-detected from the filename extension
-        overwrite: bool
+        overwrite
             overwrite an existing vector file?
 
         Returns
         -------
-        ~spatialist.vector.Vector or None
             the vector object if `outname` is None, None otherwise
         
         See also
@@ -2004,42 +2013,49 @@ class SAFE(ID):
         else:
             vec.write(outfile=outname, driver=driver, overwrite=overwrite)
     
-    def getOSV(self, osvdir=None, osvType='POE', returnMatch=False, useLocal=True, timeout=300, url_option=1):
+    def getOSV(
+            self,
+            osvdir: str | None = None,
+            osvType: Literal['POE', 'RES'] | list[Literal['POE', 'RES']] = 'POE',
+            returnMatch: bool = False,
+            useLocal: bool = True,
+            timeout: Number | tuple[Number, Number] | None = 300,
+            url_option: int = 1
+    ) -> str | None:
         """
         download Orbit State Vector files for the scene
 
         Parameters
         ----------
-        osvdir: str
+        osvdir
             the directory of OSV files; subdirectories POEORB and RESORB are created automatically;
             if no directory is defined, the standard SNAP auxdata location is used
-        osvType: str or list[str]
+        osvType
             the type of orbit file either 'POE', 'RES' or a list of both;
             if both are selected, the best matching file will be retrieved. I.e., POE if available and RES otherwise
-        returnMatch: bool
+        returnMatch
             return the best matching orbit file?
-        useLocal: bool
+        useLocal
             use locally existing files and do not search for files online if the right file has been found?
-        timeout: int or tuple or None
+        timeout
             the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
-        url_option: int
+        url_option
             the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch` for options
 
         Returns
         -------
-        str or None
             the best matching OSV file if `returnMatch` is True or None otherwise
         
         See Also
         --------
         :class:`pyroSAR.S1.OSV`
         """
-        with S1.OSV(osvdir, timeout=timeout) as osv:
+        with S1.OSV(osvdir=osvdir, timeout=timeout) as osv:
             if useLocal:
-                match = osv.match(sensor=self.sensor, timestamp=self.start,
-                                  osvtype=osvType)
-                if match is not None:
-                    return match if returnMatch else None
+                matched = osv.match(sensor=self.sensor, timestamp=self.start,
+                                    osvtype=osvType)
+                if matched is not None:
+                    return matched if returnMatch else None
             
             if osvType in ['POE', 'RES']:
                 files = osv.catch(sensor=self.sensor, osvtype=osvType,
@@ -2060,28 +2076,29 @@ class SAFE(ID):
             osv.retrieve(files)
             
             if returnMatch:
-                match = osv.match(sensor=self.sensor, timestamp=self.start,
-                                  osvtype=osvType)
-                return match
+                matched = osv.match(sensor=self.sensor, timestamp=self.start,
+                                    osvtype=osvType)
+                return matched
     
-    def quicklook(self, outname, format='kmz', na_transparent=True):
+    def quicklook(
+            self,
+            outname: str,
+            format: Literal['kmz'] = 'kmz',
+            na_transparent: bool = True
+    ) -> None:
         """
         Write a quicklook file for the scene.
         
         Parameters
         ----------
-        outname: str
+        outname
             the file to write
-        format: str
+        format
             the quicklook format. Currently supported options:
             
              - kmz
-        na_transparent: bool
+        na_transparent
             make NA values transparent?
-
-        Returns
-        -------
-
         """
         if self.product not in ['GRD', 'SLC']:
             msg = 'this method has only been implemented for GRD and SLC, not {}'
@@ -2100,7 +2117,7 @@ class SAFE(ID):
                 if na_transparent:
                     img = Image.open(png_in)
                     img = img.convert('RGBA')
-                    datas = img.getdata()
+                    datas = list(img.getdata())
                     newData = []
                     for item in datas:
                         if item[0] == 0 and item[1] == 0 and item[2] == 0:
@@ -2114,7 +2131,7 @@ class SAFE(ID):
                 else:
                     out.writestr('quick-look.png', data=png_in.getvalue())
     
-    def resolution(self):
+    def resolution(self) -> tuple[float, float]:
         """
         Compute the mid-swath resolution of the Sentinel-1 product. For GRD products the resolution is expressed in
         ground range and in slant range otherwise.
@@ -2126,7 +2143,6 @@ class SAFE(ID):
         
         Returns
         -------
-        tuple[float]
             the resolution as (range, azimuth)
         """
         if 'resolution' in self.meta.keys():
@@ -2186,7 +2202,7 @@ class SAFE(ID):
         self.meta['resolution'] = resolution_rg, resolution_az
         return self.meta['resolution']
     
-    def scanMetadata(self):
+    def scanMetadata(self) -> MetaDict:
         with self.getFileObj(self.findfiles('manifest.safe')[0]) as input:
             manifest = input.getvalue()
         namespaces = getNamespaces(manifest)
@@ -2277,7 +2293,7 @@ class SAFE(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False, exist_ok=False):
+    def unpack(self, directory: str, overwrite: bool = False, exist_ok: bool = False) -> None:
         outdir = os.path.join(directory, os.path.basename(self.file))
         self._unpack(outdir, overwrite=overwrite, exist_ok=exist_ok)
 
@@ -2318,7 +2334,7 @@ class TSX(ID):
         * EEC: Enhanced Ellipsoid Corrected
     """
     
-    def __init__(self, scene):
+    def __init__(self, scene: str) -> None:
         if isinstance(scene, str):
             self.scene = os.path.realpath(scene)
             
@@ -2335,7 +2351,7 @@ class TSX(ID):
         
         super(TSX, self).__init__(self.meta)
     
-    def scanMetadata(self):
+    def scanMetadata(self) -> MetaDict:
         annotation = self.getFileObj(self.file).getvalue()
         namespaces = getNamespaces(annotation)
         tree = ET.fromstring(annotation)
@@ -2375,7 +2391,7 @@ class TSX(ID):
         
         return meta
     
-    def unpack(self, directory, overwrite=False, exist_ok=False):
+    def unpack(self, directory: str, overwrite: bool = False, exist_ok: bool = False) -> None:
         match = self.findfiles(self.pattern, True)
         header = [x for x in match if not x.endswith('xml') and 'iif' not in x][0].replace(self.scene, '').strip('/')
         outdir = os.path.join(directory, os.path.basename(header))
@@ -2420,7 +2436,7 @@ class TDM(TSX):
     >>>     archive.insert(scenes_tdm)
     """
     
-    def __init__(self, scene):
+    def __init__(self, scene: str) -> None:
         self.scene = os.path.realpath(scene)
         
         self.pattern = patterns.tdm
@@ -2436,7 +2452,7 @@ class TDM(TSX):
         
         super(TDM, self).__init__(self.meta)
     
-    def scanMetadata(self):
+    def scanMetadata(self) -> MetaDict:
         annotation = self.getFileObj(self.file).getvalue()
         namespaces = getNamespaces(annotation)
         tree = ET.fromstring(annotation)
@@ -2509,20 +2525,19 @@ class TDM(TSX):
         return meta
 
 
-def getFileObj(scene, filename):
+def getFileObj(scene: str, filename: str) -> BytesIO:
     """
     Load a file in a SAR scene archive into a readable file object.
 
     Parameters
     ----------
-    scene: str
+    scene
         the scene archive. Can be either a directory or a compressed archive of type `zip` or `tar.gz`.
-    filename: str
+    filename
         the name of a file in the scene archive, easiest to get with method :meth:`~ID.findfiles`
 
     Returns
     -------
-    ~io.BytesIO
         a file object
     """
     membername = filename.replace(scene, '').strip(r'\/')
@@ -2560,19 +2575,18 @@ def getFileObj(scene, filename):
     return obj
 
 
-def parse_date(x):
+def parse_date(x: str | datetime) -> str:
     """
     this function gathers known time formats provided in the different SAR products and converts them to a common
     standard of the form YYYYMMDDTHHMMSS
 
     Parameters
     ----------
-    x: str or ~datetime.datetime
+    x
         the time stamp to be converted
 
     Returns
     -------
-    str
         the converted time stamp in format YYYYmmddTHHMMSS
     """
     if isinstance(x, datetime):
