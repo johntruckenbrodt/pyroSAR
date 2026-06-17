@@ -18,7 +18,7 @@ mytable = Table('mytable', metadata,
                 Column('mytable_id', Integer, primary_key=True),
                 Column('value', String(50)),
                 Column('shape', Geometry(geometry_type='POLYGON',
-                                         management=True, srid=4326)))
+                                         srid=4326)))
 
 
 def test_archive(tmpdir, testdata):
