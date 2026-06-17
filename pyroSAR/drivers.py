@@ -52,7 +52,8 @@ from .config import __LOCAL__
 from .ERS import passdb_query, get_resolution_nesz
 from .xml_util import getNamespaces
 
-from spatialist import crsConvert, Vector, bbox
+from spatialist.vector import Vector, bbox
+from spatialist.auxil import crsConvert, ogr2ogr
 from spatialist.ancillary import parse_literal, finder, multicore
 
 import logging
@@ -274,7 +275,7 @@ class ID(object):
         
         See Also
         --------
-        spatialist.vector.Vector.bbox
+        spatialist.vector.bbox
         """
         if outname is None:
             return bbox(coordinates=self.getCorners(), crs=self.projection,
@@ -291,7 +292,9 @@ class ID(object):
             overwrite: bool = True
     ) -> Vector | None:
         """
-        get the footprint geometry of a scene either as a vector object or written to a file
+        Get the footprint geometry of a scene.
+        The result is either returned as a vector object or written to a file.
+        Polygons crossing the antimeridian are automatically split into a multipolygon.
 
         Parameters
         ----------
@@ -315,9 +318,16 @@ class ID(object):
             raise NotImplementedError
         srs = crsConvert(self.projection, 'osr')
         points = ogr.Geometry(ogr.wkbMultiPoint)
+        
+        lons = [lon for lon, lat in self.meta['coordinates']]
+        
+        wrapped = True if max(lons) - min(lons) > 180 else False
+        
         for lon, lat in self.meta['coordinates']:
+            # shift longitudes if crossing the antimeridian
+            lon_mod = lon + 360 if wrapped and lon < 0 else lon
             point = ogr.Geometry(ogr.wkbPoint)
-            point.AddPoint(lon, lat)
+            point.AddPoint(lon_mod, lat)
             points.AddGeometry(point)
         geom = points.ConvexHull()
         geom.FlattenTo2D()
@@ -331,15 +341,37 @@ class ID(object):
             geom.CloseRings()
         exterior = points = None
         
-        bbox = Vector(driver='MEM')
-        bbox.addlayer('geometry', srs, geom.GetGeometryType())
-        bbox.addfield('area', ogr.OFTReal)
-        bbox.addfeature(geom, fields={'area': geom.Area()})
+        vec = Vector(driver='MEM')
+        vec.addlayer('geometry', srs, geom.GetGeometryType())
+        vec.addfield('area', ogr.OFTReal)
+        vec.addfeature(geom, fields={'area': geom.Area()})
         geom = None
+        
+        # shift antimeridian-shifted coordinates back and split the polygon
+        if wrapped:
+            ds = ogr2ogr(
+                src=vec.vector,
+                dst='',
+                format='MEM',
+                dstSRS=srs,
+                reproject=True,
+                geometryType='PROMOTE_TO_MULTI',
+                options=[
+                    '-wrapdateline',
+                    '-datelineoffset', '180'
+                ],
+                void=False
+            )
+            vec.__init__()
+            vec.vector = ds
+            vec.init_layer()
+        
         if outname is None:
-            return bbox
+            return vec
         else:
-            bbox.write(outfile=outname, driver=driver, overwrite=overwrite)
+            vec.write(outfile=outname, driver=driver, overwrite=overwrite)
+            vec.close()
+            return None
     
     @property
     def compression(self) -> Literal['zip', 'tar'] | None:
