@@ -38,10 +38,11 @@ from spatialist.ancillary import finder
 
 from pyroSAR.drivers import identify, identify_many, ID
 
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc
+from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, text
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.sql import select, func
 from sqlalchemy.engine.url import URL
 from sqlalchemy.ext.automap import automap_base
@@ -278,7 +279,7 @@ class Archive(SceneArchive):
         
         # https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS
         self.engine = create_engine(url=self.url, echo=False,
-                                    connect_args=connect_args)
+                                    connect_args=connect_args,poolclass=StaticPool)
         
         # call to __load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
@@ -287,7 +288,7 @@ class Archive(SceneArchive):
             # check if loading was successful
             try:
                 with self.engine.begin() as conn:
-                    version = conn.execute('SELECT spatialite_version();')
+                    version = conn.execute(text('SELECT spatialite_version();'))
             except exc.OperationalError:
                 raise RuntimeError('could not load spatialite extension')
         
@@ -299,12 +300,12 @@ class Archive(SceneArchive):
             log.debug('enabling spatial extension for new database')
             with self.engine.begin() as conn:
                 if self.driver == 'sqlite':
-                    conn.execute(select([func.InitSpatialMetaData(1)]))
+                    conn.execute(select(func.InitSpatialMetaData(1)))
                 else:
                     conn.exec_driver_sql('CREATE EXTENSION IF NOT EXISTS postgis;')
         # create Session (ORM) and get metadata
         self.Session = sessionmaker(bind=self.engine)
-        self.meta = MetaData(self.engine)
+        self.meta = MetaData()
         self.custom_fields = custom_fields
         
         # load or create tables
@@ -322,7 +323,7 @@ class Archive(SceneArchive):
             raise RuntimeError(msg.format("the 'geometry' column"))
         
         self.Base = automap_base(metadata=self.meta)
-        self.Base.prepare(self.engine, reflect=True)
+        self.Base.prepare(autoload_with=self.engine)
         self.Data = self.Base.classes.data
         self.Duplicates = self.Base.classes.duplicates
         self.dbfile = dbfile
@@ -340,10 +341,6 @@ class Archive(SceneArchive):
         Add tables to the database per :class:`sqlalchemy.schema.Table`
         Tables provided here will be added to the database.
 
-        .. note::
-
-            Columns using Geometry must have setting management=True for SQLite,
-            for example: ``geometry = Column(Geometry('POLYGON', management=True, srid=4326))``
 
         Parameters
         ----------
@@ -365,7 +362,7 @@ class Archive(SceneArchive):
                 created.append(str(table))
         log.info('created table(s) {}.'.format(', '.join(created)))
         self.Base = automap_base(metadata=self.meta)
-        self.Base.prepare(self.engine, reflect=True)
+        self.Base.prepare(autoload_with=self.engine)
     
     def __init_data_table(self) -> None:
         if sql_inspect(self.engine).has_table('data'):
@@ -394,7 +391,7 @@ class Archive(SceneArchive):
                                  Column('hv', Integer),
                                  Column('vh', Integer),
                                  Column('geometry', Geometry(geometry_type='POLYGON',
-                                                             management=True, srid=4326)))
+                                                             srid=4326)))
         # add custom fields
         if self.custom_fields is not None:
             for key, val in self.custom_fields.items():
@@ -756,7 +753,7 @@ class Archive(SceneArchive):
             the column names of the chosen table
         """
         # get all columns of `table`, but shows geometry columns not correctly
-        table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
+        table_info = Table(table, self.meta, autoload_with=self.engine)
         col_names = table_info.c.keys()
         
         return sorted([self.to_str(x) for x in col_names])
@@ -1193,7 +1190,6 @@ class Archive(SceneArchive):
         close the database connection
         """
         self.engine.dispose()
-        gc.collect(generation=2)  # this was added as a fix for win PermissionError when deleting sqlite.db files.
     
     def __exit__(
             self,

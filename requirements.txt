@@ -1,4 +1,4 @@
-geoalchemy2<0.14.0
+geoalchemy2>=0.14.0
 lxml
 numpy
 packaging
@@ -11,4 +11,4 @@ requests
 shapely
 spatialist>=0.17.0
 sqlalchemy-utils>=0.37,<0.42
-sqlalchemy>=1.4,<2.0
+sqlalchemy>=1.4
