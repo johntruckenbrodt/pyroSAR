@@ -286,7 +286,7 @@ def dem_create(
         src: str | list[str],
         dst: str,
         t_srs: CRS | None = None,
-        tr: tuple[int | float] | None = None,
+        tr: tuple[int | float, int | float] | None = None,
         threads: int | str | None = None,
         geoid_convert: bool = False,
         geoid: str = 'EGM96',
