@@ -1363,7 +1363,7 @@ class DEMHandler:
         vsi = self.config[dem_type]['vsi']
         pattern = self.config[dem_type]['pattern'][product]
         if vsi is not None and not locals[0].endswith('.tif'):
-            tiles = [vsi + x for x in dissolve([finder(x, [pattern]) for x in locals])]
+            tiles = [vsi + x for x in dissolve([finder(y, [pattern]) for y in locals])]
         else:
             tiles = locals
         
