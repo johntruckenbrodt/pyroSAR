@@ -376,7 +376,7 @@ def dem_create(
         src_format = ras.format
         if src_format == 'VRT':
             vrt_check_sources(src)
-            bytes = int("".join(filter(str.isdigit, ras.dtype))) // 8
+            bytes = Dtype(ras.dtype).bytes
             expecteFileSize = ras.bands * ras.rows * ras.cols * bytes
         if nodata is None:
             nodata = ras.nodata
