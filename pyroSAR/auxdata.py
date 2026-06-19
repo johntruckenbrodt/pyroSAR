@@ -32,7 +32,7 @@ from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import Lock
 from spatialist.raster import Raster, Dtype
 from spatialist.vector import bbox, Vector
-from spatialist.ancillary import dissolve, finder
+from spatialist.ancillary import finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
 from osgeo import gdal, osr
