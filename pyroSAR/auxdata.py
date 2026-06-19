@@ -1765,6 +1765,30 @@ def vrt_check_sources(fname: str) -> None:
     ------
     RuntimeError
     """
+    
+    def get_archive_path(path: str) -> str:
+        """
+        Extract the archive path from a GDAL VSI archive path.
+
+        Examples
+        --------
+        /vsitar/C:\\tmp\\file.tar.gz\\folder\\image.tif
+        -> C:\\tmp\\file.tar.gz
+
+        /vsizip//tmp/file.zip/folder/image.tif
+        -> /tmp/file.zip
+        """
+        pattern = (
+            r'^/vsi[a-z]+/'  # VSI directive
+            r'(?P<archive>.*?'
+            r'\.(?:tar(?:\.gz)?|zip))'  # archive extension
+        )
+        
+        match = re.match(pattern, path, flags=re.IGNORECASE)
+        if not match:
+            raise RuntimeError(f'could not match archive path: {path}')
+        return match.group('archive')
+    
     if os.path.isfile(fname):
         tree = etree.parse(fname)
         sources = [x.text for x in tree.findall('.//SourceFilename')]
@@ -1774,5 +1798,7 @@ def vrt_check_sources(fname: str) -> None:
             if not os.path.isabs(source):
                 base_dir = os.path.dirname(fname)
                 source = os.path.normpath(os.path.join(base_dir, source))
+            if re.search('^/vsi', source):
+                source = get_archive_path(source)
             if not os.path.isfile(source):
                 raise RuntimeError(f'missing VRT source file: {source}')
