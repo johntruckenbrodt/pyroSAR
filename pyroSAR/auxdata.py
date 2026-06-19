@@ -75,7 +75,7 @@ def dem_autoload(
         crop: bool = True,
         lock_timeout: int = 600,
         offline: bool = False,
-        return_fname:bool=True
+        return_fname: bool = True
 ) -> list[str] | None:
     """
     Obtain all relevant DEM tiles for selected geometries.
@@ -146,7 +146,19 @@ def dem_autoload(
 
     vrt
         an optional GDAL VRT file created from the obtained DEM tiles.
-        Setting this to None lets the function return the file paths.
+        Setting this to `None` lets the function return the file paths.
+        
+        .. NOTE::
+            VRTs do not support antimeridian splitting.
+            For this, return the file paths and pass them to :func:`dem_create` directly.
+        
+        .. NOTE::
+            If the geometries are entirely over ocean it might be possible
+            that no DEM tiles are found. In this case a sidecar file is created,
+            which covers the geometries' extent and contains one pixel with
+            a value of 0 (Naming: ``vrt.replace('.vrt', '_tmp.tif')``).
+            This file is then used as source in the VRT.
+    
     buffer
         a buffer in degrees to add around the individual geometries
     username
