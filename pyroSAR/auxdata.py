@@ -1169,7 +1169,7 @@ class DEMHandler:
             crop: bool = True,
             lock_timeout: int = 600,
             offline: bool = False,
-            return_fname:bool=True
+            return_fname: bool = True
     ) -> list[str] | None:
         """
         Download DEM tiles. The result is either returned in a list of file
@@ -1375,10 +1375,15 @@ class DEMHandler:
             for item in locals:
                 getasse30_hdr(item)
         
+        # get the file paths inside zip/tar archives and prepend a GDAL VSI directive
         vsi = self.config[dem_type]['vsi']
-        pattern = self.config[dem_type]['pattern'][product]
-        if vsi is not None and not locals[0].endswith('.tif'):
-            tiles = [vsi + x for x in dissolve([finder(y, [pattern]) for y in locals])]
+        if vsi is not None:
+            tiles = []
+            pattern = self.config[dem_type]['pattern'][product]
+            for local in locals:
+                if not local.endswith('.tif'):
+                    for tile in finder(local, [pattern]):
+                        tiles.append(vsi + tile)
         else:
             tiles = locals
         
