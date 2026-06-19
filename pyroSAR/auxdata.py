@@ -346,9 +346,7 @@ def dem_create(
          - 'EGM96'
          - 'EGM2008'
     nodata
-        the no data value of the source and destination files.
-        Can be used if no source nodata value can be read or to override it.
-        A special string 'None' can be used to skip reading the value from the source file.
+        the nodata value of the destination files. Default `None`: use the value of the source file.
     resampleAlg
         the resampling algorithm tu be used. See here for options:
         https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r
@@ -435,7 +433,7 @@ def dem_create(
         memDS = None
     
     gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
-                     'srcNodata': nodata, 'dstNodata': nodata,
+                     'dstNodata': nodata,
                      'srcSRS': f'EPSG:{epsg_in}',
                      'dstSRS': f'EPSG:{epsg_out}',
                      'resampleAlg': resampleAlg,
