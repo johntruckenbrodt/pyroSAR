@@ -556,47 +556,70 @@ class DEMHandler:
                                 getasse30_hdr(fname)
                             return vsi + content[0]
     
-    @staticmethod
     def __buildvrt(
+            self,
             tiles: list[str],
-            vrtfile: str,
-            extent: EXT,
-            src_nodata: int | float | None = None,
-            dst_nodata: int | float | None = None,
-            hide_nodata: bool = False,
-            resolution: tuple[int | float, int | float] | None = None,
-            tap: bool = True,
-            dst_datatype: int | str | None = None
+            vrt: str,
+            dem_type: str,
+            product: str,
+            crop: bool
     ) -> None:
         """
-        Build a VRT mosaic from DEM tiles. The VRT is cropped to the specified `extent` but the pixel grid
+        Build a VRT mosaic from DEM tiles.
+        The VRT is cropped to the specified `extent` but the pixel grid
         of the source files is preserved and no resampling/shifting is applied.
         
         Parameters
         ----------
         tiles
             a list of DEM files or compressed archives containing DEM files
-        vrtfile
+        vrt
             the output VRT filename
-        extent
-            a dictionary with keys `xmin`, `ymin`, `xmax` and `ymax`
-        src_nodata
-            The nodata value of the source DEM tiles.
-            Default None: read the value from the first item in `tiles`.
-        dst_nodata
-            the nodata value of the output VRT file.
-            Default None: do not define a nodata value and use `src_nodata` instead.
         hide_nodata
             hide the nodata value of the output VRT file?
-        resolution
-            the spatial resolution (X, Y) of the source DEM tiles.
-            Default None: read the value from the first item in `tiles`
-        tap
-            align target pixels?
-        dst_datatype
-            the VRT data type as supported by :class:`spatialist.raster.Dtype`.
-            Default None: use the same data type as the source files.
         """
+        
+        resolution = None
+        dst_datatype = None
+        dst_nodata = 0
+        tap = False
+        extent = self.__commonextent()
+        aop = self.config[dem_type]['area_or_point']
+        res = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
+        
+        # expand the extent to multiples of the DEM tile size
+        if not crop:
+            f = self.config[dem_type]['tilesize']
+            extent['xmin'] = floor(extent['xmin'] / f) * f
+            extent['ymin'] = floor(extent['ymin'] / f) * f
+            extent['xmax'] = ceil(extent['xmax'] / f) * f
+            extent['ymax'] = ceil(extent['ymax'] / f) * f
+        
+        # shift coordinates from upper left corner (area) to center (point)
+        if aop == 'point':
+            shift_x = res[0] / 2
+            shift_y = res[1] / 2
+            extent['xmin'] -= shift_x
+            extent['ymin'] += shift_y
+            extent['xmax'] -= shift_x
+            extent['ymax'] += shift_y
+        
+        # special case where no DEM tiles were found because the AOI is completely over ocean
+        if len(tiles) == 0:
+            # define a dummy file as source file
+            # this file contains one pixel with a value of 0
+            # nodata value is 255
+            tif = vrt.replace('.vrt', '_tmp.tif')
+            self.__create_dummy_dem(filename=tif, extent=extent)
+            tiles = [tif]
+            dst_datatype = self.config[dem_type]['datatype'][product]
+            if product != 'dem':
+                dst_nodata = self.config[dem_type]['nodata'][product]
+            # determine the target resolution based on minimum latitude
+            resolution = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
+        
+        src_nodata = self.config[dem_type]['nodata'][product]
+        
         with Raster(tiles[0]) as ras:
             if src_nodata is None:
                 src_nodata = ras.nodata
@@ -604,22 +627,24 @@ class DEMHandler:
                 xres, yres = ras.res
             else:
                 xres, yres = resolution
-        opts = {'srcNodata': src_nodata,
-                'targetAlignedPixels': tap,
-                'xRes': xres, 'yRes': yres, 'hideNodata': hide_nodata
-                }
-        if dst_nodata is not None:
-            opts['VRTNodata'] = dst_nodata
+        opts = {
+            'srcNodata': src_nodata,
+            'targetAlignedPixels': tap,
+            'xRes': xres, 'yRes': yres,
+            'hideNodata': True
+        }
+        opts['VRTNodata'] = dst_nodata
         opts['outputBounds'] = (extent['xmin'], extent['ymin'],
                                 extent['xmax'], extent['ymax'])
         
-        gdalbuildvrt(src=tiles, dst=vrtfile, **opts)
+        gdalbuildvrt(src=tiles, dst=vrt, **opts)
+        
         if dst_datatype is not None:
-            datatype = Dtype(dst_datatype).gdalstr
-            tree = etree.parse(source=vrtfile)
+            dst_datatype = Dtype(dst_datatype).gdalstr
+            tree = etree.parse(source=vrt)
             band = tree.find(path='VRTRasterBand')
-            band.attrib['dataType'] = datatype
-            tree.write(file=vrtfile, pretty_print=True,
+            band.attrib['dataType'] = dst_datatype
+            tree.write(file=vrt, pretty_print=True,
                        xml_declaration=False, encoding='utf-8')
     
     def __commonextent(self, buffer: int | float | None = None) -> EXT:
@@ -1327,49 +1352,6 @@ class DEMHandler:
                                      lock_timeout=lock_timeout,
                                      offline=offline)
         
-        resolution = None
-        datatype = None
-        src_nodata = None
-        dst_nodata = None
-        tap = False
-        extent = self.__commonextent(buffer=buffer)
-        aop = self.config[dem_type]['area_or_point']
-        res = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
-        
-        # expand the extent to multiples of the DEM tile size
-        if not crop:
-            f = self.config[dem_type]['tilesize']
-            extent['xmin'] = floor(extent['xmin'] / f) * f
-            extent['ymin'] = floor(extent['ymin'] / f) * f
-            extent['xmax'] = ceil(extent['xmax'] / f) * f
-            extent['ymax'] = ceil(extent['ymax'] / f) * f
-        
-        # shift coordinates from upper left corner (area) to center (point)
-        if aop == 'point':
-            shift_x = res[0] / 2
-            shift_y = res[1] / 2
-            extent['xmin'] -= shift_x
-            extent['ymin'] += shift_y
-            extent['xmax'] -= shift_x
-            extent['ymax'] += shift_y
-        
-        # special case where no DEM tiles were found because the AOI is completely over ocean
-        if len(locals) == 0 and vrt is not None:
-            # define a dummy file as source file
-            # his file contains one pixel with a value of 0
-            # nodata value is 255
-            tif = vrt.replace('.vrt', '_tmp.tif')
-            self.__create_dummy_dem(filename=tif, extent=extent)
-            locals = [tif]
-            datatype = self.config[dem_type]['datatype'][product]
-            src_nodata = 0  # define the data value as nodata, so it can be overwritten in the VRT
-            if product == 'dem':
-                dst_nodata = 0
-            else:
-                dst_nodata = self.config[dem_type]['nodata'][product]
-            # determine the target resolution based on minimum latitude
-            resolution = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
-        
         # make sure all GETASSE30 tiles get an ENVI HDR file so that they are GDAL-readable
         if dem_type == 'GETASSE30':
             for item in locals:
@@ -1388,17 +1370,10 @@ class DEMHandler:
             tiles = locals
         
         if vrt is not None:
-            if src_nodata is None:
-                src_nodata = self.config[dem_type]['nodata'][product]
-            if dst_nodata is None:
-                dst_nodata = 0 if product == 'dem' else None
-            
-            self.__buildvrt(tiles=tiles, vrtfile=vrt,
-                            extent=extent,
-                            src_nodata=src_nodata, dst_nodata=dst_nodata,
-                            hide_nodata=True,
-                            resolution=resolution,
-                            tap=tap, dst_datatype=datatype)
+            self.__buildvrt(tiles=tiles, vrt=vrt,
+                            crop=crop,
+                            dem_type=dem_type,
+                            product=product)
         else:
             return tiles if return_fname else locals
     
