@@ -37,7 +37,7 @@ from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
 from osgeo import gdal, osr
 
-from typing import TypeAlias, Self, Any, TypedDict, Literal
+from typing import TypeAlias, Self, Any, Literal
 
 import logging
 
@@ -46,22 +46,6 @@ log = logging.getLogger(__name__)
 # typing
 CRS: TypeAlias = int | str | osr.SpatialReference
 EXT: TypeAlias = dict[str, int | float]
-
-
-class DEMConfig(TypedDict, total=False):
-    """
-    DEM configuration template
-    """
-    url: str
-    nodata: dict[str, int | float | None]
-    resolution: dict[str, tuple[float, float]]
-    tilesize: int
-    area_or_point: Literal["area", "point"]
-    vsi: str | None
-    port: int
-    pattern: dict[str, str]
-    datatype: dict[str, Literal["Byte", "Int16", "UInt16", "Float32"]]
-    authentication: bool
 
 
 def dem_autoload(
@@ -581,7 +565,7 @@ class DEMHandler:
         
         resolution = None
         dst_datatype = None
-        dst_nodata = 0
+        dst_nodata = self.config[dem_type]['ocean_fill_value'][product]
         tap = False
         extent = self.__commonextent()
         aop = self.config[dem_type]['area_or_point']
@@ -613,8 +597,6 @@ class DEMHandler:
             self.__create_dummy_dem(filename=tif, extent=extent)
             tiles = [tif]
             dst_datatype = self.config[dem_type]['datatype'][product]
-            if product != 'dem':
-                dst_nodata = self.config[dem_type]['nodata'][product]
             # determine the target resolution based on minimum latitude
             resolution = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
         
@@ -954,197 +936,191 @@ class DEMHandler:
         return sorted(locals)
     
     @property
-    def config(self) -> dict[str, DEMConfig]:
+    def config(self) -> dict[str, Any]:
         """
         Get DEM configuration options.
         """
+        cop_dem_constants = {
+            'area_or_point': 'point',
+            'datatype': {
+                'dem': 'Float32',
+                'edm': 'Byte',
+                'flm': 'Byte',
+                'hem': 'Float32',
+                'wbm': 'Byte'
+            },
+            'nodata': {
+                'dem': None,
+                'edm': 0,  # 0 = "Void (no data)"
+                'flm': 0,  # 0 = "Void (no data)"
+                'hem': -32767.0,
+                'wbm': None
+            },
+            'ocean_fill_value': {
+                'dem': 0,
+                'edm': 8,  # editing mask; 8 = "Ocean Pixels"
+                'flm': 1,  # filling mask; 1 = "Edited (except filled pixels)"
+                'hem': -32767.0,  # height error mask; -32767 = Nodata
+                'wbm': 1  # water body mask; 1 = "Ocean"
+            },
+            'pattern': {
+                'dem': '*DEM.tif',
+                'edm': '*EDM.tif',
+                'flm': '*FLM.tif',
+                'hem': '*HEM.tif',
+                'wbm': '*WBM.tif'
+            },
+            'resolution_10m': {
+                '0-50': (1 / 9000, 1 / 9000),
+                '50-60': (1.5 / 9000, 1 / 9000),
+                '60-70': (2 / 9000, 1 / 9000),
+                '70-80': (3 / 9000, 1 / 9000),
+                '80-85': (5 / 9000, 1 / 9000),
+                '85-90': (10 / 9000, 1 / 9000)
+            },
+            'resolution_30m': {
+                '0-50': (1 / 3600, 1 / 3600),
+                '50-60': (1.5 / 3600, 1 / 3600),
+                '60-70': (2 / 3600, 1 / 3600),
+                '70-80': (3 / 3600, 1 / 3600),
+                '80-85': (5 / 3600, 1 / 3600),
+                '85-90': (10 / 3600, 1 / 3600)
+            },
+            'resolution_90m': {
+                '0-50': (1 / 1200, 1 / 1200),
+                '50-60': (1.5 / 1200, 1 / 1200),
+                '60-70': (2 / 1200, 1 / 1200),
+                '70-80': (3 / 1200, 1 / 1200),
+                '80-85': (5 / 1200, 1 / 1200),
+                '85-90': (10 / 1200, 1 / 1200)
+            },
+            'tilesize': 1
+        }
+        
         return {
-            'AW3D30': {'url': 'ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804',
-                       'nodata': {'dem': -9999,
-                                  'msk': 3,
-                                  'stk': 0},
-                       'resolution': {'0-90': (1 / 3600, 1 / 3600)},
-                       'tilesize': 1,
-                       'area_or_point': 'area',
-                       'vsi': '/vsitar/',
-                       'pattern': {'dem': '*DSM.tif',
-                                   'msk': '*MSK.tif',
-                                   'stk': '*STK.tif'},
-                       'datatype': {'dem': 'Int16',
-                                    'msk': 'Byte',
-                                    'stk': 'Byte'},
-                       'authentication': False
-                       },
-            'Copernicus 10m EEA DEM': {'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1',
-                                       'nodata': {'dem': -32767.0,
-                                                  'edm': 8,
-                                                  'flm': 1,
-                                                  'hem': -32767.0,
-                                                  'wbm': 1},
-                                       'resolution': {'0-50': (1 / 9000, 1 / 9000),
-                                                      '50-60': (1.5 / 9000, 1 / 9000),
-                                                      '60-70': (2 / 9000, 1 / 9000),
-                                                      '70-80': (3 / 9000, 1 / 9000),
-                                                      '80-85': (5 / 9000, 1 / 9000),
-                                                      '85-90': (10 / 9000, 1 / 9000)},
-                                       'tilesize': 1,
-                                       'area_or_point': 'point',
-                                       'vsi': '/vsitar/',
-                                       'port': 990,
-                                       'pattern': {'dem': '*DEM.tif',
-                                                   'edm': '*EDM.tif',
-                                                   'flm': '*FLM.tif',
-                                                   'hem': '*HEM.tif',
-                                                   'wbm': '*WBM.tif'},
-                                       'datatype': {'dem': 'Float32',
-                                                    'edm': 'Byte',
-                                                    'flm': 'Byte',
-                                                    'hem': 'Float32',
-                                                    'wbm': 'Byte'},
-                                       'authentication': True
-                                       },
-            'Copernicus 30m Global DEM': {'url': 'https://copernicus-dem-30m-stac.s3.amazonaws.com',
-                                          'nodata': {'dem': -32767.0,
-                                                     'edm': 8,
-                                                     'flm': 1,
-                                                     'hem': -32767.0,
-                                                     'wbm': 1},
-                                          'resolution': {'0-50': (1 / 3600, 1 / 3600),
-                                                         '50-60': (1.5 / 3600, 1 / 3600),
-                                                         '60-70': (2 / 3600, 1 / 3600),
-                                                         '70-80': (3 / 3600, 1 / 3600),
-                                                         '80-85': (5 / 3600, 1 / 3600),
-                                                         '85-90': (10 / 3600, 1 / 3600)},
-                                          'tilesize': 1,
-                                          'area_or_point': 'point',
-                                          'vsi': None,
-                                          'pattern': {'dem': '*DEM.tif',
-                                                      'edm': '*EDM.tif',
-                                                      'flm': '*FLM.tif',
-                                                      'hem': '*HEM.tif',
-                                                      'wbm': '*WBM.tif'},
-                                          'datatype': {'dem': 'Float32',
-                                                       'edm': 'Byte',
-                                                       'flm': 'Byte',
-                                                       'hem': 'Float32',
-                                                       'wbm': 'Byte'},
-                                          'authentication': False
-                                          },
+            'AW3D30': {
+                'url': 'ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804',
+                'ocean_fill_value': {
+                    'dem': 0,
+                    'msk': 3, # mask file; 3 = 00000011 binary = "Sea mask"
+                    'stk': 0 # stacking number file; 0 = no input files
+                },
+                'nodata': {
+                    'dem': -9999,
+                    'msk': None,
+                    'stk': None
+                },
+                'resolution': {'0-90': (1 / 3600, 1 / 3600)},
+                'tilesize': 1,
+                'area_or_point': 'area',
+                'vsi': '/vsitar/',
+                'pattern': {'dem': '*DSM.tif',
+                            'msk': '*MSK.tif',
+                            'stk': '*STK.tif'},
+                'datatype': {'dem': 'Int16',
+                             'msk': 'Byte',
+                             'stk': 'Byte'},
+                'authentication': False
+            },
+            'Copernicus 10m EEA DEM': {
+                'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1',
+                'ocean_fill_value': cop_dem_constants['ocean_fill_value'],
+                'nodata': cop_dem_constants['nodata'],
+                'resolution': cop_dem_constants['resolution_10m'],
+                'tilesize': cop_dem_constants['tilesize'],
+                'area_or_point': cop_dem_constants['area_or_point'],
+                'vsi': '/vsitar/',
+                'port': 990,
+                'pattern': cop_dem_constants['pattern'],
+                'datatype': cop_dem_constants['datatype'],
+                'authentication': True
+            },
+            'Copernicus 30m Global DEM': {
+                'url': 'https://copernicus-dem-30m-stac.s3.amazonaws.com',
+                'ocean_fill_value': cop_dem_constants['ocean_fill_value'],
+                'nodata': cop_dem_constants['nodata'],
+                'resolution': cop_dem_constants['resolution_30m'],
+                'tilesize': cop_dem_constants['tilesize'],
+                'area_or_point': cop_dem_constants['area_or_point'],
+                'vsi': None,
+                'pattern': cop_dem_constants['pattern'],
+                'datatype': cop_dem_constants['datatype'],
+                'authentication': False
+            },
             'Copernicus 30m Global DEM II': {
                 'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-30-DGED/2021_1',
-                'nodata': {'dem': -32767.0,
-                           'edm': 8,
-                           'flm': 1,
-                           'hem': -32767.0,
-                           'wbm': 1},
-                'resolution': {'0-50': (1 / 3600, 1 / 3600),
-                               '50-60': (1.5 / 3600, 1 / 3600),
-                               '60-70': (2 / 3600, 1 / 3600),
-                               '70-80': (3 / 3600, 1 / 3600),
-                               '80-85': (5 / 3600, 1 / 3600),
-                               '85-90': (10 / 3600, 1 / 3600)},
-                'tilesize': 1,
-                'area_or_point': 'point',
+                'ocean_fill_value': cop_dem_constants['ocean_fill_value'],
+                'nodata': cop_dem_constants['nodata'],
+                'resolution': cop_dem_constants['resolution_30m'],
+                'tilesize': cop_dem_constants['tilesize'],
+                'area_or_point': cop_dem_constants['area_or_point'],
                 'vsi': '/vsitar/',
                 'port': 990,
-                'pattern': {'dem': '*DEM.tif',
-                            'edm': '*EDM.tif',
-                            'flm': '*FLM.tif',
-                            'hem': '*HEM.tif',
-                            'wbm': '*WBM.tif'},
-                'datatype': {'dem': 'Float32',
-                             'edm': 'Byte',
-                             'flm': 'Byte',
-                             'hem': 'Float32',
-                             'wbm': 'Byte'},
+                'pattern': cop_dem_constants['pattern'],
+                'datatype': cop_dem_constants['datatype'],
                 'authentication': True
             },
-            'Copernicus 90m Global DEM': {'url': 'https://copernicus-dem-90m-stac.s3.amazonaws.com',
-                                          'nodata': {'dem': -32767.0,
-                                                     'edm': 8,
-                                                     'flm': 1,
-                                                     'hem': -32767.0,
-                                                     'wbm': 1},
-                                          'resolution': {'0-50': (1 / 1200, 1 / 1200),
-                                                         '50-60': (1.5 / 1200, 1 / 1200),
-                                                         '60-70': (2 / 1200, 1 / 1200),
-                                                         '70-80': (3 / 1200, 1 / 1200),
-                                                         '80-85': (5 / 1200, 1 / 1200),
-                                                         '85-90': (10 / 1200, 1 / 1200)},
-                                          'tilesize': 1,
-                                          'area_or_point': 'point',
-                                          'vsi': None,
-                                          'pattern': {'dem': '*DEM.tif',
-                                                      'edm': '*EDM.tif',
-                                                      'flm': '*FLM.tif',
-                                                      'hem': '*HEM.tif',
-                                                      'wbm': '*WBM.tif'},
-                                          'datatype': {'dem': 'Float32',
-                                                       'edm': 'Byte',
-                                                       'flm': 'Byte',
-                                                       'hem': 'Float32',
-                                                       'wbm': 'Byte'},
-                                          'authentication': False
-                                          },
+            'Copernicus 90m Global DEM': {
+                'url': 'https://copernicus-dem-90m-stac.s3.amazonaws.com',
+                'ocean_fill_value': cop_dem_constants['ocean_fill_value'],
+                'nodata': cop_dem_constants['nodata'],
+                'resolution': cop_dem_constants['resolution_90m'],
+                'tilesize': cop_dem_constants['tilesize'],
+                'area_or_point': cop_dem_constants['area_or_point'],
+                'vsi': None,
+                'pattern': cop_dem_constants['pattern'],
+                'datatype': cop_dem_constants['datatype'],
+                'authentication': False
+            },
             'Copernicus 90m Global DEM II': {
                 'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-90-DGED/2021_1',
-                'nodata': {'dem': -32767.0,
-                           'edm': 8,
-                           'flm': 1,
-                           'hem': -32767.0,
-                           'wbm': 1},
-                'resolution': {'0-50': (1 / 1200, 1 / 1200),
-                               '50-60': (1.5 / 1200, 1 / 1200),
-                               '60-70': (2 / 1200, 1 / 1200),
-                               '70-80': (3 / 1200, 1 / 1200),
-                               '80-85': (5 / 1200, 1 / 1200),
-                               '85-90': (10 / 1200, 1 / 1200)},
-                'tilesize': 1,
-                'area_or_point': 'point',
+                'ocean_fill_value': cop_dem_constants['ocean_fill_value'],
+                'nodata': cop_dem_constants['nodata'],
+                'resolution': cop_dem_constants['resolution_90m'],
+                'tilesize': cop_dem_constants['tilesize'],
+                'area_or_point': cop_dem_constants['area_or_point'],
                 'vsi': '/vsitar/',
                 'port': 990,
-                'pattern': {'dem': '*DEM.tif',
-                            'edm': '*EDM.tif',
-                            'flm': '*FLM.tif',
-                            'hem': '*HEM.tif',
-                            'wbm': '*WBM.tif'},
-                'datatype': {'dem': 'Float32',
-                             'edm': 'Byte',
-                             'flm': 'Byte',
-                             'hem': 'Float32',
-                             'wbm': 'Byte'},
+                'pattern': cop_dem_constants['pattern'],
+                'datatype': cop_dem_constants['datatype'],
                 'authentication': True
             },
-            'GETASSE30': {'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
-                          'nodata': {'dem': None},
-                          'resolution': {'0-90': (15 / 1800, 15 / 1800)},
-                          'tilesize': 15,
-                          'area_or_point': 'area',
-                          'vsi': '/vsizip/',
-                          'pattern': {'dem': '*.GETASSE30'},
-                          'datatype': {'dem': 'Int16'},
-                          'authentication': False
-                          },
-            'SRTM 1Sec HGT': {'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
-                              'nodata': {'dem': -32768.0},
-                              'resolution': {'0-90': (1 / 3600, 1 / 3600)},
-                              'tilesize': 1,
-                              'area_or_point': 'point',
-                              'vsi': '/vsizip/',
-                              'pattern': {'dem': '*.hgt'},
-                              'datatype': {'dem': 'Int16'},
-                              'authentication': False
-                              },
-            'SRTM 3Sec': {'url': 'https://step.esa.int/auxdata/dem/SRTM90/tiff',
-                          'nodata': {'dem': -32768.0},
-                          'resolution': {'0-90': (5 / 6000, 5 / 6000)},
-                          'tilesize': 5,
-                          'area_or_point': 'area',
-                          'vsi': '/vsizip/',
-                          'pattern': {'dem': 'srtm*.tif'},
-                          'datatype': {'dem': 'Int16'},
-                          'authentication': False
-                          },
+            'GETASSE30': {
+                'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
+                'ocean_fill_value': {'dem': 0},
+                'nodata': {'dem': None},
+                'resolution': {'0-90': (15 / 1800, 15 / 1800)},
+                'tilesize': 15,
+                'area_or_point': 'area',
+                'vsi': '/vsizip/',
+                'pattern': {'dem': '*.GETASSE30'},
+                'datatype': {'dem': 'Int16'},
+                'authentication': False
+            },
+            'SRTM 1Sec HGT': {
+                'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
+                'ocean_fill_value': {'dem': 0},
+                'nodata': {'dem': None},
+                'resolution': {'0-90': (1 / 3600, 1 / 3600)},
+                'tilesize': 1,
+                'area_or_point': 'point',
+                'vsi': '/vsizip/',
+                'pattern': {'dem': '*.hgt'},
+                'datatype': {'dem': 'Int16'},
+                'authentication': False
+            },
+            'SRTM 3Sec': {
+                'url': 'https://step.esa.int/auxdata/dem/SRTM90/tiff',
+                'ocean_fill_value': {'dem': 0},
+                'nodata': {'dem': None},
+                'resolution': {'0-90': (5 / 6000, 5 / 6000)},
+                'tilesize': 5,
+                'area_or_point': 'area',
+                'vsi': '/vsizip/',
+                'pattern': {'dem': 'srtm*.tif'},
+                'datatype': {'dem': 'Int16'},
+                'authentication': False
+            },
             # 'TDX90m': {'url': 'ftpes://tandemx-90m.dlr.de',
             #            'nodata': {'dem': -32767.0,
             #                       'am2': 0,
