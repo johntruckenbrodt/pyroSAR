@@ -301,7 +301,7 @@ def dem_create(
         tr: tuple[int | float, int | float] | None = None,
         threads: int | str | None = None,
         geoid_convert: bool = False,
-        geoid: str = 'EGM96',
+        geoid: Literal['EGM96', 'EGM2008'] | None = 'EGM96',
         nodata: int | float | str | None = None,
         resampleAlg: str = 'bilinear',
         dtype: str | None = None,
@@ -313,10 +313,9 @@ def dem_create(
     This is basically a convenience wrapper around :func:`osgeo.gdal.Warp` via :func:`spatialist.auxil.gdalwarp`.
     The following argument defaults deviate from those of :func:`osgeo.gdal.WarpOptions`:
     
-    - `format` is set to 'GTiff'
-    - `resampleAlg` is set to 'bilinear'
-    - `targetAlignedPixels` is set to 'True'
-    
+    - `format='GTiff'`
+    - `resampleAlg='bilinear'`
+    - `targetAlignedPixels='True'`
     
     Parameters
     ----------
@@ -377,9 +376,10 @@ def dem_create(
     
     with Raster(src[0] if isinstance(src, list) else src) as ras:
         src_format = ras.format
-        if src_format == 'VRT' :
+        if src_format == 'VRT':
             vrt_check_sources(src)
-            expecteFileSize = ras.bands * ras.rows *  ras.cols * (int("".join(filter(str.isdigit, ras.dtype))) // 8)
+            bytes = int("".join(filter(str.isdigit, ras.dtype))) // 8
+            expecteFileSize = ras.bands * ras.rows * ras.cols * bytes
         if nodata is None:
             nodata = ras.nodata
         if tr is None:
@@ -390,7 +390,7 @@ def dem_create(
         epsg_out = epsg_in
     else:
         epsg_out = crsConvert(t_srs, 'epsg')
-
+    
     threads_system = gdal.GetConfigOption('GDAL_NUM_THREADS')
     if isinstance(threads, str):
         if threads != 'ALL_CPUS':
@@ -409,27 +409,31 @@ def dem_create(
     else:
         raise TypeError(f"'threads' must be of type int, str or None. Is: {type(threads)}")
     
-    if (threads not in [1, None]) and (src_format == 'VRT') and ( version.parse(gdal.__version__) < version.parse('3.12.1') ):
-        log.info('using multithreading for VRT warping is erronous for smaller GDAL Versions. '
-                 '( See https://github.com/OSGeo/gdal/issues/13464. )'
-                 'VRT dataset is transformed to memory TIF file prior to warping' )
+    c1 = (threads not in [1, None]) and (src_format == 'VRT')
+    c2 = (version.parse(gdal.__version__) < version.parse('3.12.1'))
+    if c1 and c2:
+        log.info('Using multithreading for VRT warping is erroneous for smaller GDAL Versions. '
+                 'See https://github.com/OSGeo/gdal/issues/13464.'
+                 'VRT dataset is transformed to memory TIF file prior to warping.')
         # check free memory for TIFF file creation
         memory = psutil.virtual_memory()
         usedMemory = expecteFileSize * 100 / memory.available
-
-        if usedMemory  > 80 :
-           log.warn(f"Warning low memory for warping file {expecteFileSize} {memory.available} {usedMemory}")
-
-        memName = "/vsimem/mem.tif"
-
-        # disable multithreaded gdal.Translate (GDAL_NUM_THREADS = None). prevent erronous VRT treatment
-        gdal.SetConfigOption('GDAL_NUM_THREADS', None)
-
-        memDS = gdal.Translate(memName,src,format='GTiff')
-        src = memName
-    else :
-        memDS = None
         
+        if usedMemory > 80:
+            log.warning(f"Warning low memory for warping file "
+                        f"{expecteFileSize} {memory.available} {usedMemory}")
+        
+        memName = "/vsimem/mem.tif"
+        
+        # Disable multithreaded gdal.Translate (GDAL_NUM_THREADS = None).
+        # Prevents erroneous VRT treatment.
+        gdal.SetConfigOption('GDAL_NUM_THREADS', None)
+        
+        memDS = gdal.Translate(memName, src, format='GTiff')
+        src = memName
+    else:
+        memDS = None
+    
     gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
                      'srcNodata': nodata, 'dstNodata': nodata,
                      'srcSRS': f'EPSG:{epsg_in}',
@@ -437,7 +441,7 @@ def dem_create(
                      'resampleAlg': resampleAlg,
                      'xRes': tr[0], 'yRes': tr[1],
                      'targetAlignedPixels': True,
-                     'warpOptions' : {"NUM_THREADS" : f"{threads}"}}
+                     'warpOptions': {"NUM_THREADS": f"{threads}"}}
     
     if dtype is not None:
         gdalwarp_args['outputType'] = Dtype(dtype).gdalint
@@ -483,13 +487,14 @@ def dem_create(
             os.remove(dst)
         raise
     finally:
-        if memDS is not None :
+        if memDS is not None:
             # Close the temporary dataset (releases the Dataset object)
             memDS = None
-
+            
             # Delete the in-memory "file" to free RAM
             gdal.Unlink(memName)
-
+            memName = None
+        
         gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
 
 
