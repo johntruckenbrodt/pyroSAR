@@ -331,6 +331,10 @@ def dem_create(
          - 'EGM2008'
     nodata
         the nodata value of the destination files. Default `None`: use the value of the source file.
+        
+        .. NOTE::
+            the nodata value of VRT source files created by :func:`dem_autoload` is always `None`.
+        
     resampleAlg
         the resampling algorithm tu be used. See here for options:
         https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r
@@ -348,7 +352,7 @@ def dem_create(
         - `xRes`, `yRes`: controlled via argument `tr`
         - `srcSRS`, `dstSRS`: controlled via the CRS of `src` and arguments
           `t_srs`, `geoid`, `geoid_convert`
-        - `srcNodata`, `dstNodata`: controlled via argument `nodata`
+        - `dstNodata`: controlled via argument `nodata`
         - `outputType`: controlled via argument `dtype`
         - `multithread` controlled via argument `threads`
     """
@@ -446,7 +450,7 @@ def dem_create(
             errstr = str(e)
             raise RuntimeError(errstr)
     
-    locked = ['xRes', 'yRes', 'srcSRS', 'dstSRS', 'srcNodata',
+    locked = ['xRes', 'yRes', 'srcSRS', 'dstSRS',
               'dstNodata', 'outputType', 'multithread']
     for key, val in kwargs.items():
         if key not in locked:
