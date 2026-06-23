@@ -283,8 +283,6 @@ def dem_autoload(
 
 
 def dem_create(
-        demType: str,
-        product: str,
         src: str | list[str],
         dst: str,
         t_srs: CRS | None = None,
@@ -304,10 +302,6 @@ def dem_create(
 
     Parameters
     ----------
-    demType
-        The input DEM product type. See :func:`dem_autoload` for options.
-    product
-        The input DEM sub-product type. See :func:`dem_autoload` for options.
     src
         the input dataset(s) as returned by :func:`dem_autoload`.
     dst
@@ -370,8 +364,6 @@ def dem_create(
     """
     with DEMHandler() as handler:
         handler.create(
-            dem_type=demType,
-            product=product,
             src=src,
             dst=dst,
             t_srs=t_srs,
@@ -1077,10 +1069,8 @@ class DEMHandler:
     
     def create(
             self,
-            dem_type: str,
             src: str | list[str],
             dst: str,
-            product: str = 'dem',
             t_srs: CRS | None = None,
             tr: tuple[int | float, int | float] | None = None,
             threads: int | str | None = None,
@@ -1098,10 +1088,6 @@ class DEMHandler:
 
         Parameters
         ----------
-        demType
-            The input DEM product type. See :func:`dem_autoload` for options.
-        product
-            The input DEM sub-product type. See :func:`dem_autoload` for options.
         src
             the input dataset(s) as returned by :func:`dem_autoload`.
         dst
@@ -1162,6 +1148,49 @@ class DEMHandler:
             - ``warpOptions``: currently used for setting the number of threads.
               Can be exposed if necessary.
         """
+        
+        def identify_validate_source(src: str | list[str]) -> tuple[str, str]:
+            dem_types = list(self.config.keys())
+            if isinstance(src, str):
+                if not src.endswith('.vrt'):
+                    raise RuntimeError("If 'src' is a string, it must be a VRT file.")
+                tree = etree.parse(src)
+                sources = [x.text for x in tree.findall('.//SourceFilename')]
+                return identify_validate_source(sources)
+            else:
+                dem_type = None
+                product = None
+                for item in src:
+                    # identify DEM type
+                    if dem_type is None:
+                        for option in dem_types:
+                            if option in item:
+                                dem_type = option
+                                break
+                    if dem_type is None:
+                        raise RuntimeError('Could not identify the DEM type.')
+                    else:
+                        if dem_type not in item:
+                            raise RuntimeError('The DEM type does not seem to be '
+                                               'the same for all input datasets.')
+                    # identify DEM sub-product
+                    product_patterns = self.config[dem_type]['pattern']
+                    product_item = None
+                    for product_option, pattern in product_patterns.items():
+                        if re.search(fnmatch.translate(pattern), item):
+                            product_item = product_option
+                            break
+                    if product_item is None:
+                        raise RuntimeError('Could not identify the DEM sub-product.')
+                    if product is None:
+                        product = product_item
+                    if product_item != product:
+                        raise RuntimeError('The DEM sub-product is not the '
+                                           'same for all input datasets.')
+            
+            return dem_type, product
+        
+        dem_type, product = identify_validate_source(src)
         src_nodata = self.config[dem_type]['nodata'][product]
         src_dtype = self.config[dem_type]['datatype']
         vertical_datum = self.config[dem_type]['vertical_datum']
@@ -1170,7 +1199,7 @@ class DEMHandler:
         if dtype is not None:
             dtype_obj = Dtype(dtype)
         else:
-            dtype_obj = Dtype(src_dtype)
+            dtype_obj = Dtype(src_dtype[product])
         
         # set dst nodata default if None
         if nodata is None:
