@@ -1194,14 +1194,14 @@ class DEMHandler:
         dem_type, product = identify_validate_source(src)
         
         src_nodata = self.config[dem_type]['nodata'][product]
-        src_dtype = self.config[dem_type]['datatype']
+        src_dtype = self.config[dem_type]['datatype'][product]
         vertical_datum = self.config[dem_type]['vertical_datum']
         
         # data type handling
         if dtype is not None:
             dtype_obj = Dtype(dtype)
         else:
-            dtype_obj = Dtype(src_dtype[product])
+            dtype_obj = Dtype(src_dtype)
         
         # set dst nodata default if None
         if nodata is None:
@@ -1210,7 +1210,7 @@ class DEMHandler:
                 'Float32': -9999,
                 'Int16': -32768
             }
-            nodata = dst_nodata_lookup[src_dtype[product]]
+            nodata = dst_nodata_lookup[src_dtype]
         
         if product != 'dem' or vertical_datum == 'WGS84':
             geoid_convert = False
