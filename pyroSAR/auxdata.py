@@ -1154,6 +1154,7 @@ class DEMHandler:
             if isinstance(src, str):
                 if not src.endswith('.vrt'):
                     raise RuntimeError("If 'src' is a string, it must be a VRT file.")
+                vrt_check_sources(src)
                 tree = etree.parse(src)
                 sources = [x.text for x in tree.findall('.//SourceFilename')]
                 return identify_validate_source(sources)
@@ -1191,6 +1192,7 @@ class DEMHandler:
             return dem_type, product
         
         dem_type, product = identify_validate_source(src)
+        
         src_nodata = self.config[dem_type]['nodata'][product]
         src_dtype = self.config[dem_type]['datatype']
         vertical_datum = self.config[dem_type]['vertical_datum']
@@ -1216,13 +1218,9 @@ class DEMHandler:
         if resampleAlg is None:
             resampleAlg = 'mode' if src_dtype == 'Byte' else 'bilinear'
         ############################################################################
-        if isinstance(src, str):
-            vrt_check_sources(src)
-        
         with Raster(src[0] if isinstance(src, list) else src) as ras:
             src_format = ras.format
             if src_format == 'VRT':
-                vrt_check_sources(src)
                 bytes = Dtype(ras.dtype).bytes
                 expecteFileSize = ras.bands * ras.rows * ras.cols * bytes
             if nodata is None:
