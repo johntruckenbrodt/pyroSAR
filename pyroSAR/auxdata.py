@@ -336,7 +336,7 @@ def dem_create(
         - ``Float32``: -9999.0
 
     resampleAlg
-        the resampling algorithm tu be used. See here for options:
+        the resampling algorithm to be used. See here for options:
         https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r.
         Default ``None``: use ``mode`` if the data type of ``src`` is ``Byte`` (for categorical
         value masks) and ``bilinear`` (for DEM and floating point error masks) otherwise.
@@ -1122,7 +1122,7 @@ class DEMHandler:
             - ``Float32``: -9999.0
 
         resampleAlg
-            the resampling algorithm tu be used. See here for options:
+            the resampling algorithm to be used. See here for options:
             https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r.
             Default ``None``: use ``mode`` if the data type of ``src`` is ``Byte`` (for categorical
             value masks) and ``bilinear`` (for DEM and floating point error masks) otherwise.
