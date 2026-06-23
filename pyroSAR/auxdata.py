@@ -215,6 +215,7 @@ def dem_autoload(
     
     crop
         crop to the provided geometries (or return the full extent of the DEM tiles)?
+        Only applies if `vrt!=None`.
     lock_timeout
         how long to wait to acquire a lock on the downloaded files?
     offline
@@ -223,7 +224,8 @@ def dem_autoload(
         raised. For this to work, the function needs to be run in `online`
         mode once to create a local index.
     return_fname: bool
-        return the file name including GDAL VSI directive (or just the path to the downloaded product)?
+        return the file name including GDAL VSI directive
+        (or just the path to the downloaded product)?
         E.g. `/vsizip/srtm_72_02.zip/srtm_72_02.tif` vs. `/srtm_72_02.zip`.
         Only applies if `vrt=None`.
     
@@ -263,84 +265,90 @@ def dem_autoload(
         from pyroSAR.auxdata import dem_create
         outname = scene.outname_base() + 'srtm1_ellp.tif'
         dem_create(src=vrt, dst=outname, t_srs=32632, tr=(30, 30),
-                   geoid_convert=True, geoid='EGM96')
+                   geoid_convert=True)
     """
     with DEMHandler(geometries) as handler:
-        return handler.load(dem_type=demType,
-                            username=username,
-                            password=password,
-                            vrt=vrt,
-                            buffer=buffer,
-                            product=product,
-                            crop=crop,
-                            lock_timeout=lock_timeout,
-                            offline=offline,
-                            return_fname=return_fname)
+        return handler.load(
+            dem_type=demType,
+            username=username,
+            password=password,
+            vrt=vrt,
+            buffer=buffer,
+            product=product,
+            crop=crop,
+            lock_timeout=lock_timeout,
+            offline=offline,
+            return_fname=return_fname
+        )
 
 
 def dem_create(
+        demType: str,
+        product: str,
         src: str | list[str],
         dst: str,
         t_srs: CRS | None = None,
         tr: tuple[int | float, int | float] | None = None,
         threads: int | str | None = None,
-        geoid_convert: bool = False,
-        geoid: Literal['EGM96', 'EGM2008'] | None = 'EGM96',
+        geoid_convert: bool = True,
         nodata: int | float | str | None = None,
-        resampleAlg: str = 'bilinear',
+        resampleAlg: str | None = None,
         dtype: str | None = None,
         pbar: bool = False,
         **kwargs
 ) -> None:
     """
     Create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid.
-    This is basically a convenience wrapper around :func:`osgeo.gdal.Warp` via :func:`spatialist.auxil.gdalwarp`.
-    The following argument defaults deviate from those of :func:`osgeo.gdal.WarpOptions`:
-    
-    - `format='GTiff'`
-    - `resampleAlg='bilinear'`
-    - `targetAlignedPixels='True'`
-    
+    This is basically a convenience wrapper around :func:`osgeo.gdal.Warp`
+    via :func:`spatialist.auxil.gdalwarp`.
+
     Parameters
     ----------
+    demType
+        The input DEM product type. See :func:`dem_autoload` for options.
+    product
+        The input DEM sub-product type. See :func:`dem_autoload` for options.
     src
         the input dataset(s) as returned by :func:`dem_autoload`.
     dst
-        the output dataset
+        the output GeoTIFF file name.
     t_srs
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
-        Default (None): use the crs of ``src``.
+        Default ``None``: use the crs of ``src``.
     tr
-        the target resolution as (xres, yres)
+        the target resolution as (xres, yres).
+        Default ``None``: use the resolution of ``src``.
     threads
         the number of threads to use. Possible values:
-        
-         - Default `None`: use the value of `GDAL_NUM_THREADS` without modification. If `GDAL_NUM_THREADS` is None,
-           multi-threading is still turned on and two threads are used, one for I/O and one for computation.
-         - integer value: temporarily modify `GDAL_NUM_THREADS` and reset it once done.
+
+         - Default ``None``: use the value of ``GDAL_NUM_THREADS`` without modification.
+           If ``GDAL_NUM_THREADS`` is None, multi-threading is still turned on and two
+           threads are used, one for I/O and one for computation.
+         - integer value: temporarily modify ``GDAL_NUM_THREADS`` and reset it once done.
            If 1, multithreading is turned off.
-         - `ALL_CPUS`: special string to use all cores/CPUs of the computer; will also temporarily
-           modify `GDAL_NUM_THREADS`.
+         - ``ALL_CPUS``: special string to use all cores/CPUs of the computer;
+           will also temporarily modify ``GDAL_NUM_THREADS``.
     geoid_convert
-        convert geoid heights?
-    geoid
-        the geoid model to be corrected, only used if ``geoid_convert == True``; current options:
-        
-         - 'EGM96'
-         - 'EGM2008'
+        Convert geoid heights to WGS84 ellipsoid heights?
+        Only applied if the vertical datum isn't already WGS84 and ``product='dem'``.
+        The geoid model is inferred from ``demType``.
+        See :func:`dem_autoload` for details.
     nodata
-        the nodata value of the destination files. Default `None`: use the value of the source file.
-        
-        .. NOTE::
-            the nodata value of VRT source files created by :func:`dem_autoload` is always `None`.
-        
+        the nodata value of `dst`. Default ``None``: use these values per data type:
+
+        - ``Byte``: 255
+        - ``Int16``: -32768
+        - ``Float32``: -9999.0
+
     resampleAlg
         the resampling algorithm tu be used. See here for options:
-        https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r
+        https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r.
+        Default ``None``: use ``mode`` if the data type of ``src`` is ``Byte`` (for categorical
+        value masks) and ``bilinear`` (for DEM and floating point error masks) otherwise.
     dtype
-        override the data type of the written file; Default None: use same type as source data.
-        Data type notations of GDAL (e.g. `Float32`) and numpy (e.g. `int8`) are supported.
+        the data type of ``dst``. Default ``None``: use the value of the source file(s).
+        Data type notations of GDAL (e.g. ``Float32``) and numpy (e.g. ``int8``) are supported.
         See :class:`spatialist.raster.Dtype`.
     pbar
         add a progressbar?
@@ -348,140 +356,34 @@ def dem_create(
         additional keyword arguments to be passed to :func:`spatialist.auxil.gdalwarp`.
         See :func:`osgeo.gdal.WarpOptions` for options. The following arguments cannot
         be set as they are controlled internally:
-        
-        - `xRes`, `yRes`: controlled via argument `tr`
-        - `srcSRS`, `dstSRS`: controlled via the CRS of `src` and arguments
-          `t_srs`, `geoid`, `geoid_convert`
-        - `dstNodata`: controlled via argument `nodata`
-        - `outputType`: controlled via argument `dtype`
-        - `multithread` controlled via argument `threads`
+
+        - ``xRes``, ``yRes``: controlled via argument ``tr``
+        - ``srcSRS``, ``dstSRS``: controlled via arguments ``t_srs`` and ``geoid_convert``
+        - ``srcNodata``: controlled via nodata value of ``src``
+        - ``dstNodata``: controlled via argument ``nodata``
+        - ``outputType``: controlled via argument ``dtype``
+        - ``multithread``: controlled via argument ``threads``
+        - ``format``: fixed to ``GTiff``
+        - ``targetAlignedPixels``: fixed to ``True``
+        - ``warpOptions``: currently used for setting the number of threads.
+          Can be exposed if necessary.
     """
-    
-    if isinstance(src, str):
-        vrt_check_sources(src)
-    
-    with Raster(src[0] if isinstance(src, list) else src) as ras:
-        src_format = ras.format
-        if src_format == 'VRT':
-            vrt_check_sources(src)
-            bytes = Dtype(ras.dtype).bytes
-            expecteFileSize = ras.bands * ras.rows * ras.cols * bytes
-        if nodata is None:
-            nodata = ras.nodata
-        if tr is None:
-            tr = ras.res
-        epsg_in = ras.epsg
-    
-    if t_srs is None:
-        epsg_out = epsg_in
-    else:
-        epsg_out = crsConvert(t_srs, 'epsg')
-    
-    threads_system = gdal.GetConfigOption('GDAL_NUM_THREADS')
-    if isinstance(threads, str):
-        if threads != 'ALL_CPUS':
-            raise ValueError(f"unsupported value for 'threads': '{threads}'")
-        else:
-            multithread = True
-    elif isinstance(threads, int):
-        if threads == 1:
-            multithread = False
-        elif threads > 1:
-            multithread = True
-        else:
-            raise ValueError("if 'threads' is of type int, it must be >= 1")
-    elif threads is None:
-        multithread = True
-    else:
-        raise TypeError(f"'threads' must be of type int, str or None. Is: {type(threads)}")
-    
-    c1 = (threads not in [1, None]) and (src_format == 'VRT')
-    c2 = (version.parse(gdal.__version__) < version.parse('3.12.1'))
-    if c1 and c2:
-        log.info('Using multithreading for VRT warping is erroneous for smaller GDAL Versions. '
-                 'See https://github.com/OSGeo/gdal/issues/13464.'
-                 'VRT dataset is transformed to memory TIF file prior to warping.')
-        # check free memory for TIFF file creation
-        memory = psutil.virtual_memory()
-        usedMemory = expecteFileSize * 100 / memory.available
-        
-        if usedMemory > 80:
-            log.warning(f"Warning low memory for warping file "
-                        f"{expecteFileSize} {memory.available} {usedMemory}")
-        
-        memName = "/vsimem/mem.tif"
-        
-        # Disable multithreaded gdal.Translate (GDAL_NUM_THREADS = None).
-        # Prevents erroneous VRT treatment.
-        gdal.SetConfigOption('GDAL_NUM_THREADS', None)
-        
-        memDS = gdal.Translate(memName, src, format='GTiff')
-        src = memName
-    else:
-        memDS = None
-    
-    gdalwarp_args = {'format': 'GTiff', 'multithread': multithread,
-                     'dstNodata': nodata,
-                     'srcSRS': f'EPSG:{epsg_in}',
-                     'dstSRS': f'EPSG:{epsg_out}',
-                     'resampleAlg': resampleAlg,
-                     'xRes': tr[0], 'yRes': tr[1],
-                     'targetAlignedPixels': True,
-                     'warpOptions': {"NUM_THREADS": f"{threads}"}}
-    
-    if dtype is not None:
-        gdalwarp_args['outputType'] = Dtype(dtype).gdalint
-    
-    if geoid_convert:
-        geoid_epsg = {'EGM96': 5773,
-                      'EGM2008': 3855}
-        if geoid in geoid_epsg.keys():
-            epsg = geoid_epsg[geoid]
-            gdalwarp_args['srcSRS'] += f'+{epsg}'
-            # the following line is a workaround for older GDAL versions that did not
-            # support compound EPSG codes. See https://github.com/OSGeo/gdal/pull/4639.
-            if version.parse(gdal.__version__) < version.parse('3.4.0'):
-                gdalwarp_args['srcSRS'] = crsConvert(gdalwarp_args['srcSRS'], 'proj4')
-        else:
-            raise RuntimeError('geoid model not yet supported')
-        try:
-            get_egm_lookup(geoid=geoid, software='PROJ')
-        except OSError as e:
-            errstr = str(e)
-            raise RuntimeError(errstr)
-    
-    locked = ['xRes', 'yRes', 'srcSRS', 'dstSRS',
-              'dstNodata', 'outputType', 'multithread']
-    for key, val in kwargs.items():
-        if key not in locked:
-            gdalwarp_args[key] = val
-        else:
-            msg = f"argument '{key}' cannot be set via kwargs as it is set internally."
-            raise RuntimeError(msg)
-    try:
-        if not os.path.isfile(dst):
-            message = 'creating mosaic'
-            crs = gdalwarp_args['dstSRS']
-            if crs != 'EPSG:4326':
-                message += f' and reprojecting to {crs}'
-            log.info(f'{message}: {dst}')
-            gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
-        else:
-            log.info(f'mosaic already exists: {dst}')
-    except Exception:
-        if os.path.isfile(dst):
-            os.remove(dst)
-        raise
-    finally:
-        if memDS is not None:
-            # Close the temporary dataset (releases the Dataset object)
-            memDS = None
-            
-            # Delete the in-memory "file" to free RAM
-            gdal.Unlink(memName)
-            memName = None
-        
-        gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
+    with DEMHandler() as handler:
+        handler.create(
+            dem_type=demType,
+            product=product,
+            src=src,
+            dst=dst,
+            t_srs=t_srs,
+            tr=tr,
+            threads=threads,
+            geoid_convert=geoid_convert,
+            nodata=nodata,
+            resampleAlg=resampleAlg,
+            dtype=dtype,
+            pbar=pbar,
+            **kwargs
+        )
 
 
 class DEMHandler:
@@ -493,10 +395,10 @@ class DEMHandler:
     Parameters
     ----------
     geometries
-        a list of geometries
+        a list of geometries. Default `None`: use the global extent.
     """
     
-    def __init__(self, geometries: list[Vector] | None) -> None:
+    def __init__(self, geometries: list[Vector] | None = None) -> None:
         if not (isinstance(geometries, list) or geometries is None):
             raise RuntimeError('geometries must be of type list')
         
@@ -998,7 +900,8 @@ class DEMHandler:
                 '80-85': (5 / 1200, 1 / 1200),
                 '85-90': (10 / 1200, 1 / 1200)
             },
-            'tilesize': 1
+            'tilesize': 1,
+            'vertical_datum': 'EGM2008'
         }
         
         return {
@@ -1006,8 +909,8 @@ class DEMHandler:
                 'url': 'ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804',
                 'ocean_fill_value': {
                     'dem': 0,
-                    'msk': 3, # mask file; 3 = 00000011 binary = "Sea mask"
-                    'stk': 0 # stacking number file; 0 = no input files
+                    'msk': 3,  # mask file; 3 = 00000011 binary = "Sea mask"
+                    'stk': 0  # stacking number file; 0 = no input files
                 },
                 'nodata': {
                     'dem': -9999,
@@ -1024,7 +927,8 @@ class DEMHandler:
                 'datatype': {'dem': 'Int16',
                              'msk': 'Byte',
                              'stk': 'Byte'},
-                'authentication': False
+                'authentication': False,
+                'vertical_datum': 'EGM96',
             },
             'Copernicus 10m EEA DEM': {
                 'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_EEA-10-DGED/2021_1',
@@ -1037,7 +941,8 @@ class DEMHandler:
                 'port': 990,
                 'pattern': cop_dem_constants['pattern'],
                 'datatype': cop_dem_constants['datatype'],
-                'authentication': True
+                'authentication': True,
+                'vertical_datum': cop_dem_constants['vertical_datum'],
             },
             'Copernicus 30m Global DEM': {
                 'url': 'https://copernicus-dem-30m-stac.s3.amazonaws.com',
@@ -1049,7 +954,8 @@ class DEMHandler:
                 'vsi': None,
                 'pattern': cop_dem_constants['pattern'],
                 'datatype': cop_dem_constants['datatype'],
-                'authentication': False
+                'authentication': False,
+                'vertical_datum': cop_dem_constants['vertical_datum'],
             },
             'Copernicus 30m Global DEM II': {
                 'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-30-DGED/2021_1',
@@ -1062,7 +968,8 @@ class DEMHandler:
                 'port': 990,
                 'pattern': cop_dem_constants['pattern'],
                 'datatype': cop_dem_constants['datatype'],
-                'authentication': True
+                'authentication': True,
+                'vertical_datum': cop_dem_constants['vertical_datum'],
             },
             'Copernicus 90m Global DEM': {
                 'url': 'https://copernicus-dem-90m-stac.s3.amazonaws.com',
@@ -1074,7 +981,8 @@ class DEMHandler:
                 'vsi': None,
                 'pattern': cop_dem_constants['pattern'],
                 'datatype': cop_dem_constants['datatype'],
-                'authentication': False
+                'authentication': False,
+                'vertical_datum': cop_dem_constants['vertical_datum'],
             },
             'Copernicus 90m Global DEM II': {
                 'url': 'ftps://cdsdata.copernicus.eu/DEM-datasets/COP-DEM_GLO-90-DGED/2021_1',
@@ -1087,7 +995,8 @@ class DEMHandler:
                 'port': 990,
                 'pattern': cop_dem_constants['pattern'],
                 'datatype': cop_dem_constants['datatype'],
-                'authentication': True
+                'authentication': True,
+                'vertical_datum': cop_dem_constants['vertical_datum'],
             },
             'GETASSE30': {
                 'url': 'https://step.esa.int/auxdata/dem/GETASSE30',
@@ -1099,7 +1008,8 @@ class DEMHandler:
                 'vsi': '/vsizip/',
                 'pattern': {'dem': '*.GETASSE30'},
                 'datatype': {'dem': 'Int16'},
-                'authentication': False
+                'authentication': False,
+                'vertical_datum': 'WGS84',
             },
             'SRTM 1Sec HGT': {
                 'url': 'https://step.esa.int/auxdata/dem/SRTMGL1',
@@ -1111,7 +1021,8 @@ class DEMHandler:
                 'vsi': '/vsizip/',
                 'pattern': {'dem': '*.hgt'},
                 'datatype': {'dem': 'Int16'},
-                'authentication': False
+                'authentication': False,
+                'vertical_datum': 'EGM96',
             },
             'SRTM 3Sec': {
                 'url': 'https://step.esa.int/auxdata/dem/SRTM90/tiff',
@@ -1123,7 +1034,8 @@ class DEMHandler:
                 'vsi': '/vsizip/',
                 'pattern': {'dem': 'srtm*.tif'},
                 'datatype': {'dem': 'Int16'},
-                'authentication': False
+                'authentication': False,
+                'vertical_datum': 'EGM96',
             },
             # 'TDX90m': {'url': 'ftpes://tandemx-90m.dlr.de',
             #            'nodata': {'dem': -32767.0,
@@ -1162,6 +1074,247 @@ class DEMHandler:
             #            'authentication': True
             #            }
         }
+    
+    def create(
+            self,
+            dem_type: str,
+            src: str | list[str],
+            dst: str,
+            product: str = 'dem',
+            t_srs: CRS | None = None,
+            tr: tuple[int | float, int | float] | None = None,
+            threads: int | str | None = None,
+            geoid_convert: bool = True,
+            nodata: int | float | str | None = None,
+            resampleAlg: str | None = None,
+            dtype: str | None = None,
+            pbar: bool = False,
+            **kwargs
+    ) -> None:
+        """
+        Create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid.
+        This is basically a convenience wrapper around :func:`osgeo.gdal.Warp`
+        via :func:`spatialist.auxil.gdalwarp`.
+
+        Parameters
+        ----------
+        demType
+            The input DEM product type. See :func:`dem_autoload` for options.
+        product
+            The input DEM sub-product type. See :func:`dem_autoload` for options.
+        src
+            the input dataset(s) as returned by :func:`dem_autoload`.
+        dst
+            the output GeoTIFF file name.
+        t_srs
+            A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
+            See function :func:`spatialist.auxil.crsConvert()` for details.
+            Default ``None``: use the crs of ``src``.
+        tr
+            the target resolution as (xres, yres).
+            Default ``None``: use the resolution of ``src``.
+        threads
+            the number of threads to use. Possible values:
+
+             - Default ``None``: use the value of ``GDAL_NUM_THREADS`` without modification.
+               If ``GDAL_NUM_THREADS`` is None, multi-threading is still turned on and two
+               threads are used, one for I/O and one for computation.
+             - integer value: temporarily modify ``GDAL_NUM_THREADS`` and reset it once done.
+               If 1, multithreading is turned off.
+             - ``ALL_CPUS``: special string to use all cores/CPUs of the computer;
+               will also temporarily modify ``GDAL_NUM_THREADS``.
+        geoid_convert
+            Convert geoid heights to WGS84 ellipsoid heights?
+            Only applied if the vertical datum isn't already WGS84 and ``product='dem'``.
+            The geoid model is inferred from ``demType``.
+            See :func:`dem_autoload` for details.
+        nodata
+            the nodata value of `dst`. Default ``None``: use these values per data type:
+
+            - ``Byte``: 255
+            - ``Int16``: -32768
+            - ``Float32``: -9999.0
+
+        resampleAlg
+            the resampling algorithm tu be used. See here for options:
+            https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r.
+            Default ``None``: use ``mode`` if the data type of ``src`` is ``Byte`` (for categorical
+            value masks) and ``bilinear`` (for DEM and floating point error masks) otherwise.
+        dtype
+            the data type of ``dst``. Default ``None``: use the value of the source file(s).
+            Data type notations of GDAL (e.g. ``Float32``) and numpy (e.g. ``int8``) are supported.
+            See :class:`spatialist.raster.Dtype`.
+        pbar
+            add a progressbar?
+        **kwargs
+            additional keyword arguments to be passed to :func:`spatialist.auxil.gdalwarp`.
+            See :func:`osgeo.gdal.WarpOptions` for options. The following arguments cannot
+            be set as they are controlled internally:
+
+            - ``xRes``, ``yRes``: controlled via argument ``tr``
+            - ``srcSRS``, ``dstSRS``: controlled via arguments ``t_srs`` and ``geoid_convert``
+            - ``srcNodata``: controlled via nodata value of ``src``
+            - ``dstNodata``: controlled via argument ``nodata``
+            - ``outputType``: controlled via argument ``dtype``
+            - ``multithread``: controlled via argument ``threads``
+            - ``format``: fixed to ``GTiff``
+            - ``targetAlignedPixels``: fixed to ``True``
+            - ``warpOptions``: currently used for setting the number of threads.
+              Can be exposed if necessary.
+        """
+        src_nodata = self.config[dem_type]['nodata'][product]
+        src_dtype = self.config[dem_type]['datatype']
+        vertical_datum = self.config[dem_type]['vertical_datum']
+        
+        # data type handling
+        if dtype is not None:
+            dtype_obj = Dtype(dtype)
+        else:
+            dtype_obj = Dtype(src_dtype)
+        
+        # set dst nodata default if None
+        if nodata is None:
+            dst_nodata_lookup = {
+                'Byte': 255,
+                'Float32': -9999,
+                'Int16': -32768
+            }
+            nodata = dst_nodata_lookup[src_dtype[product]]
+        
+        if product != 'dem' or vertical_datum == 'WGS84':
+            geoid_convert = False
+        
+        if resampleAlg is None:
+            resampleAlg = 'mode' if src_dtype == 'Byte' else 'bilinear'
+        ############################################################################
+        if isinstance(src, str):
+            vrt_check_sources(src)
+        
+        with Raster(src[0] if isinstance(src, list) else src) as ras:
+            src_format = ras.format
+            if src_format == 'VRT':
+                vrt_check_sources(src)
+                bytes = Dtype(ras.dtype).bytes
+                expecteFileSize = ras.bands * ras.rows * ras.cols * bytes
+            if nodata is None:
+                nodata = ras.nodata
+            if tr is None:
+                tr = ras.res
+            epsg_in = ras.epsg
+        
+        if t_srs is None:
+            epsg_out = epsg_in
+        else:
+            epsg_out = crsConvert(t_srs, 'epsg')
+        
+        threads_system = gdal.GetConfigOption('GDAL_NUM_THREADS')
+        if isinstance(threads, str):
+            if threads != 'ALL_CPUS':
+                raise ValueError(f"unsupported value for 'threads': '{threads}'")
+            else:
+                multithread = True
+        elif isinstance(threads, int):
+            if threads == 1:
+                multithread = False
+            elif threads > 1:
+                multithread = True
+            else:
+                raise ValueError("if 'threads' is of type int, it must be >= 1")
+        elif threads is None:
+            multithread = True
+        else:
+            raise TypeError(f"'threads' must be of type int, str or None. Is: {type(threads)}")
+        
+        c1 = (threads not in [1, None]) and (src_format == 'VRT')
+        c2 = (version.parse(gdal.__version__) < version.parse('3.12.1'))
+        if c1 and c2:
+            log.info('Using multithreading for VRT warping is erroneous for smaller GDAL Versions. '
+                     'See https://github.com/OSGeo/gdal/issues/13464.'
+                     'VRT dataset is transformed to memory TIF file prior to warping.')
+            # check free memory for TIFF file creation
+            memory = psutil.virtual_memory()
+            usedMemory = expecteFileSize * 100 / memory.available
+            
+            if usedMemory > 80:
+                log.warning(f"Warning low memory for warping file "
+                            f"{expecteFileSize} {memory.available} {usedMemory}")
+            
+            memName = "/vsimem/mem.tif"
+            
+            # Disable multithreaded gdal.Translate (GDAL_NUM_THREADS = None).
+            # Prevents erroneous VRT treatment.
+            gdal.SetConfigOption('GDAL_NUM_THREADS', None)
+            
+            memDS = gdal.Translate(memName, src, format='GTiff')
+            src = memName
+        else:
+            memDS = memName = None
+        
+        gdalwarp_args = {
+            'format': 'GTiff',
+            'multithread': multithread,
+            'srcNodata': src_nodata,
+            'dstNodata': nodata,
+            'srcSRS': f'EPSG:{epsg_in}',
+            'dstSRS': f'EPSG:{epsg_out}',
+            'resampleAlg': resampleAlg,
+            'xRes': tr[0],
+            'yRes': tr[1],
+            'targetAlignedPixels': True,
+            'warpOptions': {"NUM_THREADS": f"{threads}"},
+            'outputType': dtype_obj.gdalint
+        }
+        
+        if geoid_convert:
+            geoid_epsg = {'EGM96': 5773,
+                          'EGM2008': 3855}
+            if vertical_datum in geoid_epsg.keys():
+                epsg = geoid_epsg[vertical_datum]
+                gdalwarp_args['srcSRS'] += f'+{epsg}'
+                # the following line is a workaround for older GDAL versions that did not
+                # support compound EPSG codes. See https://github.com/OSGeo/gdal/pull/4639.
+                if version.parse(gdal.__version__) < version.parse('3.4.0'):
+                    crs = crsConvert(gdalwarp_args['srcSRS'], 'proj4')
+                    gdalwarp_args['srcSRS'] = crs
+            else:
+                raise RuntimeError('geoid model not yet supported')
+            try:
+                get_egm_lookup(geoid=vertical_datum, software='PROJ')
+            except OSError as e:
+                errstr = str(e)
+                raise RuntimeError(errstr)
+        
+        locked = list(gdalwarp_args.keys())
+        for key, val in kwargs.items():
+            if key not in locked:
+                gdalwarp_args[key] = val
+            else:
+                msg = f"argument '{key}' cannot be set via kwargs as it is set internally."
+                raise RuntimeError(msg)
+        try:
+            if not os.path.isfile(dst):
+                message = 'creating mosaic'
+                crs = gdalwarp_args['dstSRS']
+                if crs != 'EPSG:4326':
+                    message += f' and reprojecting to {crs}'
+                log.info(f'{message}: {dst}')
+                gdalwarp(src=src, dst=dst, pbar=pbar, **gdalwarp_args)
+            else:
+                log.info(f'mosaic already exists: {dst}')
+        except Exception:
+            if os.path.isfile(dst):
+                os.remove(dst)
+            raise
+        finally:
+            if memDS is not None:
+                # Close the temporary dataset (releases the Dataset object)
+                memDS = None
+                
+                # Delete the in-memory "file" to free RAM
+                gdal.Unlink(memName)
+                memName = None
+            
+            gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
     
     def load(
             self,
