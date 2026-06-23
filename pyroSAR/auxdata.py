@@ -37,7 +37,7 @@ from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
 from spatialist.envi import HDRobject
 from osgeo import gdal, osr
 
-from typing import TypeAlias, Self, Any, Literal
+from typing import TypeAlias, Self, Any
 
 import logging
 
