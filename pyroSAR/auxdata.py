@@ -283,6 +283,7 @@ def dem_autoload(
 
 
 def dem_create(
+        geometries: list[Vector] | None,
         src: str | list[str],
         dst: str,
         t_srs: CRS | None = None,
@@ -362,7 +363,7 @@ def dem_create(
         - ``warpOptions``: currently used for setting the number of threads.
           Can be exposed if necessary.
     """
-    with DEMHandler() as handler:
+    with DEMHandler(geometries=geometries) as handler:
         handler.create(
             src=src,
             dst=dst,
@@ -1104,6 +1105,9 @@ class DEMHandler:
         ----------
         src
             the input dataset(s) as returned by :func:`dem_autoload`.
+            A string is expected to point to a VRT file.
+            A list is interpreted as multiple GDAL-readable datasets.
+            :func:`dem_autoload` must be run with `return_fnames=True` to provide the correct format.
         dst
             the output GeoTIFF file name.
         t_srs
@@ -1213,6 +1217,7 @@ class DEMHandler:
         src_nodata = self.config[dem_type]['nodata'][product]
         src_dtype = self.config[dem_type]['datatype'][product]
         vertical_datum = self.config[dem_type]['vertical_datum']
+        fill_value = self.config[dem_type]['ocean_fill_value'][product]
         
         # data type handling
         if dtype is not None:
@@ -1304,6 +1309,18 @@ class DEMHandler:
             'warpOptions': {"NUM_THREADS": f"{threads}"},
             'outputType': dtype_obj.gdalint
         }
+        
+        if isinstance(src, list):
+            extent = self.__commonextent()
+            gdalwarp_args['outputBounds'] = [extent['xmin'], extent['ymin'],
+                                             extent['xmax'], extent['ymax']]
+            gdalwarp_args['outputBoundsSRS'] = 'EPSG:4326'
+            
+            dummy = self.__create_dummy_dem(filename=None, extent=extent,
+                                            fill_value=fill_value)
+            src.insert(0, dummy)
+        else:
+            dummy = None
         
         if geoid_convert:
             geoid_epsg = {'EGM96': 5773,
