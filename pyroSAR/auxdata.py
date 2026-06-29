@@ -27,7 +27,7 @@ from lxml import etree
 from math import ceil, floor
 from urllib.parse import urlparse
 from collections import defaultdict
-from packaging import version
+from packaging.version import Version
 from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import Lock
 from spatialist.raster import Raster, Dtype
@@ -1163,6 +1163,9 @@ class DEMHandler:
               Can be exposed if necessary.
         """
         
+        if isinstance(src, list):
+            src = src.copy()
+        
         def identify_validate_source(src: str | list[str]) -> tuple[str, str]:
             dem_types = list(self.config.keys())
             if isinstance(src, str):
@@ -1267,11 +1270,11 @@ class DEMHandler:
             raise TypeError(f"'threads' must be of type int, str or None. Is: {type(threads)}")
         
         c1 = (threads not in [1, None]) and (src_format == 'VRT')
-        c2 = (version.parse(gdal.__version__) < version.parse('3.12.1'))
+        c2 = (Version(gdal.__version__) < Version('3.12.1'))
         if c1 and c2:
             log.info('Using multithreading for VRT warping is erroneous for smaller GDAL Versions. '
                      'See https://github.com/OSGeo/gdal/issues/13464.'
-                     'VRT dataset is transformed to memory TIF file prior to warping.')
+                     'VRT dataset is transformed to a memory dataset prior to warping.')
             # check free memory for TIFF file creation
             memory = psutil.virtual_memory()
             usedMemory = expecteFileSize * 100 / memory.available
@@ -1280,16 +1283,12 @@ class DEMHandler:
                 log.warning(f"Warning low memory for warping file "
                             f"{expecteFileSize} {memory.available} {usedMemory}")
             
-            memName = "/vsimem/mem.tif"
-            
             # Disable multithreaded gdal.Translate (GDAL_NUM_THREADS = None).
             # Prevents erroneous VRT treatment.
             gdal.SetConfigOption('GDAL_NUM_THREADS', None)
             
-            memDS = gdal.Translate(memName, src, format='GTiff')
-            src = memName
-        else:
-            memDS = memName = None
+            driver_name = 'MEM' if Version(gdal.__version__) >= Version('3.11') else 'Memory'
+            src = gdal.Translate(destName='', srcDS=src, format=driver_name)
         
         gdalwarp_args = {
             'format': 'GTiff',
@@ -1314,7 +1313,7 @@ class DEMHandler:
                 gdalwarp_args['srcSRS'] += f'+{epsg}'
                 # the following line is a workaround for older GDAL versions that did not
                 # support compound EPSG codes. See https://github.com/OSGeo/gdal/pull/4639.
-                if version.parse(gdal.__version__) < version.parse('3.4.0'):
+                if Version(gdal.__version__) < Version('3.4.0'):
                     crs = crsConvert(gdalwarp_args['srcSRS'], 'proj4')
                     gdalwarp_args['srcSRS'] = crs
             else:
@@ -1347,14 +1346,7 @@ class DEMHandler:
                 os.remove(dst)
             raise
         finally:
-            if memDS is not None:
-                # Close the temporary dataset (releases the Dataset object)
-                memDS = None
-                
-                # Delete the in-memory "file" to free RAM
-                gdal.Unlink(memName)
-                memName = None
-            
+            src = dummy = None
             gdal.SetConfigOption('GDAL_NUM_THREADS', threads_system)
     
     def load(
