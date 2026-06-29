@@ -17,7 +17,7 @@ import csv
 import ssl
 import socket
 import json
-import numpy
+import numpy as np
 import fnmatch
 import ftplib
 import requests
@@ -556,14 +556,24 @@ class DEMHandler:
         return ext_new
     
     @staticmethod
-    def __create_dummy_dem(filename: str, extent: EXT) -> None:
+    def __create_dummy_dem(
+            filename: str | None,
+            extent: EXT,
+            fill_value: int | float
+    ) -> gdal.Dataset | None:
         """
         Create a dummy file which spans the given extent and
         is 1x1 pixels large to be as small as possible.
         This file is used to create dummy DEMs over ocean.
         """
-        driver = gdal.GetDriverByName('GTiff')
-        dataset = driver.Create(filename, 1, 1, 1, 1)
+        if filename is None:
+            filename = ''
+            driver_name = 'MEM' if Version(gdal.__version__) >= Version('3.11') else 'Memory'
+        else:
+            driver_name = 'GTiff'
+        driver = gdal.GetDriverByName(driver_name)
+        dataset = driver.Create(utf8_path=filename, xsize=1, ysize=1,
+                                bands=1, eType=gdal.GDT_Byte)
         geo = [
             extent['xmin'],
             extent['xmax'] - extent['xmin'],
@@ -575,14 +585,18 @@ class DEMHandler:
         dataset.SetGeoTransform(geo)
         dataset.SetProjection('EPSG:4326')
         band = dataset.GetRasterBand(1)
-        band.SetNoDataValue(255)
-        mat = numpy.zeros(shape=(1, 1))
-        band.WriteArray(mat, 0, 0)
+        band.SetNoDataValue(value=255)
+        arr = np.full(shape=(1, 1), fill_value=fill_value, dtype=np.uint8)
+        band.WriteArray(array=arr, xoff=0, yoff=0)
         band.FlushCache()
-        del mat
+        del arr
         band = None
-        dataset = None
         driver = None
+        if len(filename) > 0:
+            dataset = None
+            return None
+        else:
+            return dataset
     
     @property
     def __extent_global(self) -> EXT:
