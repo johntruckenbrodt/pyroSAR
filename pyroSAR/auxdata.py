@@ -466,11 +466,18 @@ class DEMHandler:
         Parameters
         ----------
         tiles
-            a list of DEM files or compressed archives containing DEM files
+            A list of DEM files or compressed archives containing DEM files.
         vrt
-            the output VRT filename
-        hide_nodata
-            hide the nodata value of the output VRT file?
+            The output VRT filename.
+        dem_type
+            The input DEM product type. See :func:`dem_autoload` for options.
+        product
+            The input DEM sub-product type. See :func:`dem_autoload` for options.
+        crop
+            Crop the VRT to the spatial extent of the provided geometries
+            or return the full extent of the DEM tiles? In the latter case, the common
+            bounding box of the geometries is expanded so that the coordinates are
+            multiples of the tile size of the respective DEM option.
         """
         
         resolution = None
@@ -523,11 +530,11 @@ class DEMHandler:
             'srcNodata': src_nodata,
             'targetAlignedPixels': tap,
             'xRes': xres, 'yRes': yres,
-            'hideNodata': True
+            'hideNodata': True,
+            'VRTNodata': dst_nodata,
+            'outputBounds': (extent['xmin'], extent['ymin'],
+                             extent['xmax'], extent['ymax'])
         }
-        opts['VRTNodata'] = dst_nodata
-        opts['outputBounds'] = (extent['xmin'], extent['ymin'],
-                                extent['xmax'], extent['ymax'])
         
         gdalbuildvrt(src=tiles, dst=vrt, **opts)
         
