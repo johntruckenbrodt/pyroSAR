@@ -284,6 +284,8 @@ def dem_autoload(
 
 def dem_create(
         geometries: list[Vector] | None,
+        demType: str,
+        product: str,
         src: str | list[str],
         dst: str,
         t_srs: CRS | None = None,
@@ -303,6 +305,13 @@ def dem_create(
 
     Parameters
     ----------
+    geometries
+        a list of :class:`spatialist.vector.Vector` geometries to obtain DEM data for;
+        CRS must be WGS84 LatLon (EPSG 4326). Can be set to `None` for global extent.
+    demType
+        The input DEM product type. See :func:`dem_autoload` for options.
+    product
+        The input DEM sub-product type. See :func:`dem_autoload` for options.
     src
         the input dataset(s) as returned by :func:`dem_autoload`.
     dst
@@ -365,6 +374,8 @@ def dem_create(
     """
     with DEMHandler(geometries=geometries) as handler:
         handler.create(
+            dem_type=demType,
+            product=product,
             src=src,
             dst=dst,
             t_srs=t_srs,
@@ -1084,6 +1095,8 @@ class DEMHandler:
     
     def create(
             self,
+            dem_type: str,
+            product: str,
             src: str | list[str],
             dst: str,
             t_srs: CRS | None = None,
@@ -1103,10 +1116,14 @@ class DEMHandler:
 
         Parameters
         ----------
+        dem_type
+            The input DEM product type. See :func:`dem_autoload` for options.
+        product
+            The input DEM sub-product type. See :func:`dem_autoload` for options.
         src
             the input dataset(s) as returned by :func:`dem_autoload`.
             A string is expected to point to a VRT file.
-            A list is interpreted as multiple GDAL-readable datasets.
+            A list is interpreted as 0..n GDAL-readable datasets.
             :func:`dem_autoload` must be run with `return_fnames=True` to provide the correct format.
         dst
             the output GeoTIFF file name.
@@ -1240,6 +1257,35 @@ class DEMHandler:
         if resampleAlg is None:
             resampleAlg = 'mode' if src_dtype == 'Byte' else 'bilinear'
         ############################################################################
+        # initial list of gdalwarp parameters
+        
+        gdalwarp_args = {
+            'format': 'GTiff',
+            'srcNodata': src_nodata,
+            'resampleAlg': resampleAlg,
+            'targetAlignedPixels': True,
+            'outputType': dtype_obj.gdalint
+        }
+        ############################################################################
+        # if the input is a list of DEM tiles, pass the user-defined extent directly
+        # to gdalwarp (VRTs already contain this extent)
+        # Also, add an in-memory dummy file to the file list so that the output layer
+        # is extrapolated to areas where no DEM tile exists (over ocean).
+        
+        if isinstance(src, list):
+            extent = self.__commonextent()
+            gdalwarp_args['outputBounds'] = [extent['xmin'], extent['ymin'],
+                                             extent['xmax'], extent['ymax']]
+            gdalwarp_args['outputBoundsSRS'] = 'EPSG:4326'
+            
+            dummy = self.__create_dummy_dem(filename=None, extent=extent,
+                                            fill_value=fill_value)
+            src.insert(0, dummy)
+        else:
+            dummy = None
+        ############################################################################
+        # specify nodata, resolution and CRS
+        
         with Raster(src[0] if isinstance(src, list) else src) as ras:
             src_format = ras.format
             if src_format == 'VRT':
@@ -1255,6 +1301,14 @@ class DEMHandler:
             epsg_out = epsg_in
         else:
             epsg_out = crsConvert(t_srs, 'epsg')
+        
+        gdalwarp_args['dstNodata'] = nodata
+        gdalwarp_args['xRes'] = tr[0]
+        gdalwarp_args['yRes'] = tr[1]
+        gdalwarp_args['srcSRS'] = f'EPSG:{epsg_in}'
+        gdalwarp_args['dstSRS'] = f'EPSG:{epsg_out}'
+        ############################################################################
+        # determine number of threads to use
         
         threads_system = gdal.GetConfigOption('GDAL_NUM_THREADS')
         if isinstance(threads, str):
@@ -1273,6 +1327,11 @@ class DEMHandler:
             multithread = True
         else:
             raise TypeError(f"'threads' must be of type int, str or None. Is: {type(threads)}")
+        
+        gdalwarp_args['multithread'] = multithread
+        gdalwarp_args['warpOptions'] = {"NUM_THREADS": f"{threads}"}
+        ############################################################################
+        # intermediate load of WRT into memory to avoid GDAL bug
         
         c1 = (threads not in [1, None]) and (src_format == 'VRT')
         c2 = (Version(gdal.__version__) < Version('3.12.1'))
@@ -1294,33 +1353,8 @@ class DEMHandler:
             
             driver_name = 'MEM' if Version(gdal.__version__) >= Version('3.11') else 'Memory'
             src = gdal.Translate(destName='', srcDS=src, format=driver_name)
-        
-        gdalwarp_args = {
-            'format': 'GTiff',
-            'multithread': multithread,
-            'srcNodata': src_nodata,
-            'dstNodata': nodata,
-            'srcSRS': f'EPSG:{epsg_in}',
-            'dstSRS': f'EPSG:{epsg_out}',
-            'resampleAlg': resampleAlg,
-            'xRes': tr[0],
-            'yRes': tr[1],
-            'targetAlignedPixels': True,
-            'warpOptions': {"NUM_THREADS": f"{threads}"},
-            'outputType': dtype_obj.gdalint
-        }
-        
-        if isinstance(src, list):
-            extent = self.__commonextent()
-            gdalwarp_args['outputBounds'] = [extent['xmin'], extent['ymin'],
-                                             extent['xmax'], extent['ymax']]
-            gdalwarp_args['outputBoundsSRS'] = 'EPSG:4326'
-            
-            dummy = self.__create_dummy_dem(filename=None, extent=extent,
-                                            fill_value=fill_value)
-            src.insert(0, dummy)
-        else:
-            dummy = None
+        ############################################################################
+        # update CRS with vertical datum
         
         if geoid_convert:
             geoid_epsg = {'EGM96': 5773,
@@ -1340,6 +1374,8 @@ class DEMHandler:
             except OSError as e:
                 errstr = str(e)
                 raise RuntimeError(errstr)
+        ############################################################################
+        # update gdalwarp_args with user-defined kwargs
         
         locked = list(gdalwarp_args.keys())
         for key, val in kwargs.items():
@@ -1348,6 +1384,9 @@ class DEMHandler:
             else:
                 msg = f"argument '{key}' cannot be set via kwargs as it is set internally."
                 raise RuntimeError(msg)
+        ############################################################################
+        # run warping
+        
         try:
             if not os.path.isfile(dst):
                 message = 'creating mosaic'
@@ -1553,10 +1592,13 @@ class DEMHandler:
             tiles = locals
         
         if vrt is not None:
-            self.__buildvrt(tiles=tiles, vrt=vrt,
-                            crop=crop,
-                            dem_type=dem_type,
-                            product=product)
+            self.__buildvrt(
+                tiles=tiles,
+                vrt=vrt,
+                crop=crop,
+                dem_type=dem_type,
+                product=product
+            )
         else:
             return tiles if return_fname else locals
     
