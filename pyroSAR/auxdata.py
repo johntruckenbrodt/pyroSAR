@@ -485,6 +485,10 @@ class DEMHandler:
         dst_nodata = self.config[dem_type]['ocean_fill_value'][product]
         tap = False
         extent = self.__commonextent()
+        if extent['xmin'] > extent['xmax']:
+            raise RuntimeError('The extent is crossing the antimeridian. '
+                               'It is not possible to create a VRT in this case.')
+        
         aop = self.config[dem_type]['area_or_point']
         res = self.__get_resolution(dem_type=dem_type, y=extent['ymin'])
         
