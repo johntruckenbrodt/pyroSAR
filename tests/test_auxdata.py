@@ -56,13 +56,14 @@ def test_autoload(auxdata_dem_cases, travis):
 
 
 def test_dem_create(tmpdir):
+    vrt = '/vsimem/test.vrt'
+    out = os.path.join(str(tmpdir), 'srtm.tif')
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
         with pytest.raises(RuntimeError):
-            files = dem_autoload([box], 'foobar')
-        vrt = '/vsimem/test.vrt'
-        dem_autoload([box], 'SRTM 3Sec', vrt=vrt)
-    out = os.path.join(str(tmpdir), 'srtm.tif')
-    dem_create(src=vrt, dst=out, t_srs=32632, tr=(90, 90), nodata=-32767)
+            files = dem_autoload(geometries=[box], demType='foobar')
+        dem_autoload(geometries=[box], demType='SRTM 3Sec', vrt=vrt, product='dem')
+        dem_create(geometries=[box], demType='SRTM 3Sec', product='dem', src=vrt,
+                   dst=out, t_srs=32632, tr=(90, 90), nodata=-32767)
     assert os.path.isfile(out)
 
 
@@ -71,9 +72,9 @@ def test_intrange():
            'ymin': 51, 'ymax': 51.5}
     with bbox(ext, 4326) as box:
         with DEMHandler([box]) as dem:
-            ref1 = range(51, 52), range(11, 12)
-            ref5 = range(50, 55, 5), range(10, 15, 5)
-            ref15 = range(45, 60, 15), range(0, 15, 15)
+            ref1 = ([51], [11])
+            ref5 = ([50], [10])
+            ref15 = ([45], [0])
             assert dem.intrange(box.extent, 1) == ref1
             assert dem.intrange(box.extent, 5) == ref5
             assert dem.intrange(box.extent, 15) == ref15
