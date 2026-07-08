@@ -394,7 +394,8 @@ class DEMHandler:
     """
     An interface to obtain DEM data for selected geometries.
     The files are downloaded into the ESA SNAP auxiliary data directory structure.
-    This class is the foundation for the convenience function :func:`~pyroSAR.auxdata.dem_autoload`.
+    This class is the foundation for the convenience functions
+    :func:`~pyroSAR.auxdata.dem_autoload` and :func:`~pyroSAR.auxdata.dem_create`.
     
     Parameters
     ----------
@@ -583,43 +584,94 @@ class DEMHandler:
             filename: str | None,
             extent: EXT,
             fill_value: int | float
-    ) -> gdal.Dataset | None:
+    ) -> gdal.Dataset | list[gdal.Dataset] | None:
         """
-        Create a dummy file which spans the given extent and
-        is 1x1 pixels large to be as small as possible.
-        This file is used to create dummy DEMs over ocean.
+        Create dummy dataset(s) which span the given extent and
+        are 1x1 pixels large to be as small as possible.
+        These dataset(s) are used to create dummy DEMs over ocean.
+        
+        Parameters
+        ----------
+        filename
+            The filename to be used if the dataset is to be written to a GeoTIFF file.
+            If `None`, a :class:`gdal.Dataset` object is returned.
+            If the extent is crossing the antimeridian, `filename` must be set
+            to `None` because two datasets will be created.
+        extent
+            The extent for which to create the dataset(s).
+        fill_value
+            The value to use for extrapolating areas over ocean where no DEM tile exists.
         """
-        if filename is None:
-            filename = ''
-            driver_name = 'MEM' if Version(gdal.__version__) >= Version('3.11') else 'Memory'
+        
+        def create_file(
+                filename: str | None,
+                extent: EXT,
+                fill_value: int | float
+        ) -> gdal.Dataset | None:
+            if filename is None:
+                filename = ''
+                driver_name = 'MEM' if Version(gdal.__version__) >= Version('3.11') else 'Memory'
+            else:
+                driver_name = 'GTiff'
+            driver = gdal.GetDriverByName(driver_name)
+            dataset = driver.Create(utf8_path=filename, xsize=1, ysize=1,
+                                    bands=1, eType=gdal.GDT_Byte)
+            geo = [
+                extent['xmin'],
+                extent['xmax'] - extent['xmin'],
+                0,
+                extent['ymax'],
+                0,
+                extent['ymin'] - extent['ymax']  # negative
+            ]
+            dataset.SetGeoTransform(geo)
+            dataset.SetProjection('EPSG:4326')
+            band = dataset.GetRasterBand(1)
+            band.SetNoDataValue(value=255)
+            arr = np.full(shape=(1, 1), fill_value=fill_value, dtype=np.uint8)
+            band.WriteArray(array=arr, xoff=0, yoff=0)
+            band.FlushCache()
+            del arr
+            band = None
+            driver = None
+            if len(filename) > 0:
+                dataset = None
+                return None
+            else:
+                return dataset
+        
+        # create two sub-datasets if the extent is crossing the antimeridian
+        if extent['xmin'] > extent['xmax']:
+            if filename is not None:
+                raise ValueError("the extent is crossing the antimeridian."
+                                 "In this case 'filename' must be None.")
+            extents = [
+                {
+                    'xmin': extent['xmin'],
+                    'xmax': 180.,
+                    'ymin': extent['ymin'],
+                    'ymax': extent['ymax']
+                },
+                {
+                    'xmin': -180.,
+                    'xmax': extent['xmax'],
+                    'ymin': extent['ymin'],
+                    'ymax': extent['ymax']
+                }
+            ]
+            out = [
+                create_file(
+                    filename=filename,
+                    extent=extent_sub,
+                    fill_value=fill_value)
+                for extent_sub in extents
+            ]
         else:
-            driver_name = 'GTiff'
-        driver = gdal.GetDriverByName(driver_name)
-        dataset = driver.Create(utf8_path=filename, xsize=1, ysize=1,
-                                bands=1, eType=gdal.GDT_Byte)
-        geo = [
-            extent['xmin'],
-            extent['xmax'] - extent['xmin'],
-            0,
-            extent['ymax'],
-            0,
-            extent['ymin'] - extent['ymax']  # negative
-        ]
-        dataset.SetGeoTransform(geo)
-        dataset.SetProjection('EPSG:4326')
-        band = dataset.GetRasterBand(1)
-        band.SetNoDataValue(value=255)
-        arr = np.full(shape=(1, 1), fill_value=fill_value, dtype=np.uint8)
-        band.WriteArray(array=arr, xoff=0, yoff=0)
-        band.FlushCache()
-        del arr
-        band = None
-        driver = None
-        if len(filename) > 0:
-            dataset = None
-            return None
-        else:
-            return dataset
+            out = create_file(
+                filename=filename,
+                extent=extent,
+                fill_value=fill_value)
+        return out
     
     @property
     def __extent_global(self) -> EXT:
@@ -635,7 +687,7 @@ class DEMHandler:
         ----------
         extent
             a dictionary with keys `xmin`, `xmax`, `ymin` and `ymax`
-            with coordinates in EPSG:4326 or None to use a global extent.
+            with coordinates in EPSG:4326.
         step
             the sequence steps
 
@@ -1196,7 +1248,7 @@ class DEMHandler:
         """
         
         if isinstance(src, list):
-            src = src.copy()
+            src: list[str | gdal.Dataset] = src.copy()
         
         if isinstance(src, str):
             if not src.endswith('.vrt'):
@@ -1239,20 +1291,28 @@ class DEMHandler:
             'outputType': dtype_obj.gdalint
         }
         ############################################################################
-        # if the input is a list of DEM tiles, pass the user-defined extent directly
-        # to gdalwarp (VRTs already contain this extent)
-        # Also, add an in-memory dummy file to the file list so that the output layer
+        # If the input is a list of DEM tiles, pass the user-defined extent directly
+        # to gdalwarp (VRTs already contain this extent).
+        # Also, add in-memory dummy dataset(s) to the file list so that the output layer
         # is extrapolated to areas where no DEM tile exists (over ocean).
         
         if isinstance(src, list):
-            extent = self.__commonextent()
-            gdalwarp_args['outputBounds'] = [extent['xmin'], extent['ymin'],
-                                             extent['xmax'], extent['ymax']]
-            gdalwarp_args['outputBoundsSRS'] = 'EPSG:4326'
+            extent_4326 = self.__commonextent()
+            if t_srs is not None:
+                with bbox(coordinates=extent_4326, crs=4326) as vec:
+                    vec.reproject(t_srs)
+                    extent_out = vec.extent
+            else:
+                extent_out = extent_4326
+            gdalwarp_args['outputBounds'] = [extent_out['xmin'], extent_out['ymin'],
+                                             extent_out['xmax'], extent_out['ymax']]
             
-            dummy = self.__create_dummy_dem(filename=None, extent=extent,
+            dummy = self.__create_dummy_dem(filename=None, extent=extent_4326,
                                             fill_value=fill_value)
-            src.insert(0, dummy)
+            if isinstance(dummy, list):
+                src = dummy + src
+            else:
+                src.insert(0, dummy)
         else:
             dummy = None
         ############################################################################
@@ -1303,7 +1363,7 @@ class DEMHandler:
         gdalwarp_args['multithread'] = multithread
         gdalwarp_args['warpOptions'] = {"NUM_THREADS": f"{threads}"}
         ############################################################################
-        # intermediate load of WRT into memory to avoid GDAL bug
+        # intermediate loading of VRT into memory to avoid GDAL bug
         
         c1 = (threads not in [1, None]) and (src_format == 'VRT')
         c2 = (Version(gdal.__version__) < Version('3.12.1'))
@@ -1340,8 +1400,9 @@ class DEMHandler:
                     crs = crsConvert(gdalwarp_args['srcSRS'], 'proj4')
                     gdalwarp_args['srcSRS'] = crs
             else:
-                raise RuntimeError('geoid model not yet supported')
+                raise RuntimeError('geoid model not (yet) supported')
             try:
+                # download the geoid model
                 get_egm_lookup(geoid=vertical_datum, software='PROJ')
             except OSError as e:
                 errstr = str(e)
