@@ -1245,6 +1245,11 @@ class DEMHandler:
             - ``targetAlignedPixels``: fixed to ``True``
             - ``warpOptions``: currently used for setting the number of threads.
               Can be exposed if necessary.
+            
+            The following arguments are set if they are not defined in `kwargs`:
+            
+            - ``outputBounds``: set to the common extent of ``geometries``
+              projected to ``t_srs`` if ``isinstance(src, list)``.
         """
         
         if isinstance(src, list):
@@ -1304,8 +1309,13 @@ class DEMHandler:
                     extent_out = vec.extent
             else:
                 extent_out = extent_4326
-            gdalwarp_args['outputBounds'] = [extent_out['xmin'], extent_out['ymin'],
-                                             extent_out['xmax'], extent_out['ymax']]
+            
+            if 'outputBounds' not in kwargs.keys():
+                gdalwarp_args['outputBounds'] = [extent_out['xmin'], extent_out['ymin'],
+                                                 extent_out['xmax'], extent_out['ymax']]
+            else:
+                gdalwarp_args['outputBounds'] = kwargs['outputBounds']
+                del kwargs['outputBounds']
             
             dummy = self.__create_dummy_dem(filename=None, extent=extent_4326,
                                             fill_value=fill_value)
