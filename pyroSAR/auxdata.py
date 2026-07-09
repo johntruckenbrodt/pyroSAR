@@ -1592,7 +1592,7 @@ class DEMHandler:
         if self.geometries is not None:
             candidates = []
             for geo in self.geometries:
-                corners = self.__applybuffer(extent=geo.get_extent(split_antimeridian=True),
+                corners = self.__applybuffer(extent=geo.extent,
                                              buffer=buffer)
                 candidates.extend(self.remote_ids(extent=corners, dem_type=dem_type,
                                                   username=username, password=password,
