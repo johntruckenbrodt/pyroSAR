@@ -427,10 +427,10 @@ class DEMHandler:
     def __applybuffer(extent: EXT, buffer: int | float | None) -> EXT:
         ext = dict(extent)
         if buffer is not None:
-            ext['xmin'] -= buffer
-            ext['xmax'] += buffer
-            ext['ymin'] -= buffer
-            ext['ymax'] += buffer
+            ext['xmin'] = max(-180., ext['xmin'] - buffer)
+            ext['xmax'] = min(180., ext['xmax'] + buffer)
+            ext['ymin'] = max(-90., ext['ymin'] - buffer)
+            ext['ymax'] = min(90., ext['ymax'] + buffer)
         return ext
     
     def __find_first(self, dem_type: str, product: str) -> str | None:
