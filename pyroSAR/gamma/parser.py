@@ -1,7 +1,7 @@
 ###############################################################################
 # parse GAMMA command docstrings to Python functions
 
-# Copyright (c) 2015-2025, the pyroSAR Developers.
+# Copyright (c) 2015-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -25,22 +25,21 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def parse_command(command, indent='    '):
+def parse_command(command: str, indent: str='    ') -> str:
     """
     Parse the help text of a GAMMA command to a Python function including a docstring.
-    The docstring is in rst format and can thu be parsed by e.g. sphinx.
+    The docstring is in rst format and can thus be parsed by e.g. sphinx.
     This function is not intended to be used by itself, but rather within function :func:`parse_module`.
 
     Parameters
     ----------
-    command: str
+    command
         the name of the gamma command
-    indent: str
+    indent
         the Python function indentation string; default: four spaces
 
     Returns
     -------
-    str
         the full Python function text
 
     """
@@ -631,20 +630,17 @@ def parse_command(command, indent='    '):
     return fun
 
 
-def parse_module(bindir, outfile):
+def parse_module(bindir: str, outfile: str) -> None:
     """
     parse all Gamma commands of a module to functions and save them to a Python script.
 
     Parameters
     ----------
-    bindir: str
+    bindir
         the `bin` directory of a module containing the commands
-    outfile: str
+    outfile
         the name of the Python file to write
 
-    Returns
-    -------
-    
     Examples
     --------
     >>> import os
@@ -690,18 +686,17 @@ def parse_module(bindir, outfile):
         log.info(info.format('\n'.join(failed), len(failed)))
 
 
-def autoparse():
+def autoparse() -> None:
     """
     automatic parsing of GAMMA commands.
-    This function will detect the GAMMA installation via environment variable `GAMMA_HOME`, detect all available
-    modules (e.g. ISP, DIFF) and parse all the module's commands via function :func:`parse_module`.
-    A new Python module will be created called `gammaparse`, which is stored under `$HOME/.pyrosar`.
-    Upon importing the `pyroSAR.gamma` submodule, this function is run automatically and module `gammaparse`
-    is imported as `api`.
+    This function will detect the GAMMA installation via environment variable
+    ``$GAMMA_HOME``, detect all available  modules (e.g. ISP, DIFF) and parse all
+    the module's commands via function :func:`parse_module`.
+    A new Python module will be created called ``gammaparse``, which is stored
+    under ``$HOME/.pyrosar``.
+    Upon importing the ``pyroSAR.gamma`` submodule, this function is run
+    automatically and module ``gammaparse`` is imported as ``api``.
     
-    Returns
-    -------
-
     Examples
     --------
     >>> from pyroSAR.gamma.api import diff
@@ -715,14 +710,15 @@ def autoparse():
     for module in finder(home, ['[A-Z]*'], foldermode=2):
         outfile = os.path.join(target, os.path.basename(module).lower() + '.py')
         if not os.path.isfile(outfile):
-            log.info('parsing module {} to {}'.format(os.path.basename(module), outfile))
+            log.info(f'parsing module {os.path.basename(module)} to {outfile}')
             for submodule in ['bin', 'scripts']:
                 log.info(submodule)
                 try:
                     parse_module(os.path.join(module, submodule), outfile)
                 except OSError:
                     log.info('..does not exist')
-    modules = [re.sub(r'\.py', '', os.path.basename(x)) for x in finder(target, [r'[a-z]+\.py$'], regex=True)]
+    modules = [re.sub(r'\.py', '', os.path.basename(x))
+               for x in finder(target, [r'[a-z]+\.py$'], regex=True)]
     if len(modules) > 0:
         with open(os.path.join(target, '__init__.py'), 'w') as init:
             init.write('from . import {}'.format(', '.join(modules)))

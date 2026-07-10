@@ -1436,3 +1436,22 @@ GAMMA API
     + :func:`pyroSAR.gamma.util.lat_ratio`
 
 - Replace usage of removed function :func:`spatialist.ancillary.which`
+
+0.37.0 | 2026-07-07
+===================
+
+- added modern typing to various modules
+
+Auxiliary Data Handling
+-----------------------
+- :class:`pyroSAR.auxdata.DEMHandler`: do not allow ``extent=None`` in methods
+  :meth:`~pyroSAR.auxdata.DEMHandler.intrange` and :meth:`~pyroSAR.auxdata.DEMHandler.remote_ids`.
+  If no geometries are defined, :class:`~pyroSAR.auxdata.DEMHandler` now auto-defines a global extent.
+
+- implemented workaround for a GDAL bug (`OSGeo/gdal#13464 <https://github.com/OSGeo/gdal/issues/13464>`_),
+  which resulted in shifted DEMs.
+
+Drivers
+-------
+
+- updated sqlalchemy and geoalchemy2 dependencies
