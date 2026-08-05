@@ -630,14 +630,14 @@ def parse_command(command: str, indent: str='    ') -> str:
     return fun
 
 
-def parse_module(bindir: str, outfile: str) -> None:
+def parse_module(directory: str, outfile: str) -> None:
     """
-    parse all Gamma commands of a module to functions and save them to a Python script.
+    parse all GAMMA commands of a module to functions and save them to a Python script.
 
     Parameters
     ----------
-    bindir
-        the `bin` directory of a module containing the commands
+    directory
+        the directory (bin/scripts) of a module containing the commands
     outfile
         the name of the Python file to write
 
@@ -649,19 +649,22 @@ def parse_module(bindir: str, outfile: str) -> None:
     >>> parse_module('/cluster/GAMMA_SOFTWARE-20161207/ISP/bin', outname)
     """
     
-    if not os.path.isdir(bindir):
-        raise OSError('directory does not exist: {}'.format(bindir))
+    if not os.path.isdir(directory):
+        raise OSError('directory does not exist: {}'.format(directory))
     
-    excludes = ['coord_trans',  # doesn't take any parameters and is interactive
-                'RSAT2_SLC_preproc',  # takes option flags
-                'mk_ASF_CEOS_list',  # "cannot create: Directory nonexistent"
-                '2PASS_UNW',  # parameter name inconsistencies
-                'mk_diff_2d',  # takes option flags
-                'gamma_doc'  # opens the Gamma documentation
-                ]
+    excludes = [
+        'coord_trans',  # doesn't take any parameters and is interactive
+        'RSAT2_SLC_preproc',  # takes option flags
+        'mk_ASF_CEOS_list',  # "cannot create: Directory nonexistent"
+        '2PASS_UNW',  # parameter name inconsistencies
+        'mk_diff_2d',  # takes option flags
+        'gamma_doc'  # opens the Gamma documentation
+    ]
     failed = []
     outstring = ''
-    for cmd in sorted(finder(bindir, [r'^\w+$'], regex=True), key=lambda s: s.lower()):
+    cmds = sorted(finder(directory, [r'^\w+$'], regex=True),
+                  key=lambda s: s.lower())
+    for cmd in cmds:
         basename = os.path.basename(cmd)
         if basename not in excludes:
             try:
