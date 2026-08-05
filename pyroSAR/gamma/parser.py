@@ -649,9 +649,6 @@ def parse_module(directory: str, outfile: str) -> None:
     >>> parse_module('/cluster/GAMMA_SOFTWARE-20161207/ISP/bin', outname)
     """
     
-    if not os.path.isdir(directory):
-        raise OSError('directory does not exist: {}'.format(directory))
-    
     excludes = [
         'coord_trans',  # doesn't take any parameters and is interactive
         'RSAT2_SLC_preproc',  # takes option flags
@@ -662,22 +659,34 @@ def parse_module(directory: str, outfile: str) -> None:
     ]
     failed = []
     outstring = ''
-    cmds = sorted(finder(directory, [r'^\w+$'], regex=True),
-                  key=lambda s: s.lower())
-    for cmd in cmds:
-        basename = os.path.basename(cmd)
-        if basename not in excludes:
-            try:
-                fun = parse_command(cmd)
-            except RuntimeError as e:
-                failed.append(f'{basename}: {str(e)}')
-                continue
-            except DeprecationWarning:
-                continue
-            except:
-                failed.append(f'{basename}: error yet to be assessed')
-                continue
-            outstring += fun + '\n\n'
+    
+    if not os.path.isdir(directory):
+        raise OSError('directory does not exist: {}'.format(directory))
+    
+    for submodule in ['bin', 'scripts']:
+        log.info(submodule)
+        target = os.path.join(directory, submodule)
+        
+        if not os.path.isdir(target):
+            continue
+        
+        cmds = sorted(finder(target, [r'^\w+$'], regex=True),
+                      key=lambda s: s.lower())
+        
+        for cmd in cmds:
+            basename = os.path.basename(cmd)
+            if basename not in excludes:
+                try:
+                    fun = parse_command(cmd)
+                except RuntimeError as e:
+                    failed.append(f'{basename}: {str(e)}')
+                    continue
+                except DeprecationWarning:
+                    continue
+                except:
+                    failed.append(f'{basename}: error yet to be assessed')
+                    continue
+                outstring += fun + '\n\n'
     
     if len(failed) > 0:
         info = 'Could not parse the following GAMMA commands:\n{0}\n({1} total)'
@@ -716,12 +725,10 @@ def autoparse() -> None:
         outfile = os.path.join(target, os.path.basename(module).lower() + '.py')
         if not os.path.isfile(outfile):
             log.info(f'parsing module {os.path.basename(module)} to {outfile}')
-            for submodule in ['bin', 'scripts']:
-                log.info(submodule)
-                try:
-                    parse_module(os.path.join(module, submodule), outfile)
-                except OSError:
-                    log.info('..does not exist')
+            try:
+                parse_module(module, outfile)
+            except OSError:
+                log.info('..does not exist')
     modules = [re.sub(r'\.py', '', os.path.basename(x))
                for x in finder(target, [r'[a-z]+\.py$'], regex=True)]
     if len(modules) > 0:
