@@ -25,7 +25,7 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def parse_command(command: str, indent: str='    ') -> str:
+def parse_command(command: str, indent: str = '    ') -> str:
     """
     Parse the help text of a GAMMA command to a Python function including a docstring.
     The docstring is in rst format and can thus be parsed by e.g. sphinx.
@@ -50,6 +50,35 @@ def parse_command(command: str, indent: str='    ') -> str:
     command_base = os.path.basename(command)
     proc = sp.Popen(command, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True)
     out, err = proc.communicate()
+    
+    # raise an error if the command cannot be executed normally
+    # 255 is the normal return code of binary executables.
+    # Several scripts return 0.
+    # Some commands unexpectedly return 1 or 2. This is currently being checked with the GAMMA developers.
+    
+    exceptions_returncode = {
+        1: [
+            'kml_map',
+            'kml_pt',
+            'svg_arrow',
+            'svg_map',
+            'svg_poly',
+            'par_Fucheng_SLC',
+            'par_HT1_SLC',
+            'INTF_SLC',
+        ],
+        2: ['vrt2dem']
+    }
+    
+    returncodes = [0, 255]
+    for returncode, commands in exceptions_returncode.items():
+        if command_base in commands:
+            returncodes.append(returncode)
+            break
+    
+    if proc.returncode not in returncodes:
+        raise RuntimeError(f'"{err}" (return code: {proc.returncode})')
+    
     # sometimes the description string is split between stdout and stderr
     # for the following commands stderr contains the usage description line, which is inserted into stdout
     if command_base in ['ras_pt', 'ras_data_pt', 'rasdt_cmap_pt']:
@@ -58,7 +87,7 @@ def parse_command(command: str, indent: str='    ') -> str:
         # for all other commands stderr is just appended to stdout
         out += err
     
-    # raise a warning when the command has been deprecated
+    # raise a warning if the command has been deprecated
     # extract all lines starting and ending with three asterisks
     matches = re.findall(r'^\*{3}\s*(.*?)\s*\*{3}$', out, re.MULTILINE)
     if matches:
@@ -69,9 +98,6 @@ def parse_command(command: str, indent: str='    ') -> str:
         match = re.search(pattern, cleaned)
         if match:
             raise DeprecationWarning(match.group())
-    
-    if re.search(r"Can't locate FILE/Path\.pm in @INC", out):
-        raise RuntimeError('unable to parse Perl script')
     ###########################################
     # fix command-specific inconsistencies in parameter naming
     # in several commands the parameter naming in the usage description line does not match that of the docstring
