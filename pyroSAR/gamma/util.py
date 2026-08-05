@@ -41,7 +41,13 @@ import logging
 
 log = logging.getLogger(__name__)
 
-from .api import diff, disp, isp, lat
+from .api import diff, disp, isp
+
+# the LAT module is not necessarily needed by this module
+try:
+    from .api import lat
+except ImportError:
+    pass
 
 
 def calibrate(id, directory, return_fnames=False,
