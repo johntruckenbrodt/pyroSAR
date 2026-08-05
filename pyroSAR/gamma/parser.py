@@ -670,23 +670,25 @@ def parse_module(directory: str, outfile: str) -> None:
             try:
                 fun = parse_command(cmd)
             except RuntimeError as e:
-                failed.append('{0}: {1}'.format(basename, str(e)))
+                failed.append(f'{basename}: {str(e)}')
                 continue
             except DeprecationWarning:
                 continue
             except:
-                failed.append('{0}: {1}'.format(basename, 'error yet to be assessed'))
+                failed.append(f'{basename}: error yet to be assessed')
                 continue
             outstring += fun + '\n\n'
+    
+    if len(failed) > 0:
+        info = 'Could not parse the following GAMMA commands:\n{0}\n({1} total)'
+        raise RuntimeError(info.format('\n'.join(failed), len(failed)))
+    
     if len(outstring) > 0:
         if not os.path.isfile(outfile):
             with open(outfile, 'w') as out:
                 out.write('from pyroSAR.gamma.auxil import process\n\n\n')
         with open(outfile, 'a') as out:
             out.write(outstring)
-    if len(failed) > 0:
-        info = 'the following functions could not be parsed:\n{0}\n({1} total)'
-        log.info(info.format('\n'.join(failed), len(failed)))
 
 
 def autoparse() -> None:
