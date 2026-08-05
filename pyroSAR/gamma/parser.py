@@ -747,7 +747,7 @@ def autoparse() -> None:
     target = os.path.join(os.path.expanduser('~'), '.pyrosar', 'gammaparse')
     if not os.path.isdir(target):
         os.makedirs(target)
-    for module in finder(home, ['[A-Z]*'], foldermode=2):
+    for module in finder(home, ['[A-Z]*'], foldermode=2, recursive=False):
         outfile = os.path.join(target, os.path.basename(module).lower() + '.py')
         if not os.path.isfile(outfile):
             log.info(f'parsing module {os.path.basename(module)} to {outfile}')
