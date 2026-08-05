@@ -663,7 +663,7 @@ def parse_module(directory: str, outfile: str) -> None:
     Parameters
     ----------
     directory
-        the directory (bin/scripts) of a module containing the commands
+        the module's directory containing subdirectories `bin` and `scripts`
     outfile
         the name of the Python file to write
 
