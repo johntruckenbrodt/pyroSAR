@@ -679,12 +679,12 @@ def parse_module(directory: str, outfile: str) -> None:
                 try:
                     fun = parse_command(cmd)
                 except RuntimeError as e:
-                    failed.append(f'{basename}: {str(e)}')
+                    failed.append(f'{cmd}: {str(e)}')
                     continue
                 except DeprecationWarning:
                     continue
                 except:
-                    failed.append(f'{basename}: error yet to be assessed')
+                    failed.append(f'{cmd}: error yet to be assessed')
                     continue
                 outstring += fun + '\n\n'
     
