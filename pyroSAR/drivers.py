@@ -571,31 +571,6 @@ class ID(object):
         return [x for x in finder(directory, [self.outname_base()], regex=True) if
                 not re.search(r'\.(?:par|hdr|aux\.xml|swp|sh)$', x)]
     
-    def getHGT(self) -> list[str]:
-        """
-        get the names of all SRTM HGT tiles overlapping with the SAR scene
-
-        Returns
-        -------
-            names of the SRTM HGT tiles
-        """
-        
-        corners = self.getCorners()
-        
-        # generate sequence of integer coordinates marking the tie points of the overlapping hgt tiles
-        lat = range(int(float(corners['ymin']) // 1), int(float(corners['ymax']) // 1) + 1)
-        lon = range(int(float(corners['xmin']) // 1), int(float(corners['xmax']) // 1) + 1)
-        
-        # convert coordinates to string with leading zeros and hemisphere identification letter
-        lat = [str(x).zfill(2 + len(str(x)) - len(str(x).strip('-'))) for x in lat]
-        lat = [x.replace('-', 'S') if '-' in x else 'N' + x for x in lat]
-        
-        lon = [str(x).zfill(3 + len(str(x)) - len(str(x).strip('-'))) for x in lon]
-        lon = [x.replace('-', 'W') if '-' in x else 'E' + x for x in lon]
-        
-        # concatenate all formatted latitudes and longitudes with each other as final product
-        return [x + y + '.hgt' for x in lat for y in lon]
-    
     def is_processed(self, outdir: str, recursive: bool = False) -> bool:
         """
         check whether a scene has already been processed and stored in the defined output directory
