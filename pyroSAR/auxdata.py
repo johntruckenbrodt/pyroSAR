@@ -29,7 +29,7 @@ from urllib.parse import urlparse
 from collections import defaultdict
 from packaging.version import Version
 from pyroSAR.examine import ExamineSnap
-from pyroSAR.ancillary import Lock
+from pyroSAR.ancillary import Lock, get_corners
 from spatialist.raster import Raster, Dtype
 from spatialist.vector import bbox, Vector
 from spatialist.ancillary import finder
@@ -485,7 +485,7 @@ class DEMHandler:
         dst_datatype = None
         dst_nodata = self.config[dem_type]['ocean_fill_value'][product]
         tap = False
-        extent = self.__commonextent()
+        extent = self.__union_extent()
         if extent['xmin'] > extent['xmax']:
             raise RuntimeError('The extent is crossing the antimeridian. '
                                'It is not possible to create a VRT in this case.')
@@ -551,31 +551,32 @@ class DEMHandler:
             tree.write(file=vrt, pretty_print=True,
                        xml_declaration=False, encoding='utf-8')
     
-    def __commonextent(self, buffer: int | float | None = None) -> EXT:
+    def __union_extent(self, buffer: int | float | None = None) -> EXT:
         """
+        Returns the union extent of all geometries,
+        i.e., the extent that covers all geometries.
         
         Parameters
         ----------
         buffer
-            a buffer to add to the common extent
+            a buffer to add to the union extent
 
         Returns
         -------
-            the common extent of all geometries
+            the union extent of all geometries
         """
         if self.geometries is None:
             return self.__extent_global
-        ext_new = {}
+        coordinates = []
         for geo in self.geometries:
-            if len(ext_new.keys()) == 0:
-                ext_new = geo.extent
-            else:
-                for key in ['xmin', 'ymin']:
-                    if geo.extent[key] > ext_new[key]:
-                        ext_new[key] = geo.extent[key]
-                for key in ['xmax', 'ymax']:
-                    if geo.extent[key] < ext_new[key]:
-                        ext_new[key] = geo.extent[key]
+            ext = geo.extent
+            coordinates += [
+                (ext['xmin'], ext['ymin']),
+                (ext['xmin'], ext['ymax']),
+                (ext['xmax'], ext['ymax']),
+                (ext['xmax'], ext['ymin']),
+            ]
+        ext_new = get_corners(coordinates)
         ext_new = self.__applybuffer(ext_new, buffer)
         return ext_new
     
@@ -1302,7 +1303,7 @@ class DEMHandler:
         # is extrapolated to areas where no DEM tile exists (over ocean).
         
         if isinstance(src, list):
-            extent_4326 = self.__commonextent()
+            extent_4326 = self.__union_extent()
             if t_srs is not None:
                 with bbox(coordinates=extent_4326, crs=4326) as vec:
                     vec.reproject(t_srs)
