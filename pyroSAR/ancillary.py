@@ -133,9 +133,9 @@ def get_geometry(
     exterior = points = None
     
     vec = Vector(driver='MEM')
-    vec.addlayer('geometry', srs, geom.GetGeometryType())
-    vec.addfield('area', ogr.OFTReal)
-    vec.addfeature(geom, fields={'area': geom.Area()})
+    vec.addlayer(name='geometry', srs=srs, geomType=geom.GetGeometryType())
+    vec.addfield(name='area', type=ogr.OFTReal)
+    vec.addfeature(geometry=geom, fields={'area': geom.Area()})
     geom = None
     
     # shift antimeridian-shifted coordinates back and split the polygon
