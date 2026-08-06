@@ -1311,6 +1311,10 @@ class DEMHandler:
             else:
                 extent_out = extent_4326
             
+            if extent_out['xmin'] > extent_out['xmax']:
+                raise RuntimeError('The output extent is crossing the antimeridian.'
+                                   'Please select a different target CRS.')
+            
             if 'outputBounds' not in kwargs.keys():
                 gdalwarp_args['outputBounds'] = [extent_out['xmin'], extent_out['ymin'],
                                                  extent_out['xmax'], extent_out['ymax']]
