@@ -48,13 +48,13 @@ from osgeo.gdalconst import GA_ReadOnly
 import numpy as np
 
 from . import S1, patterns
-from .ancillary import get_corners
+from .ancillary import get_corners, get_geometry
 from .config import __LOCAL__
 from .ERS import passdb_query, get_resolution_nesz
 from .xml_util import getNamespaces
 
 from spatialist.vector import Vector, bbox
-from spatialist.auxil import crsConvert, ogr2ogr
+from spatialist.auxil import crsConvert
 from spatialist.ancillary import parse_literal, finder, multicore
 
 import logging
@@ -313,59 +313,14 @@ class ID(object):
         
         See also
         --------
+        pyroSAR.ancillary.get_geometry
         spatialist.vector.Vector.write
         """
         if 'coordinates' not in self.meta.keys():
             raise NotImplementedError
-        srs = crsConvert(self.projection, 'osr')
-        points = ogr.Geometry(ogr.wkbMultiPoint)
         
-        lons = [lon for lon, lat in self.meta['coordinates']]
-        
-        wrapped = True if max(lons) - min(lons) > 180 else False
-        
-        for lon, lat in self.meta['coordinates']:
-            # shift longitudes if crossing the antimeridian
-            lon_mod = lon + 360 if wrapped and lon < 0 else lon
-            point = ogr.Geometry(ogr.wkbPoint)
-            point.AddPoint(lon_mod, lat)
-            points.AddGeometry(point)
-        geom = points.ConvexHull()
-        geom.FlattenTo2D()
-        point = points = None
-        exterior = geom.GetGeometryRef(0)
-        if exterior.IsClockwise():
-            points = list(exterior.GetPoints())
-            exterior.Empty()
-            for x, y in reversed(points):
-                exterior.AddPoint(x, y)
-            geom.CloseRings()
-        exterior = points = None
-        
-        vec = Vector(driver='MEM')
-        vec.addlayer('geometry', srs, geom.GetGeometryType())
-        vec.addfield('area', ogr.OFTReal)
-        vec.addfeature(geom, fields={'area': geom.Area()})
-        geom = None
-        
-        # shift antimeridian-shifted coordinates back and split the polygon
-        if wrapped:
-            ds = ogr2ogr(
-                src=vec.vector,
-                dst='',
-                format='MEM',
-                dstSRS=srs,
-                reproject=True,
-                geometryType='PROMOTE_TO_MULTI',
-                options=[
-                    '-wrapdateline',
-                    '-datelineoffset', '180'
-                ],
-                void=False
-            )
-            vec.__init__()
-            vec.vector = ds
-            vec.init_layer()
+        vec = get_geometry(coordinates=self.meta['coordinates'],
+                           crs=self.projection)
         
         if outname is None:
             return vec

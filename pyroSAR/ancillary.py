@@ -24,6 +24,9 @@ import inspect
 from datetime import datetime
 from . import patterns
 from spatialist.ancillary import finder
+from spatialist.vector import Vector
+from spatialist.auxil import crsConvert, ogr2ogr
+from osgeo import osr, ogr
 from dataclasses import dataclass
 from typing import Optional, Literal, Callable, Any, Self, TypeAlias
 from types import TracebackType
@@ -32,15 +35,23 @@ import logging
 log = logging.getLogger(__name__)
 
 BoundingBox: TypeAlias = dict[Literal['xmin', 'xmax', 'ymin', 'ymax'], int | float]
+CRS = int | str | osr.SpatialReference
 
 
-def get_corners(coordinates: list[tuple[int | float, int | float]]) -> BoundingBox:
+def get_corners(
+        coordinates: list[tuple[int | float, int | float]]
+) -> BoundingBox:
     """
     Get the bounding box corner coordinates.
 
     For an antimeridian-crossing extent, ``xmin`` is greater than ``xmax``.
     For example, ``xmin=179`` and ``xmax=-179`` represent an extent crossing
     the antimeridian with a width of 2 degrees.
+    
+    Parameters
+    ----------
+    coordinates
+        the coordinate list as exposed by `drivers.ID.meta['coordinates']`
 
     Returns
     -------
@@ -74,6 +85,78 @@ def get_corners(coordinates: list[tuple[int | float, int | float]]) -> BoundingB
         'ymin': min(latitudes),
         'ymax': max(latitudes),
     }
+
+
+def get_geometry(
+        coordinates: list[tuple[int | float, int | float]],
+        crs: CRS
+) -> Vector:
+    """
+    Get the convex hull geometry of a set of points.
+    The geometry can optionally handle cases where the coordinates cross the
+    antimeridian by accounting for longitude wrapping.
+
+    Parameters
+    ----------
+    coordinates
+        A list of coordinate tuples representing (longitude, latitude) values.
+    crs
+        The coordinate reference system to use for defining the geometry.
+
+    Returns
+    -------
+        A vector object containing the processed geometry.
+    """
+    srs = crsConvert(crs, 'osr')
+    points = ogr.Geometry(ogr.wkbMultiPoint)
+    
+    lons = [lon for lon, lat in coordinates]
+    
+    wrapped = True if max(lons) - min(lons) > 180 else False
+    
+    for lon, lat in coordinates:
+        # shift longitudes if crossing the antimeridian
+        lon_mod = lon + 360 if wrapped and lon < 0 else lon
+        point = ogr.Geometry(ogr.wkbPoint)
+        point.AddPoint(lon_mod, lat)
+        points.AddGeometry(point)
+    geom = points.ConvexHull()
+    geom.FlattenTo2D()
+    point = points = None
+    exterior = geom.GetGeometryRef(0)
+    if exterior.IsClockwise():
+        points = list(exterior.GetPoints())
+        exterior.Empty()
+        for x, y in reversed(points):
+            exterior.AddPoint(x, y)
+        geom.CloseRings()
+    exterior = points = None
+    
+    vec = Vector(driver='MEM')
+    vec.addlayer('geometry', srs, geom.GetGeometryType())
+    vec.addfield('area', ogr.OFTReal)
+    vec.addfeature(geom, fields={'area': geom.Area()})
+    geom = None
+    
+    # shift antimeridian-shifted coordinates back and split the polygon
+    if wrapped:
+        ds = ogr2ogr(
+            src=vec.vector,
+            dst='',
+            format='MEM',
+            dstSRS=srs,
+            reproject=True,
+            geometryType='PROMOTE_TO_MULTI',
+            options=[
+                '-wrapdateline',
+                '-datelineoffset', '180'
+            ],
+            void=False
+        )
+        vec.__init__()
+        vec.vector = ds
+        vec.init_layer()
+    return vec
 
 
 def groupby(

@@ -11,6 +11,7 @@ Ancillary Functions
 
         find_datasets
         get_corners
+        get_geometry
         getargs
         groupby
         groupbyTime
