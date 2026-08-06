@@ -25,12 +25,12 @@ from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import windows_fileprefix, multilook_factors, Lock
 from pyroSAR.auxdata import get_egm_lookup
 
-from spatialist import Vector, Raster, vectorize, rasterize, boundary, intersect, bbox
+from spatialist import (Vector, Raster, vectorize, rasterize,
+                        largest_polygon_exterior, intersect, bbox)
 from spatialist.auxil import gdal_translate, crsConvert
 from spatialist.ancillary import finder, run
 
 from osgeo import gdal
-from osgeo.gdalconst import GA_Update
 
 import logging
 
@@ -1539,7 +1539,7 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
                               options=['COMPRESS=DEFLATE'])
                 if only_boundary:
                     with vectorize(target=mask, reference=ref) as vec:
-                        with boundary(vec, expression="value=1") as bounds:
+                        with largest_polygon_exterior(vec, expression="value=1") as bounds:
                             with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
                                 mask = new.array()
                                 if write_intermediates:
