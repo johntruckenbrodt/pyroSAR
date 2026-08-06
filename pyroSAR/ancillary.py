@@ -25,11 +25,55 @@ from datetime import datetime
 from . import patterns
 from spatialist.ancillary import finder
 from dataclasses import dataclass
-from typing import Optional, Literal, Callable, Any, Self
+from typing import Optional, Literal, Callable, Any, Self, TypeAlias
 from types import TracebackType
 import logging
 
 log = logging.getLogger(__name__)
+
+BoundingBox: TypeAlias = dict[Literal['xmin', 'xmax', 'ymin', 'ymax'], int | float]
+
+
+def get_corners(coordinates: list[tuple[int | float, int | float]]) -> BoundingBox:
+    """
+    Get the bounding box corner coordinates.
+
+    For an antimeridian-crossing extent, ``xmin`` is greater than ``xmax``.
+    For example, ``xmin=179`` and ``xmax=-179`` represent an extent crossing
+    the antimeridian with a width of 2 degrees.
+
+    Returns
+    -------
+        A dictionary with keys ``xmin``, ``ymin``, ``xmax``, and ``ymax``.
+    """
+    if not coordinates:
+        raise ValueError("coordinates must not be empty")
+    
+    latitudes = [point[1] for point in coordinates]
+    
+    # wrap longitudes into the canonical [-180°, 180°) range (e.g. 181 -> -179)
+    longitudes = [((point[0] + 180) % 360) - 180
+                  for point in coordinates]
+    
+    ordered = sorted(longitudes)
+    if len(ordered) == 1:
+        xmin = xmax = ordered[0]
+    else:
+        # compute smallest circular longitude interval
+        gaps = [
+            (ordered[(i + 1) % len(ordered)] - ordered[i]) % 360
+            for i in range(len(ordered))
+        ]
+        largest_gap = gaps.index(max(gaps))
+        xmin = ordered[(largest_gap + 1) % len(ordered)]
+        xmax = ordered[largest_gap]
+    
+    return {
+        'xmin': xmin,
+        'xmax': xmax,
+        'ymin': min(latitudes),
+        'ymax': max(latitudes),
+    }
 
 
 def groupby(

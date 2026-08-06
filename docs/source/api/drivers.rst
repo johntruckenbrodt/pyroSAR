@@ -26,8 +26,8 @@ Drivers
     .. autosummary::
         :nosignatures:
 
-        identify
-        identify_many
         filter_processed
         getFileObj
+        identify
+        identify_many
         parse_date

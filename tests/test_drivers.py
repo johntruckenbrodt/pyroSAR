@@ -1,4 +1,5 @@
 import pyroSAR
+from pyroSAR.ancillary import get_corners
 
 import pytest
 import platform
@@ -109,6 +110,53 @@ def test_parse_date():
 
 def test_export2dict():
     pass
+
+
+@pytest.mark.parametrize(
+    'coordinates, expected',
+    [
+        (
+                [
+                    (10, 50),
+                    (10, 51),
+                    (11, 51),
+                    (11, 50),
+                ],
+                {'xmin': 10, 'xmax': 11, 'ymin': 50, 'ymax': 51},
+        ),
+        (
+                [
+                    (179, 50),
+                    (179, 51),
+                    (-179, 51),
+                    (-179, 50),
+                ],
+                {'xmin': 179, 'xmax': -179, 'ymin': 50, 'ymax': 51},
+        ),
+        (
+                [
+                    (175, 52),
+                    (-178, 50),
+                    (179, 51),
+                    (-170, 53),
+                    (178, 49),
+                ],
+                {'xmin': 175, 'xmax': -170, 'ymin': 49, 'ymax': 53},
+        ),
+        (
+                [
+                    (11, 51),
+                    (10, 50),
+                    (12, 52),
+                    (10.5, 50.5),
+                ],
+                {'xmin': 10, 'xmax': 12, 'ymin': 50, 'ymax': 52},
+        ),
+    ],
+    ids=['ordinary', 'antimeridian', 'unordered-antimeridian', 'extra-points'],
+)
+def test_get_corners(coordinates, expected):
+    assert get_corners(coordinates) == expected
 
 
 def test_getFileObj(tmpdir, testdata):

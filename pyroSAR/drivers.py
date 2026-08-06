@@ -48,6 +48,7 @@ from osgeo.gdalconst import GA_ReadOnly
 import numpy as np
 
 from . import S1, patterns
+from .ancillary import get_corners
 from .config import __LOCAL__
 from .ERS import passdb_query, get_resolution_nesz
 from .xml_util import getNamespaces
@@ -64,7 +65,7 @@ Number: TypeAlias = int | float
 Coordinate: TypeAlias = tuple[float, float]
 Coordinates: TypeAlias = list[Coordinate]
 MetaDict: TypeAlias = dict[str, Any]
-BoundingBox: TypeAlias = dict[Literal['xmin', 'xmax', 'ymin', 'ymax'], float]
+BoundingBox: TypeAlias = dict[Literal['xmin', 'xmax', 'ymin', 'ymax'], int | float]
 
 
 def identify(scene: str) -> ID:
@@ -510,18 +511,24 @@ class ID(object):
     
     def getCorners(self) -> BoundingBox:
         """
-        Get the bounding box corner coordinates
+        Get the bounding box corner coordinates.
+
+        For an antimeridian-crossing extent, ``xmin`` is greater than ``xmax``.
+        For example, ``xmin=179`` and ``xmax=-179`` represent an extent crossing
+        the antimeridian with a width of 2 degrees.
 
         Returns
         -------
-            the corner coordinates as a dictionary with keys `xmin`, `ymin`, `xmax`, `ymax`
+            A dictionary with keys ``xmin``, ``ymin``, ``xmax``, and ``ymax``.
+        
+        See Also
+        --------
+        pyroSAR.ancillary.get_corners
         """
-        if 'coordinates' not in self.meta.keys():
+        if 'coordinates' not in self.meta:
             raise NotImplementedError
         coordinates = self.meta['coordinates']
-        lat = [x[1] for x in coordinates]
-        lon = [x[0] for x in coordinates]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+        return get_corners(coordinates)
     
     def getFileObj(self, filename: str) -> BytesIO:
         """
