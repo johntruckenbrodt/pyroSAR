@@ -55,17 +55,56 @@ def testdata(testdir):
 
 
 @pytest.fixture
-def auxdata_dem_cases():
+def auxdata_dem_cases_northern():
+    extent = {'xmin': 11.5, 'xmax': 11.9, 'ymin': 51.1, 'ymax': 51.5}
     cases = [
         ('AW3D30', ['N050E010/N051E011.tar.gz']),
         ('SRTM 1Sec HGT', ['https://step.esa.int/auxdata/dem/SRTMGL1/N51E011.SRTMGL1.hgt.zip']),
         ('SRTM 3Sec', ['https://step.esa.int/auxdata/dem/SRTM90/tiff/srtm_39_02.zip']),
-        ('Copernicus 30m Global DEM', ['https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/'
-                                       'Copernicus_DSM_COG_10_N51_00_E011_00_DEM/'
-                                       'Copernicus_DSM_COG_10_N51_00_E011_00_DEM.tif'])
+        ('Copernicus 30m Global DEM', [
+            'https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/'
+            'Copernicus_DSM_COG_10_N51_00_E011_00_DEM/'
+            'Copernicus_DSM_COG_10_N51_00_E011_00_DEM.tif'
+        ])
         # ('TDX90m', ['DEM/N51/E010/TDM1_DEM__30_N51E011.zip'])
     ]
-    return cases
+    return extent, cases
+
+
+@pytest.fixture
+def auxdata_dem_cases_northern_antimeridian():
+    extent = {'xmin': 179.6, 'xmax': -179.8, 'ymin': 51.1, 'ymax': 51.5}
+    cases = [
+        ('AW3D30', ['N050E175/N051E179.tar.gz', 'N050W180/N051W180.tar.gz']),
+        ('SRTM 1Sec HGT', [
+            'https://step.esa.int/auxdata/dem/SRTMGL1/N51E179.SRTMGL1.hgt.zip',
+            'https://step.esa.int/auxdata/dem/SRTMGL1/N51W180.SRTMGL1.hgt.zip'
+        ]),
+        ('SRTM 3Sec', [
+            'https://step.esa.int/auxdata/dem/SRTM90/tiff/srtm_01_02.zip',
+            'https://step.esa.int/auxdata/dem/SRTM90/tiff/srtm_72_02.zip'
+        ]),
+        ('Copernicus 30m Global DEM', [
+            'https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/'
+            'Copernicus_DSM_COG_10_N51_00_E179_00_DEM/'
+            'Copernicus_DSM_COG_10_N51_00_E179_00_DEM.tif',
+            'https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/'
+            'Copernicus_DSM_COG_10_N51_00_W180_00_DEM/'
+            'Copernicus_DSM_COG_10_N51_00_W180_00_DEM.tif'
+        ])
+    ]
+    return extent, cases
+
+
+@pytest.fixture
+def auxdata_dem_cases_southern():
+    extent = {'xmin': -58.9, 'xmax': -58.5, 'ymin': -51.5, 'ymax': -51.1}
+    cases = [
+        ('AW3D30', ['S055W060/S052W059.tar.gz']),
+        ('SRTM 1Sec HGT', ['https://step.esa.int/auxdata/dem/SRTMGL1/S52W059.SRTMGL1.hgt.zip']),
+        ('SRTM 3Sec', ['https://step.esa.int/auxdata/dem/SRTM90/tiff/srtm_25_23.zip'])
+    ]
+    return extent, cases
 
 
 @pytest.fixture(scope='session', autouse=True)

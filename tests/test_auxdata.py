@@ -5,23 +5,25 @@ from pyroSAR.auxdata import dem_autoload, DEMHandler, dem_create
 from spatialist import bbox
 
 
-def test_handler(auxdata_dem_cases):
-    with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51.1, 'ymax': 51.5}, crs=4326) as box:
+@pytest.mark.parametrize(
+    'cases_fixture',
+    [
+        'auxdata_dem_cases_northern',
+        'auxdata_dem_cases_northern_antimeridian',
+        'auxdata_dem_cases_southern'
+    ]
+)
+def test_handler(cases_fixture, request):
+    extent, cases = request.getfixturevalue(cases_fixture)
+    with bbox(coordinates=extent, crs=4326) as box:
         with DEMHandler([box]) as handler:
             assert isinstance(handler.auxdatapath, str)
-            for demType, reference in auxdata_dem_cases:
-                result = handler.remote_ids(dem_type=demType, extent=box.extent)
-                assert result == reference
-    
-    with bbox({'xmin': -58.9, 'xmax': -58.5, 'ymin': -51.5, 'ymax': -51.1}, crs=4326) as box:
-        with DEMHandler([box]) as handler:
-            cases = [('AW3D30', ['S055W060/S052W059.tar.gz']),
-                     ('SRTM 1Sec HGT', ['https://step.esa.int/auxdata/dem/SRTMGL1/S52W059.SRTMGL1.hgt.zip']),
-                     ('SRTM 3Sec', ['https://step.esa.int/auxdata/dem/SRTM90/tiff/srtm_25_23.zip'])
-                     ]
             for demType, reference in cases:
                 result = handler.remote_ids(dem_type=demType, extent=box.extent)
                 assert result == reference
+
+
+def test_handler_fail():
     with pytest.raises(RuntimeError):
         test = DEMHandler('foobar')
     ext_utm = {'xmin': -955867, 'xmax': -915536, 'ymin': -5915518, 'ymax': -5863678}
@@ -30,7 +32,7 @@ def test_handler(auxdata_dem_cases):
             test = DEMHandler([box])
 
 
-def test_autoload(auxdata_dem_cases, travis):
+def test_autoload(travis):
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
         # if the following is run in a loop, it is not possible to see which demType failed
         # Travis CI does not support ftp access;
@@ -67,14 +69,55 @@ def test_dem_create(tmpdir):
     assert os.path.isfile(out)
 
 
-def test_intrange():
-    ext = {'xmin': 11, 'xmax': 12,
-           'ymin': 51, 'ymax': 51.5}
-    with bbox(ext, 4326) as box:
-        with DEMHandler([box]) as dem:
-            ref1 = ([51], [11])
-            ref5 = ([50], [10])
-            ref15 = ([45], [0])
-            assert dem.intrange(box.extent, 1) == ref1
-            assert dem.intrange(box.extent, 5) == ref5
-            assert dem.intrange(box.extent, 15) == ref15
+@pytest.mark.parametrize(
+    'case, extent, step, expected',
+    [
+        (
+                'one_degree_regular_extent',
+                {'xmin': 11, 'xmax': 12, 'ymin': 51, 'ymax': 51.5},
+                1,
+                ([51], [11]),
+        ),
+        (
+                'five_degree_regular_extent',
+                {'xmin': 11, 'xmax': 12, 'ymin': 51, 'ymax': 51.5},
+                5,
+                ([50], [10]),
+        ),
+        (
+                'fifteen_degree_regular_extent',
+                {'xmin': 11, 'xmax': 12, 'ymin': 51, 'ymax': 51.5},
+                15,
+                ([45], [0]),
+        ),
+        (
+                'one_degree_antimeridian_extent',
+                {'xmin': 179, 'xmax': -179, 'ymin': 51, 'ymax': 51.5},
+                1,
+                ([51], [179, -180]),
+        ),
+        (
+                'five_degree_antimeridian_extent',
+                {'xmin': 175, 'xmax': -175, 'ymin': 51, 'ymax': 51.5},
+                5,
+                ([50], [175, -180]),
+        ),
+        (
+                'fifteen_degree_antimeridian_extent',
+                {'xmin': 165, 'xmax': -165, 'ymin': 51, 'ymax': 51.5},
+                15,
+                ([45], [165, -180]),
+        ),
+    ],
+    ids=[
+        'one_degree_regular_extent',
+        'five_degree_regular_extent',
+        'fifteen_degree_regular_extent',
+        'one_degree_antimeridian_extent',
+        'five_degree_antimeridian_extent',
+        'fifteen_degree_antimeridian_extent',
+    ],
+)
+def test_intrange(case, extent, step, expected):
+    with DEMHandler() as dem:
+        assert dem.intrange(extent, step) == expected
