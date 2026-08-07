@@ -704,13 +704,10 @@ def parse_module(directory: str, outfile: str) -> None:
             if basename not in excludes:
                 try:
                     fun = parse_command(cmd)
-                except RuntimeError as e:
-                    failed.append(f'{cmd}: {str(e)}')
-                    continue
                 except DeprecationWarning:
                     continue
-                except:
-                    failed.append(f'{cmd}: error yet to be assessed')
+                except Exception as e:
+                    failed.append(f'{cmd}: {type(e).__name__}({e})')
                     continue
                 outstring += fun + '\n\n'
     
