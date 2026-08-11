@@ -1,7 +1,7 @@
 ###############################################################################
 # import wrapper for the pyroSAR GAMMA API
 
-# Copyright (c) 2018-2019, the pyroSAR Developers.
+# Copyright (c) 2018-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -13,19 +13,32 @@
 ###############################################################################
 import os
 import sys
-import warnings
 
 from .parser import autoparse
 
-try:
+
+# These placeholders allow pyroSAR.gamma modules to be imported when GAMMA
+# is unavailable. They are replaced by the generated modules when parsing
+# succeeds.
+class _UnavailableGammaModule:
+    def __init__(self, module: str) -> None:
+        self.module = module
+    
+    def __getattr__(self, command: str):
+        raise RuntimeError(
+            f"The command '{command}' is not available. "
+            f"Please install GAMMA module '{self.module.upper()}'."
+        )
+
+
+diff = _UnavailableGammaModule('diff')
+disp = _UnavailableGammaModule('disp')
+isp = _UnavailableGammaModule('isp')
+lat = _UnavailableGammaModule('lat')
+
+if 'GAMMA_HOME' in os.environ:
     autoparse()
     
     sys.path.insert(0, os.path.join(os.path.expanduser('~'), '.pyrosar'))
     
-    try:
-        from gammaparse import *
-    except ImportError:
-        warnings.warn('found a GAMMA installation directory, but module parsing failed')
-
-except RuntimeError:
-    warnings.warn('could not find GAMMA installation directory; please set the GAMMA_HOME environment variable')
+    from gammaparse import *

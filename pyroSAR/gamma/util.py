@@ -41,10 +41,7 @@ import logging
 
 log = logging.getLogger(__name__)
 
-try:
-    from .api import diff, disp, isp, lat
-except ImportError:
-    pass
+from .api import diff, disp, isp, lat
 
 
 def calibrate(id, directory, return_fnames=False,
@@ -1024,7 +1021,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     ######################################################################
     log.info('applying rtc and back-geocoding')
     for image in images:
-        if 'lat' in locals():
+        if hasattr(lat, 'product'):
             lat.product(data_1=image,
                         data_2=n.pix_ratio,
                         product=image + '_gamma0-rtc',
@@ -1063,7 +1060,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
             else:
                 width = reference_par.range_samples
                 refpar = reference + '.par'
-            if 'lat' in locals():
+            if hasattr(lat, 'linear_to_dB'):
                 lat.linear_to_dB(data_in=data_in,
                                  data_out=data_in + '_db',
                                  width=width,
@@ -1493,7 +1490,7 @@ def pixel_area_wrap(image, namespace, lut, exist_ok=False,
         c1 = not os.path.isfile(namespace.pix_ratio)
         c2 = os.path.isfile(namespace.pix_ratio) and not exist_ok
         if c1 or c2:
-            if 'lat' in locals():
+            if hasattr(lat, 'ratio'):
                 lat.ratio(d1=namespace.pix_ellip_sigma0,
                           d2=namespace.pix_area_gamma0,
                           ratio=namespace.pix_ratio,
@@ -1514,7 +1511,7 @@ def pixel_area_wrap(image, namespace, lut, exist_ok=False,
         c1 = not os.path.isfile(namespace.gs_ratio)
         c2 = os.path.isfile(namespace.gs_ratio) and not exist_ok
         if c1 or c2:
-            if 'lat' in locals():
+            if hasattr(lat, 'ratio'):
                 lat.ratio(d1=namespace.pix_area_gamma0,
                           d2=namespace.pix_area_sigma0,
                           ratio=namespace.gs_ratio,

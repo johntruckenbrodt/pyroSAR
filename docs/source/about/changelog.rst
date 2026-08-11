@@ -1455,3 +1455,43 @@ Drivers
 -------
 
 - updated sqlalchemy and geoalchemy2 dependencies
+
+0.38.0 | 2026-08-11
+===================
+
+SNAP API
+--------
+- :meth:`pyroSAR.examine.SnapProperties`: skip `snap.conf` modification if the file does not exist (because SNAP is not installed)
+
+GAMMA API
+---------
+
+Interface changes:
+
+- :func:`pyroSAR.gamma.parser.parse_module`:
+
+  - renamed argument ``bindir`` to ``directory``
+  - now expects the module directory and not the subdirectories ``bin``/``scripts``. The function now loops over those subdirectories
+
+Behavior changes:
+
+- :mod:`pyroSAR.gamma.api`:
+
+  - create dummy modules that can be imported even if GAMMA is not installed (an error is raised if a function is executed and the respective GAMMA module is not installed.)
+  - raise an error and not a warning if module parsing or import fails (only if ``GAMMA_HOME`` is set)
+
+- :mod:`pyroSAR.gamma.util`:
+
+  - always import (dummy) modules ``diff``, ``disp``, ``isp`` and ``lat`` from :mod:`pyroSAR.gamma.api`
+
+- :func:`pyroSAR.gamma.parser.parse_module`:
+
+  - raise an error if commands could not be parsed (instead of just logging an info)
+
+- :func:`pyroSAR.gamma.parser.parse_command`:
+
+  - raise an error if the return code of the called command is unexpected
+
+- :class:`pyroSAR.examine.ExamineGamma`:
+
+  - strictly check for set GAMMA module environment variables like ``DIFF_HOME``

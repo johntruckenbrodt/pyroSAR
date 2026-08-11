@@ -438,6 +438,24 @@ class ExamineGamma(object):
         self.version = re.search('GAMMA_SOFTWARE[-/](?P<version>[0-9]{8})',
                                  getattr(self, 'home')).group('version')
         
+        modules = finder(self.home, [['[A-Z]*']], foldermode=2, recursive=False)
+        for module in modules:
+            module_base = os.path.basename(module)
+            module_home = os.environ.get(f'{module_base}_HOME')
+            if module_home is None:
+                raise RuntimeError(
+                    f"Found GAMMA module '{module_base}', "
+                    f"but environment variable '{module_base}_HOME' "
+                    f"is not set."
+                )
+            else:
+                if self.home not in module_home:
+                    raise RuntimeError(
+                        f"Inconsistent paths in environment variables:\n"
+                        f"GAMMA_HOME: {self.home}\n"
+                        f"{module_base}_HOME: {module_home}"
+                    )
+        
         try:
             returncode, out, err = run(['which', 'gdal-config'], void=False)
             gdal_config = out.strip('\n')
@@ -522,10 +540,11 @@ class SnapProperties(object):
         # "RuntimeError: OpenJDK 64-Bit Server VM warning: Options
         # -Xverify:none and -noverify were deprecated in JDK 13 and will
         # likely be removed in a future release."
-        if '-J-Xverify:none' in self.conf['default_options']:
-            opts = self.conf['default_options'].copy()
-            opts.remove('-J-Xverify:none')
-            self['default_options'] = opts
+        if 'default_options' in self.conf:
+            if '-J-Xverify:none' in self.conf['default_options']:
+                opts = self.conf['default_options'].copy()
+                opts.remove('-J-Xverify:none')
+                self['default_options'] = opts
         
         # some properties need to be read from the default user path to
         # be visible to SNAP
