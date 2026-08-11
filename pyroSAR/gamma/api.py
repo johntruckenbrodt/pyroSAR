@@ -1,7 +1,7 @@
 ###############################################################################
 # import wrapper for the pyroSAR GAMMA API
 
-# Copyright (c) 2018-2019, the pyroSAR Developers.
+# Copyright (c) 2018-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -13,19 +13,11 @@
 ###############################################################################
 import os
 import sys
-import warnings
 
 from .parser import autoparse
 
-try:
-    autoparse()
-    
-    sys.path.insert(0, os.path.join(os.path.expanduser('~'), '.pyrosar'))
-    
-    try:
-        from gammaparse import *
-    except ImportError:
-        warnings.warn('found a GAMMA installation directory, but module parsing failed')
+autoparse()
 
-except RuntimeError:
-    warnings.warn('could not find GAMMA installation directory; please set the GAMMA_HOME environment variable')
+sys.path.insert(0, os.path.join(os.path.expanduser('~'), '.pyrosar'))
+
+from gammaparse import *

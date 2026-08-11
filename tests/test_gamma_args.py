@@ -1,9 +1,14 @@
+import os
 import pytest
+
+if "GAMMA_HOME" not in os.environ:
+    pytest.skip("GAMMA is not installed", allow_module_level=True)
+
 from pyroSAR.ancillary import getargs
 from pyroSAR.gamma import api
 
 
-@pytest.mark.skipif('diff' not in dir(api), reason='requires GAMMA installation with module DIFF')
+@pytest.mark.skipif(not hasattr(api, 'diff'), reason='requires GAMMA installation with module DIFF')
 def test_args_diff():
     from pyroSAR.gamma.api import diff
     lookup = {
@@ -32,7 +37,7 @@ def test_args_diff():
         assert set(args).issubset(getargs(getattr(diff, command)))
 
 
-@pytest.mark.skipif('disp' not in dir(api), reason='requires GAMMA installation with module DISP')
+@pytest.mark.skipif(not hasattr(api, 'disp'), reason='requires GAMMA installation with module DISP')
 def test_args_disp():
     from pyroSAR.gamma.api import disp
     lookup = {
@@ -43,7 +48,7 @@ def test_args_disp():
         assert set(args).issubset(getargs(getattr(disp, command)))
 
 
-@pytest.mark.skipif('isp' not in dir(api), reason='requires GAMMA installation with module ISP')
+@pytest.mark.skipif(not hasattr(api, 'isp'), reason='requires GAMMA installation with module ISP')
 def test_args_isp():
     from pyroSAR.gamma.api import isp
     lookup = {
@@ -83,7 +88,7 @@ def test_args_isp():
         assert set(args + default).issubset(getargs(getattr(isp, command)))
 
 
-@pytest.mark.skipif('lat' not in dir(api), reason='requires GAMMA installation with module LAT')
+@pytest.mark.skipif(not hasattr(api, 'lat'), reason='requires GAMMA installation with module LAT')
 def test_args_lat():
     from pyroSAR.gamma.api import lat
     lookup = {
