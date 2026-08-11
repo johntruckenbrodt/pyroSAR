@@ -540,10 +540,11 @@ class SnapProperties(object):
         # "RuntimeError: OpenJDK 64-Bit Server VM warning: Options
         # -Xverify:none and -noverify were deprecated in JDK 13 and will
         # likely be removed in a future release."
-        if '-J-Xverify:none' in self.conf['default_options']:
-            opts = self.conf['default_options'].copy()
-            opts.remove('-J-Xverify:none')
-            self['default_options'] = opts
+        if 'default_options' in self.conf:
+            if '-J-Xverify:none' in self.conf['default_options']:
+                opts = self.conf['default_options'].copy()
+                opts.remove('-J-Xverify:none')
+                self['default_options'] = opts
         
         # some properties need to be read from the default user path to
         # be visible to SNAP
