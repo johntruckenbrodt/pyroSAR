@@ -36,12 +36,9 @@ disp = _UnavailableGammaModule('disp')
 isp = _UnavailableGammaModule('isp')
 lat = _UnavailableGammaModule('lat')
 
-try:
+if 'GAMMA_HOME' in os.environ:
     autoparse()
     
     sys.path.insert(0, os.path.join(os.path.expanduser('~'), '.pyrosar'))
     
     from gammaparse import *
-
-except (ImportError, OSError, RuntimeError) as e:
-    pass
