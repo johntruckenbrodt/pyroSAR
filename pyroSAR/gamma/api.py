@@ -16,8 +16,29 @@ import sys
 
 from .parser import autoparse
 
-autoparse()
 
-sys.path.insert(0, os.path.join(os.path.expanduser('~'), '.pyrosar'))
+# These placeholders allow pyroSAR.gamma modules to be imported when GAMMA
+# is unavailable. They are replaced by the generated modules when parsing
+# succeeds.
+class _UnavailableGammaModule:
+    def __init__(self, module: str) -> None:
+        self.module = module
+    
+    def __getattr__(self, command: str):
+        raise RuntimeError(
+            f"The command '{command}' is not available. "
+            f"Please install GAMMA module '{self.module.upper()}'."
+        )
 
-from gammaparse import *
+
+diff = _UnavailableGammaModule('diff')
+disp = _UnavailableGammaModule('disp')
+isp = _UnavailableGammaModule('isp')
+lat = _UnavailableGammaModule('lat')
+
+if 'GAMMA_HOME' in os.environ:
+    autoparse()
+    
+    sys.path.insert(0, os.path.join(os.path.expanduser('~'), '.pyrosar'))
+    
+    from gammaparse import *
