@@ -1756,12 +1756,8 @@ def sub_parametrize(scene, geometry=None, offset=None, buffer=0.01, copyMetadata
             shp.reproject(4326)
             ext = shp.extent
             shp.close()
-        # add an extra buffer
-        ext['xmin'] -= buffer
-        ext['ymin'] -= buffer
-        ext['xmax'] += buffer
-        ext['ymax'] += buffer
-        with bbox(ext, 4326) as bounds:
+        
+        with bbox(ext, 4326, buffer=buffer) as bounds:
             inter = intersect(scene.bbox(), bounds)
             if not inter:
                 raise RuntimeError('no bounding box intersection between shapefile and scene')
