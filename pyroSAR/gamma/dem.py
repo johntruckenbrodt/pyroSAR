@@ -220,7 +220,8 @@ def dem_autocreate(
             bounds = None
         geometry.reproject(4326)
         log.info('collecting DEM tiles')
-        dem_autoload([geometry], demType, vrt=vrt, username=username,
+        dem_autoload(geometry=geometry, demType=demType,
+                     vrt=vrt, username=username,
                      password=password, buffer=buffer)
         
         # TanDEM-X DEM, GETASSE30 DEM: ellipsoidal heights,
@@ -250,7 +251,8 @@ def dem_autocreate(
         else:
             raise RuntimeError("'geoid_mode' is not supported")
         
-        dem_create(vrt, dem, t_srs=epsg, tr=tr, geoid_convert=gdal_geoid,
+        dem_create(geometry=geometry, demType=demType, product='dem',
+                   src=vrt, dst=dem, t_srs=epsg, tr=tr, geoid_convert=gdal_geoid,
                    resampleAlg=resampling_method, outputBounds=bounds,
                    geoid=geoid)
         

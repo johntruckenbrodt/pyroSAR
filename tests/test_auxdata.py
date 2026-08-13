@@ -16,10 +16,10 @@ from spatialist import bbox
 def test_handler(cases_fixture, request):
     extent, cases = request.getfixturevalue(cases_fixture)
     with bbox(coordinates=extent, crs=4326) as box:
-        with DEMHandler([box]) as handler:
+        with DEMHandler(box) as handler:
             assert isinstance(handler.auxdatapath, str)
             for demType, reference in cases:
-                result = handler.remote_ids(dem_type=demType, extent=box.extent)
+                result = handler.remote_ids(dem_type=demType)
                 assert result == reference
 
 
@@ -38,22 +38,22 @@ def test_autoload(travis):
         # Travis CI does not support ftp access;
         # see https://blog.travis-ci.com/2018-07-23-the-tale-of-ftp-at-travis-ci
         if not travis:
-            files = dem_autoload([box], 'AW3D30')
+            files = dem_autoload(box, 'AW3D30')
             assert len(files) == 1
-            files = dem_autoload([box], 'AW3D30', product='stk')
+            files = dem_autoload(box, 'AW3D30', product='stk')
             assert len(files) == 1
-        files = dem_autoload([box], 'SRTM 1Sec HGT')
+        files = dem_autoload(box, 'SRTM 1Sec HGT')
         assert len(files) == 1
-        files = dem_autoload([box], 'SRTM 1Sec HGT', offline=True)
+        files = dem_autoload(box, 'SRTM 1Sec HGT', offline=True)
         assert len(files) == 1
-        files = dem_autoload([box], 'SRTM 3Sec')
+        files = dem_autoload(box, 'SRTM 3Sec')
         assert len(files) == 1
         with pytest.raises(RuntimeError):
-            files = dem_autoload([box], 'TDX90m')
+            files = dem_autoload(box, 'TDX90m')
         with pytest.raises(RuntimeError):
-            dem_autoload([box], 'AW3D30', product='foobar')
+            dem_autoload(box, 'AW3D30', product='foobar')
     with bbox({'xmin': -30, 'xmax': -29, 'ymin': 40, 'ymax': 41}, crs=4326) as box:
-        files = dem_autoload([box], 'SRTM 1Sec HGT')
+        files = dem_autoload(box, 'SRTM 1Sec HGT')
         assert len(files) == 0
 
 
@@ -62,9 +62,9 @@ def test_dem_create(tmpdir):
     out = os.path.join(str(tmpdir), 'srtm.tif')
     with bbox({'xmin': 11.5, 'xmax': 11.9, 'ymin': 51, 'ymax': 51.5}, crs=4326) as box:
         with pytest.raises(RuntimeError):
-            files = dem_autoload(geometries=[box], demType='foobar')
-        dem_autoload(geometries=[box], demType='SRTM 3Sec', vrt=vrt, product='dem')
-        dem_create(geometries=[box], demType='SRTM 3Sec', product='dem', src=vrt,
+            files = dem_autoload(geometry=box, demType='foobar')
+        dem_autoload(geometry=box, demType='SRTM 3Sec', vrt=vrt, product='dem')
+        dem_create(geometry=box, demType='SRTM 3Sec', product='dem', src=vrt,
                    dst=out, t_srs=32632, tr=(90, 90), nodata=-32767)
     assert os.path.isfile(out)
 
@@ -119,5 +119,6 @@ def test_dem_create(tmpdir):
     ],
 )
 def test_intrange(case, extent, step, expected):
-    with DEMHandler() as dem:
-        assert dem.intrange(extent, step) == expected
+    with bbox(coordinates=extent, crs=4326) as box:
+        with DEMHandler(geometry=box) as dem:
+            assert dem.intrange(step=step) == expected

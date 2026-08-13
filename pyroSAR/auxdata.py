@@ -11,6 +11,8 @@
 # copied, modified, propagated, or distributed except according
 # to the terms contained in the LICENSE.txt file.
 ###############################################################################
+from __future__ import annotations
+
 import os
 import re
 import csv
@@ -18,7 +20,6 @@ import ssl
 import socket
 import json
 import numpy as np
-import fnmatch
 import ftplib
 import requests
 import psutil
@@ -29,11 +30,11 @@ from urllib.parse import urlparse
 from collections import defaultdict
 from packaging.version import Version
 from pyroSAR.examine import ExamineSnap
-from pyroSAR.ancillary import Lock, get_corners
+from pyroSAR.ancillary import Lock
 from spatialist.raster import Raster, Dtype
 from spatialist.vector import bbox, Vector
 from spatialist.ancillary import finder
-from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp
+from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp, latlon_clamp
 from spatialist.envi import HDRobject
 from osgeo import gdal, osr
 
@@ -49,7 +50,7 @@ EXT: TypeAlias = dict[str, int | float]
 
 
 def dem_autoload(
-        geometries: list[Vector] | None,
+        geometry: Vector | None,
         demType: str,
         vrt: str | None = None,
         buffer: int | float | None = None,
@@ -70,8 +71,8 @@ def dem_autoload(
 
     Parameters
     ----------
-    geometries
-        a list of :class:`spatialist.vector.Vector` geometries to obtain DEM data for;
+    geometry
+        a :class:`spatialist.vector.Vector` geometry to obtain DEM data for;
         CRS must be WGS84 LatLon (EPSG 4326). Can be set to `None` for global extent.
     demType
         the type of DEM to be used. Options:
@@ -144,7 +145,7 @@ def dem_autoload(
             This file is then used as source in the VRT.
     
     buffer
-        a buffer in degrees to add around the individual geometries
+        a buffer in degrees to add around the geometry
     username
         (optional) the username for services requiring registration
     password
@@ -253,7 +254,7 @@ def dem_autoload(
         # download the tiles and virtually combine them in an in-memory
         # VRT file subsetted to the extent of the SAR scene plus a buffer of 0.01 degrees
         vrt = '/vsimem/srtm1.vrt'
-        dem_autoload(geometries=[bbox], demType='SRTM 1Sec HGT',
+        dem_autoload(geometry=bbox, demType='SRTM 1Sec HGT',
                      vrt=vrt, buffer=0.01)
         
         # write the final GeoTIFF file
@@ -267,13 +268,12 @@ def dem_autoload(
         dem_create(src=vrt, dst=outname, t_srs=32632, tr=(30, 30),
                    geoid_convert=True)
     """
-    with DEMHandler(geometries) as handler:
+    with DEMHandler(geometry=geometry, buffer=buffer) as handler:
         return handler.load(
             dem_type=demType,
             username=username,
             password=password,
             vrt=vrt,
-            buffer=buffer,
             product=product,
             crop=crop,
             lock_timeout=lock_timeout,
@@ -283,7 +283,7 @@ def dem_autoload(
 
 
 def dem_create(
-        geometries: list[Vector] | None,
+        geometry: Vector | None,
         demType: str,
         product: str,
         src: str | list[str],
@@ -305,8 +305,8 @@ def dem_create(
 
     Parameters
     ----------
-    geometries
-        a list of :class:`spatialist.vector.Vector` geometries to obtain DEM data for;
+    geometry
+        a of :class:`spatialist.vector.Vector` geometry to obtain DEM data for;
         CRS must be WGS84 LatLon (EPSG 4326). Can be set to `None` for global extent.
     demType
         The input DEM product type. See :func:`dem_autoload` for options.
@@ -372,7 +372,7 @@ def dem_create(
         - ``warpOptions``: currently used for setting the number of threads.
           Can be exposed if necessary.
     """
-    with DEMHandler(geometries=geometries) as handler:
+    with DEMHandler(geometry=geometry) as handler:
         handler.create(
             dem_type=demType,
             product=product,
@@ -403,15 +403,21 @@ class DEMHandler:
         a list of geometries. Default `None`: use the global extent.
     """
     
-    def __init__(self, geometries: list[Vector] | None = None) -> None:
-        if not (isinstance(geometries, list) or geometries is None):
-            raise RuntimeError('geometries must be of type list')
+    def __init__(
+            self,
+            geometry: Vector | None = None,
+            buffer: int | float | None = None
+    ) -> None:
+        if not (isinstance(geometry, Vector) or geometry is None):
+            raise RuntimeError('geometry must be of type Vector or None')
         
-        if geometries is not None:
-            for geometry in geometries:
-                if geometry.getProjection('epsg') != 4326:
-                    raise RuntimeError('input geometry CRS must be WGS84 LatLon (EPSG 4326)')
-        self.geometries = geometries
+        if geometry is not None:
+            if geometry.getProjection('epsg') != 4326:
+                raise RuntimeError('input geometry CRS must be WGS84 LatLon (EPSG 4326)')
+            with geometry.bbox(buffer=buffer) as box:
+                self.extent = box.extent
+        else:
+            self.extent = {'xmin': -180, 'xmax': 180, 'ymin': -90, 'ymax': 90}
         try:
             self.auxdatapath = ExamineSnap().auxdatapath
         except AttributeError:
@@ -422,34 +428,6 @@ class DEMHandler:
     
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         return
-    
-    @staticmethod
-    def __applybuffer(extent: EXT, buffer: int | float | None) -> EXT:
-        ext = dict(extent)
-        if buffer is not None:
-            ext['xmin'] = max(-180., ext['xmin'] - buffer)
-            ext['xmax'] = min(180., ext['xmax'] + buffer)
-            ext['ymin'] = max(-90., ext['ymin'] - buffer)
-            ext['ymax'] = min(90., ext['ymax'] + buffer)
-        return ext
-    
-    def __find_first(self, dem_type: str, product: str) -> str | None:
-        outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
-        vsi = self.config[dem_type]['vsi']
-        pattern = fnmatch.translate(self.config[dem_type]['pattern'][product])
-        for root, dirs, files in os.walk(outdir):
-            for file in files:
-                if vsi is None:
-                    if re.search(pattern, file):
-                        return os.path.join(root, file)
-                else:
-                    if re.search(r'\.(?:zip|tar(\.gz)?)$', file):
-                        fname = os.path.join(root, file)
-                        content = finder(fname, [pattern], regex=True)
-                        if len(content) > 0:
-                            if dem_type == 'GETASSE30':
-                                getasse30_hdr(fname)
-                            return vsi + content[0]
     
     def __buildvrt(
             self,
@@ -485,7 +463,7 @@ class DEMHandler:
         dst_datatype = None
         dst_nodata = self.config[dem_type]['ocean_fill_value'][product]
         tap = False
-        extent = self.__union_extent()
+        extent = self.extent.copy()
         if extent['xmin'] > extent['xmax']:
             raise RuntimeError('The extent is crossing the antimeridian. '
                                'It is not possible to create a VRT in this case.')
@@ -496,19 +474,19 @@ class DEMHandler:
         # expand the extent to multiples of the DEM tile size
         if not crop:
             f = self.config[dem_type]['tilesize']
-            extent['xmin'] = floor(extent['xmin'] / f) * f
-            extent['ymin'] = floor(extent['ymin'] / f) * f
-            extent['xmax'] = ceil(extent['xmax'] / f) * f
-            extent['ymax'] = ceil(extent['ymax'] / f) * f
+            extent['xmin'] = latlon_clamp(lon=floor(extent['xmin'] / f) * f)
+            extent['ymin'] = latlon_clamp(lat=floor(extent['ymin'] / f) * f)
+            extent['xmax'] = latlon_clamp(lon=ceil(extent['xmax'] / f) * f)
+            extent['ymax'] = latlon_clamp(lat=ceil(extent['ymax'] / f) * f)
         
         # shift coordinates from upper left corner (area) to center (point)
         if aop == 'point':
             shift_x = res[0] / 2
             shift_y = res[1] / 2
-            extent['xmin'] -= shift_x
-            extent['ymin'] += shift_y
-            extent['xmax'] -= shift_x
-            extent['ymax'] += shift_y
+            extent['xmin'] = latlon_clamp(lon=extent['xmin'] - shift_x)
+            extent['ymin'] = latlon_clamp(lat=extent['ymin'] + shift_y)
+            extent['xmax'] = latlon_clamp(lon=extent['xmax'] - shift_x)
+            extent['ymax'] = latlon_clamp(lat=extent['ymax'] + shift_y)
         
         # special case where no DEM tiles were found because the AOI is completely over ocean
         if len(tiles) == 0:
@@ -551,39 +529,9 @@ class DEMHandler:
             tree.write(file=vrt, pretty_print=True,
                        xml_declaration=False, encoding='utf-8')
     
-    def __union_extent(self, buffer: int | float | None = None) -> EXT:
-        """
-        Returns the union extent of all geometries,
-        i.e., the extent that covers all geometries.
-        
-        Parameters
-        ----------
-        buffer
-            a buffer to add to the union extent
-
-        Returns
-        -------
-            the union extent of all geometries
-        """
-        if self.geometries is None:
-            return self.__extent_global
-        coordinates = []
-        for geo in self.geometries:
-            ext = geo.extent
-            coordinates += [
-                (ext['xmin'], ext['ymin']),
-                (ext['xmin'], ext['ymax']),
-                (ext['xmax'], ext['ymax']),
-                (ext['xmax'], ext['ymin']),
-            ]
-        ext_new = get_corners(coordinates)
-        ext_new = self.__applybuffer(ext_new, buffer)
-        return ext_new
-    
-    @staticmethod
     def __create_dummy_dem(
+            self,
             filename: str | None,
-            extent: EXT,
             fill_value: int | float
     ) -> gdal.Dataset | list[gdal.Dataset] | None:
         """
@@ -598,11 +546,10 @@ class DEMHandler:
             If `None`, a :class:`gdal.Dataset` object is returned.
             If the extent is crossing the antimeridian, `filename` must be set
             to `None` because two datasets will be created.
-        extent
-            The extent for which to create the dataset(s).
         fill_value
             The value to use for extrapolating areas over ocean where no DEM tile exists.
         """
+        extent = self.extent.copy()
         
         def create_file(
                 filename: str | None,
@@ -674,21 +621,13 @@ class DEMHandler:
                 fill_value=fill_value)
         return out
     
-    @property
-    def __extent_global(self) -> EXT:
-        return {'xmin': -180, 'xmax': 180, 'ymin': -90, 'ymax': 90}
-    
-    @staticmethod
-    def intrange(extent: EXT, step: int) -> tuple[list[int], list[int]]:
+    def intrange(self, step: int) -> tuple[list[int], list[int]]:
         """
         generate a sequence of integer coordinates marking
         the tie points of the individual DEM tiles.
         
         Parameters
         ----------
-        extent
-            a dictionary with keys `xmin`, `xmax`, `ymin` and `ymax`
-            with coordinates in EPSG:4326.
         step
             the sequence steps
 
@@ -696,6 +635,8 @@ class DEMHandler:
         -------
             the integer sequences as (latitude, longitude)
         """
+        extent = self.extent.copy()
+        print(extent)
         lat = list(range(floor(float(extent['ymin']) / step) * step,
                          ceil(float(extent['ymax']) / step) * step,
                          step))
@@ -749,7 +690,9 @@ class DEMHandler:
                     catalog_json = f"dem_cop_{res}.json"
                     URL_STAC = self.config[dem_type]['url']
                     marker = None
-                    out = defaultdict(lambda: defaultdict(dict[str, str]))
+                    out = defaultdict(
+                        lambda: defaultdict(dict[str, str])
+                    )
                     while True:
                         params = {}
                         if marker:
@@ -789,7 +732,9 @@ class DEMHandler:
                     response = requests.get(url)
                     response.raise_for_status()
                     items = re.findall(r'href="([^"]+)"', response.text)
-                    out = defaultdict(lambda: defaultdict(dict[str, str]))
+                    out = defaultdict(
+                        lambda: defaultdict(dict[str, str])
+                    )
                     patterns = {
                         'GETASSE30': '(?P<lat>[0-9]{2}[NS])(?P<lon>[0-9]{3}[EW])',
                         'SRTM 1Sec HGT': '(?P<lat>[NS][0-9]{2})(?P<lon>[EW][0-9]{3})',
@@ -1457,7 +1402,6 @@ class DEMHandler:
             self,
             dem_type: str,
             vrt: str | None = None,
-            buffer: int | float | None = None,
             username: str | None = None,
             password: str | None = None,
             product: str = 'dem',
@@ -1479,8 +1423,6 @@ class DEMHandler:
         vrt
             an optional GDAL VRT file created from the obtained DEM tiles.
             NOTE: VRTs are not suited for geometries crossing the antimeridian.
-        buffer
-            a buffer in degrees to add around the individual geometries
         username
             the download account username
         password
@@ -1594,18 +1536,11 @@ class DEMHandler:
         
         outdir = os.path.join(self.auxdatapath, 'dem', dem_type)
         
-        if self.geometries is not None:
-            candidates = []
-            for geo in self.geometries:
-                corners = self.__applybuffer(extent=geo.extent,
-                                             buffer=buffer)
-                candidates.extend(self.remote_ids(extent=corners, dem_type=dem_type,
-                                                  username=username, password=password,
-                                                  product=product))
-        else:
-            candidates = self.remote_ids(extent=self.__extent_global, dem_type=dem_type,
-                                         username=username, password=password,
-                                         product=product)
+        candidates = self.remote_ids(
+            dem_type=dem_type,
+            username=username, password=password,
+            product=product
+        )
         
         if self.config[dem_type]['url'].startswith('ftp'):
             port = 0
@@ -1652,7 +1587,6 @@ class DEMHandler:
     
     def remote_ids(
             self,
-            extent: EXT,
             dem_type: str,
             product: str = 'dem',
             username: str | None = None,
@@ -1663,9 +1597,6 @@ class DEMHandler:
 
         Parameters
         ----------
-        extent
-            the extent of the area of interest with keys xmin, xmax, ymin, ymax
-            or `None` to not set any spatial filter.
         dem_type
             the type of DEM to be used
         product
@@ -1680,6 +1611,8 @@ class DEMHandler:
         -------
             the sorted names of the remote files
         """
+        extent = self.extent.copy()
+        
         keys = self.config.keys()
         if dem_type not in keys:
             raise RuntimeError("demType '{}' is not supported\n  "
@@ -1726,19 +1659,19 @@ class DEMHandler:
         if dem_type in ['Copernicus 30m Global DEM',
                         'Copernicus 90m Global DEM',
                         'SRTM 1Sec HGT']:
-            lat, lon = self.intrange(extent, step=1)
+            lat, lon = self.intrange(step=1)
             indices = [ids(x, y, nx=3, ny=2)
                        for x in lon for y in lat]
             remotes = remotes_from_index(indices, product=product)
         
         elif dem_type == 'GETASSE30':
-            lat, lon = self.intrange(extent, step=15)
+            lat, lon = self.intrange(step=15)
             indices = [ids(x, y, nx=3, ny=2, reverse=True)
                        for x in lon for y in lat]
             remotes = remotes_from_index(indices, product=product)
         
         elif dem_type == 'TDX90m':
-            lat, lon = self.intrange(extent, step=1)
+            lat, lon = self.intrange(step=1)
             remotes = []
             for x in lon:
                 xr = abs(x) // 10 * 10
@@ -1749,7 +1682,7 @@ class DEMHandler:
         
         elif dem_type == 'AW3D30':
             remotes = []
-            lat, lon = self.intrange(extent, step=1)
+            lat, lon = self.intrange(step=1)
             for x in lon:
                 for y in lat:
                     remotes.append(
@@ -1784,7 +1717,7 @@ class DEMHandler:
         elif dem_type in ['Copernicus 10m EEA DEM',
                           'Copernicus 30m Global DEM II',
                           'Copernicus 90m Global DEM II']:
-            lat, lon = self.intrange(extent, step=1)
+            lat, lon = self.intrange(step=1)
             indices = [''.join(ids(x, y, nx=3, ny=2))
                        for x in lon for y in lat]
             
