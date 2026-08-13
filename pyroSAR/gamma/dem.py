@@ -15,21 +15,23 @@
 """
 A collection of functions to handle digital elevation models in GAMMA
 """
-from urllib.request import urlopen
 import os
 import re
 import shutil
-import zipfile as zf
 
-from spatialist import raster, gdal_translate, gdalbuildvrt, gdalwarp, crsConvert
-from spatialist.ancillary import finder
+from spatialist import raster
+from spatialist.auxil import gdalwarp, crsConvert
 from spatialist.envi import HDRobject
 
 from ..auxdata import dem_autoload, dem_create
-from ..drivers import ID
-from . import ISPPar, UTM, slc_corners, par2hdr
+from . import ISPPar, par2hdr
 from pyroSAR.examine import ExamineGamma
 from pyroSAR.ancillary import hasarg
+from typing import Literal, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from spatialist.vector import Vector
+    from osgeo.osr import SpatialReference
 
 import logging
 
@@ -41,24 +43,20 @@ except ImportError:
     pass
 
 
-def fill(dem, dem_out, logpath=None, replace=False):
+def fill(dem: str, dem_out: str, logpath: str | None = None, replace: bool = False) -> None:
     """
     interpolate missing values in the SRTM DEM (value -32768)
 
     Parameters
     ----------
-    dem: str
+    dem
         the input DEM to be filled
-    dem_out: str
+    dem_out
         the name of the filled DEM
-    logpath: str
+    logpath
         a directory to write logfiles to
-    replace: bool
+    replace
         delete `dem` once finished?
-
-    Returns
-    -------
-
     """
     width = ISPPar(dem + '.par').width
     
@@ -118,41 +116,19 @@ def fill(dem, dem_out, logpath=None, replace=False):
             os.remove(item)
 
 
-def transform(infile, outfile, posting=90):
-    """
-    transform SRTM DEM from EQA to UTM projection
-    """
-    # read DEM parameter file
-    par = ISPPar(infile + '.par')
-    
-    # transform corner coordinate to UTM
-    utm = UTM(infile + '.par')
-    
-    for item in [outfile, outfile + '.par']:
-        if os.path.isfile(item):
-            os.remove(item)
-    
-    # determine false northing from parameter file coordinates
-    falsenorthing = 10000000. if par.corner_lat < 0 else 0
-    
-    # create new DEM parameter file with UTM projection details
-    inlist = ['UTM', 'WGS84', 1, utm.zone, falsenorthing, os.path.basename(outfile), '', '', '', '', '',
-              '-{0} {0}'.format(posting), '']
-    
-    diff.create_dem_par(DEM_par=outfile + '.par',
-                        inlist=inlist)
-    
-    # transform dem
-    diff.dem_trans(DEM1_par=infile + '.par',
-                   DEM1=infile,
-                   DEM2_par=outfile + '.par',
-                   DEM2=outfile,
-                   bflg=1)
-    par2hdr(outfile + '.par', outfile + '.hdr')
-
-
-def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None, logpath=None,
-                   username=None, password=None, geoid_mode='gamma', resampling_method='bilinear'):
+def dem_autocreate(
+        geometry: Vector,
+        demType: str,
+        outfile: str,
+        buffer: int | float | None = None,
+        t_srs: int | str | SpatialReference = 4326,
+        tr: tuple[int | float, int | float] | None = None,
+        logpath: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        geoid_mode: Literal['gamma', 'gdal'] = 'gamma',
+        resampling_method: str = 'bilinear'
+) -> None:
     """
     | automatically create a DEM in GAMMA format for a defined spatial geometry.
     | The following steps will be performed:
@@ -178,41 +154,34 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
 
     Parameters
     ----------
-    geometry: spatialist.vector.Vector
+    geometry
         a vector geometry delimiting the output DEM size
-    demType: str
+    demType
         the type of DEM to be used; see :func:`~pyroSAR.auxdata.dem_autoload` for options
-    outfile: str
+    outfile
         the name of the final DEM file
-    buffer: float or None
+    buffer
         a buffer in degrees to create around the geometry
-    t_srs: int, str or osgeo.osr.SpatialReference
+    t_srs
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
         Default: `4326 <https://spatialreference.org/ref/epsg/4326/>`_.
-    tr: tuple or None
+    tr
         the target resolution as (xres, yres) in units of ``t_srs``; if ``t_srs`` is kept at its default value of 4326,
         ``tr`` does not need to be defined and the original resolution is preserved;
         in all other cases the default of None is rejected
-    logpath: str
+    logpath
         a directory to write GAMMA logfiles to
-    username: str or None
+    username
         (optional) the user name for services requiring registration;
         see :func:`~pyroSAR.auxdata.dem_autoload`
-    password: str or None
+    password
         (optional) the password for the registration account
-    geoid_mode: str
-        the software to be used for converting geoid to ellipsoid heights (if necessary); options:
-        
-         - 'gamma'
-         - 'gdal'
-    resampling_method: str
+    geoid_mode
+        the software to be used for converting geoid to ellipsoid heights (if necessary)
+    resampling_method
         the gdalwarp resampling method; See `here <https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r>`_
         for options.
-
-    Returns
-    -------
-
     """
     geometry = geometry.clone()
     
@@ -302,7 +271,7 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
 def dem_import(
         src: str,
         dst: str,
-        geoid: str | None = None,
+        geoid: Literal['EGM96', 'EGM2008'] | None = None,
         logpath: str | None = None,
         outdir: str | None = None,
         shellscript: str | None = None
@@ -313,21 +282,18 @@ def dem_import(
     
     Parameters
     ----------
-    src:
+    src
         the input DEM
-    dst:
+    dst
         the output DEM
-    geoid:
-        the geoid height reference of `src`; supported options:
-        
-        - 'EGM96'
-        - 'EGM2008'
-        - None: assume WGS84 ellipsoid heights and do not convert heights
-    logpath:
+    geoid
+        the geoid height reference of `src`; supported options.
+        Default `None`: assume WGS84 ellipsoid heights and do not convert heights.
+    logpath
         a directory to write logfiles to
-    outdir:
+    outdir
         the directory to execute the command in
-    shellscript:
+    shellscript
         a file to write the GAMMA commands to in shell format
     """
     with raster.Raster(src) as ras:
@@ -387,7 +353,7 @@ def dem_import(
     par2hdr(dst_base + '.par', dst_base + '.hdr', nodata=0)
 
 
-def dempar(dem, logpath=None):
+def dempar(dem: str, logpath: str | None = None) -> None:
     """
     create GAMMA parameter text files for DEM files
 
@@ -395,14 +361,10 @@ def dempar(dem, logpath=None):
 
     Parameters
     ----------
-    dem: str
+    dem
         the name of the DEM
-    logpath: str
+    logpath
         a directory to write logfiles to
-
-    Returns
-    -------
-
     """
     rast = raster.Raster(dem)
     
@@ -446,20 +408,16 @@ def dempar(dem, logpath=None):
                         logpath=logpath)
 
 
-def swap(data, outname):
+def swap(data: str, outname: str) -> None:
     """
     byte swapping from small to big endian (as required by GAMMA)
 
     Parameters
     ----------
-    data: str
+    data
         the DEM file to be swapped
-    outname: str
+    outname
         the name of the file to write
-
-    Returns
-    -------
-
     """
     with raster.Raster(data) as ras:
         dtype = ras.dtype
@@ -479,28 +437,29 @@ def swap(data, outname):
         header.write(outname + '.hdr')
 
 
-def mosaic(demlist, outname, byteorder=1, gammapar=True):
+def mosaic(
+        demlist: list[str],
+        outname: str,
+        byteorder: Literal[0, 1] = 1,
+        gammapar: bool = True
+) -> None:
     """
     mosaicing of multiple DEMs
 
     Parameters
     ----------
-    demlist: list[str]
+    demlist
         a list of DEM names to be mosaiced
-    outname: str
+    outname
         the name of the final mosaic file
-    byteorder: {0, 1}
+    byteorder
         the byte order of the mosaic
 
         - 0: small endian
         - 1: big endian
 
-    gammapar: bool
+    gammapar
         create a GAMMA parameter file for the mosaic?
-
-    Returns
-    -------
-
     """
     if len(demlist) < 2:
         raise IOError('length of demlist < 2')
@@ -520,194 +479,3 @@ def mosaic(demlist, outname, byteorder=1, gammapar=True):
         os.rename(outname + '_swap.hdr', outname + '.hdr')
     if gammapar:
         dempar(outname)
-
-
-def hgt(parfiles):
-    """
-    concatenate hgt file names overlapping with multiple SAR scenes
-
-    - this list is read for corner coordinates of which the next integer
-      lower left latitude and longitude is computed
-    - hgt files are supplied in 1 degree equiangular format named e.g.
-      N16W094.hgt (with pattern [NS][0-9]{2}[EW][0-9]{3}.hgt
-    - For north and east hemisphere the respective absolute latitude and longitude
-      values are smaller than the lower left coordinate of the SAR image
-    - west and south coordinates are negative and hence the nearest lower left
-      integer absolute value is going to be larger
-
-    Parameters
-    ----------
-    parfiles: list of str or pyroSAR.ID
-        a list of GAMMA parameter files or pyroSAR ID objects
-
-    Returns
-    -------
-    list
-        the names of hgt files overlapping with the supplied parameter files/objects
-    """
-    
-    lat = []
-    lon = []
-    for parfile in parfiles:
-        if isinstance(parfile, ID):
-            corners = parfile.getCorners()
-        elif parfile.endswith('.par'):
-            corners = slc_corners(parfile)
-        else:
-            raise RuntimeError('parfiles items must be of type pyroSAR.ID or GAMMA parfiles with suffix .par')
-        lat += [int(float(corners[x]) // 1) for x in ['ymin', 'ymax']]
-        lon += [int(float(corners[x]) // 1) for x in ['xmin', 'xmax']]
-    
-    # add missing lat/lon values (and add an extra buffer of one degree)
-    lat = range(min(lat), max(lat) + 1)
-    lon = range(min(lon), max(lon) + 1)
-    
-    # convert coordinates to string with leading zeros and hemisphere identification letter
-    lat = [str(x).zfill(2 + len(str(x)) - len(str(x).strip('-'))) for x in lat]
-    lat = [x.replace('-', 'S') if '-' in x else 'N' + x for x in lat]
-    
-    lon = [str(x).zfill(3 + len(str(x)) - len(str(x).strip('-'))) for x in lon]
-    lon = [x.replace('-', 'W') if '-' in x else 'E' + x for x in lon]
-    
-    # concatenate all formatted latitudes and longitudes with each other as final product
-    return [x + y + '.hgt' for x in lat for y in lon]
-
-
-def makeSRTM(scenes, srtmdir, outname):
-    """
-    Create a DEM in GAMMA format from SRTM tiles
-
-    - coordinates are read to determine the required DEM extent and select the necessary hgt tiles
-    - mosaics SRTM DEM tiles, converts them to GAMMA format and subtracts offset to WGS84 ellipsoid
-
-    intended for SRTM products downloaded from:
-
-    - USGS: https://gdex.cr.usgs.gov/gdex/
-    - CGIAR: https://srtm.csi.cgiar.org
-
-    Parameters
-    ----------
-    scenes: list of str or pyroSAR.ID
-        a list of Gamma parameter files or pyroSAR ID objects to read the DEM extent from
-    srtmdir: str
-        a directory containing the SRTM hgt tiles
-    outname: str
-        the name of the final DEM file
-
-    Returns
-    -------
-
-    """
-    
-    tempdir = outname + '___temp'
-    os.makedirs(tempdir)
-    
-    hgt_options = hgt(scenes)
-    
-    hgt_files = finder(srtmdir, hgt_options)
-    
-    nodatas = list(set([raster.Raster(x).nodata for x in hgt_files]))
-    if len(nodatas) == 1:
-        nodata = nodatas[0]
-    else:
-        raise RuntimeError('different nodata values are not permitted')
-    
-    srtm_vrt = os.path.join(tempdir, 'srtm.vrt')
-    srtm_temp = srtm_vrt.replace('.vrt', '_tmp')
-    srtm_final = srtm_vrt.replace('.vrt', '')
-    
-    gdalbuildvrt(src=hgt_files, dst=srtm_vrt, srcNodata=nodata, options=['-overwrite'])
-    
-    gdal_translate(src=srtm_vrt, dst=srtm_temp, format='ENVI', noData=nodata)
-    
-    diff.srtm2dem(SRTM_DEM=srtm_temp,
-                  DEM=srtm_final,
-                  DEM_par=srtm_final + '.par',
-                  gflg=2,
-                  geoid='-',
-                  outdir=tempdir)
-    
-    shutil.move(srtm_final, outname)
-    shutil.move(srtm_final + '.par', outname + '.par')
-    par2hdr(outname + '.par', outname + '.hdr')
-    
-    shutil.rmtree(tempdir)
-
-
-def hgt_collect(parfiles, outdir, demdir=None, arcsec=3):
-    """
-    automatic downloading and unpacking of srtm tiles
-
-    Parameters
-    ----------
-    parfiles: list of str or pyroSAR.ID
-        a list of Gamma parameter files or pyroSAR ID objects
-    outdir: str
-        a target directory to download the tiles to
-    demdir: str or None
-        an additional directory already containing hgt tiles
-    arcsec: {1, 3}
-        the spatial resolution to be used
-
-    Returns
-    -------
-    list
-        the names of all local hgt tiles overlapping with the parfiles
-    """
-    
-    # concatenate required hgt tile names
-    target_ids = hgt(parfiles)
-    
-    targets = []
-    
-    pattern = '[NS][0-9]{2}[EW][0-9]{3}'
-    
-    # if an additional dem directory has been defined, check this directory for required hgt tiles
-    if demdir is not None:
-        targets.extend(finder(demdir, target_ids))
-    
-    # check for additional potentially existing hgt tiles in the defined output directory
-    extras = [os.path.join(outdir, x) for x in target_ids if
-              os.path.isfile(os.path.join(outdir, x)) and not re.search(x, '\n'.join(targets))]
-    targets.extend(extras)
-    
-    log.info('found {} relevant SRTM tiles...'.format(len(targets)))
-    
-    # search server for all required tiles, which were not found in the local directories
-    if len(targets) < len(target_ids):
-        log.info('searching for additional SRTM tiles on the server...')
-        onlines = []
-        
-        if arcsec == 1:
-            remotes = ['http://e4ftl01.cr.usgs.gov/SRTM/SRTMGL1.003/2000.02.11/']
-            remotepattern = pattern + '.SRTMGL1.hgt.zip'
-        elif arcsec == 3:
-            server = 'https://dds.cr.usgs.gov/srtm/version2_1/SRTM3/'
-            remotes = [os.path.join(server, x) for x in
-                       ['Africa', 'Australia', 'Eurasia', 'Islands', 'North_America', 'South_America']]
-            remotepattern = pattern + '[.]hgt.zip'
-        else:
-            raise ValueError('argument arcsec must be of value 1 or 3')
-        
-        for remote in remotes:
-            response = urlopen(remote).read()
-            items = sorted(set(re.findall(remotepattern, response)))
-            for item in items:
-                outname = re.findall(pattern, item)[0] + '.hgt'
-                if outname in target_ids and outname not in [os.path.basename(x) for x in targets]:
-                    onlines.append(os.path.join(remote, item))
-        
-        # if additional tiles have been found online, download and unzip them to the local directory
-        if len(onlines) > 0:
-            log.info('downloading {} SRTM tiles...'.format(len(onlines)))
-            for candidate in onlines:
-                localname = os.path.join(outdir, re.findall(pattern, candidate)[0] + '.hgt')
-                infile = urlopen(candidate)
-                with open(localname + '.zip', 'wb') as outfile:
-                    outfile.write(infile.read())
-                infile.close()
-                with zf.ZipFile(localname + '.zip', 'r') as z:
-                    z.extractall(outdir)
-                os.remove(localname + '.zip')
-                targets.append(localname)
-    return targets
