@@ -15,6 +15,8 @@
 """
 A collection of functions to handle digital elevation models in GAMMA
 """
+from __future__ import annotations
+
 import os
 import re
 import shutil
