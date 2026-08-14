@@ -1952,15 +1952,18 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
         self._sock = value
 
 
-def vrt_check_sources(fname: str) -> None:
+def vrt_check_sources(fname: str) -> list[str]:
     """
     check the sanity of all source files of a given VRT.
-    Currently, does not check in-memory VRTs.
     
     Parameters
     ----------
     fname
         the VRT file name
+    
+    Returns
+    -------
+        the source file names
     
     Raises
     ------
@@ -1990,16 +1993,21 @@ def vrt_check_sources(fname: str) -> None:
             raise RuntimeError(f'could not match archive path: {path}')
         return match.group('archive')
     
-    if os.path.isfile(fname):
-        tree = etree.parse(fname)
-        sources = [x.text for x in tree.findall('.//SourceFilename')]
-        for source in sources:
-            if source is None:
-                raise ValueError('encountered None value as source file name')
-            if not os.path.isabs(source):
-                base_dir = os.path.dirname(fname)
-                source = os.path.normpath(os.path.join(base_dir, source))
-            if re.search('^/vsi', source):
-                source = get_archive_path(source)
-            if not os.path.isfile(source):
-                raise RuntimeError(f'missing VRT source file: {source}')
+    try:
+        with Raster(fname) as ras:
+            root = etree.fromstring(ras.raster.GetMetadata('xml:VRT')[0])
+    except Exception:
+        raise RuntimeError(f'cannot read: {fname}')
+    sources_raw = [x.text for x in root.findall('.//SourceFilename')]
+    sources = list(filter(None, sources_raw))
+    if len(sources) != len(sources_raw):
+        raise ValueError('encountered None value as source file name')
+    for source in sources:
+        if not os.path.isabs(source):
+            base_dir = os.path.dirname(fname)
+            source = os.path.normpath(os.path.join(base_dir, source))
+        if re.search('^/vsi', source):
+            source = get_archive_path(source)
+        if not os.path.isfile(source):
+            raise RuntimeError(f'missing VRT source file: {source}')
+    return sources
