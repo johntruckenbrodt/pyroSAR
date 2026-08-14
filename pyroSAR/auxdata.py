@@ -369,10 +369,15 @@ def dem_create(
         - ``dstNodata``: controlled via argument ``nodata``
         - ``outputType``: controlled via argument ``dtype``
         - ``multithread``: controlled via argument ``threads``
-        - ``format``: fixed to ``GTiff``
         - ``targetAlignedPixels``: fixed to ``True``
         - ``warpOptions``: currently used for setting the number of threads.
           Can be exposed if necessary.
+        
+        The following arguments are set if they are not defined in `kwargs`:
+        
+        - ``outputBounds``: set to the common extent of ``geometries``
+          projected to ``t_srs`` if ``isinstance(src, list)``.
+        - ``format``: set to ``GTiff``
     """
     with DEMHandler(geometry=geometry, buffer=buffer) as handler:
         handler.create(
@@ -1250,7 +1255,6 @@ class DEMHandler:
             - ``dstNodata``: controlled via argument ``nodata``
             - ``outputType``: controlled via argument ``dtype``
             - ``multithread``: controlled via argument ``threads``
-            - ``format``: fixed to ``GTiff``
             - ``targetAlignedPixels``: fixed to ``True``
             - ``warpOptions``: currently used for setting the number of threads.
               Can be exposed if necessary.
@@ -1259,6 +1263,7 @@ class DEMHandler:
             
             - ``outputBounds``: set to the common extent of ``geometries``
               projected to ``t_srs`` if ``isinstance(src, list)``.
+            - ``format``: set to ``GTiff``
         """
         
         if isinstance(src, list):
@@ -1301,7 +1306,6 @@ class DEMHandler:
         # initial list of gdalwarp parameters
         
         gdalwarp_args = {
-            'format': 'GTiff',
             'srcNodata': src_nodata,
             'resampleAlg': resampleAlg,
             'targetAlignedPixels': True,
@@ -1441,6 +1445,9 @@ class DEMHandler:
             else:
                 msg = f"argument '{key}' cannot be set via kwargs as it is set internally."
                 raise RuntimeError(msg)
+        
+        if 'format' not in gdalwarp_args.keys():
+            gdalwarp_args['format'] = 'GTiff'
         ############################################################################
         # run warping
         
