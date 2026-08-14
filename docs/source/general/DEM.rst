@@ -32,10 +32,10 @@ This function internally makes use of the function :func:`spatialist.auxil.gdalb
     vrt = 'mosaic.vrt'
 
     with Vector(site) as vec:
-        vrt = dem_autoload(geometries=[vec],
-                           demType='SRTM 1Sec HGT',
-                           vrt=vrt,
-                           buffer=0.1)
+        dem_autoload(geometries=[vec],
+                     demType='SRTM 1Sec HGT',
+                     vrt=vrt,
+                     buffer=0.1)
 
 The tiles, which are delivered in compressed archives, are directly connected to a virtual mosaic using GDAL's VRT
 format, making it easier to work with them by treating them as a single file.
