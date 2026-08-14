@@ -232,7 +232,7 @@ def dem_autoload(
     
     Returns
     -------
-        the names of the obtained files or None if a VRT file was defined
+        the names of the obtained files or ``None`` if a VRT file was defined
     
     Examples
     --------
@@ -399,8 +399,12 @@ class DEMHandler:
     
     Parameters
     ----------
-    geometries
-        a list of geometries. Default `None`: use the global extent.
+    geometry
+        a vector geometry object.
+        The extent of all features is used for DEM data search and mosaicking.
+        Default `None`: use the global extent.
+    buffer
+        a buffer in degrees to add around the geometry
     """
     
     def __init__(
@@ -636,7 +640,6 @@ class DEMHandler:
             the integer sequences as (latitude, longitude)
         """
         extent = self.extent.copy()
-        print(extent)
         lat = list(range(floor(float(extent['ymin']) / step) * step,
                          ceil(float(extent['ymax']) / step) * step,
                          step))
@@ -1248,13 +1251,12 @@ class DEMHandler:
         # is extrapolated to areas where no DEM tile exists (over ocean).
         
         if isinstance(src, list):
-            extent_4326 = self.__union_extent()
             if t_srs is not None:
-                with bbox(coordinates=extent_4326, crs=4326) as vec:
+                with bbox(coordinates=self.extent, crs=4326) as vec:
                     vec.reproject(t_srs)
                     extent_out = vec.extent
             else:
-                extent_out = extent_4326
+                extent_out = self.extent
             
             if extent_out['xmin'] > extent_out['xmax']:
                 raise RuntimeError('The output extent is crossing the antimeridian.'
@@ -1267,8 +1269,7 @@ class DEMHandler:
                 gdalwarp_args['outputBounds'] = kwargs['outputBounds']
                 del kwargs['outputBounds']
             
-            dummy = self.__create_dummy_dem(filename=None, extent=extent_4326,
-                                            fill_value=fill_value)
+            dummy = self.__create_dummy_dem(filename=None, fill_value=fill_value)
             if isinstance(dummy, list):
                 src = dummy + src
             else:
