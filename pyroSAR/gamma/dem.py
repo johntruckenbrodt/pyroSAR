@@ -251,7 +251,7 @@ def dem_autocreate(
         else:
             raise RuntimeError("'geoid_mode' is not supported")
         
-        dem_create(geometry=geometry, demType=demType, product='dem',
+        dem_create(geometry=geometry,
                    src=vrt, dst=dem, t_srs=epsg, tr=tr, geoid_convert=gdal_geoid,
                    resampleAlg=resampling_method, outputBounds=bounds,
                    geoid=geoid)
