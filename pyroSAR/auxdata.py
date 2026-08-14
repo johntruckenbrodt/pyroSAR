@@ -290,6 +290,7 @@ def dem_create(
         geometry: Vector | None,
         src: str | list[str],
         dst: str,
+        buffer: int | float | None = None,
         t_srs: CRS | None = None,
         tr: tuple[int | float, int | float] | None = None,
         threads: int | str | None = None,
@@ -314,6 +315,8 @@ def dem_create(
         the input dataset(s) as returned by :func:`dem_autoload`.
     dst
         the output GeoTIFF file name.
+    buffer
+        a buffer in degrees to add around the geometry
     t_srs
         A target geographic reference system in WKT, EPSG, PROJ4 or OPENGIS format.
         See function :func:`spatialist.auxil.crsConvert()` for details.
@@ -370,7 +373,7 @@ def dem_create(
         - ``warpOptions``: currently used for setting the number of threads.
           Can be exposed if necessary.
     """
-    with DEMHandler(geometry=geometry) as handler:
+    with DEMHandler(geometry=geometry, buffer=buffer) as handler:
         handler.create(
             src=src,
             dst=dst,
