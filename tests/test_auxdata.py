@@ -64,8 +64,8 @@ def test_dem_create(tmpdir):
         with pytest.raises(RuntimeError):
             files = dem_autoload(geometry=box, demType='foobar')
         dem_autoload(geometry=box, demType='SRTM 3Sec', vrt=vrt, product='dem')
-        dem_create(geometry=box, demType='SRTM 3Sec', product='dem', src=vrt,
-                   dst=out, t_srs=32632, tr=(90, 90), nodata=-32767)
+        dem_create(geometry=box, src=vrt, dst=out, t_srs=32632,
+                   tr=(90, 90), nodata=-32767)
     assert os.path.isfile(out)
 
 

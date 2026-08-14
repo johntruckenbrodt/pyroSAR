@@ -17,6 +17,7 @@ import os
 import re
 import csv
 import ssl
+import fnmatch
 import socket
 import json
 import numpy as np
@@ -265,8 +266,11 @@ def dem_autoload(
         # including conversion from geoid to ellipsoid heights
         from pyroSAR.auxdata import dem_create
         outname = scene.outname_base() + 'srtm1_ellp.tif'
-        dem_create(src=vrt, dst=outname, t_srs=32632, tr=(30, 30),
-                   geoid_convert=True)
+        dem_create(geometry=bbox, src=vrt, dst=outname, t_srs=32632,
+                   tr=(30, 30), geoid_convert=True)
+        
+        # close the Vector object
+        bbox.close()
     """
     with DEMHandler(geometry=geometry, buffer=buffer) as handler:
         return handler.load(
@@ -284,8 +288,6 @@ def dem_autoload(
 
 def dem_create(
         geometry: Vector | None,
-        demType: str,
-        product: str,
         src: str | list[str],
         dst: str,
         t_srs: CRS | None = None,
@@ -308,10 +310,6 @@ def dem_create(
     geometry
         a of :class:`spatialist.vector.Vector` geometry to obtain DEM data for;
         CRS must be WGS84 LatLon (EPSG 4326). Can be set to `None` for global extent.
-    demType
-        The input DEM product type. See :func:`dem_autoload` for options.
-    product
-        The input DEM sub-product type. See :func:`dem_autoload` for options.
     src
         the input dataset(s) as returned by :func:`dem_autoload`.
     dst
@@ -374,8 +372,6 @@ def dem_create(
     """
     with DEMHandler(geometry=geometry) as handler:
         handler.create(
-            dem_type=demType,
-            product=product,
             src=src,
             dst=dst,
             t_srs=t_srs,
@@ -1107,8 +1103,6 @@ class DEMHandler:
     
     def create(
             self,
-            dem_type: str,
-            product: str,
             src: str | list[str],
             dst: str,
             t_srs: CRS | None = None,
@@ -1202,12 +1196,15 @@ class DEMHandler:
         """
         
         if isinstance(src, list):
-            src: list[str | gdal.Dataset] = src.copy()
+            src = src.copy()
         
         if isinstance(src, str):
             if not src.endswith('.vrt'):
                 raise RuntimeError("If 'src' is a string, it must be a VRT file.")
-            vrt_check_sources(src)
+            sources = vrt_check_sources(src)
+            dem_type, product = self.info_from_filenames(sources)
+        else:
+            dem_type, product = self.info_from_filenames(src)
         
         src_nodata = self.config[dem_type]['nodata'][product]
         src_dtype = self.config[dem_type]['datatype'][product]
@@ -1787,6 +1784,65 @@ class DEMHandler:
             raise ValueError('unknown demType: {}'.format(dem_type))
         
         return sorted(remotes)
+    
+    def info_from_filenames(self, filenames: list[str]) -> tuple[str, str]:
+        """
+        Derive DEM type and product from a list of filenames.
+        
+        Parameters
+        ----------
+        filenames
+            The file names as returned by :meth:`~pyroSAR.auxdata.DEMHandler.load`
+            (with ``vrt=None`` and ``return_fname=True``)
+            or :func:`~pyroSAR.auxdata.vrt_check_sources`.
+
+        Returns
+        -------
+            DEM type, product
+        """
+        
+        def _patterns_to_regex(patterns: dict[str, str]) -> re.Pattern[str]:
+            """Convert {group_name: glob_pattern} into one compiled regex."""
+            invalid = [key for key in patterns if not key.isidentifier()]
+            if invalid:
+                raise ValueError(
+                    f"Dictionary keys must be valid regex group names: {invalid}"
+                )
+            alternatives = [
+                f"(?P<{key}>{fnmatch.translate(pattern)})"
+                for key, pattern in patterns.items()
+            ]
+            if not alternatives:
+                raise ValueError("At least one pattern is required")
+            return re.compile("|".join(alternatives))
+        
+        pattern_dem_type = '|'.join(self.config.keys())
+        dem_types = set()
+        products = set()
+        for filename in filenames:
+            match = re.search(pattern_dem_type, filename)
+            if match:
+                dem_type = match.group()
+                dem_types.add(dem_type)
+            else:
+                raise ValueError(f'could not infer DEM type: {filename}')
+            
+            pattern_product = _patterns_to_regex(self.config[dem_type]['pattern'])
+            basename = filename.replace("\\", "/").rsplit("/", maxsplit=1)[-1]
+            match = pattern_product.fullmatch(basename)
+            if match:
+                product = match.lastgroup
+                products.add(product)
+            else:
+                raise ValueError(f'could not infer product type: {filename}')
+        
+        if len(dem_types) > 1:
+            raise ValueError(f'multiple DEM types found: {dem_types}')
+        
+        if len(products) > 1:
+            raise ValueError(f'multiple products found: {dem_types}')
+        
+        return dem_types.pop(), products.pop()
 
 
 def getasse30_hdr(fname: str) -> None:
