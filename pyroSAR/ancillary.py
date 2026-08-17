@@ -25,7 +25,7 @@ from datetime import datetime
 from . import patterns
 from spatialist.ancillary import finder
 from spatialist.vector import Vector
-from spatialist.auxil import crsConvert, ogr2ogr
+from spatialist.auxil import crsConvert, ogr2ogr, latlon_normalize
 from osgeo import osr, ogr
 from dataclasses import dataclass
 from typing import Optional, Literal, Callable, Any, Self, TypeAlias
@@ -63,7 +63,7 @@ def get_corners(
     latitudes = [point[1] for point in coordinates]
     
     # wrap longitudes into the canonical [-180°, 180°) range (e.g. 181 -> -179)
-    longitudes = [((point[0] + 180) % 360) - 180
+    longitudes = [latlon_normalize(lon=point[0])
                   for point in coordinates]
     
     ordered = sorted(longitudes)
