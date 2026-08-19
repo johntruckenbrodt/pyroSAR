@@ -709,6 +709,7 @@ class ID(object):
         
         if do_unpack:
             if tf.is_tarfile(self.scene):
+                log.info(f'unpacking scene to {directory}')
                 archive = tf.open(self.scene, 'r')
                 names = archive.getnames()
                 if offset is not None:
@@ -729,6 +730,7 @@ class ID(object):
                         archive.close()
             
             elif zf.is_zipfile(self.scene):
+                log.info(f'unpacking scene to {directory}')
                 archive = zf.ZipFile(self.scene, 'r')
                 names = archive.namelist()
                 header = os.path.commonprefix(names)
