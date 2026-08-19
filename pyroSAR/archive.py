@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import os
 import re
-import gc
 import shutil
 import sys
 import socket
@@ -1187,8 +1186,42 @@ class Archive(SceneArchive):
     
     def close(self) -> None:
         """
-        close the database connection
+        Close the database connection.
+        
+        There is a bug in spatialite v5.1.0 that prevents working with libxml2
+        (e.g., needed by lxml) after closing the database connection on Windows:
+        https://www.gaia-gis.it/fossil/libspatialite/tktview/855ef62a68b9ac6e500b54883707b2876c390c01
+        
+        Whenever close() is called, any subsequent use of e.g., lxml will lead
+        to a segmentation fault.
+        Therefore, fully closing the connection is postponed to the garbage collect
+        at the end of the running Python process.
+        The process will exit with a non-zero code, but at least all processing
+        steps are executed.
+        
+        Minimal reproducible failing example if just calling
+        ``self.engine.dispose()`` in ``self.close()``:
+    
+        .. code-block:: python
+        
+            import sqlite3
+            from lxml import html
+            
+            test = html.fromstring("<p>before</p>")
+            print(test.text)
+            
+            conn = sqlite3.connect(":memory:")
+            conn.enable_load_extension(True)
+            conn.load_extension("mod_spatialite")
+            conn.close()
+            
+            # this line triggers the segmentation fault
+            test = html.fromstring("<p>after</p>")
+            print(test.text)
         """
+        if platform.system() == 'Windows' and self.driver == 'sqlite':
+            self.engine.dispose(close=False)
+            return
         self.engine.dispose()
     
     def __exit__(

@@ -1,4 +1,8 @@
 import os
+import sys
+import platform
+import textwrap
+import subprocess as sp
 
 from sqlalchemy import Table, MetaData, Column, Integer, String
 from geoalchemy2 import Geometry
@@ -101,6 +105,43 @@ def test_archive2(tmpdir, testdata):
         db = Archive(testdata['archive_old_csv'])
     with pytest.raises(RuntimeError):
         db = Archive(testdata['archive_old_bbox'])
+
+
+def test_archive_close_does_not_break_lxml():
+    """
+    Confirm the current erroneous behavior of spatialite on Windows.
+    """
+    
+    code = textwrap.dedent("""
+        import tempfile
+        from pathlib import Path
+
+        from lxml import html
+        from pyroSAR import Archive
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dbfile = Path(tmpdir) / "archive.db"
+
+            archive = Archive(str(dbfile))
+
+            test = html.fromstring("<p>before</p>")
+
+            archive.close()
+
+            test = html.fromstring("<p>after</p>")
+            print(test.text)
+    """)
+    
+    result = sp.run(
+        args=[sys.executable, "-X", "faulthandler", "-c", code],
+        capture_output=True,
+        text=True,
+    )
+    if platform.system() == 'Windows':
+        assert result.returncode != 0
+    else:
+        assert result.returncode == 0
+    assert result.stdout.strip() == "after"
 
 
 def test_archive_postgres(tmpdir, testdata, pg_conn):
