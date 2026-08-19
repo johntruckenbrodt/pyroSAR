@@ -571,7 +571,7 @@ class DEMHandler:
             else:
                 driver_name = 'GTiff'
             driver = gdal.GetDriverByName(driver_name)
-            dataset = driver.Create(utf8_path=filename, xsize=1, ysize=1,
+            dataset = driver.Create(path=filename, xsize=1, ysize=1,
                                     bands=1, eType=gdal.GDT_Byte)
             geo = [
                 extent['xmin'],
