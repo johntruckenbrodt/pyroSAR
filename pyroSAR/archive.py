@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import os
 import re
-import gc
 import shutil
 import sys
 import socket
@@ -38,7 +37,8 @@ from spatialist.ancillary import finder
 
 from pyroSAR.drivers import identify, identify_many, ID
 
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, text
+from sqlalchemy import (create_engine, Table, MetaData,
+                        Column, Integer, String, exc, text)
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
@@ -47,7 +47,8 @@ from sqlalchemy.sql import select, func
 from sqlalchemy.engine.url import URL
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy_utils import database_exists, create_database, drop_database
-from geoalchemy2 import Geometry
+from geoalchemy2.types import Geometry
+from geoalchemy2.elements import WKTElement
 
 log = logging.getLogger(__name__)
 
@@ -279,7 +280,7 @@ class Archive(SceneArchive):
         
         # https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS
         self.engine = create_engine(url=self.url, echo=False,
-                                    connect_args=connect_args,poolclass=StaticPool)
+                                    connect_args=connect_args, poolclass=StaticPool)
         
         # call to __load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
@@ -371,27 +372,31 @@ class Archive(SceneArchive):
         
         log.debug("creating DB table 'data'")
         
-        self.data_schema = Table('data', self.meta,
-                                 Column('sensor', String),
-                                 Column('orbit', String),
-                                 Column('orbitNumber_abs', Integer),
-                                 Column('orbitNumber_rel', Integer),
-                                 Column('cycleNumber', Integer),
-                                 Column('frameNumber', Integer),
-                                 Column('acquisition_mode', String),
-                                 Column('start', String),
-                                 Column('stop', String),
-                                 Column('product', String, primary_key=True),
-                                 Column('samples', Integer),
-                                 Column('lines', Integer),
-                                 Column('outname_base', String, primary_key=True),
-                                 Column('scene', String),
-                                 Column('hh', Integer),
-                                 Column('vv', Integer),
-                                 Column('hv', Integer),
-                                 Column('vh', Integer),
-                                 Column('geometry', Geometry(geometry_type='POLYGON',
-                                                             srid=4326)))
+        self.data_schema = Table(
+            'data', self.meta,
+            Column('sensor', String),
+            Column('orbit', String),
+            Column('orbitNumber_abs', Integer),
+            Column('orbitNumber_rel', Integer),
+            Column('cycleNumber', Integer),
+            Column('frameNumber', Integer),
+            Column('acquisition_mode', String),
+            Column('start', String),
+            Column('stop', String),
+            Column('product', String, primary_key=True),
+            Column('samples', Integer),
+            Column('lines', Integer),
+            Column('outname_base', String, primary_key=True),
+            Column('scene', String),
+            Column('hh', Integer),
+            Column('vv', Integer),
+            Column('hv', Integer),
+            Column('vh', Integer),
+            Column('geometry', Geometry(
+                geometry_type='MULTIPOLYGON',
+                srid=4326)
+                   )
+        )
         # add custom fields
         if self.custom_fields is not None:
             for key, val in self.custom_fields.items():
@@ -469,9 +474,8 @@ class Archive(SceneArchive):
             if attribute == 'geometry':
                 geom = id.geometry()
                 geom.reproject(4326)
-                geom = geom.convert2wkt(set3D=False)[0]
-                geom = 'SRID=4326;' + str(geom)
-                # set attributes of the Data object according to input
+                geom = geom.convert2wkt(set3D=False, multi=True)[0]
+                geom = WKTElement(data=geom, srid=4326)
                 setattr(insertion, 'geometry', geom)
             elif attribute in ['hh', 'vv', 'hv', 'vh']:
                 setattr(insertion, attribute, int(attribute in pols))
@@ -517,7 +521,9 @@ class Archive(SceneArchive):
             test: bool = False
     ) -> None:
         """
-        Insert one or many scenes into the database
+        Insert one or many scenes into the database.
+        All footprint geometries are stored as MULTIPOLYGON
+        type to account for antimeridian-split geometries.
 
         Parameters
         ----------
@@ -915,7 +921,8 @@ class Archive(SceneArchive):
             **kwargs: Any
     ) -> list[str | bytes] | list[tuple[str | bytes]]:
         """
-        select scenes from the database
+        Select scenes from the database.
+        Single polygon MULTIPOLYGON geometries are converted back to POLYGON geometries.
 
         Parameters
         ----------
@@ -958,15 +965,24 @@ class Archive(SceneArchive):
 
         Returns
         -------
-            If a single return_value is specified: list of values for that attribute.
-            If multiple return_values are specified: list of tuples containing the requested attributes.
-            The return value type is bytes for `geometry_wkb` and str for all others.
+            If a single ``return_value`` is specified: list of values for that attribute.
+            If multiple values for ``return_value`` are specified: list of tuples containing the requested attributes.
+            The return value type is ``bytes`` for ``geometry_wkb`` and ``str`` for all others.
         """
         # Convert return_value to list if it's a string
         if isinstance(return_value, str):
             return_values = [return_value]
         else:
             return_values = return_value
+        
+        # demote MULTIPOLYGON to POLYGON if it only contains one polygon
+        geometry_sql = (
+            'CASE '
+            'WHEN ST_NumGeometries(geometry) = 1 '
+            'THEN ST_GeometryN(geometry, 1) '
+            'ELSE geometry '
+            'END'
+        )
         
         return_values_sql = []
         for val in return_values:
@@ -975,11 +991,13 @@ class Archive(SceneArchive):
             elif val == 'maxdate':
                 return_values_sql.append('stop')
             elif val == 'geometry_wkt':
-                prefix = 'ST_' if self.driver == 'postgresql' else ''
-                return_values_sql.append(f'{prefix}AsText(geometry) as geometry_wkt')
+                return_values_sql.append(
+                    f'ST_AsText({geometry_sql}) as geometry_wkt'
+                )
             elif val == 'geometry_wkb':
-                prefix = 'ST_' if self.driver == 'postgresql' else ''
-                return_values_sql.append(f'{prefix}AsBinary(geometry) as geometry_wkb')
+                return_values_sql.append(
+                    f'ST_AsBinary({geometry_sql}) as geometry_wkb'
+                )
             else:
                 return_values_sql.append(val)
         

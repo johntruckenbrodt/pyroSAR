@@ -103,6 +103,17 @@ def test_archive2(tmpdir, testdata):
         db = Archive(testdata['archive_old_bbox'])
 
 
+def test_archive_antimeridian(tmpdir, testdata):
+    dbfile = os.path.join(str(tmpdir), 'scenes.db')
+    db = Archive(dbfile)
+    db.insert([testdata['s1'], testdata['s1_anti']])
+    
+    out = db.select(vv=1, return_value=['geometry_wkt'])
+    assert len(out) == 2
+    assert wkt.loads(out[0]).geom_type == 'Polygon'
+    assert wkt.loads(out[1]).geom_type == 'MultiPolygon'
+
+
 def test_archive_postgres(tmpdir, testdata, pg_conn):
     pguser = pg_conn.info.user
     pgport = pg_conn.info.port

@@ -43,6 +43,8 @@ def testdata(testdir):
         's1_3': os.path.join(testdir, 'S1A_IW_GRDH_1SDV_20150203T043109_20150203T043134_004454_00574F_6D00.zip'),
         # for testing database duplicate handling
         's1_4': os.path.join(testdir, 'S1A_IW_GRDH_1SDV_20150203T043109_20150203T043134_004454_00574F_FEC3.zip'),
+        # for antimeridian testing
+        's1_anti': os.path.join(testdir, 'S1A_IW_GRDH_1SDV_20260606T181903_20260606T181928_064852_082C02_1C0B.zip'),
         # used in test_osv
         's1_orbit': os.path.join(testdir, 'S1A_IW_GRDH_1SDV_20210119T031653_20210119T031718_036201_043ED0_8255.zip'),
         'tif': os.path.join(testdir, 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'),
