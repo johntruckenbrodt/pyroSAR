@@ -1012,7 +1012,9 @@ class Archive(SceneArchive):
                    f"return values: {invalid_str}")
             raise ValueError(msg)
         
-        arg_valid = [x for x in kwargs.keys() if x in self.get_colnames()]
+        arg_valid = [k for k, v in kwargs.items()
+                     if k in self.get_colnames()
+                     and v is not None]
         arg_invalid = [x for x in kwargs.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
             log.info(f"the following arguments will be ignored as they are not "
