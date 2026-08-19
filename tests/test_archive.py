@@ -105,9 +105,8 @@ def test_archive2(tmpdir, testdata):
 
 def test_archive_antimeridian(tmpdir, testdata):
     dbfile = os.path.join(str(tmpdir), 'scenes.db')
-    db = Archive(dbfile)
-    db.insert([testdata['s1'], testdata['s1_anti']])
-    
+    with Archive(dbfile) as db:
+        db.insert([testdata['s1'], testdata['s1_anti']])
     out = db.select(vv=1, return_value=['geometry_wkt'])
     assert len(out) == 2
     assert wkt.loads(out[0]).geom_type == 'Polygon'
@@ -187,3 +186,19 @@ def test_archive_postgres(tmpdir, testdata, pg_conn):
     with pytest.raises(SystemExit) as pytest_wrapped_e:
         Archive('test', postgres=True, user='hello_world', port=7080)
     assert pytest_wrapped_e.type == SystemExit
+
+
+def test_archive_postgres_antimeridian(tmpdir, testdata, pg_conn):
+    pguser = pg_conn.info.user
+    pgport = pg_conn.info.port
+    pgpassword = pg_conn.info.password
+    
+    with Archive(
+            dbfile='test', postgres=True, port=pgport,
+            user=pguser, password=pgpassword
+    ) as db:
+        db.insert([testdata['s1'], testdata['s1_anti']])
+    out = db.select(vv=1, return_value=['geometry_wkt'])
+    assert len(out) == 2
+    assert wkt.loads(out[0]).geom_type == 'Polygon'
+    assert wkt.loads(out[1]).geom_type == 'MultiPolygon'
