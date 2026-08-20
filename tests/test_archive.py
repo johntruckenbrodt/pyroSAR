@@ -106,6 +106,40 @@ def extra_table():
     )
 
 
+@pytest.fixture
+def extra_tables(extra_table):
+    metadata = extra_table.metadata
+    
+    table2 = Table(
+        'mytable2',
+        metadata,
+        Column('mytable2_id', Integer, primary_key=True),
+        Column('value', String(50)),
+        Column(
+            'shape',
+            Geometry(
+                geometry_type='POLYGON',
+                srid=4326,
+            ),
+        ),
+    )
+    
+    return [extra_table, table2]
+
+
+@pytest.fixture(
+    params=[
+        ('extra_table', ['mytable']),
+        ('extra_tables', ['mytable', 'mytable2']),
+    ],
+    ids=['single-table', 'two-tables'],
+)
+def extra_table_case(request):
+    fixture_name, expected = request.param
+    tables = request.getfixturevalue(fixture_name)
+    return tables, expected
+
+
 def test_schema(archive):
     assert all(isinstance(x, str) for x in archive.get_tablenames())
     assert all(isinstance(x, str) for x in archive.get_colnames())
@@ -229,10 +263,13 @@ def test_drop_element(archive, testdata):
     archive.drop_element(testdata['s1_4'])
 
 
-def test_add_tables(archive, extra_table):
-    archive.add_tables(extra_table)
+def test_add_tables(archive, extra_table_case):
+    tables, expected = extra_table_case
     
-    assert 'mytable' in archive.get_tablenames()
+    archive.add_tables(tables)
+    
+    tablenames = archive.get_tablenames()
+    assert all(name in tablenames for name in expected)
 
 
 def test_filter_scenelist_invalid_input(archive):
