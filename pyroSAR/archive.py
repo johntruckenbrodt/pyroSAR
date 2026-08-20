@@ -1008,22 +1008,24 @@ class Archive(SceneArchive):
             finally:
                 if progress is not None:
                     progress.update(i + 1)
-            if self.select(scene=scene) != 0:
-                table = 'data'
+            
+            if self.select(scene=scene):
+                table = self.data_schema
+            elif self.select_duplicates(scene=scene, value='scene'):
+                table = self.duplicates_schema
             else:
-                # using core connection to execute SQL syntax (as was before)
-                query = '''SELECT scene FROM duplicates WHERE scene='{0}' '''.format(scene)
+                table = None
+            
+            if table is not None:
+                statement = (
+                    table.update()
+                    .where(table.c.scene == scene)
+                    .values(scene=new)
+                )
+                
                 with self.engine.begin() as conn:
-                    query_duplicates = conn.exec_driver_sql(query)
-                if len(query_duplicates) != 0:
-                    table = 'duplicates'
-                else:
-                    table = None
-            if table:
-                # using core connection to execute SQL syntax (as was before)
-                query = '''UPDATE {0} SET scene= '{1}' WHERE scene='{2}' '''.format(table, new, scene)
-                with self.engine.begin() as conn:
-                    conn.exec_driver_sql(query)
+                    conn.execute(statement)
+        
         if progress is not None:
             progress.finish()
         

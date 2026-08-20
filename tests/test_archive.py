@@ -1,6 +1,7 @@
 import pytest
 
 import sys
+import shutil
 import textwrap
 import platform
 from uuid import uuid4
@@ -407,6 +408,68 @@ def test_import_outdated_archive(
             expected_size = old.size
             new.import_outdated(old)
         assert new.size == expected_size
+
+
+def test_move(
+        archive_config,
+        testdata,
+        tmp_path,
+):
+    source_dir = tmp_path / 'source'
+    source_dir.mkdir()
+    
+    target_dir = tmp_path / 'target'
+    
+    # Work on copies so the original test data are not modified.
+    source = Path(testdata['s1'])
+    scene = source_dir / source.name
+    shutil.copy2(source, scene)
+    
+    # Create another physical file to represent a duplicate entry.
+    duplicate = source_dir / f'duplicate_{source.name}'
+    shutil.copy2(source, duplicate)
+    
+    with archive_config.open() as db:
+        db.insert(str(scene))
+        
+        # Add a duplicate entry manually. The file itself does not need to
+        # be identifiable because this test is concerned with move().
+        outname_base = db.select(
+            return_value='outname_base',
+        )[0]
+        
+        with db.engine.begin() as conn:
+            conn.execute(
+                db.duplicates_schema.insert().values(
+                    outname_base=outname_base,
+                    scene=str(duplicate),
+                )
+            )
+        
+        assert db.size == (1, 1)
+        
+        db.move(
+            scenelist=[str(scene), str(duplicate)],
+            directory=str(target_dir),
+        )
+        
+        moved_scene = target_dir / scene.name
+        moved_duplicate = target_dir / duplicate.name
+        
+        # Check physical files.
+        assert not scene.exists()
+        assert not duplicate.exists()
+        assert moved_scene.is_file()
+        assert moved_duplicate.is_file()
+        
+        # Check that both database tables contain the new paths.
+        assert db.select(
+            return_value='scene',
+        ) == [str(moved_scene)]
+        
+        assert db.select_duplicates(
+            value='scene',
+        ) == [str(moved_duplicate)]
 
 
 def test_sqlite_deleted_after_close(
