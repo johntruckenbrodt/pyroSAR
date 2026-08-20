@@ -252,6 +252,34 @@ def test_select_invalid_return_value(archive):
         )
 
 
+def test_get_tablenames(archive):
+    assert set(archive.get_tablenames()) == {
+        'data',
+        'duplicates',
+    }
+
+    assert {
+        '_managed_tables',
+        'data',
+        'duplicates',
+    } <= set(
+        archive.get_tablenames(return_all=True)
+    )
+
+
+def test_managed_tables_persist(
+        archive_config,
+        extra_table,
+):
+    with archive_config.open() as db:
+        db.add_tables(extra_table)
+
+        assert 'mytable' in db.get_tablenames()
+
+    with archive_config.open() as db:
+        assert 'mytable' in db.get_tablenames()
+
+
 def test_drop_element(archive, testdata):
     archive.insert(testdata['s1_3'])
     archive.insert(testdata['s1_4'])
@@ -265,11 +293,34 @@ def test_drop_element(archive, testdata):
 
 def test_add_tables(archive, extra_table_case):
     tables, expected = extra_table_case
-    
+
     archive.add_tables(tables)
-    
+
     tablenames = archive.get_tablenames()
-    assert all(name in tablenames for name in expected)
+
+    assert {'data', 'duplicates'} <= set(tablenames)
+    assert set(expected) <= set(tablenames)
+
+
+def test_drop_table(
+        archive,
+        extra_table,
+):
+    archive.add_tables(extra_table)
+
+    assert 'mytable' in archive.get_tablenames()
+
+    archive.drop_table('mytable')
+
+    assert 'mytable' not in archive.get_tablenames()
+    assert 'mytable' not in archive.get_tablenames(
+        return_all=True
+    )
+
+
+def test_drop_managed_tables_registry(archive):
+    with pytest.raises(ValueError):
+        archive.drop_table('_managed_tables')
 
 
 def test_filter_scenelist_invalid_input(archive):
