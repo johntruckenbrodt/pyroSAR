@@ -62,6 +62,8 @@ jobs:
         with:
           github-token: ${{ github.token }}
           format: cobertura
+          flag-name: linux
+          parallel: true
 
   build-windows:
     runs-on: windows-latest
@@ -136,7 +138,30 @@ jobs:
       - name: Test with pytest
         shell: bash -el {0}
         run: |
-          pytest -vv
+          coverage run -m pytest -vv
+          coverage xml
         env:
           PGUSER: postgres
           PGPASSWORD: postgres
+
+      - name: Publish to coveralls.io
+        if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: coverallsapp/github-action@v2.3.0
+        with:
+          github-token: ${{ github.token }}
+          format: cobertura
+          flag-name: windows
+          parallel: true
+  coveralls:
+    name: Finish Coveralls
+    needs:
+      - build-linux
+      - build-windows
+    if: ${{ always() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Finish Coveralls
+        uses: coverallsapp/github-action@v2.3.0
+        with:
+          github-token: ${{ github.token }}
+          parallel-finished: true
