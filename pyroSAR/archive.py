@@ -279,7 +279,7 @@ class Archive(SceneArchive):
         
         # https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS
         self.engine = create_engine(url=self.url, echo=False,
-                                    connect_args=connect_args,poolclass=StaticPool)
+                                    connect_args=connect_args, poolclass=StaticPool)
         
         # call to __load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
@@ -549,7 +549,6 @@ class Archive(SceneArchive):
         
         counter_regulars = 0
         counter_duplicates = 0
-        list_duplicates = []
         
         message = 'inserting {0} scene{1} into database'
         log.info(message.format(len(scenes), '' if len(scenes) == 1 else 's'))
@@ -559,23 +558,28 @@ class Archive(SceneArchive):
         else:
             progress = None
         insertions = []
+        prepared = set()
         with self.Session() as session:
             for i, id in enumerate(scenes):
                 basename = id.outname_base()
-                if not self.is_registered(id):
+                key = (id.product, basename)
+                if not self.is_registered(id) and key not in prepared:
                     insertion = self.__prepare_insertion(id)
                     insertions.append(insertion)
+                    prepared.add(key)
                     counter_regulars += 1
                     log.debug('regular:   {}'.format(id.scene))
-                elif not self.__is_registered_in_duplicates(id):
-                    insertion = self.Duplicates(outname_base=basename,
-                                                scene=id.scene)
-                    insertions.append(insertion)
-                    counter_duplicates += 1
-                    log.debug('duplicate: {}'.format(id.scene))
                 else:
-                    list_duplicates.append(id.outname_base())
-                
+                    if not self.__is_registered_in_duplicates(id):
+                        insertion = self.Duplicates(
+                            outname_base=basename,
+                            scene=id.scene
+                        )
+                        insertions.append(insertion)
+                        counter_duplicates += 1
+                        log.debug('duplicate: {}'.format(id.scene))
+                    else:
+                        log.debug('skipped:   {}'.format(id.scene))
                 if progress is not None:
                     progress.update(i + 1)
             
