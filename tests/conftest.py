@@ -50,6 +50,7 @@ def testdata(testdir):
         'tif': os.path.join(testdir, 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'),
         'archive_old_csv': os.path.join(testdir, 'archive_outdated.csv'),
         'archive_old_bbox': os.path.join(testdir, 'archive_outdated_bbox.db'),
+        'archive_old_tables-unmanaged': os.path.join(testdir, 'archive_outdated_tables-unmanaged.db'),
         'dempar': os.path.join(testdir, 'dem.par'),
         'mlipar': os.path.join(testdir, 'mli.par')
     }

@@ -159,9 +159,11 @@ class Archive(SceneArchive):
         required for postgres driver: port number to the database. Default: 5432
     cleanup:
         check whether all registered scenes exist and remove missing entries?
+        Ignored when ``legacy=True``.
     legacy:
-        open an outdated database in legacy mode to import into a new database.
-        Opening an outdated database without legacy mode will throw a RuntimeError.
+        Open an outdated database in legacy mode so that it can be imported
+        into a new database using :meth:`import_outdated`.
+        Trying to regularly open an outdated database will raise a RuntimeError.
 
     Examples
     ----------
@@ -234,7 +236,6 @@ class Archive(SceneArchive):
             cleanup: bool = True,
             legacy: bool = False
     ):
-        
         if dbfile.endswith('.csv'):
             raise RuntimeError("Please create a new Archive database and import the"
                                "CSV file using db.import_outdated('<file>.csv').")
@@ -244,11 +245,12 @@ class Archive(SceneArchive):
             dirname = os.path.dirname(os.path.abspath(dbfile))
             w_ok = os.access(dirname, os.W_OK)
             if not w_ok:
-                raise RuntimeError('cannot write to directory {}'.format(dirname))
+                raise RuntimeError(f'cannot write to directory {dirname}')
             # catch if .db extension is missing
             root, ext = os.path.splitext(dbfile)
             if len(ext) == 0:
                 dbfile = root + '.db'
+            database_new = not os.path.isfile(dbfile)
         else:
             self.driver = 'postgresql'
             if not self.__check_host(host, port):
@@ -282,6 +284,9 @@ class Archive(SceneArchive):
         self.engine = create_engine(url=self.url, echo=False,
                                     connect_args=connect_args, poolclass=StaticPool)
         
+        if self.driver == 'postgresql':
+            database_new = not database_exists(self.engine.url)
+        
         # call to __load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
             log.debug('loading spatialite extension')
@@ -294,7 +299,7 @@ class Archive(SceneArchive):
                 raise RuntimeError('could not load spatialite extension')
         
         # if database is new, (create postgres-db and) enable spatial extension
-        if not database_exists(self.engine.url):
+        if database_new:
             if self.driver == 'postgresql':
                 log.debug('creating new PostgreSQL database')
                 create_database(self.engine.url)
@@ -304,14 +309,26 @@ class Archive(SceneArchive):
                     conn.execute(select(func.InitSpatialMetaData(1)))
                 else:
                     conn.exec_driver_sql('CREATE EXTENSION IF NOT EXISTS postgis;')
+        
         # create Session (ORM) and get metadata
         self.Session = sessionmaker(bind=self.engine)
         self.meta = MetaData()
         self.custom_fields = custom_fields
+        self.managed_tables_schema: Table | None = None
+        
+        # managed tables are 'data', 'duplicates' and anything added with add_tables()
+        self.__init_managed_tables(
+            database_new=database_new,
+            legacy=legacy,
+        )
         
         # load or create tables
         self.__init_data_table()
         self.__init_duplicates_table()
+        
+        if self.managed_tables_schema is not None:
+            self.__register_table('data')
+            self.__register_table('duplicates')
         
         msg = ("the 'data' table is missing {}. Please create a new database "
                "and import the old one opened in legacy mode using "
@@ -329,7 +346,7 @@ class Archive(SceneArchive):
         self.Duplicates = self.Base.classes.duplicates
         self.dbfile = dbfile
         
-        if cleanup:
+        if cleanup and not legacy:
             log.info('checking for missing scenes')
             self.cleanup()
             sys.stdout.flush()
@@ -339,29 +356,34 @@ class Archive(SceneArchive):
             tables: Table | list[Table],
     ) -> None:
         """
-        Add tables to the database per :class:`sqlalchemy.schema.Table`
-        Tables provided here will be added to the database.
-
-
-        Parameters
-        ----------
-        tables:
-            The table(s) to be added to the database.
+        Add tables to the database.
         """
+        if self.managed_tables_schema is None:
+            raise RuntimeError(
+                'tables cannot be added to a legacy Archive'
+            )
+        
+        if isinstance(tables, Table):
+            tables = [tables]
+        
         created = []
-        if isinstance(tables, list):
-            for table in tables:
-                table.metadata = self.meta
-                if not sql_inspect(self.engine).has_table(str(table)):
-                    table.create(self.engine)
-                    created.append(str(table))
-        else:
-            table = tables
-            table.metadata = self.meta
-            if not sql_inspect(self.engine).has_table(str(table)):
+        
+        for table in tables:
+            name = table.name
+            
+            if table.metadata is not self.meta:
+                table = table.to_metadata(self.meta)
+            
+            if not sql_inspect(self.engine).has_table(name):
                 table.create(self.engine)
-                created.append(str(table))
-        log.info('created table(s) {}.'.format(', '.join(created)))
+                created.append(name)
+            
+            self.__register_table(name)
+        
+        log.info(
+            'created table(s) {}.'.format(', '.join(created))
+        )
+        
         self.Base = automap_base(metadata=self.meta)
         self.Base.prepare(autoload_with=self.engine)
     
@@ -408,6 +430,47 @@ class Archive(SceneArchive):
                     log.info('Value in dict custom_fields must be "integer" or "string"!')
         
         self.data_schema.create(self.engine)
+    
+    def __init_managed_tables(
+            self,
+            database_new: bool,
+            legacy: bool,
+    ) -> None:
+        """
+        Initialize the table registry.
+
+        The presence of ``_managed_tables`` identifies a database using the
+        current Archive database format. Existing databases without this table
+        may only be opened in legacy mode.
+        """
+        inspector = sql_inspect(self.engine)
+        
+        if inspector.has_table('_managed_tables'):
+            self.managed_tables_schema = Table(
+                '_managed_tables',
+                self.meta,
+                autoload_with=self.engine,
+            )
+            return
+        
+        if not database_new:
+            if legacy:
+                self.managed_tables_schema = None
+                return
+            
+            raise RuntimeError(
+                "the Archive database uses an outdated format because "
+                "the '_managed_tables' table is missing. Open the database "
+                "with legacy=True and import it into a new Archive using "
+                "Archive.import_outdated()."
+            )
+        
+        self.managed_tables_schema = Table(
+            '_managed_tables',
+            self.meta,
+            Column('name', String, primary_key=True),
+        )
+        self.managed_tables_schema.create(self.engine)
     
     def __init_duplicates_table(self) -> None:
         # create tables if not existing
@@ -514,6 +577,37 @@ class Archive(SceneArchive):
         files = [self.to_str(x[0]) for x in scenes]
         return [x for x in files if not os.path.isfile(x)]
     
+    def __register_table(self, table: str) -> None:
+        if self.managed_tables_schema is None:
+            raise RuntimeError(
+                'tables cannot be registered in a legacy Archive'
+            )
+        
+        with self.engine.begin() as conn:
+            exists = conn.execute(
+                select(self.managed_tables_schema.c.name)
+                .where(self.managed_tables_schema.c.name == table)
+            ).scalar_one_or_none()
+            
+            if exists is None:
+                conn.execute(
+                    self.managed_tables_schema.insert().values(
+                        name=table
+                    )
+                )
+    
+    def __unregister_table(self, table: str) -> None:
+        if self.managed_tables_schema is None:
+            return
+        
+        with self.engine.begin() as conn:
+            conn.execute(
+                self.managed_tables_schema.delete()
+                .where(
+                    self.managed_tables_schema.c.name == table
+                )
+            )
+    
     def insert(
             self,
             scene_in: str | ID | list[str | ID],
@@ -555,7 +649,6 @@ class Archive(SceneArchive):
         
         counter_regulars = 0
         counter_duplicates = 0
-        list_duplicates = []
         
         message = 'inserting {0} scene{1} into database'
         log.info(message.format(len(scenes), '' if len(scenes) == 1 else 's'))
@@ -565,23 +658,28 @@ class Archive(SceneArchive):
         else:
             progress = None
         insertions = []
+        prepared = set()
         with self.Session() as session:
             for i, id in enumerate(scenes):
                 basename = id.outname_base()
-                if not self.is_registered(id):
+                key = (id.product, basename)
+                if not self.is_registered(id) and key not in prepared:
                     insertion = self.__prepare_insertion(id)
                     insertions.append(insertion)
+                    prepared.add(key)
                     counter_regulars += 1
                     log.debug('regular:   {}'.format(id.scene))
-                elif not self.__is_registered_in_duplicates(id):
-                    insertion = self.Duplicates(outname_base=basename,
-                                                scene=id.scene)
-                    insertions.append(insertion)
-                    counter_duplicates += 1
-                    log.debug('duplicate: {}'.format(id.scene))
                 else:
-                    list_duplicates.append(id.outname_base())
-                
+                    if not self.__is_registered_in_duplicates(id):
+                        insertion = self.Duplicates(
+                            outname_base=basename,
+                            scene=id.scene
+                        )
+                        insertions.append(insertion)
+                        counter_duplicates += 1
+                        log.debug('duplicate: {}'.format(id.scene))
+                    else:
+                        log.debug('skipped:   {}'.format(id.scene))
                 if progress is not None:
                     progress.update(i + 1)
             
@@ -764,39 +862,56 @@ class Archive(SceneArchive):
         
         return sorted([self.to_str(x) for x in col_names])
     
-    def get_tablenames(self, return_all: bool = False) -> list[str]:
+    def get_tablenames(
+            self,
+            return_all: bool = False,
+    ) -> list[str]:
         """
-        Return the names of all tables in the database
+        Return table names from the database.
 
         Parameters
         ----------
         return_all:
-            only gives tables data and duplicates on default.
-            Set to True to get all other tables and views created automatically.
+            If False, return tables managed by Archive, i.e. ``data``,
+            ``duplicates`` and tables registered through :meth:`add_tables`.
+            If True, return all database tables and views.
 
         Returns
         -------
             the table names
         """
-        #  TODO: make this dynamic
-        #  the method was intended to only return user generated tables by default, as well as data and duplicates
-        all_tables = ['ElementaryGeometries', 'SpatialIndex', 'geometry_columns', 'geometry_columns_auth',
-                      'geometry_columns_field_infos', 'geometry_columns_statistics', 'geometry_columns_time',
-                      'spatial_ref_sys', 'spatial_ref_sys_aux', 'spatialite_history', 'sql_statements_log',
-                      'sqlite_sequence', 'views_geometry_columns', 'views_geometry_columns_auth',
-                      'views_geometry_columns_field_infos', 'views_geometry_columns_statistics',
-                      'virts_geometry_columns', 'virts_geometry_columns_auth', 'virts_geometry_columns_field_infos',
-                      'virts_geometry_columns_statistics', 'data_licenses', 'KNN']
-        # get tablenames from metadata
-        tables = sorted([self.to_str(x) for x in self.meta.tables.keys()])
+        inspector = sql_inspect(self.engine)
+        
         if return_all:
-            return tables
-        else:
-            ret = []
-            for i in tables:
-                if i not in all_tables and 'idx_' not in i:
-                    ret.append(i)
-            return ret
+            tables = inspector.get_table_names()
+            views = inspector.get_view_names()
+            
+            return sorted(set(tables + views))
+        
+        # Legacy databases do not contain a managed-table registry.
+        # The two Archive core tables are nevertheless known.
+        if self.managed_tables_schema is None:
+            existing = set(inspector.get_table_names())
+            return sorted(
+                x
+                for x in ['data', 'duplicates']
+                if x in existing
+            )
+        
+        with self.engine.begin() as conn:
+            managed = conn.execute(
+                select(self.managed_tables_schema.c.name)
+            ).scalars().all()
+        
+        # Avoid reporting stale registry entries if a table was removed
+        # externally rather than through Archive.drop_table().
+        existing = set(inspector.get_table_names())
+        
+        return sorted(
+            table
+            for table in managed
+            if table in existing
+        )
     
     def get_unique_directories(self) -> list[str]:
         """
@@ -826,21 +941,40 @@ class Archive(SceneArchive):
                 text = csvfile.read()
                 csvfile.seek(0)
                 dialect = csv.Sniffer().sniff(text)
-                reader = csv.DictReader(csvfile, dialect=dialect)
-                scenes = []
-                for row in reader:
-                    scenes.append(row['scene'])
+                reader = csv.DictReader(
+                    f=csvfile,
+                    dialect=dialect,
+                )
+                
+                scenes = [
+                    row['scene']
+                    for row in reader
+                ]
+                
                 self.insert(scenes)
+        
         elif isinstance(dbfile, Archive):
-            with self.engine.begin() as conn:
-                scenes = conn.exec_driver_sql('SELECT scene from data')
-                scenes = [s.scene for s in scenes]
+            with dbfile.engine.begin() as conn:
+                scenes = conn.exec_driver_sql(
+                    'SELECT scene FROM data'
+                )
+                scenes = [
+                    row.scene
+                    for row in scenes
+                ]
+            
             self.insert(scenes)
+            
             reinsert = dbfile.select_duplicates(value='scene')
-            if reinsert is not None:
+            
+            if reinsert:
                 self.insert(reinsert)
+        
         else:
-            raise RuntimeError("'dbfile' must either be a CSV file name or an Archive object")
+            raise RuntimeError(
+                "'dbfile' must either be a CSV file name "
+                "or an Archive object."
+            )
     
     def move(self, scenelist: list[str], directory: str, pbar: bool = False) -> None:
         """
@@ -881,22 +1015,24 @@ class Archive(SceneArchive):
             finally:
                 if progress is not None:
                     progress.update(i + 1)
-            if self.select(scene=scene) != 0:
-                table = 'data'
+            
+            if self.select(scene=scene):
+                table = self.data_schema
+            elif self.select_duplicates(scene=scene, value='scene'):
+                table = self.duplicates_schema
             else:
-                # using core connection to execute SQL syntax (as was before)
-                query = '''SELECT scene FROM duplicates WHERE scene='{0}' '''.format(scene)
+                table = None
+            
+            if table is not None:
+                statement = (
+                    table.update()
+                    .where(table.c.scene == scene)
+                    .values(scene=new)
+                )
+                
                 with self.engine.begin() as conn:
-                    query_duplicates = conn.exec_driver_sql(query)
-                if len(query_duplicates) != 0:
-                    table = 'duplicates'
-                else:
-                    table = None
-            if table:
-                # using core connection to execute SQL syntax (as was before)
-                query = '''UPDATE {0} SET scene= '{1}' WHERE scene='{2}' '''.format(table, new, scene)
-                with self.engine.begin() as conn:
-                    conn.exec_driver_sql(query)
+                    conn.execute(statement)
+        
         if progress is not None:
             progress.finish()
         
@@ -1111,7 +1247,7 @@ class Archive(SceneArchive):
             
             if processdir and os.path.isdir(processdir):
                 scenes = [x for x in query_rs
-                          if len(finder(processdir, [x[-1]],
+                          if len(finder(processdir, matchlist=[x[-1]],
                                         regex=True, recursive=recursive)) == 0]
             else:
                 scenes = query_rs
@@ -1126,7 +1262,11 @@ class Archive(SceneArchive):
                     values = []
                     for k, v in zip(return_values, x[:-1]):  # Exclude outname_base
                         if k == 'geometry_wkb':
-                            values.append(v)
+                            if isinstance(v, memoryview):
+                                # psycopg2-specific
+                                values.append(v.tobytes())
+                            else:
+                                values.append(v)
                         else:
                             values.append(self.to_str(v))
                     ret.append(tuple(values))
@@ -1207,8 +1347,43 @@ class Archive(SceneArchive):
     
     def close(self) -> None:
         """
-        close the database connection
+        Close the database connection.
+        
+        There is a bug in spatialite v5.1.0 that prevents working with libxml2
+        (e.g., needed by lxml) after closing the database connection on Windows:
+        https://www.gaia-gis.it/fossil/libspatialite/tktview/855ef62a68b9ac6e500b54883707b2876c390c01
+        
+        Whenever ``close()`` is called, any subsequent use of e.g., lxml will lead
+        to a segmentation fault.
+        Therefore, fully closing the connection is postponed to the garbage collect
+        at the end of the running Python process.
+        The process will exit with a non-zero code, but at least all processing
+        steps are executed.
+        This also means that the database file cannot be deleted during the process (PermissionError).
+        
+        Minimal reproducible failing example if just calling
+        ``self.engine.dispose()`` in ``close()``:
+    
+        .. code-block:: python
+        
+            import sqlite3
+            from lxml import html
+            
+            test = html.fromstring("<p>before</p>")
+            print(test.text)
+            
+            conn = sqlite3.connect(":memory:")
+            conn.enable_load_extension(True)
+            conn.load_extension("mod_spatialite")
+            conn.close()
+            
+            # this line triggers the segmentation fault
+            test = html.fromstring("<p>after</p>")
+            print(test.text)
         """
+        if platform.system() == 'Windows' and self.driver == 'sqlite':
+            self.engine.dispose(close=False)
+            return
         self.engine.dispose()
     
     def __exit__(
@@ -1295,23 +1470,54 @@ class Archive(SceneArchive):
         table:
             the table name
         """
-        if table in self.get_tablenames(return_all=True):
-            # this removes the idx tables and entries in geometry_columns for sqlite databases
-            if self.driver == 'sqlite':
-                with self.engine.begin() as conn:
-                    query = "SELECT f_table_name FROM geometry_columns"
-                    tab_with_geom = [rowproxy[0] for rowproxy
-                                     in conn.exec_driver_sql(query)]
-                    if table in tab_with_geom:
-                        conn.exec_driver_sql("SELECT DropGeoTable('" + table + "')")
-            else:
-                table_info = Table(table, self.meta, autoload=True, autoload_with=self.engine)
-                table_info.drop(self.engine)
-            log.info('table {} dropped from database.'.format(table))
+        if table == '_managed_tables':
+            raise ValueError(
+                "table '_managed_tables' cannot be dropped"
+            )
+        
+        if table not in self.get_tablenames(return_all=True):
+            raise ValueError(
+                f"table {table} is not registered in the database!"
+            )
+        
+        if self.driver == 'sqlite':
+            with self.engine.begin() as conn:
+                tab_with_geom = [
+                    row[0]
+                    for row in conn.exec_driver_sql(
+                        'SELECT f_table_name '
+                        'FROM geometry_columns'
+                    )
+                ]
+                
+                if table in tab_with_geom:
+                    conn.exec_driver_sql(
+                        f"SELECT DropGeoTable('{table}')"
+                    )
+                else:
+                    table_info = Table(
+                        table,
+                        MetaData(),
+                        autoload_with=self.engine,
+                    )
+                    table_info.drop(bind=conn)
+        
         else:
-            raise ValueError("table {} is not registered in the database!".format(table))
+            table_info = Table(
+                table,
+                MetaData(),
+                autoload_with=self.engine,
+            )
+            table_info.drop(self.engine)
+        
+        self.__unregister_table(table)
+        
+        log.info(
+            f'table {table} dropped from database.'
+        )
+        
         self.Base = automap_base(metadata=self.meta)
-        self.Base.prepare(self.engine, reflect=True)
+        self.Base.prepare(autoload_with=self.engine)
     
     @staticmethod
     def __is_open(ip: str, port: str | int) -> bool:
