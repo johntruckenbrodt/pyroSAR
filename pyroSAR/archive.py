@@ -278,7 +278,7 @@ class Archive(SceneArchive):
         
         # https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS
         self.engine = create_engine(url=self.url, echo=False,
-                                    connect_args=connect_args,poolclass=StaticPool)
+                                    connect_args=connect_args, poolclass=StaticPool)
         
         # call to __load_spatialite() for sqlite, to load mod_spatialite via event handler listen()
         if self.driver == 'sqlite':
@@ -1090,7 +1090,7 @@ class Archive(SceneArchive):
             
             if processdir and os.path.isdir(processdir):
                 scenes = [x for x in query_rs
-                          if len(finder(processdir, [x[-1]],
+                          if len(finder(processdir, matchlist=[x[-1]],
                                         regex=True, recursive=recursive)) == 0]
             else:
                 scenes = query_rs
@@ -1105,7 +1105,11 @@ class Archive(SceneArchive):
                     values = []
                     for k, v in zip(return_values, x[:-1]):  # Exclude outname_base
                         if k == 'geometry_wkb':
-                            values.append(v)
+                            if isinstance(v, memoryview):
+                                # psycopg2-specific
+                                values.append(v.tobytes())
+                            else:
+                                values.append(v)
                         else:
                             values.append(self.to_str(v))
                     ret.append(tuple(values))
@@ -1192,15 +1196,16 @@ class Archive(SceneArchive):
         (e.g., needed by lxml) after closing the database connection on Windows:
         https://www.gaia-gis.it/fossil/libspatialite/tktview/855ef62a68b9ac6e500b54883707b2876c390c01
         
-        Whenever close() is called, any subsequent use of e.g., lxml will lead
+        Whenever ``close()`` is called, any subsequent use of e.g., lxml will lead
         to a segmentation fault.
         Therefore, fully closing the connection is postponed to the garbage collect
         at the end of the running Python process.
         The process will exit with a non-zero code, but at least all processing
         steps are executed.
+        This also means that the database file cannot be deleted during the process (PermissionError).
         
         Minimal reproducible failing example if just calling
-        ``self.engine.dispose()`` in ``self.close()``:
+        ``self.engine.dispose()`` in ``close()``:
     
         .. code-block:: python
         
