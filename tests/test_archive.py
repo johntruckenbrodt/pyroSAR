@@ -257,12 +257,12 @@ def test_get_tablenames(archive):
         'data',
         'duplicates',
     }
-
+    
     assert {
-        '_managed_tables',
-        'data',
-        'duplicates',
-    } <= set(
+               '_managed_tables',
+               'data',
+               'duplicates',
+           } <= set(
         archive.get_tablenames(return_all=True)
     )
 
@@ -273,9 +273,9 @@ def test_managed_tables_persist(
 ):
     with archive_config.open() as db:
         db.add_tables(extra_table)
-
+        
         assert 'mytable' in db.get_tablenames()
-
+    
     with archive_config.open() as db:
         assert 'mytable' in db.get_tablenames()
 
@@ -293,11 +293,11 @@ def test_drop_element(archive, testdata):
 
 def test_add_tables(archive, extra_table_case):
     tables, expected = extra_table_case
-
+    
     archive.add_tables(tables)
-
+    
     tablenames = archive.get_tablenames()
-
+    
     assert {'data', 'duplicates'} <= set(tablenames)
     assert set(expected) <= set(tablenames)
 
@@ -307,11 +307,11 @@ def test_drop_table(
         extra_table,
 ):
     archive.add_tables(extra_table)
-
+    
     assert 'mytable' in archive.get_tablenames()
-
+    
     archive.drop_table('mytable')
-
+    
     assert 'mytable' not in archive.get_tablenames()
     assert 'mytable' not in archive.get_tablenames(
         return_all=True
@@ -345,6 +345,19 @@ def test_persistence_and_export(
     assert Vector(str(shp)).nfeatures == 1
 
 
+@pytest.mark.parametrize(
+    'key',
+    [
+        'archive_old_csv',
+        'archive_old_bbox',
+        'archive_old_tables-unmanaged',
+    ],
+)
+def test_open_legacy_archive_fails(testdata, key):
+    with pytest.raises(RuntimeError):
+        Archive(dbfile=testdata[key])
+
+
 def test_import_outdated_csv(
         archive_config,
         testdata,
@@ -364,9 +377,17 @@ def test_import_outdated_invalid_input(
             db.import_outdated('foobar')
 
 
+@pytest.mark.parametrize(
+    'key',
+    [
+        'archive_old_bbox',
+        'archive_old_tables-unmanaged',
+    ],
+)
 def test_import_outdated_archive(
         archive_config,
         testdata,
+        key,
         monkeypatch,
 ):
     """
@@ -378,27 +399,14 @@ def test_import_outdated_archive(
     folder = Path(__file__).parent / 'data'
     monkeypatch.chdir(folder)
     
-    with archive_config.open() as db:
+    with archive_config.open() as new:
         with Archive(
-                testdata['archive_old_bbox'],
+                testdata[key],
                 legacy=True,
-        ) as db_old:
-            db.import_outdated(db_old)
-
-
-@pytest.mark.parametrize(
-    'key',
-    [
-        'archive_old_csv',
-        'archive_old_bbox',
-    ],
-)
-def test_open_outdated_without_legacy(
-        testdata,
-        key,
-):
-    with pytest.raises(RuntimeError):
-        Archive(testdata[key])
+        ) as old:
+            expected_size = old.size
+            new.import_outdated(old)
+        assert new.size == expected_size
 
 
 def test_sqlite_deleted_after_close(
