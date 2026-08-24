@@ -24,7 +24,7 @@ import inspect
 from datetime import datetime
 from . import patterns
 from spatialist.ancillary import finder
-from spatialist.vector import Vector
+from spatialist.vector import Vector, hull
 from spatialist.auxil import crsConvert, longitude_shortest_interval
 from osgeo import osr, ogr
 from dataclasses import dataclass
@@ -80,13 +80,14 @@ def get_geometry(
 ) -> Vector:
     """
     Get the convex hull geometry of a set of points.
-    The geometry can optionally handle cases where the coordinates cross the
-    antimeridian by accounting for longitude wrapping.
+
+    Antimeridian crossing is handled automatically for geographic coordinate
+    reference systems.
 
     Parameters
     ----------
     coordinates
-        A list of coordinate tuples representing (longitude, latitude) values.
+        A list of coordinate tuples representing (x, y) values.
     crs
         The coordinate reference system to use for defining the geometry.
 
@@ -95,55 +96,30 @@ def get_geometry(
         A vector object containing the processed geometry.
     """
     srs = crsConvert(crs, 'osr')
+    
     points = ogr.Geometry(ogr.wkbMultiPoint)
     
-    lons = [lon for lon, lat in coordinates]
-    
-    wrapped = True if max(lons) - min(lons) > 180 else False
-    
-    for lon, lat in coordinates:
-        # shift longitudes if crossing the antimeridian
-        lon_mod = lon + 360 if wrapped and lon < 0 else lon
+    for x, y in coordinates:
         point = ogr.Geometry(ogr.wkbPoint)
-        point.AddPoint(lon_mod, lat)
+        point.AddPoint(x, y)
         points.AddGeometry(point)
-    geom = points.ConvexHull()
-    geom.FlattenTo2D()
-    point = points = None
-    exterior = geom.GetGeometryRef(0)
-    if exterior.IsClockwise():
-        points = list(exterior.GetPoints())
-        exterior.Empty()
-        for x, y in reversed(points):
-            exterior.AddPoint(x, y)
-        geom.CloseRings()
-    exterior = points = None
     
-    vec = Vector(driver='MEM')
-    vec.addlayer(name='geometry', srs=srs, geomType=geom.GetGeometryType())
-    vec.addfield(name='area', type=ogr.OFTReal)
-    vec.addfeature(geometry=geom, fields={'area': geom.Area()})
-    geom = None
-    
-    # shift antimeridian-shifted coordinates back and split the polygon
-    if wrapped:
-        ds = ogr2ogr(
-            src=vec.vector,
-            dst='',
-            format='MEM',
-            dstSRS=srs,
-            reproject=True,
-            geometryType='PROMOTE_TO_MULTI',
-            options=[
-                '-wrapdateline',
-                '-datelineoffset', '180'
-            ],
-            void=False
+    with Vector() as vec:
+        vec.addlayer(
+            name='geometry',
+            srs=srs,
+            geomType=ogr.wkbMultiPoint,
         )
-        vec.__init__()
-        vec.vector = ds
-        vec.init_layer()
-    return vec
+        vec.addfeature(points)
+        
+        points = point = None
+        
+        out = hull(
+            vectorobject=vec,
+            ratio=1.0
+        )
+    
+    return out
 
 
 def groupby(
