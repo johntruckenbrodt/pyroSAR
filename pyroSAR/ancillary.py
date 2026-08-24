@@ -25,7 +25,7 @@ from datetime import datetime
 from . import patterns
 from spatialist.ancillary import finder
 from spatialist.vector import Vector
-from spatialist.auxil import crsConvert, ogr2ogr, latlon_normalize
+from spatialist.auxil import crsConvert, longitude_shortest_interval
 from osgeo import osr, ogr
 from dataclasses import dataclass
 from typing import Optional, Literal, Callable, Any, Self, TypeAlias
@@ -61,23 +61,10 @@ def get_corners(
         raise ValueError("coordinates must not be empty")
     
     latitudes = [point[1] for point in coordinates]
+    longitudes = [point[0] for point in coordinates]
     
-    # wrap longitudes into the canonical [-180°, 180°) range (e.g. 181 -> -179)
-    longitudes = [latlon_normalize(lon=point[0])
-                  for point in coordinates]
-    
-    ordered = sorted(longitudes)
-    if len(ordered) == 1:
-        xmin = xmax = ordered[0]
-    else:
-        # compute smallest circular longitude interval
-        gaps = [
-            (ordered[(i + 1) % len(ordered)] - ordered[i]) % 360
-            for i in range(len(ordered))
-        ]
-        largest_gap = gaps.index(max(gaps))
-        xmin = ordered[(largest_gap + 1) % len(ordered)]
-        xmax = ordered[largest_gap]
+    # compute smallest circular longitude interval
+    xmin, xmax = longitude_shortest_interval(longitudes)
     
     return {
         'xmin': xmin,
