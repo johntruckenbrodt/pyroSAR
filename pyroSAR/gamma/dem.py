@@ -1,7 +1,7 @@
 ###############################################################################
 # preparation of DEM data for use in GAMMA
 
-# Copyright (c) 2014-2022, the pyroSAR Developers.
+# Copyright (c) 2014-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -299,30 +299,36 @@ def dem_autocreate(geometry, demType, outfile, buffer=None, t_srs=4326, tr=None,
         shutil.rmtree(tmpdir)
 
 
-def dem_import(src, dst, geoid=None, logpath=None, outdir=None):
+def dem_import(
+        src: str,
+        dst: str,
+        geoid: str | None = None,
+        logpath: str | None = None,
+        outdir: str | None = None,
+        shellscript: str | None = None
+) -> None:
     """
-    convert an existing DEM in GDAL-readable format to GAMMA format including optional geoid-ellipsoid conversion.
+    convert an existing DEM in GDAL-readable format to GAMMA
+    format including optional geoid-ellipsoid conversion.
     
     Parameters
     ----------
-    src: str
+    src:
         the input DEM
-    dst: str
+    dst:
         the output DEM
-    geoid: str or None
+    geoid:
         the geoid height reference of `src`; supported options:
         
         - 'EGM96'
         - 'EGM2008'
         - None: assume WGS84 ellipsoid heights and do not convert heights
-    logpath: str or None
+    logpath:
         a directory to write logfiles to
-    outdir: str or None
+    outdir:
         the directory to execute the command in
-
-    Returns
-    -------
-
+    shellscript:
+        a file to write the GAMMA commands to in shell format
     """
     with raster.Raster(src) as ras:
         epsg = ras.epsg
@@ -349,17 +355,22 @@ def dem_import(src, dst, geoid=None, logpath=None, outdir=None):
                       gflg=gflg,
                       geoid='-',
                       logpath=logpath,
-                      outdir=outdir)
+                      outdir=outdir,
+                      shellscript=shellscript)
     else:
         # new approach enabling an arbitrary target CRS EPSG code
         diff.create_dem_par(DEM_par=dst_base + '.par',
                             inlist=[''] * 9,
-                            EPSG=epsg)
+                            EPSG=epsg,
+                            logpath=logpath,
+                            outdir=outdir,
+                            shellscript=shellscript)
         dem_import_pars = {'input_DEM': src,
                            'DEM': dst,
                            'DEM_par': dst_base + '.par',
                            'logpath': logpath,
-                           'outdir': outdir}
+                           'outdir': outdir,
+                           'shellscript': shellscript}
         if gflg == 2:
             home = ExamineGamma().home
             if geoid == 'EGM96':
@@ -367,7 +378,7 @@ def dem_import(src, dst, geoid=None, logpath=None, outdir=None):
             elif geoid == 'EGM2008':
                 geoid_file = os.path.join(home, 'DIFF', 'scripts', 'egm2008-5.dem')
             else:
-                raise RuntimeError('conversion of {} geoid is not supported by GAMMA'.format(geoid))
+                raise RuntimeError(f"conversion of '{geoid}' geoid is not supported by GAMMA")
             dem_import_pars['geoid'] = geoid_file
             dem_import_pars['geoid_par'] = geoid_file + '_par'
         

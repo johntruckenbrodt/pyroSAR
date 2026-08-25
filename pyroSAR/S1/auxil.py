@@ -1,7 +1,7 @@
 ###############################################################################
 # general utilities for Sentinel-1
 
-# Copyright (c) 2016-2025, the pyroSAR Developers.
+# Copyright (c) 2016-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -12,11 +12,12 @@
 # to the terms contained in the LICENSE.txt file.
 ###############################################################################
 
+from __future__ import annotations
+
 import os
 import re
 import sys
 import requests
-import tempfile
 import zipfile as zf
 from io import BytesIO
 from datetime import datetime, timedelta
@@ -34,8 +35,16 @@ import progressbar as pb
 from spatialist.ancillary import finder
 
 import logging
+from types import TracebackType
+from typing import Any, Literal, TypeAlias, TYPE_CHECKING
 
 log = logging.getLogger(__name__)
+
+Timeout: TypeAlias = float | tuple[float | None, float | None] | None
+OsvType: TypeAlias = Literal['POE', 'RES']
+OsvDateType: TypeAlias = Literal['publish', 'start', 'stop']
+Sentinel1Satellite: TypeAlias = Literal['S1A', 'S1B', 'S1C', 'S1D']
+OsvProduct: TypeAlias = dict[str, Any]
 
 try:
     import argparse
@@ -45,8 +54,11 @@ except ImportError:
     finally:
         import argparse
 
+if TYPE_CHECKING:
+    from ..drivers import ID
 
-def init_parser():
+
+def init_parser() -> argparse.ArgumentParser:
     """
     initialize argument parser for S1 processing utilities
     """
@@ -89,9 +101,9 @@ class OSV(object):
 
     Parameters
     ----------
-    osvdir: str
+    osvdir
         the directory to write the orbit files to
-    timeout: int or tuple or None
+    timeout
         the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
     
     See Also
@@ -99,7 +111,7 @@ class OSV(object):
     `requests timeouts <https://requests.readthedocs.io/en/master/user/advanced/#timeouts>`_
     """
     
-    def __init__(self, osvdir=None, timeout=300):
+    def __init__(self, osvdir: str | None = None, timeout: Timeout = 300) -> None:
         self.timeout = timeout
         if osvdir is None:
             try:
@@ -118,13 +130,14 @@ class OSV(object):
         self._init_dir()
         self._reorganize()
     
-    def __enter__(self):
+    def __enter__(self) -> OSV:
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None,
+                 exc_tb: TracebackType | None) -> None:
         return
     
-    def _init_dir(self):
+    def _init_dir(self) -> None:
         """
         create directories if they don't exist yet
         """
@@ -132,18 +145,14 @@ class OSV(object):
             if not os.path.isdir(dir):
                 os.makedirs(dir)
     
-    def _parse(self, file):
+    def _parse(self, file: str) -> dict[str, str]:
         basename = os.path.basename(file)
         groups = re.match(self.pattern_fine, basename).groupdict()
         return groups
     
-    def _reorganize(self):
+    def _reorganize(self) -> None:
         """
         compress and move EOF files into subdirectories
-
-        Returns
-        -------
-
         """
         message = True
         for subdir in [self.outdir_poe, self.outdir_res]:
@@ -165,19 +174,18 @@ class OSV(object):
                                   arcname=base)
                 os.remove(eof)
     
-    def _typeEvaluate(self, osvtype):
+    def _typeEvaluate(self, osvtype: OsvType) -> str:
         """
-        evaluate the 'osvtype' method argument and return the corresponding remote repository and local directory
+        evaluate the 'osvtype' method argument and return the corresponding local directory
 
         Parameters
         ----------
-        osvtype: str
+        osvtype
             the type of orbit files required; either 'POE' or 'RES'
 
         Returns
         -------
-        tuple of str
-            the remote repository and local directory of the osv type
+            the local directory of the OSV type
         """
         if osvtype not in ['POE', 'RES']:
             raise IOError('type must be either "POE" or "RES"')
@@ -186,7 +194,13 @@ class OSV(object):
         else:
             return self.outdir_res
     
-    def __catch_aux_sentinel(self, sensor, start, stop, osvtype='POE'):
+    def __catch_aux_sentinel(
+            self,
+            sensor: Sentinel1Satellite,
+            start: datetime,
+            stop: datetime,
+            osvtype: OsvType = 'POE'
+    ) -> list[OsvProduct]:
         url = 'http://aux.sentinel1.eo.esa.int'
         skeleton = '{url}/{osvtype}ORB/{year}/{month:02d}/{day:02d}/'
         
@@ -221,7 +235,13 @@ class OSV(object):
         
         return files
     
-    def __catch_step_auxdata(self, sensor, start, stop, osvtype='POE'):
+    def __catch_step_auxdata(
+            self,
+            sensor: Sentinel1Satellite | list[Sentinel1Satellite],
+            start: datetime,
+            stop: datetime,
+            osvtype: OsvType = 'POE'
+    ) -> list[OsvProduct]:
         url = 'https://step.esa.int/auxdata/orbits/Sentinel-1'
         skeleton = '{url}/{osvtype}ORB/{sensor}/{year}/{month:02d}/'
         
@@ -266,7 +286,12 @@ class OSV(object):
                     busy = False
         return files
     
-    def __catch_gnss(self, sensor, start, stop, osvtype='POE'):
+    def __catch_gnss(
+            self,
+            sensor: Sentinel1Satellite | list[Sentinel1Satellite],
+            start: datetime, stop: datetime,
+            osvtype: OsvType = 'POE'
+    ) -> list[OsvProduct]:
         url = 'https://scihub.copernicus.eu/gnss'
         redirect = 'https://dhusfeed.dhus.onda-dias.net/gnss'
         auth = ('gnssguest', 'gnssguest')
@@ -306,7 +331,7 @@ class OSV(object):
         target = '{}/search?q={}&format=json'.format(url, query_str)
         log.info(target)
         
-        def _parse_gnsssearch_json(search_dict):
+        def _parse_gnsssearch_json(search_dict: dict[str, Any] | list[dict[str, Any]]) -> dict[str, OsvProduct]:
             parsed_dict = {}
             # Will return ['entry'] as dict if only one item
             # If so just make a list
@@ -343,7 +368,7 @@ class OSV(object):
                 parsed_dict[id] = entry_dict
             return parsed_dict
         
-        def _parse_gnsssearch_response(response_json):
+        def _parse_gnsssearch_response(response_json: dict[str, Any]) -> dict[str, OsvProduct]:
             if 'entry' in response_json.keys():
                 search_dict = response_json['entry']
                 parsed_dict = _parse_gnsssearch_json(search_dict)
@@ -380,33 +405,34 @@ class OSV(object):
             item['href'] = item['href'].replace(redirect, url)
         return collection
     
-    def catch(self, sensor, osvtype='POE', start=None, stop=None, url_option=1):
+    def catch(
+            self,
+            sensor: Sentinel1Satellite | list[Sentinel1Satellite],
+            osvtype: OsvType = 'POE',
+            start: str | None = None,
+            stop: str | None = None,
+            url_option: int = 1
+    ) -> list[OsvProduct]:
         """
         check a server for files
 
         Parameters
         ----------
-        sensor: str or list[str]
-            The S1 mission(s):
-            
-             - 'S1A'
-             - 'S1B'
-             - 'S1C'
-             - 'S1D'
-        osvtype: str
+        sensor
+            The S1 satellite(s)
+        osvtype
             the type of orbit files required
-        start: str or None
+        start
             the date to start searching for files in format YYYYmmddTHHMMSS
-        stop: str or None
+        stop
             the date to stop searching for files in format YYYYmmddTHHMMSS
-        url_option: int
+        url_option
             the OSV download URL option
             
              - 1: https://step.esa.int/auxdata/orbits/Sentinel-1
 
         Returns
         -------
-        list[dict]
             the product dictionary of the remote OSV files, with href
         """
         
@@ -434,25 +460,24 @@ class OSV(object):
         
         return items
     
-    def date(self, file, datetype):
+    def date(self, file: str, datetype: OsvDateType) -> str:
         """
         extract a date from an OSV file name
 
         Parameters
         ----------
-        file: str
+        file
             the OSV file
-        datetype: {'publish', 'start', 'stop'}
+        datetype
             one of three possible date types contained in the OSV filename
 
         Returns
         -------
-        str
             a time stamp in the format YYYYmmddTHHMMSS
         """
         return self._parse(file)[datetype]
     
-    def clean_res(self):
+    def clean_res(self) -> None:
         """
         delete all RES files for whose date a POE file exists
         """
@@ -463,64 +488,66 @@ class OSV(object):
             for item in deprecated:
                 os.remove(item)
     
-    def getLocals(self, osvtype='POE'):
+    def getLocals(self, osvtype: OsvType = 'POE') -> list[str]:
         """
         get a list of local files of specific type
 
         Parameters
         ----------
-        osvtype: {'POE', 'RES'}
+        osvtype
             the type of orbit files required
 
         Returns
         -------
-        list[str]
             a selection of local OSV files
         """
         directory = self._typeEvaluate(osvtype)
         return finder(directory, [self.pattern], regex=True)
     
-    def maxdate(self, osvtype='POE', datetype='stop'):
+    def maxdate(self, osvtype: OsvType = 'POE', datetype: OsvDateType = 'stop') -> str | None:
         """
         return the latest date of locally existing POE/RES files
 
         Parameters
         ----------
-        osvtype: {'POE', 'RES'}
+        osvtype
             the type of orbit files required
-        datetype: {'publish', 'start', 'stop'}
+        datetype
             one of three possible date types contained in the OSV filename
 
         Returns
         -------
-        str
             a timestamp in format YYYYmmddTHHMMSS
         """
         directory = self._typeEvaluate(osvtype)
         files = finder(directory, [self.pattern], regex=True)
         return max([self.date(x, datetype) for x in files]) if len(files) > 0 else None
     
-    def mindate(self, osvtype='POE', datetype='start'):
+    def mindate(self, osvtype: OsvType = 'POE', datetype: OsvDateType = 'start') -> str | None:
         """
         return the earliest date of locally existing POE/RES files
 
         Parameters
         ----------
-        osvtype: {'POE', 'RES'}
+        osvtype
             the type of orbit files required
-        datetype: {'publish', 'start', 'stop'}
+        datetype
             one of three possible date types contained in the OSV filename
 
         Returns
         -------
-        str
             a timestamp in format YYYYmmddTHHMMSS
         """
         directory = self._typeEvaluate(osvtype)
         files = finder(directory, [self.pattern], regex=True)
         return min([self.date(x, datetype) for x in files]) if len(files) > 0 else None
     
-    def match(self, sensor, timestamp, osvtype='POE'):
+    def match(
+            self,
+            sensor: Sentinel1Satellite,
+            timestamp: str,
+            osvtype: OsvType | list[OsvType] = 'POE'
+    ) -> str | None:
         """
         return the corresponding OSV file for the provided sensor and time stamp.
         The file returned is one which covers the acquisition time and, if multiple exist,
@@ -529,19 +556,15 @@ class OSV(object):
 
         Parameters
         ----------
-        sensor: str
-            The S1 mission:
-            
-             - 'S1A'
-             - 'S1B'
-        timestamp: str
+        sensor
+            The S1 satellite
+        timestamp
             the time stamp in the format 'YYYmmddTHHMMSS'
-        osvtype: str or list[str]
+        osvtype
             the type of orbit files required; either 'POE', 'RES' or a list of both
 
         Returns
         -------
-        str
             the best matching orbit file (overlapping time plus latest publication date)
         """
         # list all locally existing files of the defined type
@@ -563,19 +586,16 @@ class OSV(object):
                 best = self.match(sensor=sensor, timestamp=timestamp, osvtype='RES')
             return best
     
-    def retrieve(self, products, pbar=False):
+    def retrieve(self, products: list[OsvProduct], pbar: bool = False) -> None:
         """
         download a list of product dictionaries into the respective subdirectories, i.e. POEORB or RESORB
 
         Parameters
         ----------
-        products: list[dict]
+        products
             a list of remotely existing OSV product dictionaries as returned by method :meth:`catch`
-        pbar: bool
+        pbar
             add a progressbar?
-
-        Returns
-        -------
         """
         downloads = []
         for product in products:
@@ -630,25 +650,24 @@ class OSV(object):
             progress.finish()
         self.clean_res()
     
-    def sortByDate(self, files, datetype='start'):
+    def sortByDate(self, files: list[str], datetype: OsvDateType = 'start') -> list[str]:
         """
         sort a list of OSV files by a specific date type
 
         Parameters
         ----------
-        files: list[str]
+        files
             some OSV files
-        datetype: {'publish', 'start', 'stop'}
+        datetype
             one of three possible date types contained in the OSV filename
 
         Returns
         -------
-        list[str]
             the input OSV files sorted by the defined date
         """
         return sorted(files, key=lambda x: self.date(x, datetype))
     
-    def _subdir(self, file):
+    def _subdir(self, file: str) -> str:
         """
         | return the subdirectory in which to store the EOF file,
         | i.e. basedir/{type}ORB/{sensor}/{year}/{month}
@@ -656,12 +675,11 @@ class OSV(object):
 
         Parameters
         ----------
-        file: str
+        file
             the EOF filename
 
         Returns
         -------
-        str
             the target directory
         """
         attr = self._parse(file)
@@ -674,7 +692,7 @@ class OSV(object):
         return outdir
 
 
-def removeGRDBorderNoise(scene, method='pyroSAR'):
+def removeGRDBorderNoise(scene: ID, method: Literal['pyroSAR', 'ESA'] = 'pyroSAR') -> None:
     """
     Mask out Sentinel-1 image border noise. This function implements the method for removing GRD border noise as
     published by ESA :cite:`Miranda2018` and implemented in SNAP and additionally adds further refinement of the result using an image
@@ -685,9 +703,9 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
 
     Parameters
     ----------
-    scene: pyroSAR.drivers.SAFE
+    scene
         the Sentinel-1 scene object
-    method: str
+    method
         the border noise removal method to be applied; one of the following:
         
          - 'ESA': the pure implementation as described by ESA
@@ -785,10 +803,10 @@ def removeGRDBorderNoise(scene, method='pyroSAR'):
         
         if method == 'pyroSAR':
             # helper functions for masking out negative values
-            def helper1(x):
+            def helper1(x: np.ndarray) -> int:
                 return len(x) - np.argmax(x > 0)
             
-            def helper2(x):
+            def helper2(x: np.ndarray) -> int:
                 return len(x) - np.argmax(x[::-1] > 0)
             
             # mask out negative values and simplify borders (custom implementation)

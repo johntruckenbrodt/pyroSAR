@@ -1312,9 +1312,186 @@ Drivers
 Auxiliary Data Handling
 -----------------------
 - enable global search (the parameter `geometries` is now optional)
-- generation of local indices to avoid web traffic
+- generation of local indices to reduce web traffic
 - option to work in offline mode
 
 Ancillary Tools
 ---------------
 - class :class:`~pyroSAR.ancillary.Lock`: fixed bug where lock file would remain on error if target does not exist
+
+SNAP API
+--------
+- :meth:`pyroSAR.examine.ExamineSnap.get_version`: more robust mechanism to read version information.
+  Only the version is returned as string now (instead of a dictionary with version and release date).
+
+- :meth:`pyroSAR.examine.SnapProperties`: support for `snap.conf` files
+
+0.34.1 | 2026-02-12
+===================
+
+SNAP API
+--------
+- :class:`pyroSAR.examine.ExamineSnap`: restore Python 3.10 compatibility (f-string parsing issue)
+
+0.34.2 | 2026-02-13
+===================
+
+Ancillary Tools
+---------------
+- restored Python 3.10 compatibility (import `typing_extensions.Self` instead of `typing.Self` if necessary)
+
+0.34.3 | 2026-02-17
+===================
+
+SNAP API
+--------
+- :class:`pyroSAR.examine.ExamineSnap`: do not call SNAP to read version info in `__init__`
+
+Auxiliary Data Handling
+-----------------------
+- handle empty URL lists in `DEMHandler.__retrieve`
+
+0.34.4 | 2026-03-03
+===================
+
+SNAP API
+--------
+- :func:`pyroSAR.snap.auxil.erode_edges`: explictly open BEAM-DIMAP .img files with the ENVI driver.
+  This was necessary because GDAL 3.12 introduces a new `MiraMonRaster` driver, which is used per default for .img files.
+
+Drivers
+-------
+- use `MEM` instead of `Memory` as driver for creating in-memory :class:`spatialist.vector.Vector` objects. `Memory` has been deprecated.
+
+0.34.5 | 2026-03-06
+===================
+
+SNAP API
+--------
+- :meth:`pyroSAR.examine.ExamineSnap.get_version`: fixed bug where the X11 environment variable `DISPLAY` was preventing SNAP to start
+
+GAMMA API
+---------
+- handle subprocess signal kills like segmentation fault (SIGSEGV). Before these were just passed through, now a `RuntimeError` is raised.
+
+0.35.0 | 2026-03-09
+===================
+
+Archive
+-------
+- new module :mod:`pyroSAR.archive` extracted from :mod:`pyroSAR.drivers`
+- new protocol class :class:`pyroSAR.archive.SceneArchive` to establish an interface for scene search classes (inherited by :class:`pyroSAR.archive.Archive`).
+- method `Archive.encode` has been renamed to :meth:`~pyroSAR.archive.Archive.to_str` and has been reimplemented to be more predictable
+
+Drivers
+-------
+- :class:`~pyroSAR.drivers.ID`: deleted method `export2sqlite`
+
+0.36.0 | 2026-03-10
+===================
+
+GAMMA API
+---------
+
+- :func:`pyroSAR.gamma.dem.dem_import`:
+
+    + add `shellscript` argument
+    + consistently pass `logpath`, `outdir` and `shellscript` to GAMMA commands
+
+- :func:`pyroSAR.gamma.auxil.process`:
+
+    + replace environment variable `base` in the `shellscript` with `OUTDIR` and corrected its usage.
+      Before, the value of `outdir` in the command was just replaced with `$base`.
+      This lead to wrong scripts whenever different values for `outdir` were passed to `process`.
+      Now, no global variable is set and `OUTDIR` is redefined whenever the value of `outdir` changes, e.g.
+
+      .. code-block:: bash
+
+          OUTDIR=/xyz
+          command1 $OUTDIR
+          command2 $OUTDIR
+          OUTDIR=/abc
+          command3 $OUTDIR
+
+    + bugfix: the file header and the declaration of `GAMMA_HOME` are now written to the file even if `outdir=None`
+
+0.36.1 | 2026-03-24
+===================
+
+GAMMA API
+---------
+
+- :func:`pyroSAR.gamma.util.convert2gamma`: fix error in not removing thermal noise due to GAMMA interface change
+
+0.36.2 | 2026-04-20
+===================
+
+GAMMA API
+---------
+
+- Do not write `nan` to output files and remove written files on error for:
+
+    + :func:`pyroSAR.gamma.util.lat_linear_to_db`
+    + :func:`pyroSAR.gamma.util.lat_product`
+    + :func:`pyroSAR.gamma.util.lat_ratio`
+
+- Replace usage of removed function :func:`spatialist.ancillary.which`
+
+0.37.0 | 2026-07-07
+===================
+
+- added modern typing to various modules
+
+Auxiliary Data Handling
+-----------------------
+- :class:`pyroSAR.auxdata.DEMHandler`: do not allow ``extent=None`` in methods
+  :meth:`~pyroSAR.auxdata.DEMHandler.intrange` and :meth:`~pyroSAR.auxdata.DEMHandler.remote_ids`.
+  If no geometries are defined, :class:`~pyroSAR.auxdata.DEMHandler` now auto-defines a global extent.
+
+- implemented workaround for a GDAL bug (`OSGeo/gdal#13464 <https://github.com/OSGeo/gdal/issues/13464>`_),
+  which resulted in shifted DEMs.
+
+Drivers
+-------
+
+- updated sqlalchemy and geoalchemy2 dependencies
+
+0.38.0 | 2026-08-11
+===================
+
+SNAP API
+--------
+- :meth:`pyroSAR.examine.SnapProperties`: skip `snap.conf` modification if the file does not exist (because SNAP is not installed)
+
+GAMMA API
+---------
+
+Interface changes:
+
+- :func:`pyroSAR.gamma.parser.parse_module`:
+
+  - renamed argument ``bindir`` to ``directory``
+  - now expects the module directory and not the subdirectories ``bin``/``scripts``. The function now loops over those subdirectories
+
+Behavior changes:
+
+- :mod:`pyroSAR.gamma.api`:
+
+  - create dummy modules that can be imported even if GAMMA is not installed (an error is raised if a function is executed and the respective GAMMA module is not installed.)
+  - raise an error and not a warning if module parsing or import fails (only if ``GAMMA_HOME`` is set)
+
+- :mod:`pyroSAR.gamma.util`:
+
+  - always import (dummy) modules ``diff``, ``disp``, ``isp`` and ``lat`` from :mod:`pyroSAR.gamma.api`
+
+- :func:`pyroSAR.gamma.parser.parse_module`:
+
+  - raise an error if commands could not be parsed (instead of just logging an info)
+
+- :func:`pyroSAR.gamma.parser.parse_command`:
+
+  - raise an error if the return code of the called command is unexpected
+
+- :class:`pyroSAR.examine.ExamineGamma`:
+
+  - strictly check for set GAMMA module environment variables like ``DIFF_HOME``

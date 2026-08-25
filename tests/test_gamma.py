@@ -1,5 +1,9 @@
 import os
 import pytest
+
+if "GAMMA_HOME" not in os.environ:
+    pytest.skip("GAMMA is not installed", allow_module_level=True)
+
 from pyroSAR.gamma import ISPPar, par2hdr, Namespace, slc_corners, api
 
 
@@ -44,7 +48,7 @@ def test_namespace():
     assert n['dem_seg'] == '-'
 
 
-@pytest.mark.skipif('isp' not in dir(api), reason='requires GAMMA installation with module ISP')
+@pytest.mark.skipif(not hasattr(api, 'isp'), reason='requires GAMMA installation with module ISP')
 def test_slc_corners(testdata):
     print(testdata['dempar'])
     pts = slc_corners(testdata['mlipar'])

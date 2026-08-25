@@ -1,7 +1,7 @@
 ###############################################################################
 # parse GAMMA command docstrings to Python functions
 
-# Copyright (c) 2015-2025, the pyroSAR Developers.
+# Copyright (c) 2015-2026, the pyroSAR Developers.
 
 # This file is part of the pyroSAR Project. It is subject to the
 # license terms in the LICENSE.txt file found in the top-level
@@ -13,9 +13,10 @@
 ###############################################################################
 import os
 import re
+from shutil import which
 import subprocess as sp
 from collections import Counter
-from spatialist.ancillary import finder, which, dissolve
+from spatialist.ancillary import finder, dissolve
 
 from pyroSAR.examine import ExamineGamma
 
@@ -24,22 +25,21 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def parse_command(command, indent='    '):
+def parse_command(command: str, indent: str = '    ') -> str:
     """
     Parse the help text of a GAMMA command to a Python function including a docstring.
-    The docstring is in rst format and can thu be parsed by e.g. sphinx.
+    The docstring is in rst format and can thus be parsed by e.g. sphinx.
     This function is not intended to be used by itself, but rather within function :func:`parse_module`.
 
     Parameters
     ----------
-    command: str
+    command
         the name of the gamma command
-    indent: str
+    indent
         the Python function indentation string; default: four spaces
 
     Returns
     -------
-    str
         the full Python function text
 
     """
@@ -50,6 +50,35 @@ def parse_command(command, indent='    '):
     command_base = os.path.basename(command)
     proc = sp.Popen(command, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True)
     out, err = proc.communicate()
+    
+    # raise an error if the command cannot be executed normally
+    # 255 is the normal return code of binary executables.
+    # Several scripts return 0.
+    # Some commands unexpectedly return 1 or 2. This is currently being checked with the GAMMA developers.
+    
+    exceptions_returncode = {
+        1: [
+            'kml_map',
+            'kml_pt',
+            'svg_arrow',
+            'svg_map',
+            'svg_poly',
+            'par_Fucheng_SLC',
+            'par_HT1_SLC',
+            'INTF_SLC',
+        ],
+        2: ['vrt2dem']
+    }
+    
+    returncodes = [0, 255]
+    for returncode, commands in exceptions_returncode.items():
+        if command_base in commands:
+            returncodes.append(returncode)
+            break
+    
+    if proc.returncode not in returncodes:
+        raise RuntimeError(f'"{err}" (return code: {proc.returncode})')
+    
     # sometimes the description string is split between stdout and stderr
     # for the following commands stderr contains the usage description line, which is inserted into stdout
     if command_base in ['ras_pt', 'ras_data_pt', 'rasdt_cmap_pt']:
@@ -58,7 +87,7 @@ def parse_command(command, indent='    '):
         # for all other commands stderr is just appended to stdout
         out += err
     
-    # raise a warning when the command has been deprecated
+    # raise a warning if the command has been deprecated
     # extract all lines starting and ending with three asterisks
     matches = re.findall(r'^\*{3}\s*(.*?)\s*\*{3}$', out, re.MULTILINE)
     if matches:
@@ -69,9 +98,6 @@ def parse_command(command, indent='    '):
         match = re.search(pattern, cleaned)
         if match:
             raise DeprecationWarning(match.group())
-    
-    if re.search(r"Can't locate FILE/Path\.pm in @INC", out):
-        raise RuntimeError('unable to parse Perl script')
     ###########################################
     # fix command-specific inconsistencies in parameter naming
     # in several commands the parameter naming in the usage description line does not match that of the docstring
@@ -630,20 +656,17 @@ def parse_command(command, indent='    '):
     return fun
 
 
-def parse_module(bindir, outfile):
+def parse_module(directory: str, outfile: str) -> None:
     """
-    parse all Gamma commands of a module to functions and save them to a Python script.
+    parse all GAMMA commands of a module to functions and save them to a Python script.
 
     Parameters
     ----------
-    bindir: str
-        the `bin` directory of a module containing the commands
-    outfile: str
+    directory
+        the module's directory containing subdirectories `bin` and `scripts`
+    outfile
         the name of the Python file to write
 
-    Returns
-    -------
-    
     Examples
     --------
     >>> import os
@@ -652,55 +675,65 @@ def parse_module(bindir, outfile):
     >>> parse_module('/cluster/GAMMA_SOFTWARE-20161207/ISP/bin', outname)
     """
     
-    if not os.path.isdir(bindir):
-        raise OSError('directory does not exist: {}'.format(bindir))
-    
-    excludes = ['coord_trans',  # doesn't take any parameters and is interactive
-                'RSAT2_SLC_preproc',  # takes option flags
-                'mk_ASF_CEOS_list',  # "cannot create: Directory nonexistent"
-                '2PASS_UNW',  # parameter name inconsistencies
-                'mk_diff_2d',  # takes option flags
-                'gamma_doc'  # opens the Gamma documentation
-                ]
+    excludes = [
+        'coord_trans',  # doesn't take any parameters and is interactive
+        'RSAT2_SLC_preproc',  # takes option flags
+        'mk_ASF_CEOS_list',  # "cannot create: Directory nonexistent"
+        '2PASS_UNW',  # parameter name inconsistencies
+        'mk_diff_2d',  # takes option flags
+        'gamma_doc'  # opens the Gamma documentation
+    ]
     failed = []
     outstring = ''
-    for cmd in sorted(finder(bindir, [r'^\w+$'], regex=True), key=lambda s: s.lower()):
-        basename = os.path.basename(cmd)
-        if basename not in excludes:
-            try:
-                fun = parse_command(cmd)
-            except RuntimeError as e:
-                failed.append('{0}: {1}'.format(basename, str(e)))
-                continue
-            except DeprecationWarning:
-                continue
-            except:
-                failed.append('{0}: {1}'.format(basename, 'error yet to be assessed'))
-                continue
-            outstring += fun + '\n\n'
+    
+    if not os.path.isdir(directory):
+        raise OSError('directory does not exist: {}'.format(directory))
+    
+    for submodule in ['bin', 'scripts']:
+        log.info(submodule)
+        target = os.path.join(directory, submodule)
+        
+        if not os.path.isdir(target):
+            continue
+        
+        cmds = sorted(finder(target, [r'^\w+$'], regex=True),
+                      key=lambda s: s.lower())
+        
+        for cmd in cmds:
+            basename = os.path.basename(cmd)
+            if basename not in excludes:
+                try:
+                    fun = parse_command(cmd)
+                except DeprecationWarning:
+                    continue
+                except Exception as e:
+                    failed.append(f'{cmd}: {type(e).__name__}({e})')
+                    continue
+                outstring += fun + '\n\n'
+    
+    if len(failed) > 0:
+        info = 'Could not parse the following GAMMA commands:\n{0}\n({1} total)'
+        raise RuntimeError(info.format('\n'.join(failed), len(failed)))
+    
     if len(outstring) > 0:
         if not os.path.isfile(outfile):
             with open(outfile, 'w') as out:
                 out.write('from pyroSAR.gamma.auxil import process\n\n\n')
         with open(outfile, 'a') as out:
             out.write(outstring)
-    if len(failed) > 0:
-        info = 'the following functions could not be parsed:\n{0}\n({1} total)'
-        log.info(info.format('\n'.join(failed), len(failed)))
 
 
-def autoparse():
+def autoparse() -> None:
     """
     automatic parsing of GAMMA commands.
-    This function will detect the GAMMA installation via environment variable `GAMMA_HOME`, detect all available
-    modules (e.g. ISP, DIFF) and parse all the module's commands via function :func:`parse_module`.
-    A new Python module will be created called `gammaparse`, which is stored under `$HOME/.pyrosar`.
-    Upon importing the `pyroSAR.gamma` submodule, this function is run automatically and module `gammaparse`
-    is imported as `api`.
+    This function will detect the GAMMA installation via environment variable
+    ``$GAMMA_HOME``, detect all available  modules (e.g. ISP, DIFF) and parse all
+    the module's commands via function :func:`parse_module`.
+    A new Python module will be created called ``gammaparse``, which is stored
+    under ``$HOME/.pyrosar``.
+    Upon importing the ``pyroSAR.gamma`` submodule, this function is run
+    automatically and module ``gammaparse`` is imported as ``api``.
     
-    Returns
-    -------
-
     Examples
     --------
     >>> from pyroSAR.gamma.api import diff
@@ -711,17 +744,16 @@ def autoparse():
     target = os.path.join(os.path.expanduser('~'), '.pyrosar', 'gammaparse')
     if not os.path.isdir(target):
         os.makedirs(target)
-    for module in finder(home, ['[A-Z]*'], foldermode=2):
+    for module in finder(home, ['[A-Z]*'], foldermode=2, recursive=False):
         outfile = os.path.join(target, os.path.basename(module).lower() + '.py')
         if not os.path.isfile(outfile):
-            log.info('parsing module {} to {}'.format(os.path.basename(module), outfile))
-            for submodule in ['bin', 'scripts']:
-                log.info(submodule)
-                try:
-                    parse_module(os.path.join(module, submodule), outfile)
-                except OSError:
-                    log.info('..does not exist')
-    modules = [re.sub(r'\.py', '', os.path.basename(x)) for x in finder(target, [r'[a-z]+\.py$'], regex=True)]
+            log.info(f'parsing module {os.path.basename(module)} to {outfile}')
+            try:
+                parse_module(module, outfile)
+            except OSError:
+                log.info('..does not exist')
+    modules = [re.sub(r'\.py', '', os.path.basename(x))
+               for x in finder(target, [r'[a-z]+\.py$'], regex=True)]
     if len(modules) > 0:
         with open(os.path.join(target, '__init__.py'), 'w') as init:
             init.write('from . import {}'.format(', '.join(modules)))

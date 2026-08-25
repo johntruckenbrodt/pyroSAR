@@ -97,10 +97,6 @@ class ExamineSnap(object):
         
         # update the config file: this scans for config changes and re-writes the config file if any are found
         self.__update_config()
-        
-        if ExamineSnap._version_dict is None:
-            ExamineSnap._version_dict = self.__read_version_dict()
-        self.version_dict = ExamineSnap._version_dict
     
     def __getattr__(self, item):
         if item in ['path', 'gpt']:
@@ -231,8 +227,14 @@ class ExamineSnap(object):
         if platform.system() == 'Windows':
             cmd.extend(['--console', 'suppress'])
         
+        # fix Exception in thread "main" java.awt.AWTError: Can't connect to
+        # X11 window server using 'xyz' as the value of the DISPLAY variable.
+        env = os.environ.copy()
+        env['DISPLAY'] = ''
+        
         proc = sp.Popen(args=cmd, stdout=sp.PIPE, stderr=sp.STDOUT,
-                        text=True, encoding='utf-8', bufsize=1)
+                        text=True, encoding='utf-8', bufsize=1,
+                        env=env)
         
         counter = 0
         lines = []
@@ -332,6 +334,9 @@ class ExamineSnap(object):
         -------
             the version number
         """
+        if ExamineSnap._version_dict is None:
+            ExamineSnap._version_dict = self.__read_version_dict()
+        
         log.debug(f"reading version information for module '{module}'")
         patterns = {'core': 'org.esa.snap.snap.core',
                     'desktop': 'org.esa.snap.snap.ui',
@@ -343,7 +348,7 @@ class ExamineSnap(object):
             raise ValueError(f"'{module}' is not a valid module name. "
                              f"Supported options: {patterns.keys()}")
         
-        for k, v in self.version_dict.items():
+        for k, v in ExamineSnap._version_dict.items():
             if patterns[module] == k:
                 if v['state'] == 'Available':
                     raise RuntimeError(f'{module} is not installed')
@@ -433,8 +438,26 @@ class ExamineGamma(object):
         self.version = re.search('GAMMA_SOFTWARE[-/](?P<version>[0-9]{8})',
                                  getattr(self, 'home')).group('version')
         
+        modules = finder(self.home, [['[A-Z]*']], foldermode=2, recursive=False)
+        for module in modules:
+            module_base = os.path.basename(module)
+            module_home = os.environ.get(f'{module_base}_HOME')
+            if module_home is None:
+                raise RuntimeError(
+                    f"Found GAMMA module '{module_base}', "
+                    f"but environment variable '{module_base}_HOME' "
+                    f"is not set."
+                )
+            else:
+                if self.home not in module_home:
+                    raise RuntimeError(
+                        f"Inconsistent paths in environment variables:\n"
+                        f"GAMMA_HOME: {self.home}\n"
+                        f"{module_base}_HOME: {module_home}"
+                    )
+        
         try:
-            out, err = run(['which', 'gdal-config'], void=False)
+            returncode, out, err = run(['which', 'gdal-config'], void=False)
             gdal_config = out.strip('\n')
             self.gdal_config = gdal_config
         except sp.CalledProcessError:
@@ -517,10 +540,11 @@ class SnapProperties(object):
         # "RuntimeError: OpenJDK 64-Bit Server VM warning: Options
         # -Xverify:none and -noverify were deprecated in JDK 13 and will
         # likely be removed in a future release."
-        if '-J-Xverify:none' in self.conf['default_options']:
-            opts = self.conf['default_options'].copy()
-            opts.remove('-J-Xverify:none')
-            self['default_options'] = opts
+        if 'default_options' in self.conf:
+            if '-J-Xverify:none' in self.conf['default_options']:
+                opts = self.conf['default_options'].copy()
+                opts.remove('-J-Xverify:none')
+                self['default_options'] = opts
         
         # some properties need to be read from the default user path to
         # be visible to SNAP
@@ -593,7 +617,7 @@ class SnapProperties(object):
     def _to_dict(
             self,
             path: str,
-            str_split: dict[str, str] | None=None
+            str_split: dict[str, str] | None = None
     ) -> dict[str, int | float | str | None | list[str]]:
         """
         Read a properties file into a dictionary.

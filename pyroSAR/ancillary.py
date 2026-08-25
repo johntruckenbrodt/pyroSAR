@@ -25,7 +25,12 @@ from datetime import datetime
 from . import patterns
 from spatialist.ancillary import finder
 from dataclasses import dataclass
-from typing import Optional, Literal, Self, Callable, Any
+from typing import Optional, Literal, Callable, Any
+try:
+    from typing import Self
+except ImportError:
+    # Python < 3.11
+    from typing_extensions import Self
 from types import TracebackType
 import logging
 

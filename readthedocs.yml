@@ -1,9 +1,9 @@
 version: 2
 
 build:
-  os: "ubuntu-lts-latest"
+  os: "ubuntu-26.04"
   tools:
-    python: "mambaforge-latest"
+    python: "miniforge3-26.3"
 
 conda:
   environment: environment.yml

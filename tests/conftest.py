@@ -1,6 +1,8 @@
 import os
+import sys
 import shutil
 import pytest
+import psycopg2
 import platform
 from pathlib import Path
 from pyroSAR.examine import ExamineSnap
@@ -46,6 +48,7 @@ def testdata(testdir):
         'tif': os.path.join(testdir, 'S1A__IW___A_20150309T173017_VV_grd_mli_geo_norm_db.tif'),
         'archive_old_csv': os.path.join(testdir, 'archive_outdated.csv'),
         'archive_old_bbox': os.path.join(testdir, 'archive_outdated_bbox.db'),
+        'archive_old_tables-unmanaged': os.path.join(testdir, 'archive_outdated_tables-unmanaged.db'),
         'dempar': os.path.join(testdir, 'dem.par'),
         'mlipar': os.path.join(testdir, 'mli.par')
     }
@@ -94,3 +97,36 @@ def tmp_home(tmp_path_factory):
     snap_config.auxdatapath = str(snap / 'auxdata')
     
     return home
+
+
+if sys.platform != "win32":
+    from pytest_postgresql import factories
+    
+    # On Linux/macOS: let pytest-postgresql manage the server
+    postgresql_proc = factories.postgresql_proc()
+    postgresql = factories.postgresql('postgresql_proc')
+    
+    
+    @pytest.fixture
+    def pg_conn(postgresql):
+        yield postgresql
+
+else:
+    # On Windows: connect to an already running PostgreSQL service
+    @pytest.fixture
+    def pg_conn():
+        user = os.environ.get('PGUSER', 'postgres')
+        password = os.environ.get('PGPASSWORD', 'PGPASSWORD')
+        port = int(os.environ.get('PGPORT', '5432'))
+        
+        conn = psycopg2.connect(
+            host='127.0.0.1',
+            port=port,
+            user=user,
+            password=password,
+            dbname='postgres',
+        )
+        try:
+            yield conn
+        finally:
+            conn.close()

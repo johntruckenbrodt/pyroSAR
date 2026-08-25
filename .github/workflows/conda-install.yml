@@ -26,13 +26,6 @@ jobs:
     defaults:
       run:
         shell: micromamba-shell {0}
-    services:
-      postgres:
-        image: postgis/postgis:16-3.4
-        env:
-          POSTGRES_PASSWORD: Password12!
-        ports:
-          - 5432:5432
     steps:
       - uses: actions/checkout@v3
       - name: Set up python environment
@@ -61,17 +54,16 @@ jobs:
           pip install .
       - name: Test with pytest
         run: |
-          coverage run -m pytest
+          coverage run -m pytest -vv
           coverage xml
-        env:
-          PGUSER: postgres
-          PGPASSWORD: Password12!
       - name: Publish to coveralls.io
         if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
         uses: coverallsapp/github-action@v2.3.0
         with:
           github-token: ${{ github.token }}
           format: cobertura
+          flag-name: linux
+          parallel: true
 
   build-windows:
     runs-on: windows-latest
@@ -146,7 +138,30 @@ jobs:
       - name: Test with pytest
         shell: bash -el {0}
         run: |
-          pytest -vv
+          coverage run -m pytest -vv
+          coverage xml
         env:
           PGUSER: postgres
           PGPASSWORD: postgres
+
+      - name: Publish to coveralls.io
+        if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: coverallsapp/github-action@v2.3.0
+        with:
+          github-token: ${{ github.token }}
+          format: cobertura
+          flag-name: windows
+          parallel: true
+  coveralls:
+    name: Finish Coveralls
+    needs:
+      - build-linux
+      - build-windows
+    if: ${{ always() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Finish Coveralls
+        uses: coverallsapp/github-action@v2.3.0
+        with:
+          github-token: ${{ github.token }}
+          parallel-finished: true

@@ -50,6 +50,9 @@ def test_autoload(auxdata_dem_cases, travis):
             files = dem_autoload([box], 'TDX90m')
         with pytest.raises(RuntimeError):
             dem_autoload([box], 'AW3D30', product='foobar')
+    with bbox({'xmin': -30, 'xmax': -29, 'ymin': 40, 'ymax': 41}, crs=4326) as box:
+        files = dem_autoload([box], 'SRTM 1Sec HGT')
+        assert len(files) == 0
 
 
 def test_dem_create(tmpdir):

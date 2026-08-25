@@ -19,7 +19,7 @@ version = '.'.join(version_full.split('.')[:2])
 # release is automatically added to the latex document title and header
 release = version
 
-autodoc_mock_imports = ['osgeo', 'sqlalchemy', 'sqlalchemy_utils', 'geoalchemy2',
+autodoc_mock_imports = ['sqlalchemy', 'sqlalchemy_utils', 'geoalchemy2',
                         'lxml', 'progressbar', 'spatialist']
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -45,14 +45,15 @@ bibtex_bibfiles = ['references.bib']
 # autodoc_default_flags = ['members']
 autosummary_generate = []
 
-intersphinx_mapping = {'osgeo': ('https://gdal.org', None),
-                       'python': ('https://docs.python.org/3', None),
-                       'requests': ('https://requests.readthedocs.io/en/latest', None),
-                       'scipy': ('https://docs.scipy.org/doc/scipy', None),
-                       'spatialist': ('https://spatialist.readthedocs.io/en/latest', None),
-                       'sqlalchemy': ('https://docs.sqlalchemy.org/en/latest', None),
-                       'sqlalchemy-utils': ('https://sqlalchemy-utils.readthedocs.io/en/latest', None)
-                       }
+intersphinx_mapping = {
+    'osgeo': ('https://gdal.org', None),
+    'python': ('https://docs.python.org/3', None),
+    'requests': ('https://requests.readthedocs.io/en/latest', None),
+    'scipy': ('https://docs.scipy.org/doc/scipy', None),
+    'spatialist': ('https://spatialist.readthedocs.io/en/latest', None),
+    'sqlalchemy': ('https://docs.sqlalchemy.org/en/latest', None),
+    'sqlalchemy-utils': ('https://sqlalchemy-utils.readthedocs.io/en/latest', None)
+}
 
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
@@ -124,7 +125,7 @@ pygments_style = 'sphinx'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'default'
+html_theme = 'sphinx_rtd_theme'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
