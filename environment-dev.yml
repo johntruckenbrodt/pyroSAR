@@ -6,6 +6,7 @@ dependencies:
   - geoalchemy2>=0.14.0
   - libgdal
   - libspatialite>=5.1.0
+  - libxml2<2.14
   - lxml
   - numpy
   - packaging

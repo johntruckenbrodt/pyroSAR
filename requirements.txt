@@ -1,4 +1,5 @@
 geoalchemy2>=0.14.0
+libxml2<2.14
 lxml
 numpy
 packaging
