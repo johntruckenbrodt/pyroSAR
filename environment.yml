@@ -6,7 +6,7 @@ dependencies:
   - geoalchemy2>=0.14.0
   - libgdal
   - libspatialite>=5.1.0
-  - libxml2<2.14
+  - libxml2<2.14 # https://github.com/johntruckenbrodt/pyroSAR/issues/438
   - lxml
   - numpy
   - packaging
