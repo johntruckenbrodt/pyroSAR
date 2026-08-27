@@ -503,7 +503,7 @@ class DEMHandler:
             # this file contains one pixel with a value of 0
             # nodata value is 255
             tif = vrt.replace('.vrt', '_tmp.tif')
-            self.__create_dummy_dem(filename=tif, extent=extent, fill_value=dst_nodata)
+            self.__create_dummy_dem(filename=tif, fill_value=dst_nodata)
             tiles = [tif]
             dst_datatype = self.config[dem_type]['datatype'][product]
             # determine the target resolution based on minimum latitude
