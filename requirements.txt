@@ -9,6 +9,6 @@ psycopg2
 pyyaml
 requests
 shapely
-spatialist>=0.20.0
+spatialist>=0.20.1
 sqlalchemy-utils>=0.37,<0.42
 sqlalchemy>=1.4
