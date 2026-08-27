@@ -1917,7 +1917,7 @@ class DEMHandler:
             raise ValueError(f'multiple DEM types found: {dem_types}')
         
         if len(products) > 1:
-            raise ValueError(f'multiple products found: {dem_types}')
+            raise ValueError(f'multiple products found: {products}')
         
         return dem_types.pop(), products.pop()
 
