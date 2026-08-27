@@ -567,7 +567,7 @@ class DEMHandler:
         ) -> gdal.Dataset | None:
             if filename is None:
                 filename = ''
-                driver_name = 'MEM' if Version(gdal.__version__) >= Version('3.11') else 'Memory'
+                driver_name = 'MEM'
             else:
                 driver_name = 'GTiff'
             driver = gdal.GetDriverByName(driver_name)
@@ -1411,8 +1411,7 @@ class DEMHandler:
             # Prevents erroneous VRT treatment.
             gdal.SetConfigOption('GDAL_NUM_THREADS', None)
             
-            driver_name = 'MEM' if Version(gdal.__version__) >= Version('3.11') else 'Memory'
-            src = gdal.Translate(destName='', srcDS=src, format=driver_name)
+            src = gdal.Translate(destName='', srcDS=src, format='MEM')
         ############################################################################
         # update CRS with vertical datum
         
