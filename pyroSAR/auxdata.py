@@ -2137,11 +2137,12 @@ def vrt_check_sources(fname: str) -> list[str]:
     if len(sources) != len(sources_raw):
         raise ValueError('encountered None value as source file name')
     for source in sources:
-        if not os.path.isabs(source):
-            base_dir = os.path.dirname(fname)
-            source = os.path.normpath(os.path.join(base_dir, source))
         if re.search('^/vsi', source):
             source = get_archive_path(source)
+        elif not os.path.isabs(source):
+            base_dir = os.path.dirname(fname)
+            source = os.path.normpath(os.path.join(base_dir, source))
+        
         if not os.path.isfile(source):
             raise RuntimeError(f'missing VRT source file: {source}')
     return sources
