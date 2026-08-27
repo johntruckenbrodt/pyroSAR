@@ -1893,7 +1893,10 @@ class DEMHandler:
                 raise ValueError("At least one pattern is required")
             return re.compile("|".join(alternatives))
         
-        pattern_dem_type = '|'.join(self.config.keys())
+        pattern_dem_type = '|'.join(
+            re.escape(x)
+            for x in sorted(self.config, key=len, reverse=True)
+        )
         dem_types = set()
         products = set()
         for filename in filenames:
