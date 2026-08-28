@@ -1495,3 +1495,83 @@ Behavior changes:
 - :class:`pyroSAR.examine.ExamineGamma`:
 
   - strictly check for set GAMMA module environment variables like ``DIFF_HOME``
+
+0.39.0 | 2026-08-28
+===================
+
+General
+-------
+- added antimeridian handling throughout scene geometry, archive storage and DEM workflows
+- increased the minimum `spatialist` version to 0.20.1
+- Conda environments temporarily require ``libxml2<2.14`` as workaround for the current libspatialite 5.1.0/libxml2
+  incompatibility (`issue #438 <https://github.com/johntruckenbrodt/pyroSAR/issues/438>`_)
+
+Ancillary Tools
+---------------
+- new function :func:`pyroSAR.ancillary.get_corners` to compute the shortest longitude interval. Extents crossing the
+  antimeridian are represented with ``xmin > xmax``
+- new function :func:`pyroSAR.ancillary.get_geometry` to create a hull from coordinates and automatically split
+  geometries crossing the antimeridian
+
+Drivers
+-------
+- :class:`~pyroSAR.drivers.ID`:
+
+    + :meth:`~pyroSAR.drivers.ID.getCorners`: use :func:`pyroSAR.ancillary.get_corners` for antimeridian-safe extents
+    + :meth:`~pyroSAR.drivers.ID.geometry`: use :func:`pyroSAR.ancillary.get_geometry`; footprints crossing the
+      antimeridian are returned as ``MULTIPOLYGON``
+    + removed method `getHGT`
+
+Archive
+-------
+- :class:`~pyroSAR.archive.Archive`:
+
+    + introduced a ``_managed_tables`` registry for the core tables ``data`` and ``duplicates`` and tables added with
+      :meth:`~pyroSAR.archive.Archive.add_tables`. This changes the database format. Existing databases without the
+      registry must be opened with ``legacy=True`` and imported into a new database using
+      :meth:`~pyroSAR.archive.Archive.import_outdated`; custom tables from legacy databases are not imported
+    + changed the geometry column from ``POLYGON`` to ``MULTIPOLYGON`` to support footprints split at the antimeridian.
+      Geometries are promoted on insert and single-part geometries are demoted back to ``POLYGON`` when selected
+    + :meth:`~pyroSAR.archive.Archive.get_tablenames`: return only managed tables by default and all database tables and
+      views with ``return_all=True``
+    + :meth:`~pyroSAR.archive.Archive.insert`: properly handle duplicate scenes within the input list
+    + :meth:`~pyroSAR.archive.Archive.select`: convert psycopg2 ``memoryview`` values to ``bytes`` for ``geometry_wkb``
+    + :meth:`~pyroSAR.archive.Archive.move`: fixed compatibility with current SQLAlchemy and replaced raw SQL queries
+      with SQLAlchemy functionality
+
+Auxiliary Data Handling
+-----------------------
+- :class:`pyroSAR.auxdata.DEMHandler`:
+
+    + argument ``geometries`` has been replaced by ``vectorobject`` and now expects a single
+      :class:`spatialist.vector.Vector` object
+    + support wrapped longitude ranges and DEM tile selection on both sides of the antimeridian
+    + new method :meth:`~pyroSAR.auxdata.DEMHandler.create` to create/reproject DEM mosaics from a VRT or a list of source
+      tiles
+    + new method :meth:`~pyroSAR.auxdata.DEMHandler.info_from_filenames` to derive DEM type and sub-product from source
+      file names
+
+- :func:`pyroSAR.auxdata.dem_autoload`:
+
+    + argument ``geometries`` has been replaced by ``vectorobject``
+    + new argument ``return_fname`` and support for returning individual GDAL-readable DEM sources instead of creating
+      a VRT. This enables processing of antimeridian-crossing extents, which cannot be represented correctly by a VRT
+
+- :func:`pyroSAR.auxdata.dem_create`:
+
+    + ``src`` can now be either a VRT or a list of DEM tiles
+    + new arguments ``vectorobject`` and ``buffer`` to define the output extent when working directly with source tiles
+    + automatically determine source data type, nodata value, resampling method and vertical datum from the DEM
+      configuration; the geoid model is inferred from the DEM type
+
+- :func:`pyroSAR.auxdata.vrt_check_sources` now returns VRT source file names, supports ``/vsimem/`` VRTs and handles
+  GDAL VSI paths into ZIP/TAR archives
+- removed class `pyroSAR.auxdata.DEMConfig`
+
+GAMMA API
+---------
+- adapted DEM processing to the new :func:`pyroSAR.auxdata.dem_autoload` / :func:`pyroSAR.auxdata.dem_create` interface
+- :class:`pyroSAR.gamma.api._UnavailableGammaModule`: ``__getattr__`` now raises ``AttributeError`` so that ``hasattr``
+  works correctly for non-existing dummy GAMMA modules (so that one can easily check whether certain functions exist in
+  the module)
+- removed outdated DEM functions `transform`, `hgt`, `hgt_collect` and `makeSRTM`
