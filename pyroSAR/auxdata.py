@@ -33,7 +33,7 @@ from packaging.version import Version
 from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import Lock
 from spatialist.raster import Raster, Dtype
-from spatialist.vector import bbox, Vector, intersect
+from spatialist.vector import bbox, Vector, intersect, combine_polygons
 from spatialist.ancillary import finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp, latlon_clamp
 from spatialist.envi import HDRobject
@@ -1328,11 +1328,12 @@ class DEMHandler:
         # use the intersection of the bounding box of all DEM tiles and the user-defined
         # extent (which might be global if ``vectorobject=None``) as target extent.
         if isinstance(src, list):
-            with Raster(src) as ras:
-                extent_4326 = ras.extent
-                with ras.bbox() as box:
-                    with bbox(coordinates=self.extent, crs=4326) as vec:
-                        inter = intersect(box, vec)
+            boxes = [Raster(x).bbox() for x in src]
+            with combine_polygons(boxes) as combi:
+                extent_4326 = combi.extent
+                with combi.bbox() as dem_bbox:
+                    with bbox(coordinates=self.extent, crs=4326) as user_bbox:
+                        inter = intersect(dem_bbox, user_bbox)
                         if inter is None:
                             raise RuntimeError(
                                 "The extent of 'vectorobject' does not intersect "
@@ -1342,6 +1343,7 @@ class DEMHandler:
                             inter.reproject(t_srs)
                         extent_out = inter.extent
                         inter.close()
+            boxes = None
             
             if extent_out['xmin'] > extent_out['xmax']:
                 raise RuntimeError('The output extent is crossing the antimeridian.'
