@@ -2003,17 +2003,14 @@ def get_dem_options(require_auth: bool | None = None) -> list[str]:
         The names of the DEM options.
     """
     out = []
-    # create a dummy vector geometry for initializing the DEMHandler
-    ext = {'xmin': -44, 'xmax': -43, 'ymin': 30, 'ymax': 31}
-    with bbox(coordinates=ext, crs=4326) as vec:
-        with DEMHandler(geometry=vec) as handler:
-            for key, properties in handler.config.items():
-                if require_auth is None:
+    with DEMHandler() as handler:
+        for key, properties in handler.config.items():
+            if require_auth is None:
+                out.append(key)
+            else:
+                if require_auth == properties['authentication']:
                     out.append(key)
-                else:
-                    if require_auth == properties['authentication']:
-                        out.append(key)
-            return sorted(out)
+        return sorted(out)
 
 
 def get_egm_lookup(
