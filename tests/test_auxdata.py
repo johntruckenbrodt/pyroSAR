@@ -22,8 +22,7 @@ from pyroSAR.auxdata import (
     getasse30_hdr,
     vrt_check_sources,
 )
-from spatialist import bbox
-
+from spatialist import Raster, bbox
 
 DEM_TYPES = sorted([
     'AW3D30',
@@ -53,94 +52,108 @@ class _Response:
         self._json_data = json_data
         self.status_code = status_code
         self.closed = False
-
+    
     def raise_for_status(self):
         if self.status_code >= 400:
             raise RuntimeError(f'HTTP {self.status_code}')
-
+    
     def close(self):
         self.closed = True
-
+    
     def json(self):
         return self._json_data
-
-
-class _FakeRaster:
-    def __init__(
-            self,
-            *,
-            format='GTiff',
-            nodata=None,
-            res=(0.01, 0.01),
-            epsg=4326,
-            dtype='Int16',
-            bands=1,
-            rows=10,
-            cols=10,
-    ):
-        self.format = format
-        self.nodata = nodata
-        self.res = res
-        self.epsg = epsg
-        self.dtype = dtype
-        self.bands = bands
-        self.rows = rows
-        self.cols = cols
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        return None
 
 
 class _FakeVrtRaster:
     def __init__(self, xml):
         self.raster = SimpleNamespace(GetMetadata=lambda domain: [xml])
-
+    
     def __enter__(self):
         return self
-
+    
     def __exit__(self, exc_type, exc_val, exc_tb):
         return None
 
 
-def _write_raster(
-        filename,
-        *,
-        array=None,
-        epsg=4326,
-        geotransform=(11, 0.01, 0, 52, 0, -0.01),
-        dtype=gdal.GDT_Int16,
-        nodata=None,
-):
-    """Create a small georeferenced GeoTIFF."""
-    if array is None:
-        array = np.array([[1, 2], [3, 4]], dtype=np.int16)
-
-    dataset = gdal.GetDriverByName('GTiff').Create(
-        str(filename),
-        array.shape[1],
-        array.shape[0],
-        1,
-        dtype,
-    )
-    dataset.SetGeoTransform(geotransform)
-    srs = osr.SpatialReference()
-    srs.ImportFromEPSG(epsg)
-    dataset.SetProjection(srs.ExportToWkt())
-    band = dataset.GetRasterBand(1)
-    if nodata is not None:
-        band.SetNoDataValue(nodata)
-    band.WriteArray(array)
-    band.FlushCache()
-    dataset.FlushCache()
-    dataset = None
-    return str(filename)
+@pytest.fixture
+def raster_factory(tmp_path):
+    """Create small georeferenced GeoTIFFs and return them as Raster objects."""
+    rasters = []
+    
+    def create(
+            name='dummy.tif',
+            extent=(11, 51.98, 11.02, 52),
+            shape=(2, 2),
+            epsg=4326,
+            dtype=gdal.GDT_Int16,
+            nodata=None,
+            value=1,
+            array=None,
+    ):
+        filename = tmp_path / name
+        filename.parent.mkdir(parents=True, exist_ok=True)
+        
+        if isinstance(extent, dict):
+            xmin = extent['xmin']
+            ymin = extent['ymin']
+            xmax = extent['xmax']
+            ymax = extent['ymax']
+        else:
+            xmin, ymin, xmax, ymax = extent
+        
+        if array is not None:
+            array = np.asarray(array)
+            rows, cols = array.shape
+        else:
+            rows, cols = shape
+        
+        dataset = gdal.GetDriverByName('GTiff').Create(
+            str(filename),
+            cols,
+            rows,
+            1,
+            dtype,
+        )
+        dataset.SetGeoTransform((
+            xmin,
+            (xmax - xmin) / cols,
+            0,
+            ymax,
+            0,
+            -(ymax - ymin) / rows,
+        ))
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(epsg)
+        dataset.SetProjection(srs.ExportToWkt())
+        
+        band = dataset.GetRasterBand(1)
+        if nodata is not None:
+            band.SetNoDataValue(nodata)
+        if array is None:
+            band.Fill(value)
+        else:
+            band.WriteArray(array)
+        band.FlushCache()
+        dataset.FlushCache()
+        band = None
+        dataset = None
+        
+        raster = Raster(str(filename))
+        rasters.append(raster)
+        return raster
+    
+    yield create
+    
+    for raster in rasters:
+        raster.close()
 
 
 def _build_vrt(filename, sources):
-    dataset = gdal.BuildVRT(str(filename), [str(x) for x in sources])
+    sources = [
+        source.filename if isinstance(source, Raster) else str(source)
+        for source in sources
+    ]
+    dataset = gdal.BuildVRT(str(filename), sources)
     assert dataset is not None
     dataset.FlushCache()
     dataset = None
@@ -156,41 +169,55 @@ def _dataset_bounds(dataset):
     return xmin, ymin, xmax, ymax
 
 
-def _patch_create_dependencies(
-        monkeypatch,
-        handler,
-        *,
-        dem_type='SRTM 3Sec',
-        product='dem',
-        raster=None,
-):
-    """Patch external work performed by DEMHandler.create and capture gdalwarp."""
-    if raster is None:
-        raster = _FakeRaster(format='VRT', dtype='Int16')
-
-    monkeypatch.setattr(
-        handler,
-        'info_from_filenames',
-        lambda filenames: (dem_type, product),
-    )
-    monkeypatch.setattr(
-        auxdata,
-        'vrt_check_sources',
-        lambda filename: [f'/tmp/{dem_type}/source.tif'],
-    )
-    monkeypatch.setattr(auxdata, 'Raster', lambda source: raster)
-    monkeypatch.setattr(auxdata, 'get_egm_lookup', lambda **kwargs: None)
-
+def _capture_gdalwarp(monkeypatch):
+    """Patch gdalwarp and return a dictionary containing the call arguments."""
     captured = {}
-
+    
     def fake_gdalwarp(*, src, dst, pbar=False, **kwargs):
         captured['src'] = src
         captured['dst'] = dst
         captured['pbar'] = pbar
         captured['kwargs'] = kwargs
-
+    
     monkeypatch.setattr(auxdata, 'gdalwarp', fake_gdalwarp)
     return captured
+
+
+def _dem_vrt(
+        tmp_path,
+        raster_factory,
+        *,
+        dem_type='SRTM 3Sec',
+        product='dem',
+        dtype=None,
+        nodata=None,
+        extent=(11, 51.98, 11.02, 52),
+):
+    """Create a test DEM tile with a recognizable filename and build a VRT."""
+    basenames = {
+        'SRTM 3Sec': {
+            'dem': 'srtm_39_02.tif',
+        },
+        'Copernicus 30m Global DEM': {
+            'dem': 'Copernicus_DSM_COG_10_N51_00_E011_00_DEM.tif',
+            'wbm': 'Copernicus_DSM_COG_10_N51_00_E011_00_WBM.tif',
+        },
+        'GETASSE30': {
+            'dem': '45N000E.GETASSE30',
+        },
+    }
+    if dtype is None:
+        dtype = gdal.GDT_Int16
+    
+    raster = raster_factory(
+        name=f'{dem_type}/{basenames[dem_type][product]}',
+        extent=extent,
+        dtype=dtype,
+        nodata=nodata,
+    )
+    vrt = tmp_path / f'{dem_type.replace(" ", "_")}_{product}.vrt'
+    _build_vrt(vrt, [raster])
+    return raster, str(vrt)
 
 
 # -----------------------------------------------------------------------------
@@ -200,25 +227,25 @@ def _patch_create_dependencies(
 def test_dem_autoload_forwards_arguments(monkeypatch):
     geometry = object()
     captured = {}
-
+    
     class FakeHandler:
-        def __init__(self, geometry, buffer):
-            captured['init'] = (geometry, buffer)
-
+        def __init__(self, vectorobject, buffer):
+            captured['init'] = (vectorobject, buffer)
+        
         def __enter__(self):
             return self
-
+        
         def __exit__(self, exc_type, exc_val, exc_tb):
             return None
-
+        
         def load(self, **kwargs):
             captured['load'] = kwargs
             return ['tile.tif']
-
+    
     monkeypatch.setattr(auxdata, 'DEMHandler', FakeHandler)
-
+    
     result = dem_autoload(
-        geometry=geometry,
+        vectorobject=geometry,
         demType='SRTM 3Sec',
         vrt='test.vrt',
         buffer=0.5,
@@ -230,7 +257,7 @@ def test_dem_autoload_forwards_arguments(monkeypatch):
         offline=True,
         return_fname=False,
     )
-
+    
     assert result == ['tile.tif']
     assert captured['init'] == (geometry, 0.5)
     assert captured['load'] == {
@@ -249,24 +276,24 @@ def test_dem_autoload_forwards_arguments(monkeypatch):
 def test_dem_create_forwards_arguments(monkeypatch):
     geometry = object()
     captured = {}
-
+    
     class FakeHandler:
-        def __init__(self, geometry, buffer):
-            captured['init'] = (geometry, buffer)
-
+        def __init__(self, vectorobject, buffer):
+            captured['init'] = (vectorobject, buffer)
+        
         def __enter__(self):
             return self
-
+        
         def __exit__(self, exc_type, exc_val, exc_tb):
             return None
-
+        
         def create(self, **kwargs):
             captured['create'] = kwargs
-
+    
     monkeypatch.setattr(auxdata, 'DEMHandler', FakeHandler)
-
+    
     dem_create(
-        geometry=geometry,
+        vectorobject=geometry,
         src='test.vrt',
         dst='test.tif',
         buffer=0.25,
@@ -280,7 +307,7 @@ def test_dem_create_forwards_arguments(monkeypatch):
         pbar=True,
         creationOptions=['COMPRESS=LZW'],
     )
-
+    
     assert captured['init'] == (geometry, 0.25)
     assert captured['create'] == {
         'src': 'test.vrt',
@@ -304,7 +331,7 @@ def test_dem_create_forwards_arguments(monkeypatch):
 def test_handler_init_geometry():
     extent = {'xmin': 11, 'xmax': 12, 'ymin': 51, 'ymax': 52}
     with bbox(coordinates=extent, crs=4326) as box:
-        with DEMHandler(geometry=box) as handler:
+        with DEMHandler(vectorobject=box) as handler:
             assert handler.extent == extent
             assert isinstance(handler.auxdatapath, str)
 
@@ -313,7 +340,7 @@ def test_handler_init_buffer():
     extent = {'xmin': 11, 'xmax': 12, 'ymin': 51, 'ymax': 52}
     expected = {'xmin': 10.5, 'xmax': 12.5, 'ymin': 50.5, 'ymax': 52.5}
     with bbox(coordinates=extent, crs=4326) as box:
-        with DEMHandler(geometry=box, buffer=0.5) as handler:
+        with DEMHandler(vectorobject=box, buffer=0.5) as handler:
             assert handler.extent == pytest.approx(expected)
 
 
@@ -330,7 +357,7 @@ def test_handler_init_global_extent():
 def test_handler_init_invalid_geometry():
     with pytest.raises(
             RuntimeError,
-            match='geometry must be of type Vector or None',
+            match='vectorobject.*must be of type Vector or None',
     ):
         DEMHandler('foobar')
 
@@ -343,14 +370,14 @@ def test_handler_init_invalid_crs():
         'ymax': -5863678,
     }
     with bbox(coordinates=extent, crs=32632) as box:
-        with pytest.raises(RuntimeError, match='input geometry CRS must be WGS84 LatLon'):
+        with pytest.raises(RuntimeError, match="input vector object's CRS must be WGS84 LatLon"):
             DEMHandler(box)
 
 
 def test_handler_init_auxdatapath_fallback(monkeypatch):
     class FakeExamineSnap:
         pass
-
+    
     monkeypatch.setattr(auxdata, 'ExamineSnap', FakeExamineSnap)
     with DEMHandler() as handler:
         expected = os.path.join(os.path.expanduser('~'), '.snap', 'auxdata')
@@ -360,7 +387,7 @@ def test_handler_init_auxdatapath_fallback(monkeypatch):
 def test_handler_config():
     with DEMHandler() as handler:
         config = handler.config
-
+    
     assert sorted(config) == DEM_TYPES
     required = {
         'url',
@@ -414,7 +441,7 @@ def test_get_dem_options(require_auth, expected):
 )
 def test_intrange(extent, step, expected):
     with bbox(coordinates=extent, crs=4326) as box:
-        with DEMHandler(geometry=box) as handler:
+        with DEMHandler(vectorobject=box) as handler:
             assert handler.intrange(step=step) == expected
 
 
@@ -460,24 +487,24 @@ def test_get_resolution_outside_range():
         ('/tmp/AW3D30/N51E011_MSK.tif', ('AW3D30', 'msk')),
         ('/tmp/AW3D30/N51E011_STK.tif', ('AW3D30', 'stk')),
         (
-            '/tmp/Copernicus 30m Global DEM/Copernicus_DSM_N51_00_E011_00_DEM.tif',
-            ('Copernicus 30m Global DEM', 'dem'),
+                '/tmp/Copernicus 30m Global DEM/Copernicus_DSM_N51_00_E011_00_DEM.tif',
+                ('Copernicus 30m Global DEM', 'dem'),
         ),
         (
-            '/tmp/Copernicus 30m Global DEM/Copernicus_DSM_N51_00_E011_00_EDM.tif',
-            ('Copernicus 30m Global DEM', 'edm'),
+                '/tmp/Copernicus 30m Global DEM/Copernicus_DSM_N51_00_E011_00_EDM.tif',
+                ('Copernicus 30m Global DEM', 'edm'),
         ),
         (
-            '/tmp/Copernicus 30m Global DEM/Copernicus_DSM_N51_00_E011_00_FLM.tif',
-            ('Copernicus 30m Global DEM', 'flm'),
+                '/tmp/Copernicus 30m Global DEM/Copernicus_DSM_N51_00_E011_00_FLM.tif',
+                ('Copernicus 30m Global DEM', 'flm'),
         ),
         (
-            '/tmp/Copernicus 30m Global DEM/Copernicus_DSM_N51_00_E011_00_HEM.tif',
-            ('Copernicus 30m Global DEM', 'hem'),
+                '/tmp/Copernicus 30m Global DEM/Copernicus_DSM_N51_00_E011_00_HEM.tif',
+                ('Copernicus 30m Global DEM', 'hem'),
         ),
         (
-            '/tmp/Copernicus 30m Global DEM/Copernicus_DSM_N51_00_E011_00_WBM.tif',
-            ('Copernicus 30m Global DEM', 'wbm'),
+                '/tmp/Copernicus 30m Global DEM/Copernicus_DSM_N51_00_E011_00_WBM.tif',
+                ('Copernicus 30m Global DEM', 'wbm'),
         ),
         ('/tmp/GETASSE30/45N000E.GETASSE30', ('GETASSE30', 'dem')),
         ('/tmp/SRTM 1Sec HGT/N51E011.hgt', ('SRTM 1Sec HGT', 'dem')),
@@ -515,12 +542,12 @@ def test_info_from_filenames_multiple_files():
         (['/tmp/N51E011.hgt'], 'could not infer DEM type'),
         (['/tmp/SRTM 1Sec HGT/N51E011.tif'], 'could not infer product type'),
         (
-            ['/tmp/AW3D30/N51E011_DSM.tif', '/tmp/SRTM 1Sec HGT/N51E011.hgt'],
-            'multiple DEM types found',
+                ['/tmp/AW3D30/N51E011_DSM.tif', '/tmp/SRTM 1Sec HGT/N51E011.hgt'],
+                'multiple DEM types found',
         ),
         (
-            ['/tmp/AW3D30/N51E011_DSM.tif', '/tmp/AW3D30/N51E011_MSK.tif'],
-            'multiple products found',
+                ['/tmp/AW3D30/N51E011_DSM.tif', '/tmp/AW3D30/N51E011_MSK.tif'],
+                'multiple products found',
         ),
     ],
 )
@@ -636,12 +663,12 @@ def test_local_index_from_directory_listing(
 ):
     html = f'<html><body><a href="../">../</a><a href="{item}">{item}</a></body></html>'
     monkeypatch.setattr(auxdata.requests, 'get', lambda url: _Response(text=html))
-
+    
     with DEMHandler() as handler:
         handler.auxdatapath = str(tmp_path)
         result = handler._DEMHandler__local_index(dem_type)
         url = handler.config[dem_type]['url'].rstrip('/') + '/' + item
-
+    
     assert result[lat][lon]['dem'] == url
     assert (tmp_path / 'dem' / dem_type / 'index.json').is_file()
 
@@ -662,18 +689,18 @@ def test_local_index_copernicus_stac(tmp_path, monkeypatch):
         'Copernicus_DSM_COG_10_N51_00_E011_00_DEM/'
         'Copernicus_DSM_COG_10_N51_00_E011_00_DEM.tif'
     )
-
+    
     def fake_get(url, params=None):
         if url.endswith(item):
             return _Response(json_data={'assets': {'elevation': {'href': asset_href}}})
         return _Response(content=listing)
-
+    
     monkeypatch.setattr(auxdata.requests, 'get', fake_get)
-
+    
     with DEMHandler() as handler:
         handler.auxdatapath = str(tmp_path)
         result = handler._DEMHandler__local_index(dem_type)
-
+    
     tile = result['N51']['E011']
     assert tile['dem'].endswith(
         'Copernicus_DSM_COG_10_N51_00_E011_00_DEM/'
@@ -732,17 +759,17 @@ def test_retrieve_download(tmp_path, monkeypatch):
     base = _Response()
     remote = _Response(content=b'content')
     calls = []
-
+    
     def fake_get(url):
         calls.append(url)
         return base if url == 'https://example.test' else remote
-
+    
     monkeypatch.setattr(auxdata.requests, 'get', fake_get)
     result = DEMHandler._DEMHandler__retrieve(
         ['https://example.test/tile.tif'],
         str(tmp_path),
     )
-
+    
     local = tmp_path / 'tile.tif'
     assert result == [str(local)]
     assert local.read_bytes() == b'content'
@@ -756,7 +783,7 @@ def test_retrieve_404_is_skipped(tmp_path, monkeypatch):
         if url == 'https://example.test':
             return _Response()
         return _Response(status_code=404)
-
+    
     monkeypatch.setattr(auxdata.requests, 'get', fake_get)
     result = DEMHandler._DEMHandler__retrieve(
         ['https://example.test/missing.tif'],
@@ -793,7 +820,7 @@ def test_retrieve_ftp_authentication_required(tmp_path, scheme):
 
 def test_retrieve_ftp_download(tmp_path, monkeypatch):
     instances = []
-
+    
     class FakeFTP:
         def __init__(self, host, timeout):
             self.host = host
@@ -801,23 +828,23 @@ def test_retrieve_ftp_download(tmp_path, monkeypatch):
             self.cwd_path = None
             self.closed = False
             instances.append(self)
-
+        
         def login(self):
             return None
-
+        
         def cwd(self, path):
             self.cwd_path = path
-
+        
         def nlst(self, remote):
             return [remote]
-
+        
         def retrbinary(self, command, callback):
             assert command == 'RETR tile.zip'
             callback(b'content')
-
+        
         def close(self):
             self.closed = True
-
+    
     monkeypatch.setattr(auxdata.ftplib, 'FTP', FakeFTP)
     result = DEMHandler._DEMHandler__retrieve_ftp(
         url='ftp://example.test/data',
@@ -826,7 +853,7 @@ def test_retrieve_ftp_download(tmp_path, monkeypatch):
         username=None,
         password=None,
     )
-
+    
     assert result == [str(tmp_path / 'tile.zip')]
     assert (tmp_path / 'tile.zip').read_bytes() == b'content'
     assert instances[0].cwd_path == '/data'
@@ -837,19 +864,19 @@ def test_retrieve_ftp_temporary_error(tmp_path, monkeypatch):
     class FakeFTP:
         def __init__(self, host, timeout):
             pass
-
+        
         def login(self):
             return None
-
+        
         def cwd(self, path):
             return None
-
+        
         def nlst(self, remote):
             raise ftplib.error_temp('temporary failure')
-
+        
         def close(self):
             return None
-
+    
     monkeypatch.setattr(auxdata.ftplib, 'FTP', FakeFTP)
     result = DEMHandler._DEMHandler__retrieve_ftp(
         url='ftp://example.test/data',
@@ -869,7 +896,7 @@ def test_create_dummy_dem_memory():
     with DEMHandler() as handler:
         handler.extent = {'xmin': 11, 'xmax': 12, 'ymin': 51, 'ymax': 52}
         dataset = handler._DEMHandler__create_dummy_dem(filename=None, fill_value=7)
-
+    
     assert isinstance(dataset, gdal.Dataset)
     assert dataset.RasterXSize == 1
     assert dataset.RasterYSize == 1
@@ -890,7 +917,7 @@ def test_create_dummy_dem_file(tmp_path):
     with DEMHandler() as handler:
         handler.extent = {'xmin': 11, 'xmax': 12, 'ymin': 51, 'ymax': 52}
         result = handler._DEMHandler__create_dummy_dem(filename=str(dst), fill_value=3)
-
+    
     assert result is None
     assert dst.is_file()
     dataset = gdal.Open(str(dst))
@@ -904,7 +931,7 @@ def test_create_dummy_dem_antimeridian():
     with DEMHandler() as handler:
         handler.extent = {'xmin': 179, 'xmax': -179, 'ymin': 51, 'ymax': 52}
         datasets = handler._DEMHandler__create_dummy_dem(filename=None, fill_value=5)
-
+    
     assert isinstance(datasets, list)
     assert len(datasets) == 2
     assert datasets[0].GetGeoTransform() == pytest.approx((179, 1, 0, 52, 0, -1))
@@ -924,56 +951,68 @@ def test_create_dummy_dem_antimeridian_file(tmp_path):
             )
 
 
-def test_buildvrt_regular(tmp_path):
+def test_create_dummy_dem_custom_extent():
+    extent = {'xmin': 20, 'xmax': 21, 'ymin': 40, 'ymax': 41}
+    with DEMHandler() as handler:
+        dataset = handler._DEMHandler__create_dummy_dem(
+            filename=None,
+            fill_value=4,
+            extent=extent,
+        )
+    
+    assert dataset.GetGeoTransform() == pytest.approx((20, 1, 0, 41, 0, -1))
+    np.testing.assert_array_equal(dataset.ReadAsArray(), np.array([[4]], dtype=np.uint8))
+    dataset = None
+
+
+def test_buildvrt_regular(tmp_path, raster_factory):
     res = 5 / 6000
-    source = _write_raster(
-        tmp_path / 'source.tif',
-        geotransform=(11, res, 0, 52, 0, -res),
+    source = raster_factory(
+        extent=(11, 52 - 2 * res, 11 + 2 * res, 52),
     )
     vrt = tmp_path / 'test.vrt'
-
+    
     with DEMHandler() as handler:
         handler.extent = {'xmin': 11, 'xmax': 11.01, 'ymin': 51.99, 'ymax': 52}
         handler._DEMHandler__buildvrt(
-            tiles=[source],
+            tiles=[source.filename],
             vrt=str(vrt),
             dem_type='SRTM 3Sec',
             product='dem',
             crop=True,
         )
-
+    
     dataset = gdal.Open(str(vrt))
     assert _dataset_bounds(dataset) == pytest.approx((11, 51.99, 11.01, 52))
     dataset = None
 
 
-def test_buildvrt_crop_false_expands_to_tile_grid(tmp_path):
-    source = _write_raster(tmp_path / 'source.tif')
+def test_buildvrt_crop_false_expands_to_tile_grid(tmp_path, raster_factory):
+    source = raster_factory()
     vrt = tmp_path / 'test.vrt'
-
+    
     with DEMHandler() as handler:
         handler.extent = {'xmin': 11.1, 'xmax': 11.9, 'ymin': 51.1, 'ymax': 51.9}
         handler._DEMHandler__buildvrt(
-            tiles=[source],
+            tiles=[source.filename],
             vrt=str(vrt),
             dem_type='SRTM 3Sec',
             product='dem',
             crop=False,
         )
-
+    
     dataset = gdal.Open(str(vrt))
     assert _dataset_bounds(dataset) == pytest.approx((10, 50, 15, 55))
     dataset = None
 
 
-def test_buildvrt_point_registration_shift(tmp_path):
+def test_buildvrt_point_registration_shift(tmp_path, raster_factory):
     res = 1 / 3600
-    source = _write_raster(
-        tmp_path / 'source.tif',
-        geotransform=(11, res, 0, 52, 0, -res),
+    source = raster_factory(
+        extent=(11, 52 - 2 * res, 11 + 2 * res, 52),
     )
     vrt = tmp_path / 'test.vrt'
-
+    
     with DEMHandler() as handler:
         handler.extent = {
             'xmin': 11,
@@ -982,13 +1021,13 @@ def test_buildvrt_point_registration_shift(tmp_path):
             'ymax': 52,
         }
         handler._DEMHandler__buildvrt(
-            tiles=[source],
+            tiles=[source.filename],
             vrt=str(vrt),
             dem_type='SRTM 1Sec HGT',
             product='dem',
             crop=True,
         )
-
+    
     shift = res / 2
     dataset = gdal.Open(str(vrt))
     assert _dataset_bounds(dataset) == pytest.approx(
@@ -1013,7 +1052,7 @@ def test_buildvrt_empty_tiles_creates_dummy(tmp_path):
             product='dem',
             crop=True,
         )
-
+    
     assert vrt.is_file()
     assert Path(str(vrt).replace('.vrt', '_tmp.tif')).is_file()
     tree = etree.parse(str(vrt))
@@ -1114,7 +1153,7 @@ def test_load_builds_vrt(monkeypatch, tmp_path):
             crop=False,
             product='wbm',
         )
-
+    
     assert result is None
     assert captured == {
         'tiles': [local],
@@ -1130,11 +1169,11 @@ def test_load_forwards_ftp_options(monkeypatch, tmp_path):
     with DEMHandler() as handler:
         handler.auxdatapath = str(tmp_path)
         monkeypatch.setattr(handler, 'remote_ids', lambda **kwargs: ['remote.tar.gz'])
-
+        
         def fake_retrieve_ftp(**kwargs):
             captured.update(kwargs)
             return []
-
+        
         monkeypatch.setattr(handler, '_DEMHandler__retrieve_ftp', fake_retrieve_ftp)
         handler.load(
             'AW3D30',
@@ -1143,7 +1182,7 @@ def test_load_forwards_ftp_options(monkeypatch, tmp_path):
             lock_timeout=12,
             offline=True,
         )
-
+    
     assert captured['url'].startswith('ftp://')
     assert captured['filenames'] == ['remote.tar.gz']
     assert captured['username'] == 'user'
@@ -1163,15 +1202,17 @@ def test_create_string_source_requires_vrt(tmp_path):
             handler.create(src='source.tif', dst=str(tmp_path / 'out.tif'))
 
 
-def test_create_defaults(monkeypatch, tmp_path):
+def test_create_defaults(monkeypatch, tmp_path, raster_factory):
+    _, vrt = _dem_vrt(tmp_path, raster_factory)
+    captured = _capture_gdalwarp(monkeypatch)
+    
     with DEMHandler() as handler:
-        captured = _patch_create_dependencies(monkeypatch, handler)
         handler.create(
-            src='source.vrt',
+            src=vrt,
             dst=str(tmp_path / 'out.tif'),
             geoid_convert=False,
         )
-
+    
     kwargs = captured['kwargs']
     assert kwargs['srcNodata'] is None
     assert kwargs['resampleAlg'] == 'bilinear'
@@ -1186,18 +1227,19 @@ def test_create_defaults(monkeypatch, tmp_path):
     assert kwargs['format'] == 'GTiff'
 
 
-def test_create_byte_defaults(monkeypatch, tmp_path):
-    raster = _FakeRaster(format='VRT', dtype='Byte')
+def test_create_byte_defaults(monkeypatch, tmp_path, raster_factory):
+    _, vrt = _dem_vrt(
+        tmp_path,
+        raster_factory,
+        dem_type='Copernicus 30m Global DEM',
+        product='wbm',
+        dtype=gdal.GDT_Byte,
+    )
+    captured = _capture_gdalwarp(monkeypatch)
+    
     with DEMHandler() as handler:
-        captured = _patch_create_dependencies(
-            monkeypatch,
-            handler,
-            dem_type='Copernicus 30m Global DEM',
-            product='wbm',
-            raster=raster,
-        )
-        handler.create(src='source.vrt', dst=str(tmp_path / 'out.tif'))
-
+        handler.create(src=vrt, dst=str(tmp_path / 'out.tif'))
+    
     kwargs = captured['kwargs']
     assert kwargs['resampleAlg'] == 'mode'
     assert kwargs['dstNodata'] == 255
@@ -1205,15 +1247,18 @@ def test_create_byte_defaults(monkeypatch, tmp_path):
     assert kwargs['srcSRS'] == 'EPSG:4326'
 
 
-def test_create_dtype_override(monkeypatch, tmp_path):
+def test_create_dtype_override(monkeypatch, tmp_path, raster_factory):
+    _, vrt = _dem_vrt(tmp_path, raster_factory)
+    captured = _capture_gdalwarp(monkeypatch)
+    
     with DEMHandler() as handler:
-        captured = _patch_create_dependencies(monkeypatch, handler)
         handler.create(
-            src='source.vrt',
+            src=vrt,
             dst=str(tmp_path / 'out.tif'),
             dtype='Float32',
             geoid_convert=False,
         )
+    
     assert captured['kwargs']['outputType'] == gdal.GDT_Float32
 
 
@@ -1221,19 +1266,19 @@ def test_create_dtype_override(monkeypatch, tmp_path):
     'threads, multithread',
     [(1, False), (2, True), ('ALL_CPUS', True)],
 )
-def test_create_threads(monkeypatch, tmp_path, threads, multithread):
+def test_create_threads(monkeypatch, tmp_path, raster_factory, threads, multithread):
+    _, vrt = _dem_vrt(tmp_path, raster_factory)
+    captured = _capture_gdalwarp(monkeypatch)
+    monkeypatch.setattr(auxdata.gdal, '__version__', '3.12.1')
+    
     with DEMHandler() as handler:
-        captured = _patch_create_dependencies(
-            monkeypatch,
-            handler,
-            raster=_FakeRaster(format='GTiff'),
-        )
         handler.create(
-            src='source.vrt',
+            src=vrt,
             dst=str(tmp_path / 'out.tif'),
             threads=threads,
             geoid_convert=False,
         )
+    
     assert captured['kwargs']['multithread'] is multithread
     assert captured['kwargs']['warpOptions'] == {'NUM_THREADS': str(threads)}
 
@@ -1247,83 +1292,95 @@ def test_create_threads(monkeypatch, tmp_path, threads, multithread):
         (1.5, TypeError, 'must be of type int, str or None'),
     ],
 )
-def test_create_invalid_threads(monkeypatch, tmp_path, threads, exception, match):
+def test_create_invalid_threads(
+        tmp_path,
+        raster_factory,
+        threads,
+        exception,
+        match,
+):
+    _, vrt = _dem_vrt(tmp_path, raster_factory)
     with DEMHandler() as handler:
-        _patch_create_dependencies(monkeypatch, handler)
         with pytest.raises(exception, match=match):
             handler.create(
-                src='source.vrt',
+                src=vrt,
                 dst=str(tmp_path / 'out.tif'),
                 threads=threads,
                 geoid_convert=False,
             )
 
 
-def test_create_rejects_locked_kwargs(monkeypatch, tmp_path):
+def test_create_rejects_locked_kwargs(tmp_path, raster_factory):
+    _, vrt = _dem_vrt(tmp_path, raster_factory)
     with DEMHandler() as handler:
-        _patch_create_dependencies(monkeypatch, handler)
         with pytest.raises(RuntimeError, match="argument 'xRes' cannot be set"):
             handler.create(
-                src='source.vrt',
+                src=vrt,
                 dst=str(tmp_path / 'out.tif'),
                 geoid_convert=False,
                 xRes=30,
             )
 
 
-def test_create_forwards_additional_kwargs(monkeypatch, tmp_path):
+def test_create_forwards_additional_kwargs(monkeypatch, tmp_path, raster_factory):
+    _, vrt = _dem_vrt(tmp_path, raster_factory)
+    captured = _capture_gdalwarp(monkeypatch)
+    
     with DEMHandler() as handler:
-        captured = _patch_create_dependencies(monkeypatch, handler)
         handler.create(
-            src='source.vrt',
+            src=vrt,
             dst=str(tmp_path / 'out.tif'),
             geoid_convert=False,
             creationOptions=['COMPRESS=LZW'],
         )
+    
     assert captured['kwargs']['creationOptions'] == ['COMPRESS=LZW']
 
 
-def test_create_existing_output_is_not_overwritten(monkeypatch, tmp_path):
+def test_create_existing_output_is_not_overwritten(monkeypatch, tmp_path, raster_factory):
+    _, vrt = _dem_vrt(tmp_path, raster_factory)
     dst = tmp_path / 'out.tif'
     dst.write_bytes(b'existing')
+    monkeypatch.setattr(
+        auxdata,
+        'gdalwarp',
+        lambda **kwargs: pytest.fail('gdalwarp must not be called'),
+    )
+    
     with DEMHandler() as handler:
-        _patch_create_dependencies(monkeypatch, handler)
-        monkeypatch.setattr(
-            auxdata,
-            'gdalwarp',
-            lambda **kwargs: pytest.fail('gdalwarp must not be called'),
-        )
-        handler.create(src='source.vrt', dst=str(dst), geoid_convert=False)
+        handler.create(src=vrt, dst=str(dst), geoid_convert=False)
+    
     assert dst.read_bytes() == b'existing'
 
 
-def test_create_removes_partial_output_on_error(monkeypatch, tmp_path):
+def test_create_removes_partial_output_on_error(monkeypatch, tmp_path, raster_factory):
+    _, vrt = _dem_vrt(tmp_path, raster_factory)
     dst = tmp_path / 'out.tif'
+    
+    def fake_gdalwarp(*, dst, **kwargs):
+        Path(dst).write_bytes(b'partial')
+        raise RuntimeError('warp failed')
+    
+    monkeypatch.setattr(auxdata, 'gdalwarp', fake_gdalwarp)
+    
     with DEMHandler() as handler:
-        _patch_create_dependencies(monkeypatch, handler)
-
-        def fake_gdalwarp(*, dst, **kwargs):
-            Path(dst).write_bytes(b'partial')
-            raise RuntimeError('warp failed')
-
-        monkeypatch.setattr(auxdata, 'gdalwarp', fake_gdalwarp)
         with pytest.raises(RuntimeError, match='warp failed'):
-            handler.create(src='source.vrt', dst=str(dst), geoid_convert=False)
+            handler.create(src=vrt, dst=str(dst), geoid_convert=False)
+    
     assert not dst.exists()
 
 
-def test_create_restores_gdal_num_threads(monkeypatch, tmp_path):
+def test_create_restores_gdal_num_threads(monkeypatch, tmp_path, raster_factory):
+    _, vrt = _dem_vrt(tmp_path, raster_factory)
+    _capture_gdalwarp(monkeypatch)
+    monkeypatch.setattr(auxdata.gdal, '__version__', '3.12.1')
+    
     original = gdal.GetConfigOption('GDAL_NUM_THREADS')
     gdal.SetConfigOption('GDAL_NUM_THREADS', '7')
     try:
         with DEMHandler() as handler:
-            _patch_create_dependencies(
-                monkeypatch,
-                handler,
-                raster=_FakeRaster(format='GTiff'),
-            )
             handler.create(
-                src='source.vrt',
+                src=vrt,
                 dst=str(tmp_path / 'out.tif'),
                 threads=2,
                 geoid_convert=False,
@@ -1333,98 +1390,126 @@ def test_create_restores_gdal_num_threads(monkeypatch, tmp_path):
         gdal.SetConfigOption('GDAL_NUM_THREADS', original)
 
 
-def test_create_list_source_adds_dummy_and_bounds(monkeypatch, tmp_path):
-    source = '/tmp/SRTM 3Sec/srtm_39_02.tif'
-    sources = [source]
-    dummy = object()
+def test_create_list_source_adds_dummy_and_bounds(monkeypatch, tmp_path, raster_factory):
+    source = raster_factory(
+        name='SRTM 3Sec/srtm_39_02.tif',
+        extent=(11, 51, 12, 52),
+    )
+    sources = [source.filename]
+    captured = _capture_gdalwarp(monkeypatch)
+    
     with DEMHandler() as handler:
         handler.extent = {'xmin': 11, 'xmax': 12, 'ymin': 51, 'ymax': 52}
-        captured = _patch_create_dependencies(
-            monkeypatch,
-            handler,
-            raster=_FakeRaster(format='GTiff'),
-        )
-        monkeypatch.setattr(
-            handler,
-            '_DEMHandler__create_dummy_dem',
-            lambda filename, fill_value: dummy,
-        )
         handler.create(
             src=sources,
             dst=str(tmp_path / 'out.tif'),
+            tr=(0.5, 0.5),
             geoid_convert=False,
         )
+    
+    assert sources == [source.filename]
+    assert isinstance(captured['src'][0], gdal.Dataset)
+    assert captured['src'][1:] == [source.filename]
+    assert _dataset_bounds(captured['src'][0]) == pytest.approx((11, 51, 12, 52))
+    assert captured['kwargs']['outputBounds'] == pytest.approx([11, 51, 12, 52])
 
-    assert sources == [source]
-    assert captured['src'][0] is dummy
-    assert captured['src'][1:] == [source]
-    assert captured['kwargs']['outputBounds'] == [11, 51, 12, 52]
 
-
-def test_create_list_source_output_bounds_override(monkeypatch, tmp_path):
+def test_create_list_source_output_bounds_override(monkeypatch, tmp_path, raster_factory):
+    source = raster_factory(
+        name='SRTM 3Sec/srtm_39_02.tif',
+        extent=(11, 51, 12, 52),
+    )
     bounds = [10, 50, 13, 53]
+    captured = _capture_gdalwarp(monkeypatch)
+    
     with DEMHandler() as handler:
         handler.extent = {'xmin': 11, 'xmax': 12, 'ymin': 51, 'ymax': 52}
-        captured = _patch_create_dependencies(
-            monkeypatch,
-            handler,
-            raster=_FakeRaster(format='GTiff'),
-        )
-        monkeypatch.setattr(
-            handler,
-            '_DEMHandler__create_dummy_dem',
-            lambda filename, fill_value: object(),
-        )
         handler.create(
-            src=['/tmp/SRTM 3Sec/srtm_39_02.tif'],
+            src=[source.filename],
             dst=str(tmp_path / 'out.tif'),
+            tr=(0.5, 0.5),
             outputBounds=bounds,
             geoid_convert=False,
         )
+    
     assert captured['kwargs']['outputBounds'] == bounds
 
 
-def test_create_list_source_antimeridian():
+def test_create_list_source_no_intersection(tmp_path, raster_factory):
+    source = raster_factory(
+        name='SRTM 3Sec/srtm_39_02.tif',
+        extent=(11, 51, 12, 52),
+    )
+    
     with DEMHandler() as handler:
-        handler.extent = {'xmin': 179, 'xmax': -179, 'ymin': 51, 'ymax': 52}
-        handler.info_from_filenames = lambda filenames: ('SRTM 3Sec', 'dem')
-        with pytest.raises(RuntimeError, match='crossing the antimeridian'):
+        handler.extent = {'xmin': 20, 'xmax': 21, 'ymin': 60, 'ymax': 61}
+        with pytest.raises(RuntimeError, match='does not intersect'):
             handler.create(
-                src=['/tmp/SRTM 3Sec/srtm_72_02.tif'],
-                dst='out.tif',
+                src=[source.filename],
+                dst=str(tmp_path / 'out.tif'),
                 geoid_convert=False,
             )
 
 
-def test_create_geoid_conversion(monkeypatch, tmp_path):
-    calls = []
+def test_create_list_source_antimeridian(monkeypatch, tmp_path, raster_factory):
+    source = raster_factory(
+        name='SRTM 3Sec/srtm_72_02.tif',
+        extent=(179, 51, 180, 52),
+    )
+    
+    class Intersection:
+        extent = {'xmin': 179, 'xmax': -179, 'ymin': 51, 'ymax': 52}
+        
+        def reproject(self, crs):
+            return None
+        
+        def close(self):
+            return None
+    
+    monkeypatch.setattr(auxdata, 'intersect', lambda *args, **kwargs: Intersection())
+    
     with DEMHandler() as handler:
-        captured = _patch_create_dependencies(monkeypatch, handler)
-        monkeypatch.setattr(
-            auxdata,
-            'get_egm_lookup',
-            lambda **kwargs: calls.append(kwargs),
-        )
+        with pytest.raises(RuntimeError, match='crossing the antimeridian'):
+            handler.create(
+                src=[source.filename],
+                dst=str(tmp_path / 'out.tif'),
+                geoid_convert=False,
+            )
+
+
+def test_create_geoid_conversion(monkeypatch, tmp_path, raster_factory):
+    _, vrt = _dem_vrt(tmp_path, raster_factory)
+    captured = _capture_gdalwarp(monkeypatch)
+    calls = []
+    monkeypatch.setattr(
+        auxdata,
+        'get_egm_lookup',
+        lambda **kwargs: calls.append(kwargs),
+    )
+    
+    with DEMHandler() as handler:
         handler.create(
-            src='source.vrt',
+            src=vrt,
             dst=str(tmp_path / 'out.tif'),
             geoid_convert=True,
         )
+    
     assert calls == [{'geoid': 'EGM96', 'software': 'PROJ'}]
     assert captured['kwargs']['srcSRS'] == 'EPSG:4326+5773'
 
 
-def test_create_geoid_lookup_failure(monkeypatch, tmp_path):
+def test_create_geoid_lookup_failure(monkeypatch, tmp_path, raster_factory):
+    _, vrt = _dem_vrt(tmp_path, raster_factory)
+    
+    def fail(**kwargs):
+        raise OSError('lookup unavailable')
+    
+    monkeypatch.setattr(auxdata, 'get_egm_lookup', fail)
+    
     with DEMHandler() as handler:
-        _patch_create_dependencies(monkeypatch, handler)
-
-        def fail(**kwargs):
-            raise OSError('lookup unavailable')
-
-        monkeypatch.setattr(auxdata, 'get_egm_lookup', fail)
         with pytest.raises(RuntimeError, match='lookup unavailable'):
             handler.create(
-                src='source.vrt',
+                src=vrt,
                 dst=str(tmp_path / 'out.tif'),
                 geoid_convert=True,
             )
@@ -1433,101 +1518,96 @@ def test_create_geoid_lookup_failure(monkeypatch, tmp_path):
 @pytest.mark.parametrize(
     'dem_type, product, dtype',
     [
-        ('Copernicus 30m Global DEM', 'wbm', 'Byte'),
-        ('GETASSE30', 'dem', 'Int16'),
+        ('Copernicus 30m Global DEM', 'wbm', gdal.GDT_Byte),
+        ('GETASSE30', 'dem', gdal.GDT_Int16),
     ],
 )
 def test_create_disables_unneeded_geoid_conversion(
         monkeypatch,
         tmp_path,
+        raster_factory,
         dem_type,
         product,
         dtype,
 ):
+    _, vrt = _dem_vrt(
+        tmp_path,
+        raster_factory,
+        dem_type=dem_type,
+        product=product,
+        dtype=dtype,
+    )
+    captured = _capture_gdalwarp(monkeypatch)
     calls = []
+    monkeypatch.setattr(
+        auxdata,
+        'get_egm_lookup',
+        lambda **kwargs: calls.append(kwargs),
+    )
+    
     with DEMHandler() as handler:
-        captured = _patch_create_dependencies(
-            monkeypatch,
-            handler,
-            dem_type=dem_type,
-            product=product,
-            raster=_FakeRaster(format='VRT', dtype=dtype),
-        )
-        monkeypatch.setattr(
-            auxdata,
-            'get_egm_lookup',
-            lambda **kwargs: calls.append(kwargs),
-        )
         handler.create(
-            src='source.vrt',
+            src=vrt,
             dst=str(tmp_path / 'out.tif'),
             geoid_convert=True,
         )
+    
     assert calls == []
     assert captured['kwargs']['srcSRS'] == 'EPSG:4326'
 
 
-def test_create_vrt_multithreading_workaround(monkeypatch, tmp_path):
-    raster = _FakeRaster(
-        format='VRT',
-        dtype='Int16',
-        bands=1,
-        rows=10,
-        cols=10,
-    )
+def test_create_vrt_multithreading_workaround(monkeypatch, tmp_path, raster_factory):
+    _, vrt = _dem_vrt(tmp_path, raster_factory)
     translated = object()
     translate_calls = []
-
+    captured = _capture_gdalwarp(monkeypatch)
+    
+    monkeypatch.setattr(auxdata.gdal, '__version__', '3.11.0')
+    monkeypatch.setattr(
+        auxdata.psutil,
+        'virtual_memory',
+        lambda: SimpleNamespace(available=10 ** 9),
+    )
+    
+    def fake_translate(*, destName, srcDS, format):
+        translate_calls.append((destName, srcDS, format))
+        return translated
+    
+    monkeypatch.setattr(auxdata.gdal, 'Translate', fake_translate)
+    
     with DEMHandler() as handler:
-        captured = _patch_create_dependencies(monkeypatch, handler, raster=raster)
-        monkeypatch.setattr(auxdata.gdal, '__version__', '3.11.0')
-        monkeypatch.setattr(
-            auxdata.psutil,
-            'virtual_memory',
-            lambda: SimpleNamespace(available=10**9),
-        )
-
-        def fake_translate(*, destName, srcDS, format):
-            translate_calls.append((destName, srcDS, format))
-            return translated
-
-        monkeypatch.setattr(auxdata.gdal, 'Translate', fake_translate)
         handler.create(
-            src='source.vrt',
+            src=vrt,
             dst=str(tmp_path / 'out.tif'),
             threads=2,
             geoid_convert=False,
         )
-
-    assert translate_calls == [('', 'source.vrt', 'MEM')]
+    
+    assert translate_calls == [('', vrt, 'MEM')]
     assert captured['src'] is translated
 
 
-def test_dem_create_local_vrt(tmp_path):
-    source_dir = tmp_path / 'SRTM 3Sec'
-    source_dir.mkdir()
-    source = source_dir / 'srtm_39_02.tif'
+def test_dem_create_local_vrt(tmp_path, raster_factory):
+    source = raster_factory(
+        name='SRTM 3Sec/srtm_39_02.tif',
+        nodata=-32768,
+        array=np.array([[1, 2], [3, 4]], dtype=np.int16),
+    )
     vrt = tmp_path / 'source.vrt'
     out = tmp_path / 'out.tif'
-
-    _write_raster(
-        source,
-        geotransform=(11, 0.01, 0, 52, 0, -0.01),
-        nodata=-32768,
-    )
     _build_vrt(vrt, [source])
-
+    
     extent = {'xmin': 11, 'xmax': 11.02, 'ymin': 51.98, 'ymax': 52}
     with bbox(coordinates=extent, crs=4326) as box:
         dem_create(
-            geometry=box,
+            vectorobject=box,
             src=str(vrt),
             dst=str(out),
             t_srs=4326,
             tr=(0.01, 0.01),
             geoid_convert=False,
         )
-
+    
     assert out.is_file()
     dataset = gdal.Open(str(out))
     assert dataset is not None
@@ -1551,14 +1631,14 @@ def test_getasse30_hdr(tmp_path, filename, longitude, upper_latitude):
     path = tmp_path / filename
     with zf.ZipFile(path, 'w') as archive:
         archive.writestr(filename.replace('.zip', '.GETASSE30'), b'')
-
+    
     getasse30_hdr(str(path))
-
+    
     hdr_name = filename.replace('.zip', '.hdr')
     with zf.ZipFile(path) as archive:
         assert hdr_name in archive.namelist()
         text = archive.read(hdr_name).decode()
-
+    
     assert 'samples = 1800' in text
     assert 'lines = 1800' in text
     assert 'byte order = 1' in text
@@ -1633,7 +1713,7 @@ def test_get_egm_lookup_proj_not_writable(tmp_path, monkeypatch):
 def test_get_egm_lookup_snap_download(tmp_path, monkeypatch):
     class FakeExamineSnap:
         auxdatapath = str(tmp_path)
-
+    
     response = _Response(content=b'grid')
     monkeypatch.setattr(auxdata, 'ExamineSnap', FakeExamineSnap)
     monkeypatch.setattr(auxdata.requests, 'get', lambda url: response)
@@ -1675,51 +1755,51 @@ def test_implicit_ftp_tls_wraps_socket():
 # VRT source validation
 
 
-def test_vrt_check_sources(tmp_path):
-    src = tmp_path / 'source.tif'
+def test_vrt_check_sources(tmp_path, raster_factory):
+    src = raster_factory(name='source.tif')
     vrt = tmp_path / 'test.vrt'
-    _write_raster(src)
     _build_vrt(vrt, [src])
-
+    
     tree = etree.parse(str(vrt))
     element = tree.find('.//SourceFilename')
-    element.text = str(src)
+    element.text = src.filename
     element.attrib['relativeToVRT'] = '0'
     tree.write(str(vrt))
+    
+    assert vrt_check_sources(str(vrt)) == [src.filename]
 
-    assert vrt_check_sources(str(vrt)) == [str(src)]
 
-
-def test_vrt_check_sources_relative(tmp_path):
-    src = tmp_path / 'source.tif'
+def test_vrt_check_sources_relative(tmp_path, raster_factory):
+    src = raster_factory(name='source.tif')
     vrt = tmp_path / 'test.vrt'
-    _write_raster(src)
     _build_vrt(vrt, [src])
-
+    
     tree = etree.parse(str(vrt))
     element = tree.find('.//SourceFilename')
-    element.text = src.name
+    element.text = Path(src.filename).name
     element.attrib['relativeToVRT'] = '1'
     tree.write(str(vrt))
-
+    
     assert vrt_check_sources(str(vrt)) == ['source.tif']
 
 
-def test_vrt_check_sources_multiple(tmp_path):
-    src1 = tmp_path / 'source1.tif'
-    src2 = tmp_path / 'source2.tif'
+def test_vrt_check_sources_multiple(tmp_path, raster_factory):
+    src1 = raster_factory(name='source1.tif')
+    src2 = raster_factory(
+        name='source2.tif',
+        extent=(11.02, 51.98, 11.04, 52),
+    )
     vrt = tmp_path / 'test.vrt'
-    _write_raster(src1)
-    _write_raster(src2, geotransform=(11.02, 0.01, 0, 52, 0, -0.01))
     _build_vrt(vrt, [src1, src2])
-
+    
     tree = etree.parse(str(vrt))
-    for element, source in zip(tree.findall('.//SourceFilename'), [src1, src2]):
-        element.text = str(source)
+    sources = [src1.filename, src2.filename]
+    for element, source in zip(tree.findall('.//SourceFilename'), sources):
+        element.text = source
         element.attrib['relativeToVRT'] = '0'
     tree.write(str(vrt))
-
-    assert vrt_check_sources(str(vrt)) == [str(src1), str(src2)]
+    
+    assert vrt_check_sources(str(vrt)) == sources
 
 
 def test_vrt_check_sources_missing(tmp_path, monkeypatch):
@@ -1769,15 +1849,15 @@ def test_vrt_check_sources_invalid_archive_path(monkeypatch):
         vrt_check_sources('test.vrt')
 
 
-def test_vrt_check_sources_vsizip(tmp_path):
-    src = tmp_path / 'source.tif'
+def test_vrt_check_sources_vsizip(tmp_path, raster_factory):
+    src = raster_factory(name='source.tif')
     archive = tmp_path / 'source.zip'
     vrt = tmp_path / 'test.vrt'
-    _write_raster(src)
+    source_path = Path(src.filename)
     with zf.ZipFile(archive, 'w') as obj:
-        obj.write(src, arcname=src.name)
-
-    vsi = '/vsizip/' + str(archive).replace('\\', '/') + '/' + src.name
+        obj.write(source_path, arcname=source_path.name)
+    
+    vsi = '/vsizip/' + str(archive).replace('\\', '/') + '/' + source_path.name
     _build_vrt(vrt, [vsi])
     assert vrt_check_sources(str(vrt)) == [vsi]
 
