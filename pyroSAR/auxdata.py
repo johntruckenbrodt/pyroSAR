@@ -541,7 +541,8 @@ class DEMHandler:
     def __create_dummy_dem(
             self,
             filename: str | None,
-            fill_value: int | float
+            fill_value: int | float,
+            extent: EXT | None = None
     ) -> gdal.Dataset | list[gdal.Dataset] | None:
         """
         Create dummy dataset(s) which span the given extent and
@@ -557,8 +558,12 @@ class DEMHandler:
             to `None` because two datasets will be created.
         fill_value
             The value to use for extrapolating areas over ocean where no DEM tile exists.
+        extent
+            The extent to cover with the dummy DEM. Default `None`: use the extent of the
+            user-defined geometries.
         """
-        extent = self.extent.copy()
+        if extent is None:
+            extent = self.extent
         
         def create_file(
                 filename: str | None,
@@ -572,7 +577,7 @@ class DEMHandler:
                 driver_name = 'GTiff'
             driver = gdal.GetDriverByName(driver_name)
             dataset = driver.Create(
-                filename, # arg name varies between versions: name, utf8_path, path (since 3.13)
+                filename,  # arg name varies: name -> utf8_path -> path (since 3.13)
                 xsize=1, ysize=1,
                 bands=1, eType=gdal.GDT_Byte
             )
