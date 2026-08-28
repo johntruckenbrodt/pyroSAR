@@ -51,7 +51,7 @@ EXT: TypeAlias = dict[str, int | float]
 
 
 def dem_autoload(
-        geometry: Vector | None,
+        vectorobject: Vector | None,
         demType: str,
         vrt: str | None = None,
         buffer: int | float | None = None,
@@ -72,8 +72,8 @@ def dem_autoload(
 
     Parameters
     ----------
-    geometry
-        A :class:`spatialist.vector.Vector` geometry to obtain DEM data for.
+    vectorobject
+        A :class:`spatialist.vector.Vector` object to obtain DEM data for.
         CRS must be WGS84 LatLon (EPSG 4326). Can be set to `None` for global extent.
     demType
         The type of DEM to be used. Options:
@@ -146,7 +146,7 @@ def dem_autoload(
             This file is then used as source in the VRT.
     
     buffer
-        A buffer in degrees to add around the geometry
+        A buffer in degrees to add around the vector object's extent.
     username
         (optional) The username for services requiring registration.
     password
@@ -256,7 +256,7 @@ def dem_autoload(
         # download the tiles and virtually combine them in an in-memory
         # VRT file subsetted to the extent of the SAR scene plus a buffer of 0.01 degrees
         vrt = '/vsimem/srtm1.vrt'
-        dem_autoload(geometry=bbox, demType='SRTM 1Sec HGT',
+        dem_autoload(vectorobject=bbox, demType='SRTM 1Sec HGT',
                      vrt=vrt, buffer=0.01)
         
         # write the final GeoTIFF file
@@ -267,13 +267,13 @@ def dem_autoload(
         # including conversion from geoid to ellipsoid heights
         from pyroSAR.auxdata import dem_create
         outname = scene.outname_base() + 'srtm1_ellp.tif'
-        dem_create(geometry=bbox, src=vrt, dst=outname, t_srs=32632,
+        dem_create(vectorobject=bbox, src=vrt, dst=outname, t_srs=32632,
                    tr=(30, 30), geoid_convert=True)
         
         # close the Vector object
         bbox.close()
     """
-    with DEMHandler(geometry=geometry, buffer=buffer) as handler:
+    with DEMHandler(vectorobject=vectorobject, buffer=buffer) as handler:
         return handler.load(
             dem_type=demType,
             username=username,
@@ -290,7 +290,7 @@ def dem_autoload(
 def dem_create(
         src: str | list[str],
         dst: str,
-        geometry: Vector | None = None,
+        vectorobject: Vector | None = None,
         buffer: int | float | None = None,
         t_srs: CRS | None = None,
         tr: tuple[int | float, int | float] | None = None,
@@ -313,11 +313,11 @@ def dem_create(
         The input dataset(s) as returned by :func:`dem_autoload`.
     dst
         The output GeoTIFF file name.
-    geometry
-        A :class:`spatialist.vector.Vector` geometry to obtain DEM data for;
-        CRS must be WGS84 LatLon (EPSG 4326). Can be set to `None` for global extent.
+    vectorobject
+        A :class:`spatialist.vector.Vector` geometry object to define the output extent.
+        CRS must be WGS84 LatLon (EPSG 4326). Default ``None``: use the extent of ``src``.
     buffer
-        A buffer in degrees to add around the geometry.
+        A buffer in degrees to add around the vector object's extent.
     t_srs
         The target geographic reference system.
         See function :func:`spatialist.auxil.crsConvert()` for details.
@@ -329,7 +329,7 @@ def dem_create(
         The number of threads to use. Possible values:
 
          - Default ``None``: use the value of ``GDAL_NUM_THREADS`` without modification.
-           If ``GDAL_NUM_THREADS`` is None, multi-threading is still turned on and two
+           If ``GDAL_NUM_THREADS`` is None, multi-threading is still turned on, and two
            threads are used, one for I/O and one for computation.
          - integer value: temporarily modify ``GDAL_NUM_THREADS`` and reset it once done.
            If 1, multithreading is turned off.
@@ -379,7 +379,7 @@ def dem_create(
           projected to ``t_srs`` if ``isinstance(src, list)``.
         - ``format``: set to ``GTiff``
     """
-    with DEMHandler(geometry=geometry, buffer=buffer) as handler:
+    with DEMHandler(vectorobject=vectorobject, buffer=buffer) as handler:
         handler.create(
             src=src,
             dst=dst,
@@ -404,26 +404,26 @@ class DEMHandler:
     
     Parameters
     ----------
-    geometry
-        S vector geometry object.
+    vectorobject
+        A vector geometry object.
         The extent of all features is used for DEM data search and mosaicking.
         Default `None`: use the global extent.
     buffer
-        A buffer in degrees to add around the geometry.
+        A buffer in degrees to add around the vector object's extent.
     """
     
     def __init__(
             self,
-            geometry: Vector | None = None,
+            vectorobject: Vector | None = None,
             buffer: int | float | None = None
     ) -> None:
-        if not (isinstance(geometry, Vector) or geometry is None):
-            raise RuntimeError('geometry must be of type Vector or None')
+        if not (isinstance(vectorobject, Vector) or vectorobject is None):
+            raise RuntimeError("'vectorobject' must be of type Vector or None")
         
-        if geometry is not None:
-            if geometry.getProjection('epsg') != 4326:
-                raise RuntimeError('input geometry CRS must be WGS84 LatLon (EPSG 4326)')
-            with geometry.bbox(buffer=buffer) as box:
+        if vectorobject is not None:
+            if vectorobject.getProjection('epsg') != 4326:
+                raise RuntimeError("the input vector object's CRS must be WGS84 LatLon (EPSG:4326)")
+            with vectorobject.bbox(buffer=buffer) as box:
                 self.extent = box.extent
         else:
             self.extent = {'xmin': -180, 'xmax': 180, 'ymin': -90, 'ymax': 90}
@@ -1326,7 +1326,7 @@ class DEMHandler:
         # is extrapolated to areas where no DEM tile exists (over ocean).
         
         # use the intersection of the bounding box of all DEM tiles and the user-defined
-        # extent (which might be global if ``geometry=None``) as target extent.
+        # extent (which might be global if ``vectorobject=None``) as target extent.
         if isinstance(src, list):
             with Raster(src) as ras:
                 extent_4326 = ras.extent
@@ -1335,7 +1335,7 @@ class DEMHandler:
                         inter = intersect(box, vec)
                         if inter is None:
                             raise RuntimeError(
-                                "The extent of 'geometry' does not intersect "
+                                "The extent of 'vectorobject' does not intersect "
                                 "with the extent of the DEM tiles."
                             )
                         if t_srs is not None:
