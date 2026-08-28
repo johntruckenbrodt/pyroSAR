@@ -142,7 +142,7 @@ i.e. creating a mosaic covering the extent of all input DEM tiles.
 
 Next to the advantage of supporting the antimeridian case, the file list approach might also be preferred for the coverage of the output mosaic.
 The mosaic created from a VRT covers exactly the EPSG:4326 extent of the input geometry plus buffer.
-The mosaic created from the file list will cover the bounding box of the extent of the input geometry plus buffer projected to ``t_srs``:
+The mosaic created from the file list will cover the bounding box of the ``t_srs``-projected extent of the input geometry plus buffer:
 
 .. tab-set::
     :sync-group: dem_prep
