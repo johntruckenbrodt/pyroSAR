@@ -33,7 +33,7 @@ from packaging.version import Version
 from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import Lock
 from spatialist.raster import Raster, Dtype
-from spatialist.vector import bbox, Vector
+from spatialist.vector import bbox, Vector, intersect
 from spatialist.ancillary import finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp, latlon_clamp
 from spatialist.envi import HDRobject
@@ -288,9 +288,9 @@ def dem_autoload(
 
 
 def dem_create(
-        geometry: Vector | None,
         src: str | list[str],
         dst: str,
+        geometry: Vector | None = None,
         buffer: int | float | None = None,
         t_srs: CRS | None = None,
         tr: tuple[int | float, int | float] | None = None,
@@ -309,13 +309,13 @@ def dem_create(
 
     Parameters
     ----------
-    geometry
-        A :class:`spatialist.vector.Vector` geometry to obtain DEM data for;
-        CRS must be WGS84 LatLon (EPSG 4326). Can be set to `None` for global extent.
     src
         The input dataset(s) as returned by :func:`dem_autoload`.
     dst
         The output GeoTIFF file name.
+    geometry
+        A :class:`spatialist.vector.Vector` geometry to obtain DEM data for;
+        CRS must be WGS84 LatLon (EPSG 4326). Can be set to `None` for global extent.
     buffer
         A buffer in degrees to add around the geometry.
     t_srs
@@ -1325,13 +1325,23 @@ class DEMHandler:
         # Also, add in-memory dummy dataset(s) to the file list so that the output layer
         # is extrapolated to areas where no DEM tile exists (over ocean).
         
+        # use the intersection of the bounding box of all DEM tiles and the user-defined
+        # extent (which might be global if ``geometry=None``) as target extent.
         if isinstance(src, list):
-            if t_srs is not None:
-                with bbox(coordinates=self.extent, crs=4326) as vec:
-                    vec.reproject(t_srs)
-                    extent_out = vec.extent
-            else:
-                extent_out = self.extent
+            with Raster(src) as ras:
+                extent_4326 = ras.extent
+                with ras.bbox() as box:
+                    with bbox(coordinates=self.extent, crs=4326) as vec:
+                        inter = intersect(box, vec)
+                        if inter is None:
+                            raise RuntimeError(
+                                "The extent of 'geometry' does not intersect "
+                                "with the extent of the DEM tiles."
+                            )
+                        if t_srs is not None:
+                            inter.reproject(t_srs)
+                        extent_out = inter.extent
+                        inter.close()
             
             if extent_out['xmin'] > extent_out['xmax']:
                 raise RuntimeError('The output extent is crossing the antimeridian.'
@@ -1344,7 +1354,9 @@ class DEMHandler:
                 gdalwarp_args['outputBounds'] = kwargs['outputBounds']
                 del kwargs['outputBounds']
             
-            dummy = self.__create_dummy_dem(filename=None, fill_value=fill_value)
+            dummy = self.__create_dummy_dem(
+                filename=None, fill_value=fill_value, extent=extent_4326
+            )
             if isinstance(dummy, list):
                 src = dummy + src
             else:
