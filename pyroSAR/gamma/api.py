@@ -25,7 +25,7 @@ class _UnavailableGammaModule:
         self.module = module
     
     def __getattr__(self, command: str):
-        raise RuntimeError(
+        raise AttributeError(
             f"The command '{command}' is not available. "
             f"Please install GAMMA module '{self.module.upper()}'."
         )

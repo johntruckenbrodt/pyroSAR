@@ -58,7 +58,7 @@ import yaml
 import uuid
 from time import strftime, strptime
 from spatialist.raster import Raster, Dtype
-from spatialist.ancillary import union
+from spatialist.ancillary import list_intersection
 from .ancillary import parse_datasetname
 
 import logging
@@ -467,7 +467,7 @@ class Product(object):
     
     @staticmethod
     def __check_dict_keys(keys, reference):
-        return len(union(keys, reference)) == len(keys)
+        return len(list_intersection(keys, reference)) == len(keys)
     
     @property
     def __fixture_fields(self):

@@ -6,6 +6,7 @@ dependencies:
   - geoalchemy2>=0.14.0
   - libgdal
   - libspatialite>=5.1.0
+  - libxml2<2.14 # https://github.com/johntruckenbrodt/pyroSAR/issues/438
   - lxml
   - numpy
   - packaging
@@ -17,6 +18,6 @@ dependencies:
   - pyyaml
   - requests
   - shapely
-  - spatialist>=0.17.0
+  - spatialist>=0.20.1
   - sqlalchemy>=1.4
   - sqlalchemy-utils>=0.37,<0.42 # 0.42 drop database issue https://github.com/kvesteri/sqlalchemy-utils/issues/791

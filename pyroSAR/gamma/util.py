@@ -28,7 +28,7 @@ from datetime import datetime
 from urllib.error import URLError
 import numpy as np
 from spatialist import haversine, Raster
-from spatialist.ancillary import union, finder
+from spatialist.ancillary import list_intersection, finder
 
 from ..S1 import OSV
 from ..drivers import ID, identify_many
@@ -835,7 +835,7 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
     shellscript = os.path.join(tmpdir, ref.outname_base(extensions=basename_extensions) + '_commands.sh')
     
     scaling = [scaling] if isinstance(scaling, str) else scaling if isinstance(scaling, list) else []
-    scaling = union(scaling, ['db', 'linear'])
+    scaling = list_intersection(scaling, ['db', 'linear'])
     if len(scaling) == 0:
         raise IOError('wrong input type for parameter scaling')
     

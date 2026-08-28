@@ -17,6 +17,6 @@ the rest of the digits is filled with underscores. I.e., the sensor field is fou
 Thus, `S1A_` is the sensor slot. In the same way, `IW__` is the acquisition mode slot, which is also four digits long.
 `A` denotes ascending orbit, the time stamp is in format YYYYmmddTHHMMSS.
 
-Processing functions like :func:`~pyroSAR.gamma.geocode` add suffixes to this identifier to further keep track of
+Processing functions like :func:`pyroSAR.gamma.util.geocode` add suffixes to this identifier to further keep track of
 individual processing steps performed on the dataset.
 This core concept is used by many pyroSAR functions internally to keep track of which scenes have been processed before.

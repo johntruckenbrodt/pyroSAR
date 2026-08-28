@@ -48,11 +48,13 @@ from osgeo.gdalconst import GA_ReadOnly
 import numpy as np
 
 from . import S1, patterns
+from .ancillary import get_corners, get_geometry
 from .config import __LOCAL__
 from .ERS import passdb_query, get_resolution_nesz
 from .xml_util import getNamespaces
 
-from spatialist import crsConvert, Vector, bbox
+from spatialist.vector import Vector, bbox
+from spatialist.auxil import crsConvert
 from spatialist.ancillary import parse_literal, finder, multicore
 
 import logging
@@ -63,7 +65,7 @@ Number: TypeAlias = int | float
 Coordinate: TypeAlias = tuple[float, float]
 Coordinates: TypeAlias = list[Coordinate]
 MetaDict: TypeAlias = dict[str, Any]
-BoundingBox: TypeAlias = dict[Literal['xmin', 'xmax', 'ymin', 'ymax'], float]
+BoundingBox: TypeAlias = dict[Literal['xmin', 'xmax', 'ymin', 'ymax'], int | float]
 
 
 def identify(scene: str) -> ID:
@@ -274,7 +276,7 @@ class ID(object):
         
         See Also
         --------
-        spatialist.vector.Vector.bbox
+        spatialist.vector.bbox
         """
         if outname is None:
             return bbox(coordinates=self.getCorners(), crs=self.projection,
@@ -291,7 +293,9 @@ class ID(object):
             overwrite: bool = True
     ) -> Vector | None:
         """
-        get the footprint geometry of a scene either as a vector object or written to a file
+        Get the footprint geometry of a scene.
+        The result is either returned as a vector object or written to a file.
+        Polygons crossing the antimeridian are automatically split into a multipolygon.
 
         Parameters
         ----------
@@ -309,37 +313,21 @@ class ID(object):
         
         See also
         --------
+        pyroSAR.ancillary.get_geometry
         spatialist.vector.Vector.write
         """
         if 'coordinates' not in self.meta.keys():
             raise NotImplementedError
-        srs = crsConvert(self.projection, 'osr')
-        points = ogr.Geometry(ogr.wkbMultiPoint)
-        for lon, lat in self.meta['coordinates']:
-            point = ogr.Geometry(ogr.wkbPoint)
-            point.AddPoint(lon, lat)
-            points.AddGeometry(point)
-        geom = points.ConvexHull()
-        geom.FlattenTo2D()
-        point = points = None
-        exterior = geom.GetGeometryRef(0)
-        if exterior.IsClockwise():
-            points = list(exterior.GetPoints())
-            exterior.Empty()
-            for x, y in reversed(points):
-                exterior.AddPoint(x, y)
-            geom.CloseRings()
-        exterior = points = None
         
-        bbox = Vector(driver='MEM')
-        bbox.addlayer('geometry', srs, geom.GetGeometryType())
-        bbox.addfield('area', ogr.OFTReal)
-        bbox.addfeature(geom, fields={'area': geom.Area()})
-        geom = None
+        vec = get_geometry(coordinates=self.meta['coordinates'],
+                           crs=self.projection)
+        
         if outname is None:
-            return bbox
+            return vec
         else:
-            bbox.write(outfile=outname, driver=driver, overwrite=overwrite)
+            vec.write(outfile=outname, driver=driver, overwrite=overwrite)
+            vec.close()
+            return None
     
     @property
     def compression(self) -> Literal['zip', 'tar'] | None:
@@ -478,18 +466,24 @@ class ID(object):
     
     def getCorners(self) -> BoundingBox:
         """
-        Get the bounding box corner coordinates
+        Get the bounding box corner coordinates.
+
+        For an antimeridian-crossing extent, ``xmin`` is greater than ``xmax``.
+        For example, ``xmin=179`` and ``xmax=-179`` represent an extent crossing
+        the antimeridian with a width of 2 degrees.
 
         Returns
         -------
-            the corner coordinates as a dictionary with keys `xmin`, `ymin`, `xmax`, `ymax`
+            A dictionary with keys ``xmin``, ``ymin``, ``xmax``, and ``ymax``.
+        
+        See Also
+        --------
+        pyroSAR.ancillary.get_corners
         """
-        if 'coordinates' not in self.meta.keys():
+        if 'coordinates' not in self.meta:
             raise NotImplementedError
         coordinates = self.meta['coordinates']
-        lat = [x[1] for x in coordinates]
-        lon = [x[0] for x in coordinates]
-        return {'xmin': min(lon), 'xmax': max(lon), 'ymin': min(lat), 'ymax': max(lat)}
+        return get_corners(coordinates)
     
     def getFileObj(self, filename: str) -> BytesIO:
         """
@@ -531,31 +525,6 @@ class ID(object):
                     'directory missing; please provide directory to function or define object attribute "gammadir"')
         return [x for x in finder(directory, [self.outname_base()], regex=True) if
                 not re.search(r'\.(?:par|hdr|aux\.xml|swp|sh)$', x)]
-    
-    def getHGT(self) -> list[str]:
-        """
-        get the names of all SRTM HGT tiles overlapping with the SAR scene
-
-        Returns
-        -------
-            names of the SRTM HGT tiles
-        """
-        
-        corners = self.getCorners()
-        
-        # generate sequence of integer coordinates marking the tie points of the overlapping hgt tiles
-        lat = range(int(float(corners['ymin']) // 1), int(float(corners['ymax']) // 1) + 1)
-        lon = range(int(float(corners['xmin']) // 1), int(float(corners['xmax']) // 1) + 1)
-        
-        # convert coordinates to string with leading zeros and hemisphere identification letter
-        lat = [str(x).zfill(2 + len(str(x)) - len(str(x).strip('-'))) for x in lat]
-        lat = [x.replace('-', 'S') if '-' in x else 'N' + x for x in lat]
-        
-        lon = [str(x).zfill(3 + len(str(x)) - len(str(x).strip('-'))) for x in lon]
-        lon = [x.replace('-', 'W') if '-' in x else 'E' + x for x in lon]
-        
-        # concatenate all formatted latitudes and longitudes with each other as final product
-        return [x + y + '.hgt' for x in lat for y in lon]
     
     def is_processed(self, outdir: str, recursive: bool = False) -> bool:
         """
@@ -740,6 +709,7 @@ class ID(object):
         
         if do_unpack:
             if tf.is_tarfile(self.scene):
+                log.info(f'unpacking scene to {directory}')
                 archive = tf.open(self.scene, 'r')
                 names = archive.getnames()
                 if offset is not None:
@@ -760,6 +730,7 @@ class ID(object):
                         archive.close()
             
             elif zf.is_zipfile(self.scene):
+                log.info(f'unpacking scene to {directory}')
                 archive = zf.ZipFile(self.scene, 'r')
                 names = archive.namelist()
                 header = os.path.commonprefix(names)

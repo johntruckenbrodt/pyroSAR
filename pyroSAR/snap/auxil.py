@@ -25,12 +25,12 @@ from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import windows_fileprefix, multilook_factors, Lock
 from pyroSAR.auxdata import get_egm_lookup
 
-from spatialist import Vector, Raster, vectorize, rasterize, boundary, intersect, bbox
+from spatialist import (Vector, Raster, vectorize, rasterize,
+                        hull, intersect, bbox)
 from spatialist.auxil import gdal_translate, crsConvert
 from spatialist.ancillary import finder, run
 
 from osgeo import gdal
-from osgeo.gdalconst import GA_Update
 
 import logging
 
@@ -1539,14 +1539,15 @@ def erode_edges(src, only_boundary=False, connectedness=4, pixels=1):
                               options=['COMPRESS=DEFLATE'])
                 if only_boundary:
                     with vectorize(target=mask, reference=ref) as vec:
-                        with boundary(vec, expression="value=1") as bounds:
-                            with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
-                                mask = new.array()
-                                if write_intermediates:
-                                    vec.write(dst.replace('.tif', '_init_vectorized.gpkg'))
-                                    bounds.write(dst.replace('.tif', '_boundary_vectorized.gpkg'))
-                                    new.write(outname=dst.replace('.tif', '_boundary.tif'),
-                                              dtype='Byte', options=['COMPRESS=DEFLATE'])
+                        with vec.filter(expression="value=1") as filtered:
+                            with hull(vectorobject=filtered, ratio=0) as bounds:
+                                with rasterize(vectorobject=bounds, reference=ref, nodata=None) as new:
+                                    mask = new.array()
+                                    if write_intermediates:
+                                        vec.write(dst.replace('.tif', '_init_vectorized.gpkg'))
+                                        bounds.write(dst.replace('.tif', '_boundary_vectorized.gpkg'))
+                                        new.write(outname=dst.replace('.tif', '_boundary.tif'),
+                                                  dtype='Byte', options=['COMPRESS=DEFLATE'])
                 mask = binary_erosion(input=mask, structure=structure)
                 ref.write(outname=dst, array=mask, dtype='Byte',
                           options=['COMPRESS=DEFLATE'])
@@ -1756,12 +1757,8 @@ def sub_parametrize(scene, geometry=None, offset=None, buffer=0.01, copyMetadata
             shp.reproject(4326)
             ext = shp.extent
             shp.close()
-        # add an extra buffer
-        ext['xmin'] -= buffer
-        ext['ymin'] -= buffer
-        ext['xmax'] += buffer
-        ext['ymax'] += buffer
-        with bbox(ext, 4326) as bounds:
+        
+        with bbox(ext, 4326, buffer=buffer) as bounds:
             inter = intersect(scene.bbox(), bounds)
             if not inter:
                 raise RuntimeError('no bounding box intersection between shapefile and scene')

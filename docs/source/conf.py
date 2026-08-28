@@ -35,6 +35,7 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
     'sphinx.ext.viewcode',
+    'sphinx_design',
     'sphinxcontrib.bibtex',
     'sphinxcontrib.cairosvgconverter',
     'sphinx_autodoc_typehints'

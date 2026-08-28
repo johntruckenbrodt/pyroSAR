@@ -24,17 +24,102 @@ import inspect
 from datetime import datetime
 from . import patterns
 from spatialist.ancillary import finder
+from spatialist.vector import Vector, hull
+from spatialist.auxil import crsConvert, longitude_shortest_interval
+from osgeo import osr, ogr
 from dataclasses import dataclass
-from typing import Optional, Literal, Callable, Any
-try:
-    from typing import Self
-except ImportError:
-    # Python < 3.11
-    from typing_extensions import Self
+from typing import Optional, Literal, Callable, Any, Self, TypeAlias
 from types import TracebackType
 import logging
 
 log = logging.getLogger(__name__)
+
+BoundingBox: TypeAlias = dict[Literal['xmin', 'xmax', 'ymin', 'ymax'], int | float]
+CRS = int | str | osr.SpatialReference
+
+
+def get_corners(
+        coordinates: list[tuple[int | float, int | float]]
+) -> BoundingBox:
+    """
+    Get the bounding box corner coordinates.
+
+    For an antimeridian-crossing extent, ``xmin`` is greater than ``xmax``.
+    For example, ``xmin=179`` and ``xmax=-179`` represent an extent crossing
+    the antimeridian with a width of 2 degrees.
+    
+    Parameters
+    ----------
+    coordinates
+        the coordinate list as exposed by `drivers.ID.meta['coordinates']`
+
+    Returns
+    -------
+        A dictionary with keys ``xmin``, ``ymin``, ``xmax``, and ``ymax``.
+    """
+    if not coordinates:
+        raise ValueError("coordinates must not be empty")
+    
+    latitudes = [point[1] for point in coordinates]
+    longitudes = [point[0] for point in coordinates]
+    
+    # compute smallest circular longitude interval
+    xmin, xmax = longitude_shortest_interval(longitudes)
+    
+    return {
+        'xmin': xmin,
+        'xmax': xmax,
+        'ymin': min(latitudes),
+        'ymax': max(latitudes),
+    }
+
+
+def get_geometry(
+        coordinates: list[tuple[int | float, int | float]],
+        crs: CRS
+) -> Vector:
+    """
+    Get the convex hull geometry of a set of points.
+
+    Antimeridian crossing is handled automatically for geographic coordinate
+    reference systems.
+
+    Parameters
+    ----------
+    coordinates
+        A list of coordinate tuples representing (x, y) values.
+    crs
+        The coordinate reference system to use for defining the geometry.
+
+    Returns
+    -------
+        A vector object containing the processed geometry.
+    """
+    srs = crsConvert(crs, 'osr')
+    
+    points = ogr.Geometry(ogr.wkbMultiPoint)
+    
+    for x, y in coordinates:
+        point = ogr.Geometry(ogr.wkbPoint)
+        point.AddPoint(x, y)
+        points.AddGeometry(point)
+    
+    with Vector() as vec:
+        vec.addlayer(
+            name='geometry',
+            srs=srs,
+            geomType=ogr.wkbMultiPoint,
+        )
+        vec.addfeature(points)
+        
+        points = point = None
+        
+        out = hull(
+            vectorobject=vec,
+            ratio=1.0
+        )
+    
+    return out
 
 
 def groupby(

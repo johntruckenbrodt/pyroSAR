@@ -4,11 +4,107 @@ import datetime
 from pathlib import Path
 from pyroSAR.ancillary import (seconds, groupbyTime, groupby,
                                parse_datasetname, find_datasets,
-                               Lock, LockCollection)
+                               Lock, LockCollection, get_corners,
+                               get_geometry)
+from osgeo import ogr
 
 
 def test_seconds():
     assert seconds('test_20151212T234411') == 3658952651.0
+
+
+@pytest.mark.parametrize(
+    'coordinates, expected',
+    [
+        (
+                [
+                    (10, 50),
+                    (10, 51),
+                    (11, 51),
+                    (11, 50),
+                ],
+                {'xmin': 10, 'xmax': 11, 'ymin': 50, 'ymax': 51},
+        ),
+        (
+                [
+                    (179, 50),
+                    (179, 51),
+                    (-179, 51),
+                    (-179, 50),
+                ],
+                {'xmin': 179, 'xmax': -179, 'ymin': 50, 'ymax': 51},
+        ),
+        (
+                [
+                    (175, 52),
+                    (-178, 50),
+                    (179, 51),
+                    (-170, 53),
+                    (178, 49),
+                ],
+                {'xmin': 175, 'xmax': -170, 'ymin': 49, 'ymax': 53},
+        ),
+        (
+                [
+                    (11, 51),
+                    (10, 50),
+                    (12, 52),
+                    (10.5, 50.5),
+                ],
+                {'xmin': 10, 'xmax': 12, 'ymin': 50, 'ymax': 52},
+        ),
+    ],
+    ids=['ordinary', 'antimeridian', 'unordered-antimeridian', 'extra-points'],
+)
+def test_get_corners(coordinates, expected):
+    assert get_corners(coordinates) == expected
+
+
+@pytest.mark.parametrize(
+    'coordinates, geometry_type, geometry_count',
+    [
+        (
+                [
+                    (10, 50),
+                    (10, 51),
+                    (11, 51),
+                    (11, 50),
+                ],
+                ogr.wkbPolygon,
+                1,
+        ),
+        (
+                [
+                    (179, 50),
+                    (179, 51),
+                    (-179, 51),
+                    (-179, 50),
+                ],
+                ogr.wkbMultiPolygon,
+                2,
+        ),
+        (
+                [
+                    (175, 52),
+                    (-178, 50),
+                    (179, 51),
+                    (-170, 53),
+                    (178, 49),
+                ],
+                ogr.wkbMultiPolygon,
+                2,
+        ),
+    ],
+    ids=['ordinary', 'antimeridian', 'unordered-antimeridian'],
+)
+def test_get_geometry(coordinates, geometry_type, geometry_count):
+    with get_geometry(coordinates, crs=4326) as vector:
+        feature = vector.getFeatureByIndex(0)
+        geometry = feature.GetGeometryRef()
+        
+        assert geometry.GetGeometryType() == geometry_type
+        assert geometry.GetGeometryCount() == geometry_count
+        assert geometry.IsValid()
 
 
 def test_groupby():

@@ -2,7 +2,7 @@ Auxiliary Data Tools
 ====================
 
 .. automodule:: pyroSAR.auxdata
-    :members: dem_autoload, dem_create, get_egm_lookup, getasse30_hdr, get_dem_options, DEMHandler, DEMConfig
+    :members: dem_autoload, dem_create, get_egm_lookup, getasse30_hdr, get_dem_options, DEMHandler
     :undoc-members:
     :show-inheritance:
 
@@ -15,4 +15,3 @@ Auxiliary Data Tools
         getasse30_hdr
         get_dem_options
         DEMHandler
-        DEMConfig

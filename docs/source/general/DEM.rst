@@ -21,52 +21,141 @@ Download of DEM Tiles
 
 The function :func:`pyroSAR.auxdata.dem_autoload` offers convenient download of tiles from different sources
 overlapping with user-defined geometries. Optionally, a buffer in degrees can be defined.
-This function internally makes use of the function :func:`spatialist.auxil.gdalbuildvrt`.
+Users can either mosaic the result in GDAL's VRT format, return a file list with GDAL-readable paths
+(e.g. pointing to a GeoTIFF inside a zip using the /vsizip/ directive), or just download products without any return.
 
-.. code-block:: python
+When writing a VRT and ``crop=True`` (the default), the resulting mosaic is cropped to the extent of the (buffered) input geometry.
+The ``crop`` argument does not have an effect when returning a file list.
 
-    from pyroSAR.auxdata import dem_autoload
-    from spatialist import Vector
+.. note::
 
-    site = 'mysite.shp'
-    vrt = 'mosaic.vrt'
+    VRTs do not support mosaics crossing the antimeridian. Use a file list in this case.
 
-    with Vector(site) as vec:
-        vrt = dem_autoload(geometries=[vec],
-                           demType='SRTM 1Sec HGT',
-                           vrt=vrt,
-                           buffer=0.1)
+.. tab-set::
+    :sync-group: dem_prep
 
-The tiles, which are delivered in compressed archives, are directly connected to a virtual mosaic using GDAL's VRT
-format, making it easier to work with them by treating them as a single file.
-For downloading tiles of some DEM types, e.g. `TDX90m`, an account needs to be created and the user credentials be passed to
+    .. tab-item:: VRT
+        :sync: vrt
+
+        .. code-block:: python
+
+            from pyroSAR.auxdata import dem_autoload
+            from spatialist import bbox
+
+            extent = {'xmin': 11.5, 'xmax': 12, 'ymin': 50.5, 'ymax': 51}
+            vrt = 'mosaic.vrt'
+
+            with bbox(extent, crs=4326) as vec:
+                dem_autoload(
+                    geometry=vec,
+                    demType='Copernicus 30m Global DEM',
+                    buffer=0.1,
+                    vrt=vrt,
+                )
+
+    .. tab-item:: file list
+        :sync: list
+
+        .. code-block:: python
+
+            from pyroSAR.auxdata import dem_autoload
+            from spatialist import Vector
+
+            extent = {'xmin': 11.5, 'xmax': 12, 'ymin': 50.5, 'ymax': 51}
+
+
+            with bbox(extent, crs=4326) as vec:
+                tiles = dem_autoload(
+                    geometry=vec,
+                    demType='Copernicus 30m Global DEM',
+                    buffer=0.1,
+                    return_fname=True
+                )
+
+For downloading tiles of some DEM types, an account needs to be created and the user credentials be passed to
 function :func:`~pyroSAR.auxdata.dem_autoload`. See the function's documentation for further details.
 
 The files are stored in SNAP's location for auxiliary data, which per default is `$HOME/.snap/auxdata/dem`.
-The function :func:`~pyroSAR.auxdata.dem_autoload` has proven beneficial in server environments where not each node has internet access and the tiles thus
-need to be downloaded prior to processing on these nodes.
+This path can be modified using :attr:`pyroSAR.examine.ExamineSnap.auxdatapath`.
 
 DEM Mosaicing
 =============
 
-In a next step we create a mosaic GeoTIFF cropped to the boundaries defined in the VRT using the function
-:func:`pyroSAR.auxdata.dem_create`.
+In a next step we create a mosaic GeoTIFF using the function :func:`pyroSAR.auxdata.dem_create`.
 The spatial reference system, WGS84 UTM 32N in this case, is defined by its EPSG code but also several other options
-are available. Since for SAR processing we are interested in ellipsoid heights, we call the function with the according
-parameter `geoid_convert` set to `True`.
+are available (see function :func:`spatialist.auxil.crsConvert` for options).
+Since for SAR processing we are interested in WGS84 ellipsoid heights (and not geoid heights as for most DEMs),
+the function defaults to `geoid_convert=True`. The correct geoid model is inferred automatically from the input DEM type.
 This function makes use of :func:`spatialist.auxil.gdalwarp`.
 Conversion of vertical reference systems, e.g. from geoid to ellipsoid, requires GDAL version >=2.2.
 
-.. code-block:: python
+Since ``crop`` does not have an effect when returning a file list from
+:func:`~pyroSAR.auxdata.dem_autoload`,
+``geometry`` and ``buffer`` need also to be passed to
+:func:`~pyroSAR.auxdata.dem_create` to achieve the same result as with the VRT.
+If omitting them, the result will be the same as if creating a VRT in
+:func:`~pyroSAR.auxdata.dem_autoload` with ``crop=False``,
+i.e. creating a mosaic covering the extent of all input DEM tiles.
 
-    from pyroSAR.auxdata import dem_create
+.. tab-set::
+    :sync-group: dem_prep
 
-    outname = 'mysite_srtm.tif'
+    .. tab-item:: VRT
+        :sync: vrt
 
-    dem_create(src=vrt, dst=outname,
-               t_srs=32632, tr=(20, 20),
-               resampling_method='bilinear',
-               geoid_convert=True, geoid='EGM96')
+        .. code-block:: python
+
+            from pyroSAR.auxdata import dem_create
+
+
+            outname = 'cop-dem.tif'
+
+
+            dem_create(
+                src=vrt,
+                dst=outname,
+                t_srs=32632,
+                tr=(20, 20)
+
+
+            )
+
+    .. tab-item:: file list
+        :sync: list
+
+        .. code-block:: python
+
+            from pyroSAR.auxdata import dem_create
+
+            extent = {'xmin': 11.5, 'xmax': 12, 'ymin': 50.5, 'ymax': 51}
+            outname = 'cop-dem.tif'
+
+            with bbox(extent, crs=4326) as vec:
+                dem_create(
+                    geometry=vec,
+                    buffer=0.1,
+                    src=tiles,
+                    dst=outname,
+                    t_srs=32632,
+                    tr=(20, 20)
+                )
+
+Next to the advantage of supporting the antimeridian case, the file list approach might also be preferred for the coverage of the output mosaic.
+The mosaic created from a VRT covers exactly the EPSG:4326 extent of the input geometry plus buffer.
+The mosaic created from the file list will cover the bounding box of the ``t_srs``-projected extent of the input geometry plus buffer:
+
+.. tab-set::
+    :sync-group: dem_prep
+
+    .. tab-item:: VRT
+        :sync: vrt
+
+        .. figure:: figures/dem_from_vrt.png
+
+    .. tab-item:: file list
+        :sync: list
+
+        .. figure:: figures/dem_from_list.png
 
 GAMMA Import
 ============
@@ -76,4 +165,4 @@ combination of functions :func:`~pyroSAR.auxdata.dem_autoload` and :func:`~pyroS
 executes GAMMA commands for format conversion.
 It offers the same parameters as these two functions and a user can additionally decide whether geoid-ellipsoid
 conversion is done in GDAL or in GAMMA via parameter `geoid_mode`. The output is a file in GAMMA format, which can
-directly be used for processing by e.g. function :func:`pyroSAR.gamma.geocode`.
+directly be used for processing by e.g. function :func:`pyroSAR.gamma.util.geocode`.
