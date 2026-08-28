@@ -7,6 +7,7 @@ dependencies:
   - matplotlib
   - numpy
   - sphinx
+  - sphinx-design
   - sphinx_rtd_theme
   - sphinxcontrib-bibtex>=2.2
   - sphinxcontrib-svg2pdfconverter
