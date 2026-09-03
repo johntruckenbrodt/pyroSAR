@@ -411,6 +411,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 pars['COSAR'] = image
                 pars['SLC_par'] = outname + '.par'
                 pars['SLC'] = outname
+                pars['dtype'] = 1  # convert SCOMPLEX->FCOMPLEX
                 with Lock(outname):
                     if do_execute(pars, ['SLC', 'SLC_par'], exist_ok):
                         isp.par_TX_SLC(**pars)
