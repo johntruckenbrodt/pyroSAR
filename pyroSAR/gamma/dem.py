@@ -125,11 +125,12 @@ def dem_autocreate(
         buffer: int | float | None = None,
         t_srs: int | str | SpatialReference = 4326,
         tr: tuple[int | float, int | float] | None = None,
-        logpath: str | None = None,
         username: str | None = None,
         password: str | None = None,
         geoid_mode: Literal['gamma', 'gdal'] = 'gamma',
-        resampling_method: str = 'bilinear'
+        resampling_method: str = 'bilinear',
+        logpath: str | None = None,
+        shellscript: str | None = None
 ) -> None:
     """
     | automatically create a DEM in GAMMA format for a defined spatial geometry.
@@ -172,8 +173,6 @@ def dem_autocreate(
         the target resolution as (xres, yres) in units of ``t_srs``; if ``t_srs`` is kept at its default value of 4326,
         ``tr`` does not need to be defined and the original resolution is preserved;
         in all other cases the default of None is rejected
-    logpath
-        a directory to write GAMMA logfiles to
     username
         (optional) the user name for services requiring registration;
         see :func:`~pyroSAR.auxdata.dem_autoload`
@@ -184,6 +183,10 @@ def dem_autocreate(
     resampling_method
         the gdalwarp resampling method; See `here <https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-r>`_
         for options.
+    logpath
+        a directory to write GAMMA logfiles to
+    shellscript: str or None
+        a file to write the GAMMA commands to in bash format
     """
     geometry = geometry.clone()
     
@@ -261,7 +264,7 @@ def dem_autocreate(
         log.info(message)
         
         dem_import(src=dem, dst=outfile_tmp, geoid=gamma_geoid,
-                   logpath=logpath, outdir=tmpdir)
+                   logpath=logpath, outdir=tmpdir, shellscript=shellscript)
         
         for suffix in ['', '.par', '.hdr']:
             shutil.copyfile(outfile_tmp + suffix, outfile + suffix)
