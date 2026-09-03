@@ -3,7 +3,6 @@ import pytest
 import sys
 import shutil
 import textwrap
-import platform
 from uuid import uuid4
 import subprocess as sp
 from pathlib import Path
@@ -477,19 +476,15 @@ def test_sqlite_deleted_after_close(
         testdata,
 ):
     """
-    Check that closing a SQLite archive releases the database file.
+    Check that closing an SQLite archive releases the database file.
     """
     with sqlite_archive_config.open() as db:
         db.insert(testdata['s1'])
     
     dbfile = Path(sqlite_archive_config.dbfile)
     
-    if platform.system() == 'Windows':
-        with pytest.raises(PermissionError):
-            dbfile.unlink()
-    else:
-        dbfile.unlink()
-        assert not dbfile.exists()
+    dbfile.unlink()
+    assert not dbfile.exists()
 
 
 def test_postgres_import_from_sqlite(
@@ -525,7 +520,8 @@ def test_postgres_invalid_connection():
 
 def test_sqlite_close_does_not_break_lxml():
     """
-    Confirm the current erroneous behavior of SpatiaLite on Windows.
+    Test that spatialite does not crash xml/html parsing.
+    See https://github.com/johntruckenbrodt/pyroSAR/issues/438.
     """
     code = textwrap.dedent("""
         import tempfile
@@ -559,9 +555,14 @@ def test_sqlite_close_does_not_break_lxml():
         text=True,
     )
     
-    if platform.system() == 'Windows':
-        assert result.returncode != 0
-    else:
-        assert result.returncode == 0
+    assert result.returncode == 0
     
     assert result.stdout.strip() == 'after'
+
+
+def test_antimeridian(archive, testdata):
+    archive.insert(testdata['s1_anti'])
+    out = archive.select(vv=1, return_value=['geometry_wkt'])
+    assert len(out) == 2
+    assert wkt.loads(out[0]).geom_type == 'Polygon'
+    assert wkt.loads(out[1]).geom_type == 'MultiPolygon'

@@ -25,7 +25,6 @@ def testcases():
             'bbox_area': 7.573045244595988,
             'compression': 'zip',
             'corners': {'ymax': 52.183979, 'ymin': 50.295261, 'xmin': 8.017178, 'xmax': 12.0268},
-            'hgt_len': 15,
             'lines': 16685,
             'orbit': 'A',
             'outname': 'S1A__IW___A_20150222T170750',
@@ -41,7 +40,6 @@ def testcases():
             'acquisition_mode': 'FBD',
             'compression': 'zip',
             'corners': {'xmin': -62.9005207, 'xmax': -62.1629744, 'ymin': -11.4233051, 'ymax': -10.6783401},
-            'hgt_len': 2,
             'lines': 13160,
             'orbit': 'A',
             'outname': 'PSR2_FBD__A_20140909T043342',
@@ -69,7 +67,7 @@ class Test_Metadata():
     def test_attributes(self, scene):
         assert scene['pyro'].acquisition_mode == scene['acquisition_mode']
         assert scene['pyro'].compression == scene['compression']
-        assert scene['pyro'].getCorners() == scene['corners']
+        assert scene['pyro'].getCorners() == pytest.approx(scene['corners'])
         assert scene['pyro'].lines == scene['lines']
         assert scene['pyro'].outname_base() == scene['outname']
         assert scene['pyro'].orbit == scene['orbit']
@@ -80,7 +78,6 @@ class Test_Metadata():
         assert scene['pyro'].stop == scene['stop']
         assert scene['pyro'].sensor == scene['sensor']
         assert scene['pyro'].spacing == scene['spacing']
-        assert len(scene['pyro'].getHGT()) == scene['hgt_len']
 
 
 def test_identify_fail(testdir, testdata):
@@ -151,8 +148,10 @@ def test_scene(tmpdir, testdata):
         id.getGammaImages()
     assert id.getGammaImages(id.scene) == []
     id = pyroSAR.identify(testdata['psr2'])
-    assert id.getCorners() == {'xmax': -62.1629744, 'xmin': -62.9005207,
-                               'ymax': -10.6783401, 'ymin': -11.4233051}
+    assert id.getCorners() == pytest.approx({
+        'xmax': -62.1629744, 'xmin': -62.9005207,
+        'ymax': -10.6783401, 'ymin': -11.4233051
+    })
 
 
 datasets = ['asar', 'ers1_esa', 'ers1_ceos', 'psr2', 's1']

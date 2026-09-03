@@ -63,7 +63,7 @@ This method internally uses the methods described above with a time span limited
 approach 3: direct download and scene metadata update (GAMMA only)
 ==================================================================
 
-The convenience function :func:`pyroSAR.gamma.correctOSV` internally makes use of approach 2 and additionally directly
+The convenience function :func:`pyroSAR.gamma.util.correctOSV` internally makes use of approach 2 and additionally directly
 executes the GAMMA command `isp.S1_OPOD_vec` for updating the scene's metadata with the information of the OSV file.
 The scene has to be unpacked first (see :meth:`pyroSAR.drivers.SAFE.unpack`).
 
@@ -79,8 +79,8 @@ The scene has to be unpacked first (see :meth:`pyroSAR.drivers.SAFE.unpack`).
 approach 4: automatic download and use during processing
 ========================================================
 
-The processing function :func:`pyroSAR.gamma.geocode` automatically downloads OSV files needed for processing and
-updates the scene's metadata using function :func:`~pyroSAR.gamma.correctOSV`.
+The processing function :func:`pyroSAR.gamma.util.geocode` automatically downloads OSV files needed for processing and
+updates the scene's metadata using function :func:`~pyroSAR.gamma.util.correctOSV`.
 It is thus the most convenient way to handle these files and related processing steps.
 The parameter `allow_RES_OSV` can be used to allow processing with `RES` files if no `POE` file is available yet.
 

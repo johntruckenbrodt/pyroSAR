@@ -20,7 +20,7 @@ import subprocess as sp
 from datetime import datetime, timedelta
 
 from pyroSAR.examine import ExamineGamma
-from spatialist.ancillary import parse_literal, run, union, dissolve
+from spatialist.ancillary import parse_literal, run, list_intersection, dissolve
 from spatialist.envi import hdr
 
 from .error import gammaErrorHandler
@@ -192,11 +192,11 @@ class ISPPar(object):
         if hasattr(self, 'date'):
             out['acquisition_time'] = self.date + 'Z'
         
-        out['samples'] = getattr(self, union(['width', 'range_samples', 'samples'], self.keys)[0])
-        out['lines'] = getattr(self, union(['nlines', 'azimuth_lines', 'lines'], self.keys)[0])
+        out['samples'] = getattr(self, list_intersection(['width', 'range_samples', 'samples'], self.keys)[0])
+        out['lines'] = getattr(self, list_intersection(['nlines', 'azimuth_lines', 'lines'], self.keys)[0])
         
         dtypes_lookup = {'FCOMPLEX': 6, 'FLOAT': 4, 'REAL*4': 4, 'INTEGER*2': 2, 'SHORT': 12}
-        dtype = getattr(self, union(['data_format', 'image_format'], self.keys)[0])
+        dtype = getattr(self, list_intersection(['data_format', 'image_format'], self.keys)[0])
         
         if dtype not in dtypes_lookup.keys():
             raise TypeError('unsupported data type: {}'.format(dtype))

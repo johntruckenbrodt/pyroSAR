@@ -37,7 +37,8 @@ from spatialist.ancillary import finder
 
 from pyroSAR.drivers import identify, identify_many, ID
 
-from sqlalchemy import create_engine, Table, MetaData, Column, Integer, String, exc, text
+from sqlalchemy import (create_engine, Table, MetaData,
+                        Column, Integer, String, exc, text)
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
@@ -46,7 +47,8 @@ from sqlalchemy.sql import select, func
 from sqlalchemy.engine.url import URL
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy_utils import database_exists, create_database, drop_database
-from geoalchemy2 import Geometry
+from geoalchemy2.types import Geometry
+from geoalchemy2.elements import WKTElement
 
 log = logging.getLogger(__name__)
 
@@ -392,27 +394,31 @@ class Archive(SceneArchive):
         
         log.debug("creating DB table 'data'")
         
-        self.data_schema = Table('data', self.meta,
-                                 Column('sensor', String),
-                                 Column('orbit', String),
-                                 Column('orbitNumber_abs', Integer),
-                                 Column('orbitNumber_rel', Integer),
-                                 Column('cycleNumber', Integer),
-                                 Column('frameNumber', Integer),
-                                 Column('acquisition_mode', String),
-                                 Column('start', String),
-                                 Column('stop', String),
-                                 Column('product', String, primary_key=True),
-                                 Column('samples', Integer),
-                                 Column('lines', Integer),
-                                 Column('outname_base', String, primary_key=True),
-                                 Column('scene', String),
-                                 Column('hh', Integer),
-                                 Column('vv', Integer),
-                                 Column('hv', Integer),
-                                 Column('vh', Integer),
-                                 Column('geometry', Geometry(geometry_type='POLYGON',
-                                                             srid=4326)))
+        self.data_schema = Table(
+            'data', self.meta,
+            Column('sensor', String),
+            Column('orbit', String),
+            Column('orbitNumber_abs', Integer),
+            Column('orbitNumber_rel', Integer),
+            Column('cycleNumber', Integer),
+            Column('frameNumber', Integer),
+            Column('acquisition_mode', String),
+            Column('start', String),
+            Column('stop', String),
+            Column('product', String, primary_key=True),
+            Column('samples', Integer),
+            Column('lines', Integer),
+            Column('outname_base', String, primary_key=True),
+            Column('scene', String),
+            Column('hh', Integer),
+            Column('vv', Integer),
+            Column('hv', Integer),
+            Column('vh', Integer),
+            Column('geometry', Geometry(
+                geometry_type='MULTIPOLYGON',
+                srid=4326)
+                   )
+        )
         # add custom fields
         if self.custom_fields is not None:
             for key, val in self.custom_fields.items():
@@ -531,9 +537,8 @@ class Archive(SceneArchive):
             if attribute == 'geometry':
                 geom = id.geometry()
                 geom.reproject(4326)
-                geom = geom.convert2wkt(set3D=False)[0]
-                geom = 'SRID=4326;' + str(geom)
-                # set attributes of the Data object according to input
+                geom = geom.convert2wkt(set3D=False, multi=True)[0]
+                geom = WKTElement(data=geom, srid=4326)
                 setattr(insertion, 'geometry', geom)
             elif attribute in ['hh', 'vv', 'hv', 'vh']:
                 setattr(insertion, attribute, int(attribute in pols))
@@ -610,7 +615,9 @@ class Archive(SceneArchive):
             test: bool = False
     ) -> None:
         """
-        Insert one or many scenes into the database
+        Insert one or many scenes into the database.
+        All footprint geometries are stored as MULTIPOLYGON
+        type to account for antimeridian-split geometries.
 
         Parameters
         ----------
@@ -1050,7 +1057,8 @@ class Archive(SceneArchive):
             **kwargs: Any
     ) -> list[str | bytes] | list[tuple[str | bytes]]:
         """
-        select scenes from the database
+        Select scenes from the database.
+        Single polygon MULTIPOLYGON geometries are converted back to POLYGON geometries.
 
         Parameters
         ----------
@@ -1093,15 +1101,24 @@ class Archive(SceneArchive):
 
         Returns
         -------
-            If a single return_value is specified: list of values for that attribute.
-            If multiple return_values are specified: list of tuples containing the requested attributes.
-            The return value type is bytes for `geometry_wkb` and str for all others.
+            If a single ``return_value`` is specified: list of values for that attribute.
+            If multiple values for ``return_value`` are specified: list of tuples containing the requested attributes.
+            The return value type is ``bytes`` for ``geometry_wkb`` and ``str`` for all others.
         """
         # Convert return_value to list if it's a string
         if isinstance(return_value, str):
             return_values = [return_value]
         else:
             return_values = return_value
+        
+        # demote MULTIPOLYGON to POLYGON if it only contains one polygon
+        geometry_sql = (
+            'CASE '
+            'WHEN ST_NumGeometries(geometry) = 1 '
+            'THEN ST_GeometryN(geometry, 1) '
+            'ELSE geometry '
+            'END'
+        )
         
         return_values_sql = []
         for val in return_values:
@@ -1110,11 +1127,13 @@ class Archive(SceneArchive):
             elif val == 'maxdate':
                 return_values_sql.append('stop')
             elif val == 'geometry_wkt':
-                prefix = 'ST_' if self.driver == 'postgresql' else ''
-                return_values_sql.append(f'{prefix}AsText(geometry) as geometry_wkt')
+                return_values_sql.append(
+                    f'ST_AsText({geometry_sql}) as geometry_wkt'
+                )
             elif val == 'geometry_wkb':
-                prefix = 'ST_' if self.driver == 'postgresql' else ''
-                return_values_sql.append(f'{prefix}AsBinary(geometry) as geometry_wkb')
+                return_values_sql.append(
+                    f'ST_AsBinary({geometry_sql}) as geometry_wkb'
+                )
             else:
                 return_values_sql.append(val)
         
@@ -1129,7 +1148,9 @@ class Archive(SceneArchive):
                    f"return values: {invalid_str}")
             raise ValueError(msg)
         
-        arg_valid = [x for x in kwargs.keys() if x in self.get_colnames()]
+        arg_valid = [k for k, v in kwargs.items()
+                     if k in self.get_colnames()
+                     and v is not None]
         arg_invalid = [x for x in kwargs.keys() if x not in self.get_colnames()]
         if len(arg_invalid) > 0:
             log.info(f"the following arguments will be ignored as they are not "
@@ -1327,42 +1348,7 @@ class Archive(SceneArchive):
     def close(self) -> None:
         """
         Close the database connection.
-        
-        There is a bug in spatialite v5.1.0 that prevents working with libxml2
-        (e.g., needed by lxml) after closing the database connection on Windows:
-        https://www.gaia-gis.it/fossil/libspatialite/tktview/855ef62a68b9ac6e500b54883707b2876c390c01
-        
-        Whenever ``close()`` is called, any subsequent use of e.g., lxml will lead
-        to a segmentation fault.
-        Therefore, fully closing the connection is postponed to the garbage collect
-        at the end of the running Python process.
-        The process will exit with a non-zero code, but at least all processing
-        steps are executed.
-        This also means that the database file cannot be deleted during the process (PermissionError).
-        
-        Minimal reproducible failing example if just calling
-        ``self.engine.dispose()`` in ``close()``:
-    
-        .. code-block:: python
-        
-            import sqlite3
-            from lxml import html
-            
-            test = html.fromstring("<p>before</p>")
-            print(test.text)
-            
-            conn = sqlite3.connect(":memory:")
-            conn.enable_load_extension(True)
-            conn.load_extension("mod_spatialite")
-            conn.close()
-            
-            # this line triggers the segmentation fault
-            test = html.fromstring("<p>after</p>")
-            print(test.text)
         """
-        if platform.system() == 'Windows' and self.driver == 'sqlite':
-            self.engine.dispose(close=False)
-            return
         self.engine.dispose()
     
     def __exit__(
