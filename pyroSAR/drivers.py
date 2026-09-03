@@ -235,14 +235,22 @@ class ID(object):
         raise AttributeError("object has no attribute '{}'".format(item))
     
     def __str__(self) -> str:
-        lines = ['pyroSAR ID object of type {}'.format(self.__class__.__name__)]
-        for item in sorted(self.locals):
-            value = getattr(self, item)
+        lines = [f'pyroSAR ID object of type {self.__class__.__name__}']
+        keys = self.locals.copy()
+        del keys[keys.index('coordinates')]
+        keys.append('extent')
+        for item in sorted(keys):
+            if item == 'extent':
+                with self.bbox() as box:
+                    value = box.extent
+            else:
+                value = getattr(self, item)
             if item == 'projection':
-                value = crsConvert(value, 'proj4') if value is not None else None
+                value = crsConvert(value, 'proj4') \
+                    if value is not None else None
             if value == -1:
                 value = '<no global value per product>'
-            line = '{0}: {1}'.format(item, value)
+            line = f'{item}: {value}'
             lines.append(line)
         return '\n'.join(lines)
     
