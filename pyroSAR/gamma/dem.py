@@ -223,7 +223,7 @@ def dem_autocreate(
             bounds = None
         geometry.reproject(4326)
         log.info('collecting DEM tiles')
-        dem_autoload(geometry=geometry, demType=demType,
+        dem_autoload(vectorobject=geometry, demType=demType,
                      vrt=vrt, username=username,
                      password=password, buffer=buffer)
         
@@ -254,10 +254,10 @@ def dem_autocreate(
         else:
             raise RuntimeError("'geoid_mode' is not supported")
         
-        dem_create(geometry=geometry,
+        dem_create(vectorobject=geometry,
                    src=vrt, dst=dem, t_srs=epsg, tr=tr, geoid_convert=gdal_geoid,
-                   resampleAlg=resampling_method, outputBounds=bounds,
-                   geoid=geoid)
+                   resampleAlg=resampling_method, outputBounds=bounds)
+        
         
         outfile_tmp = os.path.join(tmpdir, os.path.basename(outfile))
         
