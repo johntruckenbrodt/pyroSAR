@@ -588,7 +588,7 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False,
     # compute DEM oversampling factors; will be 1 for range and
     # azimuth if the DEM spacing matches the target spacing
     ovs_lat, ovs_lon = ovs(dem + '.par', spacing)
-    
+    log.debug(f"DEM oversampling factors: y={ovs_lat}, x={ovs_lon}")
     image_par = ISPPar(image + '.par')
     
     gc_map_args = {'DEM_par': dem + '.par',
