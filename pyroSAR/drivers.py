@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from builtins import str
 from io import BytesIO
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias, Self
 
 import abc
 import ast
@@ -387,7 +387,11 @@ class ID(object):
         else:
             raise RuntimeError('file ambiguity detected:\n{}'.format('\n'.join(files)))
     
-    def findfiles(self, pattern: str, include_folders: bool = False) -> str | list[str]:
+    def findfiles(
+            self: Self,
+            pattern: str,
+            include_folders: bool = False
+    ) -> list[str]:
         """
         find files in the scene archive, which match a pattern.
 
@@ -413,7 +417,7 @@ class ID(object):
                            foldermode=foldermode, regex=True)
         except RuntimeError:
             # Return the scene if only a file and not zip
-            return self.scene
+            return [self.scene]
         
         if os.path.isdir(self.scene) \
                 and re.search(pattern, os.path.basename(self.scene)) \
