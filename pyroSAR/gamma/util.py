@@ -1366,21 +1366,23 @@ def multilook(
             par2hdr(outfile + '.par', outfile + '.hdr')
 
 
-def ovs(parfile, spacing):
+def ovs(
+        parfile: str,
+        spacing: int | float
+) -> tuple[int | float, int | float]:
     """
     compute DEM oversampling factors for a target resolution in meters
 
     Parameters
     ----------
-    parfile: str
+    parfile
         a GAMMA DEM parameter file
-    spacing: int or float
+    spacing
         the target pixel spacing in meters
     
     Returns
     -------
-    tuple of float
-        the oversampling factors for latitude and longitude
+        the oversampling factors as (y, x)
     """
     # read DEM parameter file
     dempar = ISPPar(parfile)
@@ -1401,9 +1403,9 @@ def ovs(parfile, spacing):
         post_east = haversine(lat, lon, lat, lon + res_lon)
     
     # compute resampling factors for the DEM
-    ovs_lat = post_north / spacing
-    ovs_lon = post_east / spacing
-    return ovs_lat, ovs_lon
+    ovs_y = post_north / spacing
+    ovs_x = post_east / spacing
+    return ovs_y, ovs_x
 
 
 def pixel_area_wrap(image, namespace, lut, exist_ok=False,
