@@ -1242,8 +1242,17 @@ def lat_ratio(data_in1: str, data_in2: str, data_out: str) -> None:
         _delete_product(tmp)
 
 
-def multilook(infile, outfile, spacing, rlks=None, azlks=None,
-              exist_ok=False, logpath=None, outdir=None, shellscript=None):
+def multilook(
+        infile: str | list[str],
+        outfile: str,
+        spacing: int | float,
+        rlks: int | None = None,
+        azlks: int | None = None,
+        exist_ok: bool = False,
+        logpath: str | None = None,
+        outdir: str | None = None,
+        shellscript: str | None = None
+):
     """
     Multilooking of SLC and MLI images.
 
@@ -1257,28 +1266,28 @@ def multilook(infile, outfile, spacing, rlks=None, azlks=None,
 
     Parameters
     ----------
-    infile: str or list[str]
+    infile
         one of the following:
 
         - a SAR image in GAMMA format with a parameter file <infile>.par
         - a list of ScanSAR SLC swaths with parameter files <slc>.par and <slc>.tops_par; in this case a text file
           <outfile>_slc-tab.txt will be created, which is passed to the GAMMA command ``multi_look_ScanSAR``
-    outfile: str
+    outfile
         the name of the output GAMMA MLI file
-    spacing: int
+    spacing
         the target pixel spacing in ground range
-    rlks: int or None
+    rlks
         the number of range looks. If not None, overrides the computation done by function
         :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
-    azlks: int or None
+    azlks
         the number of azimuth looks. Like `rlks`.
-    exist_ok: bool
+    exist_ok
         allow existing output files and do not create new ones?
-    logpath: str or None
+    logpath
         a directory to write command logfiles to
-    outdir: str or None
+    outdir
         the directory to execute the command in
-    shellscript: str or None
+    shellscript
         a file to write the GAMMA commands to in shell format
 
     See Also
