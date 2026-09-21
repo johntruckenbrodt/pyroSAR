@@ -464,8 +464,8 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
         If the OSV file is packed in a zip file it will be unpacked to a subdirectory `osv`.
     osvdir: str or None
         the directory of the OSV files. Default None: use the SNAP directory
-        as configured via `pyroSAR.examine.ExamineSnap` or, if SNAP is not
-        installed, `~/.snap/auxdata/Orbits/Sentinel-1` (SNAP default).
+        as configured via :attr:`pyroSAR.examine.ExamineSnap.auxdatapath`.
+        Default: `~/.snap/auxdata/Orbits/Sentinel-1`.
         Subdirectories POEORB and RESORB are created automatically.
     osvType: str or list[str]
         the OSV type (POE|RES) to be used
