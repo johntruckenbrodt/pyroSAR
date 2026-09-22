@@ -1384,6 +1384,11 @@ class DEMHandler:
             # is extrapolated to areas where no DEM tile exists (over ocean).
             # The dummy DEM(s) must be created in the same CRS as the DEM tiles because
             # the scalar argument 'srcSRS' is set in the gdal.Warp call.
+            
+            # buffer the 4326 extent to make sure it fully covers the target extent
+            with bbox(extent_4326, crs=4326, buffer=.5) as box:
+                extent_4326 = box.extent
+            
             dummy = self.__create_dummy_dem(
                 filename=None, fill_value=fill_value,
                 extent=extent_4326
