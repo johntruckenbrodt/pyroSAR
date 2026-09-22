@@ -425,8 +425,10 @@ class DEMHandler:
                 raise RuntimeError("the input vector object's CRS must be WGS84 LatLon (EPSG:4326)")
             with vectorobject.bbox(buffer=buffer) as box:
                 self.extent = box.extent
+            self.extent_is_user_defined = True
         else:
             self.extent = {'xmin': -180, 'xmax': 180, 'ymin': -90, 'ymax': 90}
+            self.extent_is_user_defined = False
         try:
             self.auxdatapath = ExamineSnap().auxdatapath
         except AttributeError:
@@ -1195,9 +1197,18 @@ class DEMHandler:
             **kwargs
     ) -> None:
         """
-        Create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid.
+        Create a new DEM GeoTIFF file and optionally convert heights from geoid
+        to ellipsoid.
         This is basically a convenience wrapper around :func:`osgeo.gdal.Warp`
         via :func:`spatialist.auxil.gdalwarp`.
+        
+        If ``src`` is a list of file names, the extent of the output DEM is
+        determined by the `DEMHandler` argument ``vectorobject`` and the
+        `**kwargs` argument `outputBounds` (passed to ``gdal.Warp``).
+        If neither ``vectorobject`` nor `outputBounds` are set, the bounding box
+        extent of all input DEM tiles is used (reprojected to `t_srs` if necessary).
+        IF both are provided, ``outputBounds`` is prioritized because it is in
+        coordinates of ``t_srs`` and thus more accurate.
 
         Parameters
         ----------
@@ -1208,8 +1219,9 @@ class DEMHandler:
         src
             The input dataset(s) as returned by :func:`dem_autoload`.
             A string is expected to point to a VRT file.
-            A list is interpreted as 0..n GDAL-readable datasets.
-            :func:`dem_autoload` must be run with `return_fnames=True` to provide the correct format.
+            A list is interpreted as 1..n GDAL-readable datasets.
+            :func:`dem_autoload` must be run with `return_fnames=True` to provide
+            the correct format.
         dst
             The output GeoTIFF file name.
         t_srs
@@ -1267,10 +1279,9 @@ class DEMHandler:
             - ``warpOptions``: currently used for setting the number of threads.
               Can be exposed if necessary.
             
-            The following arguments are set if they are not defined in `kwargs`:
+            The following arguments are set if they are not defined in ``**kwargs``:
             
-            - ``outputBounds``: set to the common extent of ``geometries``
-              projected to ``t_srs`` if ``isinstance(src, list)``.
+            - ``outputBounds``: determined from user input. See above.
             - ``format``: set to ``GTiff``
         """
         
@@ -1320,42 +1331,44 @@ class DEMHandler:
             'outputType': dtype_obj.gdalint
         }
         ############################################################################
-        # If the input is a list of DEM tiles, pass the user-defined extent directly
-        # to gdalwarp (VRTs already contain this extent).
-        # Also, add in-memory dummy dataset(s) to the file list so that the output layer
-        # is extrapolated to areas where no DEM tile exists (over ocean).
+        # If the input is a list of DEM tiles, determine the output extent from the
+        # user-defined extent (via `DEMHandler` argument `vectorobject` or `outputBounds`).
+        # VRTs already contain this extent.
         
-        # use the intersection of the bounding box of all DEM tiles and the user-defined
-        # extent (which might be global if ``vectorobject=None``) as target extent.
+        # determine the extent of the DEM in EPSG:4326
         if isinstance(src, list):
-            boxes = [Raster(x).bbox() for x in src]
-            with combine_polygons(boxes) as combi:
-                extent_4326 = combi.extent
-                with combi.bbox() as dem_bbox:
-                    with bbox(coordinates=self.extent, crs=4326) as user_bbox:
-                        inter = intersect(dem_bbox, user_bbox)
-                        if inter is None:
-                            raise RuntimeError(
-                                "The extent of 'vectorobject' does not intersect "
-                                "with the extent of the DEM tiles."
-                            )
-                        if t_srs is not None:
-                            inter.reproject(t_srs)
-                        extent_out = inter.extent
-                        inter.close()
-            boxes = None
-            
-            if extent_out['xmin'] > extent_out['xmax']:
-                raise RuntimeError('The output extent is crossing the antimeridian.'
-                                   'Please select a different target CRS.')
-            
-            if 'outputBounds' not in kwargs.keys():
-                gdalwarp_args['outputBounds'] = [extent_out['xmin'], extent_out['ymin'],
-                                                 extent_out['xmax'], extent_out['ymax']]
+            if self.extent_is_user_defined:
+                extent_4326 = self.extent
             else:
-                gdalwarp_args['outputBounds'] = kwargs['outputBounds']
-                del kwargs['outputBounds']
+                if 'outputBounds' not in kwargs.keys():
+                    # use the bounding box of all input DEM tiles as extent
+                    boxes = [Raster(x).bbox() for x in src]
+                    with combine_polygons(boxes) as combi:
+                        extent_4326 = combi.extent
+                    boxes = None
+                else:
+                    # if 'outputBounds' is provided, use it as extent
+                    # (reprojected as necessary)
+                    output_bounds_ext = dict(zip(
+                        ['xmin', 'ymin', 'xmax', 'ymax'],
+                        kwargs['outputBounds']
+                    ))
+                    with bbox(output_bounds_ext, t_srs) as vec:
+                        vec.reproject(4326)
+                        extent_4326 = vec.extent
             
+            # set 'outputBounds' if not set
+            if 'outputBounds' not in kwargs.keys():
+                with bbox(extent_4326, 4326) as box:
+                    box.reproject(t_srs)
+                    ext = box.extent
+                    gdalwarp_args['outputBounds'] = [
+                        ext['xmin'], ext['ymin'],
+                        ext['xmax'], ext['ymax']
+                    ]
+            
+            # Add in-memory dummy dataset(s) to the file list so that the output layer
+            # is extrapolated to areas where no DEM tile exists (over ocean).
             dummy = self.__create_dummy_dem(
                 filename=None, fill_value=fill_value, extent=extent_4326
             )
