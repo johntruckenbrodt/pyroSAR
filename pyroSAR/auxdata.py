@@ -33,7 +33,7 @@ from packaging.version import Version
 from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import Lock
 from spatialist.raster import Raster, Dtype
-from spatialist.vector import bbox, Vector, intersect, combine_polygons
+from spatialist.vector import bbox, Vector, combine_polygons
 from spatialist.ancillary import finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp, latlon_clamp
 from spatialist.envi import HDRobject
