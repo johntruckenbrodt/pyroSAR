@@ -1294,6 +1294,7 @@ class DEMHandler:
             - ``outputBounds``: determined from user input. See above.
             - ``format``: set to ``GTiff``
         """
+        kwargs = kwargs.copy()
         
         if isinstance(src, list):
             src = src.copy()
@@ -1345,42 +1346,47 @@ class DEMHandler:
         # user-defined extent (via `DEMHandler` argument `vectorobject` or `outputBounds`).
         # VRTs already contain this extent.
         
-        # determine the extent of the DEM in EPSG:4326
+        # determine the extent of the output DEM
         if isinstance(src, list):
-            if self.extent_is_user_defined:
-                extent_4326 = self.extent
+            if t_srs is None:
+                t_srs = 4326
+            
+            if 'outputBounds' in kwargs.keys():
+                # prioritize extent definition in outputBounds
+                gdalwarp_args['outputBounds'] = kwargs['outputBounds']
+                del kwargs['outputBounds']
+                extent = dict(zip(
+                    ['xmin', 'ymin', 'xmax', 'ymax'],
+                    gdalwarp_args['outputBounds']
+                ))
+                with bbox(extent, t_srs) as box:
+                    box.reproject(4326)
+                    extent_4326 = box.extent
             else:
-                if 'outputBounds' not in kwargs.keys():
+                # use the extent defined via DEMHandler argument vectorobject
+                if self.extent_is_user_defined:
+                    extent_4326 = self.extent
+                else:
                     # use the bounding box of all input DEM tiles as extent
                     boxes = [Raster(x).bbox() for x in src]
                     with combine_polygons(boxes) as combi:
                         extent_4326 = combi.extent
                     boxes = None
-                else:
-                    # if 'outputBounds' is provided, use it as extent
-                    # (reprojected as necessary)
-                    output_bounds_ext = dict(zip(
-                        ['xmin', 'ymin', 'xmax', 'ymax'],
-                        kwargs['outputBounds']
-                    ))
-                    with bbox(output_bounds_ext, t_srs) as vec:
-                        vec.reproject(4326)
-                        extent_4326 = vec.extent
-            
-            # set 'outputBounds' if not set
-            if 'outputBounds' not in kwargs.keys():
                 with bbox(extent_4326, 4326) as box:
                     box.reproject(t_srs)
-                    ext = box.extent
-                    gdalwarp_args['outputBounds'] = [
-                        ext['xmin'], ext['ymin'],
-                        ext['xmax'], ext['ymax']
-                    ]
+                    extent = box.extent
+                gdalwarp_args['outputBounds'] = [
+                    extent['xmin'], extent['ymin'],
+                    extent['xmax'], extent['ymax']
+                ]
             
             # Add in-memory dummy dataset(s) to the file list so that the output layer
             # is extrapolated to areas where no DEM tile exists (over ocean).
+            # The dummy DEM(s) must be created in the same CRS as the DEM tiles because
+            # the scalar argument 'srcSRS' is set in the gdal.Warp call.
             dummy = self.__create_dummy_dem(
-                filename=None, fill_value=fill_value, extent=extent_4326
+                filename=None, fill_value=fill_value,
+                extent=extent_4326
             )
             if isinstance(dummy, list):
                 src = dummy + src
