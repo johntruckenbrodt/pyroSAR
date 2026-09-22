@@ -1380,6 +1380,10 @@ class DEMHandler:
                     extent['xmax'], extent['ymax']
                 ]
             
+            if extent['xmin'] > extent['xmax']:
+                raise RuntimeError('The output extent is crossing the antimeridian.'
+                                   'Please select a different target CRS.')
+            
             # Add in-memory dummy dataset(s) to the file list so that the output layer
             # is extrapolated to areas where no DEM tile exists (over ocean).
             # The dummy DEM(s) must be created in the same CRS as the DEM tiles because
