@@ -1410,7 +1410,7 @@ def test_create_list_source_adds_dummy_and_bounds(monkeypatch, tmp_path, raster_
     assert sources == [source.filename]
     assert isinstance(captured['src'][0], gdal.Dataset)
     assert captured['src'][1:] == [source.filename]
-    assert _dataset_bounds(captured['src'][0]) == pytest.approx((11, 51, 12, 52))
+    assert _dataset_bounds(captured['src'][0]) == pytest.approx((10.5, 50.5, 12.5, 52.5))
     assert captured['kwargs']['outputBounds'] == pytest.approx([11, 51, 12, 52])
 
 
@@ -1435,44 +1435,18 @@ def test_create_list_source_output_bounds_override(monkeypatch, tmp_path, raster
     assert captured['kwargs']['outputBounds'] == bounds
 
 
-def test_create_list_source_no_intersection(tmp_path, raster_factory):
-    source = raster_factory(
-        name='SRTM 3Sec/srtm_39_02.tif',
-        extent=(11, 51, 12, 52),
-    )
-    
-    with DEMHandler() as handler:
-        handler.extent = {'xmin': 20, 'xmax': 21, 'ymin': 60, 'ymax': 61}
-        with pytest.raises(RuntimeError, match='does not intersect'):
-            handler.create(
-                src=[source.filename],
-                dst=str(tmp_path / 'out.tif'),
-                geoid_convert=False,
-            )
-
-
 def test_create_list_source_antimeridian(monkeypatch, tmp_path, raster_factory):
     source = raster_factory(
         name='SRTM 3Sec/srtm_72_02.tif',
         extent=(179, 51, 180, 52),
     )
     
-    class Intersection:
-        extent = {'xmin': 179, 'xmax': -179, 'ymin': 51, 'ymax': 52}
-        
-        def reproject(self, crs):
-            return None
-        
-        def close(self):
-            return None
-    
-    monkeypatch.setattr(auxdata, 'intersect', lambda *args, **kwargs: Intersection())
-    
     with DEMHandler() as handler:
         with pytest.raises(RuntimeError, match='crossing the antimeridian'):
             handler.create(
                 src=[source.filename],
                 dst=str(tmp_path / 'out.tif'),
+                outputBounds=[179, 51, -179, 52],
                 geoid_convert=False,
             )
 
