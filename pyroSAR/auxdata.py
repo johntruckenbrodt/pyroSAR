@@ -544,7 +544,8 @@ class DEMHandler:
             self,
             filename: str | None,
             fill_value: int | float,
-            extent: EXT | None = None
+            extent: EXT | None = None,
+            crs: CRS = 4326
     ) -> gdal.Dataset | list[gdal.Dataset] | None:
         """
         Create dummy dataset(s) which span the given extent and
@@ -563,14 +564,19 @@ class DEMHandler:
         extent
             The extent to cover with the dummy DEM. Default `None`: use the extent of the
             user-defined geometries.
+        crs
+            The coordinate reference system of ``extent``.
         """
         if extent is None:
             extent = self.extent
         
+        srs = crsConvert(crsIn=crs, crsOut='osr')
+        
         def create_file(
                 filename: str | None,
                 extent: EXT,
-                fill_value: int | float
+                fill_value: int | float,
+                srs: osr.SpatialReference
         ) -> gdal.Dataset | None:
             if filename is None:
                 filename = ''
@@ -592,7 +598,7 @@ class DEMHandler:
                 extent['ymin'] - extent['ymax']  # negative
             ]
             dataset.SetGeoTransform(geo)
-            dataset.SetProjection('EPSG:4326')
+            dataset.SetSpatialRef(srs)
             band = dataset.GetRasterBand(1)
             band.SetNoDataValue(value=255)
             arr = np.full(shape=(1, 1), fill_value=fill_value, dtype=np.uint8)
@@ -630,14 +636,18 @@ class DEMHandler:
                 create_file(
                     filename=filename,
                     extent=extent_sub,
-                    fill_value=fill_value)
+                    fill_value=fill_value,
+                    srs=srs
+                )
                 for extent_sub in extents
             ]
         else:
             out = create_file(
                 filename=filename,
                 extent=extent,
-                fill_value=fill_value)
+                fill_value=fill_value,
+                srs=srs
+            )
         return out
     
     def intrange(self, step: int) -> tuple[list[int], list[int]]:
