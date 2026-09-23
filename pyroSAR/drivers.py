@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from builtins import str
 from io import BytesIO
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias, Self
 
 import abc
 import ast
@@ -235,14 +235,22 @@ class ID(object):
         raise AttributeError("object has no attribute '{}'".format(item))
     
     def __str__(self) -> str:
-        lines = ['pyroSAR ID object of type {}'.format(self.__class__.__name__)]
-        for item in sorted(self.locals):
-            value = getattr(self, item)
+        lines = [f'pyroSAR ID object of type {self.__class__.__name__}']
+        keys = self.locals.copy()
+        del keys[keys.index('coordinates')]
+        keys.append('extent')
+        for item in sorted(keys):
+            if item == 'extent':
+                with self.bbox() as box:
+                    value = box.extent
+            else:
+                value = getattr(self, item)
             if item == 'projection':
-                value = crsConvert(value, 'proj4') if value is not None else None
+                value = crsConvert(value, 'proj4') \
+                    if value is not None else None
             if value == -1:
                 value = '<no global value per product>'
-            line = '{0}: {1}'.format(item, value)
+            line = f'{item}: {value}'
             lines.append(line)
         return '\n'.join(lines)
     
@@ -379,7 +387,11 @@ class ID(object):
         else:
             raise RuntimeError('file ambiguity detected:\n{}'.format('\n'.join(files)))
     
-    def findfiles(self, pattern: str, include_folders: bool = False) -> str | list[str]:
+    def findfiles(
+            self: Self,
+            pattern: str,
+            include_folders: bool = False
+    ) -> list[str]:
         """
         find files in the scene archive, which match a pattern.
 
@@ -405,7 +417,7 @@ class ID(object):
                            foldermode=foldermode, regex=True)
         except RuntimeError:
             # Return the scene if only a file and not zip
-            return self.scene
+            return [self.scene]
         
         if os.path.isdir(self.scene) \
                 and re.search(pattern, os.path.basename(self.scene)) \

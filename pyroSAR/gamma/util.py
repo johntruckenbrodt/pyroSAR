@@ -411,6 +411,7 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
                 pars['COSAR'] = image
                 pars['SLC_par'] = outname + '.par'
                 pars['SLC'] = outname
+                pars['dtype'] = 1  # convert SCOMPLEX->FCOMPLEX
                 with Lock(outname):
                     if do_execute(pars, ['SLC', 'SLC_par'], exist_ok):
                         isp.par_TX_SLC(**pars)
@@ -463,8 +464,8 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
         If the OSV file is packed in a zip file it will be unpacked to a subdirectory `osv`.
     osvdir: str or None
         the directory of the OSV files. Default None: use the SNAP directory
-        as configured via `pyroSAR.examine.ExamineSnap` or, if SNAP is not
-        installed, `~/.snap/auxdata/Orbits/Sentinel-1` (SNAP default).
+        as configured via :attr:`pyroSAR.examine.ExamineSnap.auxdatapath`.
+        Default: `~/.snap/auxdata/Orbits/Sentinel-1`.
         Subdirectories POEORB and RESORB are created automatically.
     osvType: str or list[str]
         the OSV type (POE|RES) to be used
@@ -587,7 +588,7 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False,
     # compute DEM oversampling factors; will be 1 for range and
     # azimuth if the DEM spacing matches the target spacing
     ovs_lat, ovs_lon = ovs(dem + '.par', spacing)
-    
+    log.debug(f"DEM oversampling factors: y={ovs_lat}, x={ovs_lon}")
     image_par = ISPPar(image + '.par')
     
     gc_map_args = {'DEM_par': dem + '.par',
@@ -1241,8 +1242,17 @@ def lat_ratio(data_in1: str, data_in2: str, data_out: str) -> None:
         _delete_product(tmp)
 
 
-def multilook(infile, outfile, spacing, rlks=None, azlks=None,
-              exist_ok=False, logpath=None, outdir=None, shellscript=None):
+def multilook(
+        infile: str | list[str],
+        outfile: str,
+        spacing: int | float,
+        rlks: int | None = None,
+        azlks: int | None = None,
+        exist_ok: bool = False,
+        logpath: str | None = None,
+        outdir: str | None = None,
+        shellscript: str | None = None
+):
     """
     Multilooking of SLC and MLI images.
 
@@ -1256,28 +1266,28 @@ def multilook(infile, outfile, spacing, rlks=None, azlks=None,
 
     Parameters
     ----------
-    infile: str or list[str]
+    infile
         one of the following:
 
         - a SAR image in GAMMA format with a parameter file <infile>.par
         - a list of ScanSAR SLC swaths with parameter files <slc>.par and <slc>.tops_par; in this case a text file
           <outfile>_slc-tab.txt will be created, which is passed to the GAMMA command ``multi_look_ScanSAR``
-    outfile: str
+    outfile
         the name of the output GAMMA MLI file
-    spacing: int
+    spacing
         the target pixel spacing in ground range
-    rlks: int or None
+    rlks
         the number of range looks. If not None, overrides the computation done by function
         :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
-    azlks: int or None
+    azlks
         the number of azimuth looks. Like `rlks`.
-    exist_ok: bool
+    exist_ok
         allow existing output files and do not create new ones?
-    logpath: str or None
+    logpath
         a directory to write command logfiles to
-    outdir: str or None
+    outdir
         the directory to execute the command in
-    shellscript: str or None
+    shellscript
         a file to write the GAMMA commands to in shell format
 
     See Also
@@ -1356,21 +1366,23 @@ def multilook(infile, outfile, spacing, rlks=None, azlks=None,
             par2hdr(outfile + '.par', outfile + '.hdr')
 
 
-def ovs(parfile, spacing):
+def ovs(
+        parfile: str,
+        spacing: int | float
+) -> tuple[int | float, int | float]:
     """
     compute DEM oversampling factors for a target resolution in meters
 
     Parameters
     ----------
-    parfile: str
+    parfile
         a GAMMA DEM parameter file
-    spacing: int or float
+    spacing
         the target pixel spacing in meters
     
     Returns
     -------
-    tuple of float
-        the oversampling factors for latitude and longitude
+        the oversampling factors as (y, x)
     """
     # read DEM parameter file
     dempar = ISPPar(parfile)
@@ -1391,9 +1403,9 @@ def ovs(parfile, spacing):
         post_east = haversine(lat, lon, lat, lon + res_lon)
     
     # compute resampling factors for the DEM
-    ovs_lat = post_north / spacing
-    ovs_lon = post_east / spacing
-    return ovs_lat, ovs_lon
+    ovs_y = post_north / spacing
+    ovs_x = post_east / spacing
+    return ovs_y, ovs_x
 
 
 def pixel_area_wrap(image, namespace, lut, exist_ok=False,

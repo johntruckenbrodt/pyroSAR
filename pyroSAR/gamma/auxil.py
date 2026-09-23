@@ -195,6 +195,8 @@ class ISPPar(object):
         out['samples'] = getattr(self, list_intersection(['width', 'range_samples', 'samples'], self.keys)[0])
         out['lines'] = getattr(self, list_intersection(['nlines', 'azimuth_lines', 'lines'], self.keys)[0])
         
+        ###########################################################################################
+        
         dtypes_lookup = {'FCOMPLEX': 6, 'FLOAT': 4, 'REAL*4': 4, 'INTEGER*2': 2, 'SHORT': 12}
         dtype = getattr(self, list_intersection(['data_format', 'image_format'], self.keys)[0])
         
@@ -203,11 +205,13 @@ class ISPPar(object):
         
         out['data_type'] = dtypes_lookup[dtype]
         
+        if out['data_type'] == 6:
+            out['complex_function'] = 'Power'
+        ###########################################################################################
+        
         if nodata is not None:
             out['data_ignore_value'] = nodata
         
-        if out['data_type'] == 6:
-            out['complex_function'] = 'Power'
         # projections = ['AEAC', 'EQA', 'LCC', 'LCC2', 'OMCH', 'PC', 'PS', 'SCH', 'TM', 'UTM']
         # the corner coordinates are shifted by 1/2 pixel to the Northwest since GAMMA pixel
         # coordinates are defined for the pixel center while in ENVI it is the upper left
