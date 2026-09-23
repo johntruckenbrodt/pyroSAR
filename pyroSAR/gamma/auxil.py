@@ -206,7 +206,7 @@ class ISPPar(object):
         out['data_type'] = dtypes_lookup[dtype]
         
         if out['data_type'] == 6:
-            out['complex_function'] = 'Magnitude'
+            out['complex_function'] = 'Power'
         ###########################################################################################
         
         if nodata is not None:
