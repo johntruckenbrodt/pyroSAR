@@ -33,7 +33,7 @@ from packaging.version import Version
 from pyroSAR.examine import ExamineSnap
 from pyroSAR.ancillary import Lock
 from spatialist.raster import Raster, Dtype
-from spatialist.vector import bbox, Vector, intersect, combine_polygons
+from spatialist.vector import bbox, Vector, combine_polygons
 from spatialist.ancillary import finder
 from spatialist.auxil import gdalbuildvrt, crsConvert, gdalwarp, latlon_clamp
 from spatialist.envi import HDRobject
@@ -425,8 +425,10 @@ class DEMHandler:
                 raise RuntimeError("the input vector object's CRS must be WGS84 LatLon (EPSG:4326)")
             with vectorobject.bbox(buffer=buffer) as box:
                 self.extent = box.extent
+            self.extent_is_user_defined = True
         else:
             self.extent = {'xmin': -180, 'xmax': 180, 'ymin': -90, 'ymax': 90}
+            self.extent_is_user_defined = False
         try:
             self.auxdatapath = ExamineSnap().auxdatapath
         except AttributeError:
@@ -542,7 +544,8 @@ class DEMHandler:
             self,
             filename: str | None,
             fill_value: int | float,
-            extent: EXT | None = None
+            extent: EXT | None = None,
+            crs: CRS = 4326
     ) -> gdal.Dataset | list[gdal.Dataset] | None:
         """
         Create dummy dataset(s) which span the given extent and
@@ -561,14 +564,19 @@ class DEMHandler:
         extent
             The extent to cover with the dummy DEM. Default `None`: use the extent of the
             user-defined geometries.
+        crs
+            The coordinate reference system of ``extent``.
         """
         if extent is None:
             extent = self.extent
         
+        srs = crsConvert(crsIn=crs, crsOut='osr')
+        
         def create_file(
                 filename: str | None,
                 extent: EXT,
-                fill_value: int | float
+                fill_value: int | float,
+                srs: osr.SpatialReference
         ) -> gdal.Dataset | None:
             if filename is None:
                 filename = ''
@@ -590,7 +598,7 @@ class DEMHandler:
                 extent['ymin'] - extent['ymax']  # negative
             ]
             dataset.SetGeoTransform(geo)
-            dataset.SetProjection('EPSG:4326')
+            dataset.SetSpatialRef(srs)
             band = dataset.GetRasterBand(1)
             band.SetNoDataValue(value=255)
             arr = np.full(shape=(1, 1), fill_value=fill_value, dtype=np.uint8)
@@ -628,14 +636,18 @@ class DEMHandler:
                 create_file(
                     filename=filename,
                     extent=extent_sub,
-                    fill_value=fill_value)
+                    fill_value=fill_value,
+                    srs=srs
+                )
                 for extent_sub in extents
             ]
         else:
             out = create_file(
                 filename=filename,
                 extent=extent,
-                fill_value=fill_value)
+                fill_value=fill_value,
+                srs=srs
+            )
         return out
     
     def intrange(self, step: int) -> tuple[list[int], list[int]]:
@@ -1195,9 +1207,18 @@ class DEMHandler:
             **kwargs
     ) -> None:
         """
-        Create a new DEM GeoTIFF file and optionally convert heights from geoid to ellipsoid.
+        Create a new DEM GeoTIFF file and optionally convert heights from geoid
+        to ellipsoid.
         This is basically a convenience wrapper around :func:`osgeo.gdal.Warp`
         via :func:`spatialist.auxil.gdalwarp`.
+        
+        If ``src`` is a list of file names, the extent of the output DEM is
+        determined by the `DEMHandler` argument ``vectorobject`` and the
+        `**kwargs` argument `outputBounds` (passed to ``gdal.Warp``).
+        If neither ``vectorobject`` nor `outputBounds` are set, the bounding box
+        extent of all input DEM tiles is used (reprojected to `t_srs` if necessary).
+        IF both are provided, ``outputBounds`` is prioritized because it is in
+        coordinates of ``t_srs`` and thus more accurate.
 
         Parameters
         ----------
@@ -1208,8 +1229,9 @@ class DEMHandler:
         src
             The input dataset(s) as returned by :func:`dem_autoload`.
             A string is expected to point to a VRT file.
-            A list is interpreted as 0..n GDAL-readable datasets.
-            :func:`dem_autoload` must be run with `return_fnames=True` to provide the correct format.
+            A list is interpreted as 1..n GDAL-readable datasets.
+            :func:`dem_autoload` must be run with `return_fnames=True` to provide
+            the correct format.
         dst
             The output GeoTIFF file name.
         t_srs
@@ -1267,12 +1289,12 @@ class DEMHandler:
             - ``warpOptions``: currently used for setting the number of threads.
               Can be exposed if necessary.
             
-            The following arguments are set if they are not defined in `kwargs`:
+            The following arguments are set if they are not defined in ``**kwargs``:
             
-            - ``outputBounds``: set to the common extent of ``geometries``
-              projected to ``t_srs`` if ``isinstance(src, list)``.
+            - ``outputBounds``: determined from user input. See above.
             - ``format``: set to ``GTiff``
         """
+        kwargs = kwargs.copy()
         
         if isinstance(src, list):
             src = src.copy()
@@ -1320,44 +1342,60 @@ class DEMHandler:
             'outputType': dtype_obj.gdalint
         }
         ############################################################################
-        # If the input is a list of DEM tiles, pass the user-defined extent directly
-        # to gdalwarp (VRTs already contain this extent).
-        # Also, add in-memory dummy dataset(s) to the file list so that the output layer
-        # is extrapolated to areas where no DEM tile exists (over ocean).
+        # If the input is a list of DEM tiles, determine the output extent from the
+        # user-defined extent (via `DEMHandler` argument `vectorobject` or `outputBounds`).
+        # VRTs already contain this extent.
         
-        # use the intersection of the bounding box of all DEM tiles and the user-defined
-        # extent (which might be global if ``vectorobject=None``) as target extent.
+        # determine the extent of the output DEM
         if isinstance(src, list):
-            boxes = [Raster(x).bbox() for x in src]
-            with combine_polygons(boxes) as combi:
-                extent_4326 = combi.extent
-                with combi.bbox() as dem_bbox:
-                    with bbox(coordinates=self.extent, crs=4326) as user_bbox:
-                        inter = intersect(dem_bbox, user_bbox)
-                        if inter is None:
-                            raise RuntimeError(
-                                "The extent of 'vectorobject' does not intersect "
-                                "with the extent of the DEM tiles."
-                            )
-                        if t_srs is not None:
-                            inter.reproject(t_srs)
-                        extent_out = inter.extent
-                        inter.close()
-            boxes = None
+            if t_srs is None:
+                t_srs = 4326
             
-            if extent_out['xmin'] > extent_out['xmax']:
+            if 'outputBounds' in kwargs.keys():
+                # prioritize extent definition in outputBounds
+                gdalwarp_args['outputBounds'] = kwargs['outputBounds']
+                del kwargs['outputBounds']
+                extent = dict(zip(
+                    ['xmin', 'ymin', 'xmax', 'ymax'],
+                    gdalwarp_args['outputBounds']
+                ))
+                with bbox(extent, t_srs) as box:
+                    box.reproject(4326)
+                    extent_4326 = box.extent
+            else:
+                # use the extent defined via DEMHandler argument vectorobject
+                if self.extent_is_user_defined:
+                    extent_4326 = self.extent
+                else:
+                    # use the bounding box of all input DEM tiles as extent
+                    boxes = [Raster(x).bbox() for x in src]
+                    with combine_polygons(boxes) as combi:
+                        extent_4326 = combi.extent
+                    boxes = None
+                with bbox(extent_4326, 4326) as box:
+                    box.reproject(t_srs)
+                    extent = box.extent
+                gdalwarp_args['outputBounds'] = [
+                    extent['xmin'], extent['ymin'],
+                    extent['xmax'], extent['ymax']
+                ]
+            
+            if extent['xmin'] > extent['xmax']:
                 raise RuntimeError('The output extent is crossing the antimeridian.'
                                    'Please select a different target CRS.')
             
-            if 'outputBounds' not in kwargs.keys():
-                gdalwarp_args['outputBounds'] = [extent_out['xmin'], extent_out['ymin'],
-                                                 extent_out['xmax'], extent_out['ymax']]
-            else:
-                gdalwarp_args['outputBounds'] = kwargs['outputBounds']
-                del kwargs['outputBounds']
+            # Add in-memory dummy dataset(s) to the file list so that the output layer
+            # is extrapolated to areas where no DEM tile exists (over ocean).
+            # The dummy DEM(s) must be created in the same CRS as the DEM tiles because
+            # the scalar argument 'srcSRS' is set in the gdal.Warp call.
+            
+            # buffer the 4326 extent to make sure it fully covers the target extent
+            with bbox(extent_4326, crs=4326, buffer=.5) as box:
+                extent_4326 = box.extent
             
             dummy = self.__create_dummy_dem(
-                filename=None, fill_value=fill_value, extent=extent_4326
+                filename=None, fill_value=fill_value,
+                extent=extent_4326
             )
             if isinstance(dummy, list):
                 src = dummy + src
