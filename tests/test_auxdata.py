@@ -1398,14 +1398,15 @@ def test_create_list_source_adds_dummy_and_bounds(monkeypatch, tmp_path, raster_
     sources = [source.filename]
     captured = _capture_gdalwarp(monkeypatch)
     
-    with DEMHandler() as handler:
-        handler.extent = {'xmin': 11, 'xmax': 12, 'ymin': 51, 'ymax': 52}
-        handler.create(
-            src=sources,
-            dst=str(tmp_path / 'out.tif'),
-            tr=(0.5, 0.5),
-            geoid_convert=False,
-        )
+    extent = {'xmin': 11, 'xmax': 12, 'ymin': 51, 'ymax': 52}
+    with bbox(extent, crs=4326) as box:
+        with DEMHandler(vectorobject=box) as handler:
+            handler.create(
+                src=sources,
+                dst=str(tmp_path / 'out.tif'),
+                tr=(0.5, 0.5),
+                geoid_convert=False,
+            )
     
     assert sources == [source.filename]
     assert isinstance(captured['src'][0], gdal.Dataset)
