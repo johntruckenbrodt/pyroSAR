@@ -37,36 +37,46 @@ from ..ancillary import multilook_factors, hasarg, groupby, Lock
 from pyroSAR.examine import ExamineSnap, ExamineGamma
 from .auxil import do_execute
 
+from typing import Literal
+
 import logging
 
 log = logging.getLogger(__name__)
 
 from .api import diff, disp, isp, lat
 
+S1_OSV = Literal['POE', 'RES']
 
-def calibrate(id, directory, return_fnames=False,
-              logpath=None, outdir=None, shellscript=None):
+
+def calibrate(
+        id: ID,
+        directory: str,
+        return_fnames: bool = False,
+        logpath: str | None = None,
+        outdir: str | None = None,
+        shellscript: str | None = None
+) -> list[str] | None:
     """
     radiometric calibration of SAR scenes
     
     Parameters
     ----------
-    id: ~pyroSAR.drivers.ID
+    id
         an SAR scene object of type pyroSAR.ID or any subclass
-    directory: str
+    directory
         the directory to search for GAMMA calibration candidates
-    return_fnames: bool
+    return_fnames
         return the names of the output image files? Default: False.
-    logpath: str or None
+    logpath
         a directory to write command logfiles to
-    outdir: str or None
+    outdir
         the directory to execute the command in
-    shellscript: str or None
+    shellscript
         a file to write the GAMMA commands to in shell format
 
     Returns
     -------
-    List[str] or None
+        the sorted image file names if ``return_fnames=True`` and None otherwise
     """
     cname = type(id).__name__
     new = []
@@ -137,40 +147,47 @@ def calibrate(id, directory, return_fnames=False,
         return new
 
 
-def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
-                  basename_extensions=None, exist_ok=False,
-                  return_fnames=False,
-                  logpath=None, outdir=None, shellscript=None):
+def convert2gamma(
+        id: ID,
+        directory: str,
+        S1_tnr: bool = True,
+        S1_bnr: bool = True,
+        basename_extensions: list[str] | None = None,
+        exist_ok: bool = False,
+        return_fnames: bool = False,
+        logpath: str | None = None,
+        outdir: str | None = None,
+        shellscript: str | None = None
+) -> list[str] | None:
     """
     general function for converting SAR images to GAMMA format
 
     Parameters
     ----------
-    id: ~pyroSAR.drivers.ID
-        an SAR scene object of type pyroSAR.ID or any subclass
-    directory: str
+    id
+        an SAR scene object
+    directory
         the output directory for the converted images
-    S1_tnr: bool
+    S1_tnr
         only Sentinel-1: should thermal noise removal be applied to the image?
-    S1_bnr: bool
+    S1_bnr
         only Sentinel-1 GRD: should border noise removal be applied to the image?
         This is available since version 20191203, for older versions this argument is ignored.
-    basename_extensions: list[str] or None
-        names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
-    exist_ok: bool
+    basename_extensions
+        names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
+    exist_ok
         allow existing output files and do not create new ones?
-    return_fnames: bool
-        return the names of the output image files? Default: False.
-    logpath: str or None
+    return_fnames
+        return the names of the output image files? Default: ``False``.
+    logpath
         a directory to write command logfiles to
-    outdir: str or None
+    outdir
         the directory to execute the command in
-    shellscript: str or None
+    shellscript
         a file to write the GAMMA commands to in bash format
 
     Returns
     -------
-    list[str] or None
         the sorted image file names if ``return_fnames=True`` and None otherwise
     """
     
@@ -448,40 +465,46 @@ def convert2gamma(id, directory, S1_tnr=True, S1_bnr=True,
         return sorted(fnames)
 
 
-def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
-               logpath=None, outdir=None, shellscript=None, url_option=1):
+def correctOSV(
+        id: ID,
+        directory: str | None,
+        osvdir: str | None = None,
+        osvType: S1_OSV | list[S1_OSV] = 'POE',
+        timeout: int | tuple[int, int] | None = 20,
+        url_option: int = 1,
+        logpath: str | None = None,
+        outdir: str | None = None,
+        shellscript: str | None = None,
+) -> None:
     """
     correct GAMMA parameter files with orbit state vector information from dedicated OSV files;
-    OSV files are downloaded automatically to either the defined `osvdir` or relative to the
-    user's home directory: `~/.snap/auxdata/Orbits/Sentinel-1`.
+    OSV files are downloaded automatically to either the defined ``osvdir`` or relative to the
+    user's home directory: ``~/.snap/auxdata/Orbits/Sentinel-1``.
     
     Parameters
     ----------
-    id: ~pyroSAR.drivers.ID
+    id
         the scene to be corrected
-    directory: str or None
+    directory
         a directory to be scanned for files associated with the scene, e.g. an SLC in GAMMA format.
-        If the OSV file is packed in a zip file it will be unpacked to a subdirectory `osv`.
-    osvdir: str or None
-        the directory of the OSV files. Default None: use the SNAP directory
+        If the OSV file is packed in a zip file it will be unpacked to a subdirectory ``osv``.
+    osvdir
+        the directory of the OSV files. Default ``None``: use the SNAP directory
         as configured via :attr:`pyroSAR.examine.ExamineSnap.auxdatapath`.
-        Default: `~/.snap/auxdata/Orbits/Sentinel-1`.
-        Subdirectories POEORB and RESORB are created automatically.
-    osvType: str or list[str]
-        the OSV type (POE|RES) to be used
-    timeout: int or tuple or None
+        Default: ``~/.snap/auxdata/Orbits/Sentinel-1``.
+        Subdirectories ``POEORB`` and ``RESORB`` are created automatically.
+    osvType
+        the OSV type to be used
+    timeout
         the timeout in seconds for downloading OSV files as provided to :func:`requests.get`
-    logpath: str or None
-        a directory to write command logfiles to
-    outdir: str or None
-        the directory to execute the command in
-    shellscript: str or None
-        a file to write the GAMMA commands to in shell format
-    url_option: int
+    url_option
         the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch`
-    
-    Returns
-    -------
+    logpath
+        a directory to write command logfiles to
+    outdir
+        the directory to execute the command in
+    shellscript
+        a file to write the GAMMA commands to in shell format
     
     Examples
     --------
@@ -557,33 +580,37 @@ def correctOSV(id, directory, osvdir=None, osvType='POE', timeout=20,
                             shellscript=shellscript)
 
 
-def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False,
-                logpath=None, outdir=None, shellscript=None):
+def gc_map_wrap(
+        image: str,
+        namespace: Namespace,
+        dem: str,
+        spacing: int | float,
+        exist_ok: bool = False,
+        logpath: str | None = None,
+        outdir: str | None = None,
+        shellscript: str | None = None
+) -> None:
     """
-    helper function for computing DEM products in function geocode.
+    Helper function for computing DEM products in function geocode.
 
     Parameters
     ----------
-    image: str
+    image
         the reference SAR image
-    namespace: pyroSAR.gamma.auxil.Namespace
+    namespace
         an object collecting all output file names
-    dem: str
+    dem
         the digital elevation model
-    spacing: int or float
+    spacing
         the target pixel spacing in meters
-    exist_ok: bool
+    exist_ok
         allow existing output files and do not create new ones?
-    logpath: str
+    logpath
         a directory to write command logfiles to
-    outdir: str
+    outdir
         the directory to execute the command in
-    shellscript: str
+    shellscript
         a file to write the GAMMA commands to in shell format
-
-    Returns
-    -------
-
     """
     # compute DEM oversampling factors; will be 1 for range and
     # azimuth if the DEM spacing matches the target spacing
@@ -654,31 +681,47 @@ def gc_map_wrap(image, namespace, dem, spacing, exist_ok=False,
             par2hdr(namespace.dem_seg_geo + '.par', namespace.get(item) + '.hdr', mods)
 
 
-def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=1,
-            nodata=(0, -99), update_osv=True, osvdir=None, allow_RES_OSV=False,
-            cleanup=True, export_extra=None, basename_extensions=None,
-            removeS1BorderNoiseMethod='gamma', refine_lut=False, rlks=None, azlks=None,
-            s1_osv_url_option=1):
+def geocode(
+        scene: str | ID | list[str | ID],
+        dem: str,
+        tmpdir: str,
+        outdir: str,
+        spacing: int | float,
+        scaling: Literal['linear', 'db'] | list[Literal['linear', 'db']] = 'linear',
+        func_geoback: Literal[0, 1, 2, 3, 4, 5, 6, 7] = 1,
+        nodata: tuple[int | float, int | float] = (0, -99),
+        update_osv: bool = True,
+        osvdir: str | None = None,
+        allow_RES_OSV: bool = False,
+        cleanup: bool = True,
+        export_extra: list[str] | None = None,
+        basename_extensions: list[str] | None = None,
+        removeS1BorderNoiseMethod: Literal['ESA', 'pyroSAR', 'gamma'] | None = 'gamma',
+        refine_lut: bool = False,
+        rlks: int | None = None,
+        azlks: int | None = None,
+        s1_osv_url_option: int = 1
+) -> None:
     """
     general function for radiometric terrain correction (RTC) and geocoding of SAR backscatter images with GAMMA.
     Applies the RTC method by :cite:t:`Small2011` to retrieve gamma nought RTC backscatter.
     
     Parameters
     ----------
-    scene: str or ~pyroSAR.drivers.ID or list
+    scene
         the SAR scene(s) to be processed
-    dem: str
+    dem
         the reference DEM in GAMMA format
-    tmpdir: str
+    tmpdir
         a temporary directory for writing intermediate files
-    outdir: str
+    outdir
         the directory for the final GeoTIFF output files
-    spacing: float or int
+    spacing
         the target pixel spacing in meters
-    scaling: str or list[str]
-        the value scaling of the backscatter values; either 'linear', 'db' or a list of both, i.e. ['linear', 'db']
-    func_geoback: {0, 1, 2, 3, 4, 5, 6, 7}
-        backward geocoding interpolation mode (see GAMMA command `geocode_back`)
+    scaling
+        the value scaling of the backscatter values
+    func_geoback
+        backward geocoding interpolation mode (see GAMMA command ``geocode_back``)
         
          - 0: nearest-neighbor
          - 1: bicubic spline (default)
@@ -697,48 +740,45 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         
             GAMMA recommendation for MLI data: "The interpolation should be performed on
             the square root of the data. A mid-order (3 to 5) B-spline interpolation is recommended."
-    nodata: tuple[float or int]
+    nodata
         the nodata values for the output files; defined as a tuple with two values, the first for linear,
         the second for logarithmic scaling
-    update_osv: bool
+    update_osv
         update the orbit state vectors?
-    osvdir: str or None
+    osvdir
         a directory for Orbit State Vector files;
-        this is currently only used by for Sentinel-1 where two subdirectories POEORB and RESORB are created;
+        this is currently only used by for Sentinel-1 where two subdirectories ``POEORB`` and ``RESORB`` are created;
         if set to None, a subdirectory OSV is created in the directory of the unpacked scene.
-    allow_RES_OSV: bool
+    allow_RES_OSV
         also allow the less accurate RES orbit files to be used?
         Otherwise the function will raise an error if no POE file exists.
-    cleanup: bool
+    cleanup
         should all files written to the temporary directory during function execution be deleted after processing?
-    export_extra: list[str] or None
-        a list of image file IDs to be exported to outdir
+    export_extra
+        a list of image file IDs to be exported to ``outdir``
         
          - format is GeoTIFF if the file is geocoded and ENVI otherwise. Non-geocoded images can be converted via GAMMA
-           command data2tiff yet the output was found impossible to read with GIS software
-         - scaling of SAR image products is applied as defined by parameter `scaling`
+           command ``data2tiff`` yet the output was found impossible to read with GIS software
+         - scaling of SAR image products is applied as defined by parameter ``scaling``
          - see Notes for ID options
-    basename_extensions: list[str] or None
-        names of additional parameters to append to the basename, e.g. ['orbitNumber_rel']
-    removeS1BorderNoiseMethod: str or None
+    basename_extensions
+        names of additional parameters to append to the basename, e.g. ``['orbitNumber_rel']``
+    removeS1BorderNoiseMethod
         the S1 GRD border noise removal method to be applied, See :func:`pyroSAR.S1.removeGRDBorderNoise` for details; one of the following:
         
          - 'ESA': the pure implementation as described by ESA
          - 'pyroSAR': the ESA method plus the custom pyroSAR refinement
          - 'gamma': the GAMMA implementation of :cite:`Ali2018`
          - None: do not remove border noise
-    refine_lut: bool
+    refine_lut
         should the LUT for geocoding be refined using pixel area normalization?
-    rlks: int or None
+    rlks
         the number of range looks. If not None, overrides the computation done by function
         :func:`pyroSAR.ancillary.multilook_factors` based on the image pixel spacing and the target spacing.
-    azlks: int or None
-        the number of azimuth looks. Like `rlks`.
-    s1_osv_url_option: int
+    azlks
+        the number of azimuth looks. Like ``rlks``.
+    s1_osv_url_option
         the OSV download URL option; see :meth:`pyroSAR.S1.OSV.catch`
-    
-    Returns
-    -------
     
     Note
     ----
@@ -1139,13 +1179,16 @@ def geocode(scene, dem, tmpdir, outdir, spacing, scaling='linear', func_geoback=
         shutil.rmtree(tmpdir)
 
 
-def _delete_product(path):
+def _delete_product(path: str) -> None:
     for item in [path, path + '.hdr', path + '.aux.xml']:
         if os.path.isfile(item):
             os.remove(item)
 
 
-def lat_linear_to_db(data_in: str, data_out: str) -> None:
+def lat_linear_to_db(
+        data_in: str,
+        data_out: str
+) -> None:
     """
     Alternative to LAT module command linear_to_dB.
 
@@ -1174,7 +1217,11 @@ def lat_linear_to_db(data_in: str, data_out: str) -> None:
         _delete_product(tmp)
 
 
-def lat_product(data_in1: str, data_in2: str, data_out: str) -> None:
+def lat_product(
+        data_in1: str,
+        data_in2: str,
+        data_out: str
+) -> None:
     """
     Alternative to LAT module command product.
 
@@ -1208,7 +1255,11 @@ def lat_product(data_in1: str, data_in2: str, data_out: str) -> None:
         _delete_product(tmp)
 
 
-def lat_ratio(data_in1: str, data_in2: str, data_out: str) -> None:
+def lat_ratio(
+        data_in1: str,
+        data_in2: str,
+        data_out: str
+) -> None:
     """
     Alternative to LAT module command ratio.
 
@@ -1252,7 +1303,7 @@ def multilook(
         logpath: str | None = None,
         outdir: str | None = None,
         shellscript: str | None = None
-):
+) -> None:
     """
     Multilooking of SLC and MLI images.
 
@@ -1408,31 +1459,34 @@ def ovs(
     return ovs_y, ovs_x
 
 
-def pixel_area_wrap(image, namespace, lut, exist_ok=False,
-                    logpath=None, outdir=None, shellscript=None):
+def pixel_area_wrap(
+        image: str,
+        namespace: Namespace,
+        lut: str,
+        exist_ok: bool = False,
+        logpath: str | None = None,
+        outdir: str | None = None,
+        shellscript: str | None = None
+) -> None:
     """
     helper function for computing pixel_area files in function geocode.
 
     Parameters
     ----------
-    image: str
+    image
         the reference SAR image
-    namespace: pyroSAR.gamma.auxil.Namespace
+    namespace
         an object collecting all output file names
-    lut: str
+    lut
         the name of the lookup table
-    exist_ok: bool
+    exist_ok
         allow existing output files and do not create new ones?
-    logpath: str
+    logpath
         a directory to write command logfiles to
-    outdir: str
+    outdir
         the directory to execute the command in
-    shellscript: str
+    shellscript
         a file to write the GAMMA commands to in shell format
-
-    Returns
-    -------
-
     """
     image_par = ISPPar(image + '.par')
     
@@ -1550,43 +1604,49 @@ def pixel_area_wrap(image, namespace, lut, exist_ok=False,
                 par2hdr(image + '.par', hdr_out)
 
 
-def S1_deburst(burst1, burst2, burst3, name_out, rlks=5, azlks=1,
-               replace=False, logpath=None, outdir=None, shellscript=None):
+def S1_deburst(
+        burst1: str,
+        burst2: str,
+        burst3: str,
+        name_out: str,
+        rlks: int = 5,
+        azlks: int = 1,
+        replace: bool = False,
+        logpath: str | None = None,
+        outdir: str | None = None,
+        shellscript: str | None = None
+) -> None:
     """
     Debursting of Sentinel-1 SLC imagery in GAMMA
     
     The procedure consists of two steps. First antenna pattern deramping and
     then mosaicing of the single deramped bursts.
-    For mosaicing, the burst boundaries are calculated from the number of looks in range (`rlks`)
-    and azimuth (`azlks`), in this case 5 range looks and 1 azimuth looks.
+    For mosaicing, the burst boundaries are calculated from the number of looks in range (``rlks``)
+    and azimuth (``azlks``), in this case 5 range looks and 1 azimuth looks.
     Alternately 10 range looks and 2 azimuth looks could be used.
     
     Parameters
     ----------
-    burst1: str
+    burst1
         burst image 1
-    burst2: str
+    burst2
         burst image 2
-    burst3: str
+    burst3
         burst image 3
-    name_out: str
+    name_out
         the name of the output file
-    rlks: int
+    rlks
         the number of looks in range
-    azlks: int
+    azlks
         the number of looks in azimuth
-    replace: bool
+    replace
         replace the burst images by the new file? If True, the three burst images will be deleted.
-    logpath: str or None
+    logpath
         a directory to write command logfiles to
-    outdir: str or None
+    outdir
         the directory to execute the command in
-    shellscript: str or None
+    shellscript
         a file to write the Gamma commands to in shell format
-
-    Returns
-    -------
-    
     """
     for burst in [burst1, burst2, burst3]:
         if not os.path.isfile(burst) or not os.path.isfile(burst + '.par') or not os.path.isfile(burst + '.tops_par'):

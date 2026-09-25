@@ -25,23 +25,32 @@ from spatialist.envi import hdr
 
 from .error import gammaErrorHandler
 
+from typing import Any, Self, TYPE_CHECKING, Literal
 
-def do_execute(par, ids, exist_ok):
+if TYPE_CHECKING:
+    from types import TracebackType
+EXT = dict[Literal['xmin', 'xmax', 'ymin', 'ymax'], int | float]
+
+
+def do_execute(
+        par: dict[str, Any],
+        ids: list[str],
+        exist_ok: bool
+) -> bool:
     """
     small helper function to assess whether a GAMMA command shall be executed.
 
     Parameters
     ----------
-    par: dict
+    par
         a dictionary containing all arguments for the command
-    ids: list[str]
+    ids
         the IDs of the output files
-    exist_ok: bool
+    exist_ok
         allow existing output files?
 
     Returns
     -------
-    bool
         execute the command because (a) not all output files exist or (b) existing files are not allowed
     """
     all_exist = all([os.path.isfile(par[x]) for x in ids if par[x] != '-'])
@@ -61,7 +70,7 @@ class ISPPar(object):
     
     Parameters
     ----------
-    filename: str
+    filename
         the GAMMA parameter file
     
     Examples
@@ -75,19 +84,15 @@ class ISPPar(object):
     
     Attributes
     ----------
-    keys: list
+    keys
         the names of all parameters
     """
+    keys: list[str]
     
     _re_kv_pair = re.compile(r'^(\w+):\s*(.+)\s*')
     _re_float_literal = re.compile(r'^[+-]?(?:(\d*\.\d+)|(\d+\.?))(?:[Ee][+-]?\d+)?')
     
-    def __init__(self, filename):
-        """Parses an ISP parameter file from disk.
-
-        Args:
-            filename: The filename or file object representing the ISP parameter file.
-        """
+    def __init__(self: Self, filename: str) -> None:
         if isinstance(filename, str):
             par_file = open(filename, 'r')
         else:
@@ -151,34 +156,42 @@ class ISPPar(object):
             self.date_dt += timedelta(seconds=self.start_time)
             self.date = self.date_dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
     
-    def __enter__(self):
+    def __enter__(self: Self) -> Self:
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_val: BaseException | None,
+            exc_tb: TracebackType | None
+    ) -> None:
         return
     
-    def __getattr__(self, item):
+    def __getattr__(self: Self, item: str) -> None:
         # will only be run if object has no attribute item
         raise AttributeError("parameter file has no attribute '{}'".format(item))
     
-    def __str__(self):
+    def __str__(self: Self) -> str:
         maxlen = len(max(self.keys, key=len)) + 1
-        return '\n'.join(['{key}:{sep}{value}'.format(key=key,
-                                                      sep=(maxlen - len(key)) * ' ',
-                                                      value=getattr(self, key)) for key in self.keys])
+        return'\n'.join([
+            f"{key}:{(maxlen - len(key)) * ' '}{getattr(self, key)}"
+            for key in self.keys
+        ])
     
-    def envidict(self, nodata=None):
+    def envidict(
+            self: Self,
+            nodata: int | float | None = None
+    ) -> dict[str, Any]:
         """
         export relevant metadata to an ENVI HDR file compliant format
         
         Parameters
         ----------
-        nodata: int, float or None
+        nodata
             a no data value to write to the HDR file via attribute 'data ignore value'
         
         Returns
         -------
-        dict
             a dictionary containing attributes translated to ENVI HDR naming
         """
         out = dict(bands=1,
@@ -274,9 +287,9 @@ class Namespace(object):
     
     Parameters
     ----------
-    directory: str
+    directory
         the directory path where files shall be written.
-    basename: str
+    basename
         the product basename as returned by
         :meth:`pyroSAR.drivers.ID.outname_base`
     
@@ -290,94 +303,94 @@ class Namespace(object):
     '/path/S1A__IW___A_20180829T170631_pix_geo'
     """
     
-    def __init__(self, directory, basename):
+    def __init__(self: Self, directory: str, basename: str) -> None:
         self.__base = basename
         self.__outdir = directory
         self.__reg = []
     
-    def __getitem__(self, item):
+    def __getitem__(self, item: str) -> str:
         item = str(item).replace('.', '_')
         return self.get(item)
     
-    def __getattr__(self, item):
+    def __getattr__(self, item: str) -> str:
         # will only be run if object has no attribute item
         return '-'
     
-    def appreciate(self, keys):
+    def appreciate(self, keys: list[str]) -> None:
         """
 
         Parameters
         ----------
-        keys: list[str]
-
-        Returns
-        -------
-
+        keys
+            the file IDs
         """
         for key in keys:
-            setattr(self, key.replace('.', '_'), os.path.join(self.__outdir, self.__base + '_' + key))
+            setattr(
+                self,
+                key.replace('.', '_'),
+                os.path.join(self.__outdir, self.__base + '_' + key)
+            )
             if key not in self.__reg:
                 self.__reg.append(key.replace('.', '_'))
     
-    def depreciate(self, keys):
+    def depreciate(self, keys: list[str]) -> None:
         """
 
         Parameters
         ----------
-        keys: list[str]
-
-        Returns
-        -------
-
+        keys
+            the file IDs
         """
         for key in keys:
             setattr(self, key.replace('.', '_'), '-')
             if key not in self.__reg:
                 self.__reg.append(key.replace('.', '_'))
     
-    def getall(self):
+    def getall(self: Self) -> dict[str, str]:
         out = {}
         for key in self.__reg:
             out[key] = getattr(self, key)
         return out
     
-    def select(self, selection):
+    def select(self, selection: list[str]) -> list[str]:
         return [getattr(self, key) for key in selection]
     
-    def isregistered(self, key):
+    def isregistered(self, key: str) -> bool:
         return key in self.__reg
     
-    def isappreciated(self, key):
+    def isappreciated(self, key: str) -> bool:
         if self.isregistered(key):
             if self.get(key) != '-':
                 return True
         return False
     
-    def isfile(self, key):
+    def isfile(self, key: str) -> bool:
         return hasattr(self, key) and os.path.isfile(getattr(self, key))
     
-    def get(self, key):
+    def get(self, key: str) -> str:
         return getattr(self, key)
 
 
-def par2hdr(parfile, hdrfile, modifications=None, nodata=None):
+def par2hdr(
+        parfile: str,
+        hdrfile: str,
+        modifications: dict[str, Any] | None = None,
+        nodata: int | float | None = None
+) -> None:
     """
     Create an ENVI HDR file from a GAMMA PAR file
     
     Parameters
     ----------
-    parfile: str
+    parfile
         the GAMMA parfile
-    hdrfile: str
+    hdrfile
         the ENVI HDR file
-    modifications: dict or None
+    modifications
         a dictionary containing value deviations to write to the HDR file
-    nodata: int, float or None
+    nodata
         a no data value to write to the HDR file via attribute 'data ignore value'
 
-    Returns
-    -------
-    
     Examples
     --------
     >>> from pyroSAR.gamma.auxil import par2hdr
@@ -412,22 +425,22 @@ def process(
 
     Parameters
     ----------
-    cmd:
+    cmd
         The command line arguments.
-    outdir:
+    outdir
         The directory to execute the command in. This directory is also set
         as environment variable in `shellscript`.
-    logfile:
+    logfile
         A file to write the command log to. Overrides parameter `logpath`.
-    logpath:
+    logpath
         A directory to write logfiles to. The file will be named
         {GAMMA command}.log, e.g. gc_map.log.
         Overrides parameter `logfile`.
-    inlist:
+    inlist
         A list of values, which is passed as interactive inputs via `stdin`.
-    void:
+    void
         Return the `stdout` and `stderr` messages?
-    shellscript:
+    shellscript
         A file to write the GAMMA commands to in shell format.
 
     Returns
@@ -488,21 +501,20 @@ def process(
         return out, err
 
 
-def slc_corners(parfile):
+def slc_corners(parfile: str) -> EXT:
     """
     extract the corner coordinates of a SAR scene
 
     Parameters
     ----------
-    parfile: str
+    parfile
         the GAMMA parameter file to read coordinates from
 
     Returns
     -------
-    dict of float
-        a dictionary with keys xmin, xmax, ymin, ymax
+        an extent dictionary
     """
-    out, err = process(['SLC_corners', parfile], void=False)
+    out, err = process(cmd=['SLC_corners', parfile], void=False)
     pts = {}
     pattern = r'-?[0-9]+\.[0-9]+'
     for line in out.split('\n'):
@@ -517,17 +529,22 @@ def slc_corners(parfile):
 
 class Spacing(object):
     """
-    compute multilooking factors and pixel spacings from an ISPPar object for a defined ground range target pixel spacing
+    Compute multilooking factors and pixel spacings from an ISPPar
+    object for a defined ground range target pixel spacing.
 
     Parameters
     ----------
-    par: str or ISPPar
+    par
         the ISP parameter file
-    spacing: int or float
+    spacing
         the target pixel spacing in ground range
     """
     
-    def __init__(self, par, spacing='automatic'):
+    def __init__(
+            self: Self,
+            par: str | ISPPar,
+            spacing: int | float | Literal['automatic'] = 'automatic'
+    ) -> None:
         # compute ground range pixel spacing
         par = par if isinstance(par, ISPPar) else ISPPar(par)
         self.groundRangePS = par.range_pixel_spacing / (math.sin(math.radians(par.incidence_angle)))
@@ -552,7 +569,7 @@ class UTM(object):
     
     Parameters
     ----------
-    parfile: str
+    parfile
         the GAMMA parameter file to read the coordinate from
     
     Example
@@ -562,7 +579,7 @@ class UTM(object):
     >>> print(UTM('gamma.par').zone)
     """
     
-    def __init__(self, parfile):
+    def __init__(self, parfile: str) -> None:
         par = ISPPar(parfile)
         inlist = ['WGS84', 1, 'EQA', par.corner_lon, par.corner_lat, '', 'WGS84', 1, 'UTM', '']
         inlist = map(str, inlist)

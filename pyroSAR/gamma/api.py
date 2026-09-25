@@ -13,6 +13,7 @@
 ###############################################################################
 import os
 import sys
+from typing import Self
 
 from .parser import autoparse
 
@@ -21,10 +22,10 @@ from .parser import autoparse
 # is unavailable. They are replaced by the generated modules when parsing
 # succeeds.
 class _UnavailableGammaModule:
-    def __init__(self, module: str) -> None:
+    def __init__(self: Self, module: str) -> None:
         self.module = module
     
-    def __getattr__(self, command: str):
+    def __getattr__(self: Self, command: str):
         raise AttributeError(
             f"The command '{command}' is not available. "
             f"Please install GAMMA module '{self.module.upper()}'."
