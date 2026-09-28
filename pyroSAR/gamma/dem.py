@@ -45,7 +45,12 @@ except ImportError:
     pass
 
 
-def fill(dem: str, dem_out: str, logpath: str | None = None, replace: bool = False) -> None:
+def fill(
+        dem: str,
+        dem_out: str,
+        logpath: str | None = None,
+        replace: bool = False
+) -> None:
     """
     interpolate missing values in the SRTM DEM (value -32768)
 
@@ -185,7 +190,7 @@ def dem_autocreate(
         for options.
     logpath
         a directory to write GAMMA logfiles to
-    shellscript: str or None
+    shellscript
         a file to write the GAMMA commands to in bash format
     """
     geometry = geometry.clone()

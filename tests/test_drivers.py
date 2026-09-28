@@ -62,22 +62,21 @@ def scene(testcases, testdata, request):
     return case
 
 
-class Test_Metadata():
-    @pytest.mark.parametrize('scene', ['s1', 'psr2'], indirect=True)
-    def test_attributes(self, scene):
-        assert scene['pyro'].acquisition_mode == scene['acquisition_mode']
-        assert scene['pyro'].compression == scene['compression']
-        assert scene['pyro'].getCorners() == pytest.approx(scene['corners'])
-        assert scene['pyro'].lines == scene['lines']
-        assert scene['pyro'].outname_base() == scene['outname']
-        assert scene['pyro'].orbit == scene['orbit']
-        assert scene['pyro'].polarizations == scene['polarizations']
-        assert scene['pyro'].product == scene['product']
-        assert scene['pyro'].samples == scene['samples']
-        assert scene['pyro'].start == scene['start']
-        assert scene['pyro'].stop == scene['stop']
-        assert scene['pyro'].sensor == scene['sensor']
-        assert scene['pyro'].spacing == scene['spacing']
+@pytest.mark.parametrize('scene', ['s1', 'psr2'], indirect=True)
+def test_attributes(scene):
+    assert scene['pyro'].acquisition_mode == scene['acquisition_mode']
+    assert scene['pyro'].compression == scene['compression']
+    assert scene['pyro'].getCorners() == pytest.approx(scene['corners'])
+    assert scene['pyro'].lines == scene['lines']
+    assert scene['pyro'].outname_base() == scene['outname']
+    assert scene['pyro'].orbit == scene['orbit']
+    assert scene['pyro'].polarizations == scene['polarizations']
+    assert scene['pyro'].product == scene['product']
+    assert scene['pyro'].samples == scene['samples']
+    assert scene['pyro'].start == scene['start']
+    assert scene['pyro'].stop == scene['stop']
+    assert scene['pyro'].sensor == scene['sensor']
+    assert scene['pyro'].spacing == scene['spacing']
 
 
 def test_identify_fail(testdir, testdata):
@@ -91,9 +90,9 @@ def test_identify_many_fail(testdata):
     assert pyroSAR.identify_many([testdata['tif']]) == []
 
 
-def test_filter_processed(tmpdir, testdata):
+def test_filter_processed(tmp_path, testdata):
     scene = pyroSAR.identify(testdata['s1'])
-    assert len(pyroSAR.filter_processed([scene], str(tmpdir))) == 1
+    assert len(pyroSAR.filter_processed([scene], str(tmp_path))) == 1
 
 
 def test_parse_date():
@@ -108,19 +107,19 @@ def test_export2dict():
     pass
 
 
-def test_getFileObj(tmpdir, testdata):
+def test_getFileObj(tmp_path, testdata):
     scene = pyroSAR.identify(testdata['s1'])
     if platform.system() == 'Windows':
-        directory = u'\\\\?\\' + str(tmpdir)
+        directory = u'\\\\?\\' + str(tmp_path)
     else:
-        directory = str(tmpdir)
+        directory = str(tmp_path)
     scene.unpack(directory)
     scene = pyroSAR.identify(scene.scene)
     item = scene.findfiles('manifest.safe')[0]
     assert os.path.basename(item) == 'manifest.safe'
     assert isinstance(scene.getFileObj(item).read(), (bytes, str))
     
-    filename = os.path.join(str(tmpdir), os.path.basename(testdata['s1'].replace('zip', 'tar.gz')))
+    filename = os.path.join(str(tmp_path), os.path.basename(testdata['s1'].replace('zip', 'tar.gz')))
     with tf.open(filename, 'w:gz') as tar:
         tar.add(scene.scene, arcname=os.path.basename(scene.scene))
     # test error if scene is not a directory, zip or tar
@@ -134,15 +133,15 @@ def test_getFileObj(tmpdir, testdata):
         pyroSAR.getFileObj('foo', 'bar')
 
 
-def test_scene(tmpdir, testdata):
+def test_scene(tmp_path, testdata):
     id = pyroSAR.identify(testdata['s1'])
     assert isinstance(id.export2dict(), dict)
     with pytest.raises(RuntimeError):
         assert isinstance(id.gdalinfo(), dict)
     id.summary()
-    id.bbox(outname=os.path.join(str(tmpdir), 'bbox_test.shp'), overwrite=True)
-    assert id.is_processed(str(tmpdir)) is False
-    id.unpack(str(tmpdir), overwrite=True)
+    id.bbox(outname=os.path.join(str(tmp_path), 'bbox_test.shp'), overwrite=True)
+    assert id.is_processed(str(tmp_path)) is False
+    id.unpack(str(tmp_path), overwrite=True)
     assert id.compression is None
     with pytest.raises(RuntimeError):
         id.getGammaImages()
@@ -164,10 +163,14 @@ def test_geometry(testdata, dataset):
         assert isinstance(geom, Vector)
 
 
-def test_geo_grid(tmpdir, testdata):
-    scene = pyroSAR.identify(testdata['s1'])
+datasets = ['asar', 'ers1_esa', 's1']
+
+
+@pytest.mark.parametrize('dataset', datasets)
+def test_geo_grid(tmp_path, testdata, dataset):
+    scene = pyroSAR.identify(testdata[dataset])
     with scene.geo_grid() as geom:
         assert isinstance(geom, Vector)
-    out = tmpdir / "geogrid.gpkg"
+    out = tmp_path / "geogrid.gpkg"
     scene.geo_grid(outname=str(out))
     assert out.exists()

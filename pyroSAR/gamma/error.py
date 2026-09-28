@@ -23,11 +23,11 @@ def gammaErrorHandler(returncode: int, out: str, err: str) -> None:
     
     Parameters
     ----------
-    returncode:
+    returncode
         the subprocess return code
-    out:
+    out
         the stdout message returned by a subprocess call of a gamma command
-    err:
+    err
         the stderr message returned by a subprocess call of a gamma command
 
     Raises: IOError | ValueError | RuntimeError
@@ -96,5 +96,5 @@ class GammaUnknownError(Exception):
     If this error occurs, the message should be included in this function.
     """
     
-    def __init__(self, errormessage):
+    def __init__(self, errormessage: str):
         Exception.__init__(self, errormessage)
