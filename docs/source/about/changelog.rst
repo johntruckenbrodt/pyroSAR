@@ -1585,17 +1585,21 @@ Auxiliary Data Handling
 
 GAMMA API
 ---------
-:func:`gamma.dem.dem_autocreate`
-- new argument `shellscript`
-- corrected usage of `pyroSAR.auxdata`
+:func:`pyroSAR.gamma.dem.dem_autocreate`:
 
-:func:`gamma.util.convert2gamma`: write TSX/TDX SLCs as FCOMPLEX, not SCOMPLEX (which the ENVI format does not support)
+- new argument ``shellscript``
+- corrected usage of ``pyroSAR.auxdata``
+
+:func:`pyroSAR.gamma.util.convert2gamma`: write TSX/TDX SLCs as FCOMPLEX, not SCOMPLEX (which the ENVI format does not support)
 
 Drivers
 -------
 
-:meth:`drivers.ID.__str__`: print extent, not coordinates
+:meth:`pyroSAR.drivers.ID.__str__`: print extent, not coordinates
 
-:meth:`drivers.ID.findfiles`: ensure output is `list[str]`
+:meth:`pyroSAR.drivers.ID.findfiles`: ensure output is ``list[str]``
 
-Plus additional typing, documentation and log messages.
+General
+-------
+
+Additional typing, documentation and log messages.
