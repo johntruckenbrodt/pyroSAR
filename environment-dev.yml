@@ -19,7 +19,7 @@ dependencies:
   - requests
   - shapely
   - spatialist>=0.20.1
-  - sqlalchemy>=1.4
+  - sqlalchemy>=1.4,<2.1
   - sqlalchemy-utils>=0.37,<0.42 # 0.42 drop database issue https://github.com/kvesteri/sqlalchemy-utils/issues/791
   - coverage
   - pytest
