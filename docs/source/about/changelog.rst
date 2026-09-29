@@ -1575,3 +1575,27 @@ GAMMA API
   works correctly for non-existing dummy GAMMA modules (so that one can easily check whether certain functions exist in
   the module)
 - removed outdated DEM functions `transform`, `hgt`, `hgt_collect` and `makeSRTM`
+
+0.39.1 | 2026-09-29
+===================
+
+Auxiliary Data Handling
+-----------------------
+- :class:`pyroSAR.auxdata.DEMHandler`: fixed extent handling logic (see `#441 <https://github.com/johntruckenbrodt/pyroSAR/pull/441>`_)
+
+GAMMA API
+---------
+:func:`gamma.dem.dem_autocreate`
+- new argument `shellscript`
+- corrected usage of `pyroSAR.auxdata`
+
+:func:`gamma.util.convert2gamma`: write TSX/TDX SLCs as FCOMPLEX, not SCOMPLEX (which the ENVI format does not support)
+
+Drivers
+-------
+
+:meth:`drivers.ID.__str__`: print extent, not coordinates
+
+:meth:`drivers.ID.findfiles`: ensure output is `list[str]`
+
+Plus additional typing, documentation and log messages.
