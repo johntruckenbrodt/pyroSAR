@@ -11,6 +11,8 @@
 # copied, modified, propagated, or distributed except according
 # to the terms contained in the LICENSE.txt file.
 ################################################################################
+from __future__ import annotations # needed for Python<3.14 typing
+
 import math
 import os
 import re
