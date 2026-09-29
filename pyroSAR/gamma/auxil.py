@@ -11,7 +11,7 @@
 # copied, modified, propagated, or distributed except according
 # to the terms contained in the LICENSE.txt file.
 ################################################################################
-from __future__ import annotations # needed for Python<3.14 typing
+from __future__ import annotations  # needed for Python<3.14 typing
 
 import math
 import os
@@ -64,8 +64,9 @@ class ISPPar(object):
     Reader for ISP parameter files of the GAMMA software package
 
     This class allows to read all information from files in GAMMA's parameter file format.
-    Each key-value pair is parsed and added as attribute. For instance if the parameter file
-    contains the pair 'sensor:    TSX-1' an attribute named 'sensor' with the value 'TSX-1' will be available.
+    Each key-value pair is parsed and added as an attribute.
+    For instance, if the parameter file contains the entry ``sensor:    TSX-1``,
+    an attribute named ``sensor`` with the value ``TSX-1`` will be available.
 
     The values are converted to native Python types, while unit identifiers like 'dB' or 'Hz' are removed.
     Please see the GAMMA reference manual for further information on the actual file format.
@@ -83,12 +84,9 @@ class ISPPar(object):
     ...     print(par.keys) # print all parameter names
     ...     for key, value in par.envidict().items():
     ...         print('{0}: {1}'.format(key, value)) # print the ENVI HDR compliant metadata
-    
-    Attributes
-    ----------
-    keys
-        the names of all parameters
     """
+    
+    #: the names of all parameters
     keys: list[str]
     
     _re_kv_pair = re.compile(r'^(\w+):\s*(.+)\s*')
@@ -175,7 +173,7 @@ class ISPPar(object):
     
     def __str__(self: Self) -> str:
         maxlen = len(max(self.keys, key=len)) + 1
-        return'\n'.join([
+        return '\n'.join([
             f"{key}:{(maxlen - len(key)) * ' '}{getattr(self, key)}"
             for key in self.keys
         ])
