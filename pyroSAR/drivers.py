@@ -2334,6 +2334,80 @@ class TSX(ID):
         
         super(TSX, self).__init__(self.meta)
     
+    def geo_grid(
+            self,
+            outname: str | None = None,
+            driver: str | None = None,
+            overwrite: bool = True
+    ) -> Vector | None:
+        """
+        get the geo grid as vector geometry
+
+        Parameters
+        ----------
+        outname
+            the name of the vector file to be written
+        driver
+            the output file format; needs to be defined if the format cannot
+            be auto-detected from the filename extension
+        overwrite
+            overwrite an existing vector file?
+
+        Returns
+        -------
+            the vector object if `outname` is None, None otherwise
+
+        See also
+        --------
+        spatialist.vector.Vector.write
+        """
+        annotation = self.findfiles('GEOREF.xml')[0]
+        
+        vec = Vector(driver='MEM')
+        vec.addlayer('geogrid', 4326, ogr.wkbPoint25D)
+        field_defs = [
+            ("azimuthTime", ogr.OFTDateTime),
+            ("slantRangeTime", ogr.OFTReal),
+            ("line", ogr.OFTInteger),
+            ("pixel", ogr.OFTInteger),
+            ("incidenceAngle", ogr.OFTReal),
+            ("elevationAngle", ogr.OFTReal),
+        ]
+        for name, ftype in field_defs:
+            field = ogr.FieldDefn(name, ftype)
+            vec.layer.CreateField(field)
+        
+        with self.getFileObj(annotation) as ann_xml:
+            tree = ET.fromstring(ann_xml.read())
+        
+        az_time_ref = tree.find(".//gridReferenceTime/tReferenceTimeUTC").text
+        az_time_ref = dateparse(az_time_ref).replace(tzinfo=timezone.utc)
+        
+        rg_time_ref = tree.find(".//gridReferenceTime/tauReferenceTime").text
+        rg_time_ref = float(rg_time_ref)
+        
+        points = tree.findall(".//geolocationGrid/gridPoint")
+        for point in points:
+            meta = {child.tag: child.text for child in point}
+            x = float(meta.pop("lon"))
+            y = float(meta.pop("lat"))
+            z = float(meta.pop("height"))
+            geom = ogr.Geometry(ogr.wkbPoint25D)
+            geom.AddPoint(x, y, z)
+            meta["azimuthTime"] = az_time_ref + timedelta(seconds=float(meta.pop("t")))
+            meta["slantRangeTime"] = rg_time_ref + float(meta.pop("tau"))
+            meta["line"] = int(meta.pop("row"))
+            meta["pixel"] = int(meta.pop("col"))
+            meta["incidenceAngle"] = float(meta.pop("inc"))
+            meta["elevationAngle"] = float(meta.pop("elev"))
+            vec.addfeature(geom, fields=meta)
+        geom = None
+        if outname is None:
+            return vec
+        else:
+            vec.write(outfile=outname, driver=driver, overwrite=overwrite)
+            vec.close()
+    
     def scanMetadata(self) -> MetaDict:
         annotation = self.getFileObj(self.file).getvalue()
         namespaces = getNamespaces(annotation)
