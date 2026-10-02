@@ -2363,6 +2363,8 @@ class TSX(ID):
         meta['looks'] = (rlks, azlks)
         meta['incidence'] = float(tree.find('.//sceneInfo/sceneCenterCoord/incidenceAngle', namespaces).text)
         
+        meta['heading'] = float(tree.find('.//sceneInfo/headingAngle', namespaces).text)
+        
         geocs = self.getFileObj(self.findfiles('GEOREF.xml')[0]).getvalue()
         tree = ET.fromstring(geocs)
         pts = tree.findall('.//gridPoint')
