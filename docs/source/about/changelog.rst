@@ -1603,3 +1603,17 @@ General
 -------
 
 Additional typing, documentation and log messages.
+
+0.40.0 | 2026-10-29
+===================
+
+Drivers
+-------
+:class:`pyroSAR.drivers.TSX`:
+
+- new method :meth:`pyroSAR.drivers.TSX.geo_grid`
+- added key `'heading'` to `meta` dictionary attribute
+
+GAMMA API
+---------
+New function :func:`pyroSAR.gamma.util.ellipsoid_incidence`.
