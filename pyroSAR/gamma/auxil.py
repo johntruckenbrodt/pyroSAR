@@ -18,6 +18,7 @@ import os
 import re
 import string
 import codecs
+from copy import deepcopy
 import subprocess as sp
 from datetime import datetime, timedelta
 
@@ -447,6 +448,11 @@ def process(
     -------
         the stdout and stderr messages if void is False, otherwise None
     """
+    # strip default value hyphens from the end of the command
+    cmd = deepcopy(cmd)
+    while cmd[-1] == '-':
+        cmd.pop()
+    
     if logfile is not None:
         log = logfile
     else:

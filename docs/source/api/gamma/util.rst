@@ -12,6 +12,7 @@ Processing
         calibrate
         convert2gamma
         correctOSV
+        ellipsoid_incidence
         gc_map_wrap
         geocode
         lat_linear_to_db

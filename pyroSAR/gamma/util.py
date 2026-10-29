@@ -428,7 +428,7 @@ def convert2gamma(
                 pars['COSAR'] = image
                 pars['SLC_par'] = outname + '.par'
                 pars['SLC'] = outname
-                pars['dtype'] = 1  # convert SCOMPLEX->FCOMPLEX
+                pars['dtype'] = 1  # convert SCOMPLEX->FCOMPLEX and calibrate to sigma0
                 with Lock(outname):
                     if do_execute(pars, ['SLC', 'SLC_par'], exist_ok):
                         isp.par_TX_SLC(**pars)
@@ -1690,3 +1690,95 @@ def S1_deburst(
             os.remove(subitem)
     os.remove(tab_in)
     os.remove(tab_out)
+
+
+def ellipsoid_incidence(
+        mli_s0: str,
+        inc_ellp: str,
+        tmp_dir: str | None = None,
+        logpath: str | None = None,
+        outdir: str | None = None,
+        shellscript: str | None = None
+) -> None:
+    """
+    Create an ellipsoidal incident angle image in radar geometry.
+    The following steps are performed:
+    
+    - undo the sigma0 calibration using radcal_MLI, refarea_flag=-1
+    - calibrate uncalibrated image to gamma0 using radcal_MLI, refarea_flag=2
+    - obtain the ellipsoidal incidence angle as ``arccos(sigma0/gamma0)``
+      using numpy and write the result as ENVI file
+    - swap bytes from little to big endian to get a GAMMA-compatible file
+    - write parameter files
+    - delete the temporary directory
+    
+    Parameters
+    ----------
+    mli_s0
+        the sigma0-scaled input MLI
+    inc_ellp
+        the output ellipsoidal incident angle image (in radians)
+    tmp_dir
+        the temporary directory for intermediate outputs.
+        Default ``None``: use a subdirectory ``ellp_inc``
+        of the input MLI's directory.
+    logpath
+        a directory to write command logfiles to
+    outdir
+        the directory to execute the command in
+    shellscript
+        a file to write the GAMMA commands to in shell format
+    """
+    if tmp_dir is None:
+        tmp_dir = os.path.join(os.path.dirname(mli_s0), 'ellp_inc')
+    with Lock(inc_ellp):
+        os.makedirs(tmp_dir, exist_ok=True)
+        try:
+            uncal = os.path.join(tmp_dir, 'mli_uncal')
+            mli_g0 = os.path.join(tmp_dir, 'mli_g0')
+            inc_ellp_tmp = os.path.join(tmp_dir, 'inc_ellp_tmp')
+            
+            # undo sigma0 calibration
+            isp.radcal_MLI(
+                MLI=mli_s0,
+                MLI_par=mli_s0 + '.par',
+                OFF_par='-',
+                CMLI=uncal,
+                refarea_flag=-1,
+                logpath=logpath,
+                outdir=outdir,
+                shellscript=shellscript
+            )
+            shutil.copyfile(mli_s0 + '.par', uncal + '.par')
+            
+            # calibrate to gamma0
+            isp.radcal_MLI(
+                MLI=uncal,
+                MLI_par=uncal + '.par',
+                OFF_par='-',
+                CMLI=mli_g0,
+                refarea_flag=2,
+                logpath=logpath,
+                outdir=outdir,
+                shellscript=shellscript
+            )
+            shutil.copyfile(mli_s0 + '.par', mli_g0 + '.par')
+            par2hdr(mli_g0 + '.par', mli_g0 + '.hdr')
+            
+            if not os.path.isfile(mli_s0 + '.hdr'):
+                par2hdr(mli_s0 + '.par', mli_s0 + '.hdr')
+            
+            with Raster(mli_s0) as ras:
+                sigma0 = ras.array()
+            with Raster(mli_g0) as ras:
+                gamma0 = ras.array()
+                inc = np.arccos(sigma0 / gamma0)
+                ras.write(outname=inc_ellp_tmp, array=inc,
+                          format='ENVI', nodata=0, dtype='float32')
+            disp.swap_bytes(infile=inc_ellp_tmp, outfile=inc_ellp, swap_type=4)
+            shutil.copy(src=mli_s0 + '.par', dst=inc_ellp + '.par')
+            shutil.copy(src=mli_s0 + '.hdr', dst=inc_ellp + '.hdr')
+        except Exception as e:
+            raise e
+        finally:
+            shutil.rmtree(tmp_dir)
