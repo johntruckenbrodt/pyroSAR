@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+message: "If you use pyroSAR in your research, please cite the publication below."
+title: "pyroSAR"
+type: software
+repository-code: "https://github.com/johntruckenbrodt/pyroSAR"
+authors:
+  - family-names: Truckenbrodt
+    given-names: John
+  - name: "The pyroSAR contributors"
+
+preferred-citation:
+  type: conference-paper
+  title: "pyroSAR: A Framework for Large-Scale SAR Satellite Data Processing"
+  authors:
+    - family-names: Truckenbrodt
+      given-names: John
+    - family-names: Cremer
+      given-names: Felix
+    - family-names: Baris
+      given-names: Ismail
+    - family-names: Eberle
+      given-names: Jonas
+  collection-title: "Big Data from Space"
+  editors:
+    - family-names: Soille
+      given-names: Pierre
+    - family-names: Loekken
+      given-names: Sveinung
+    - family-names: Albani
+      given-names: Sergio
+  year: 2019
+  month: 2
+  start: 197
+  end: 200
+  publisher:
+    name: "Publications Office of the European Union"
+    city: Luxembourg
+  collection-doi: "10.2760/848593"
+  isbn: "978-92-76-00034-1"
+  url: "https://doi.org/10.2760/848593"
