@@ -55,7 +55,7 @@ def geocode(infile, outdir, t_srs=4326, spacing=20, polarizations='all', shapefi
     Its name is created from the basename of the `infile` (:meth:`pyroSAR.drivers.ID.outname_base`)
     and a suffix identifying each processing node of the workflow (:meth:`pyroSAR.snap.auxil.Workflow.suffix`).
     
-    For example: `S1A__IW___A_20180101T170648_NR_Orb_Cal_ML_TF_TC`.
+    For example: `S1A__IW___A_20180101T170648_NR_Orb_Cal_ML_RTC_TC`.
     
     Parameters
     ----------
