@@ -451,6 +451,18 @@ def process(
         log = logfile
     else:
         log = os.path.join(logpath, os.path.basename(cmd[0]) + '.log') if logpath else None
+    
+    # check if S-Bit is set for command and abort process if so 
+    # because S-Bit prevent usage of shares libs using LD_LIBRARY_PATH  
+    SBIT_SET_MASK = 3072
+
+    mode = os.stat(cmd[0]).st_mode
+    isset =  mode & SBIT_SET_MASK
+
+    if isset:
+        raise OSError(f'S-Bit set for command {cmd[0]}\n\t'
+            ' S-Bit prevent usage of shared libraries managed by LD_LIBRARY_PATH and is therefore prohibited')
+    
     gamma_home = ExamineGamma().home
     if shellscript is not None:
         if not os.path.isfile(shellscript):
