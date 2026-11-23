@@ -415,7 +415,7 @@ class ExamineGamma(object):
     def __init__(self):
         home_sys = os.environ.get('GAMMA_HOME')
         if (home_sys is None) or (not os.path.isdir(home_sys)):
-            raise RuntimeError('could not read GAMMA installation directory')
+            raise RuntimeError(f'could not read GAMMA installation directory {home_sys}')
         
         self.__read_config()
         

@@ -56,7 +56,7 @@ def parse_command(command: str, indent: str = '    ') -> str:
     isset =  mode & SBIT_SET_MASK
 
     if isset:
-        raise OSError(f'S-Bit set for command {cmd[0]}\n\t'
+        raise OSError(f'S-Bit set for command {command}\n\t'
             ' S-Bit prevent usage of shared libraries managed by LD_LIBRARY_PATH and is therefore prohibited')
     
     command_base = os.path.basename(command)
@@ -741,11 +741,9 @@ def initialparse() -> None:
     This function will detect the GAMMA installation via environment variable
     ``$GAMMA_HOME``, detect all available  modules (e.g. ISP, DIFF) and parse all
     the module's commands via function :func:`parse_module`.
-    A new Python module will be created called ``gammaparse``, which is stored
-    under ``$HOME/.pyrosar``.
-    Upon importing the ``pyroSAR.gamma`` submodule, this function is run
-    automatically and module ``gammaparse`` is imported as ``api``.
-    
+    A new Python module will be created called ``parse``, which is stored
+    under ``$CONDA_PREFIX/share/pyrosar/gamma/{gammaVersion}``.
+    This function has to be started after new GAMMA installation module ``parse`` is imported as ``api``.    
     Examples
     --------
     >>> from pyroSAR.gamma.api import diff
