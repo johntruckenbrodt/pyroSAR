@@ -18,8 +18,8 @@ from spatialist.ancillary import finder
 
 """
 This script clones the SNAP source code from GitHub and reads the suffices for SNAP operators.
-E.g. The operator Terrain-Flattening has a suffix TF. If Terrain-Flattening is added to a workflow
-in SNAP's graph builder, this suffix is appended to the automatically created output file name.
+E.g. The operator Terrain-Flattening has a suffix TF (SNAP<14) or RTC. If Terrain-Flattening is added to a
+workflow in SNAP's graph builder, this suffix is appended to the automatically created output file name.
 As pyroSAR also automatically creates file names with processing step suffices, it is convenient to just
 use those defined by SNAP.
 Currently I am not aware of any way to retrieve them directly from a SNAP installation.
