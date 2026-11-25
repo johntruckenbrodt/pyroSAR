@@ -12,6 +12,7 @@
 # to the terms contained in the LICENSE.txt file.
 ###############################################################################
 import os
+import sys 
 import re
 from shutil import which
 import subprocess as sp
@@ -43,10 +44,21 @@ def parse_command(command: str, indent: str = '    ') -> str:
         the full Python function text
 
     """
+    SBIT_SET_MASK = 3072
+
     # run the command without passing arguments to just catch its usage description
     command = which(command)
     if command is None:
         raise OSError('command does not exist')
+    
+    # check if S-Bit is set for command and abort process if so
+    mode = os.stat(command).st_mode
+    isset =  mode & SBIT_SET_MASK
+
+    if isset:
+        raise OSError(f'S-Bit set for command {command}\n\t'
+            ' S-Bit prevent usage of shared libraries managed by LD_LIBRARY_PATH and is therefore prohibited')
+    
     command_base = os.path.basename(command)
     proc = sp.Popen(command, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True)
     out, err = proc.communicate()
@@ -723,25 +735,28 @@ def parse_module(directory: str, outfile: str) -> None:
             out.write(outstring)
 
 
-def autoparse() -> None:
+def initialparse() -> None:
     """
     automatic parsing of GAMMA commands.
     This function will detect the GAMMA installation via environment variable
     ``$GAMMA_HOME``, detect all available  modules (e.g. ISP, DIFF) and parse all
     the module's commands via function :func:`parse_module`.
-    A new Python module will be created called ``gammaparse``, which is stored
-    under ``$HOME/.pyrosar``.
-    Upon importing the ``pyroSAR.gamma`` submodule, this function is run
-    automatically and module ``gammaparse`` is imported as ``api``.
-    
+    A new Python module will be created called ``parse``, which is stored
+    under ``$CONDA_PREFIX/share/pyrosar/gamma/{gammaVersion}``.
+    This function has to be started after new GAMMA installation module ``parse`` is imported as ``api``.    
     Examples
     --------
     >>> from pyroSAR.gamma.api import diff
     >>> print('create_dem_par' in dir(diff))
     True
     """
-    home = ExamineGamma().home
-    target = os.path.join(os.path.expanduser('~'), '.pyrosar', 'gammaparse')
+    
+    config = ExamineGamma()
+    home = config.home
+    gammaVersion = config.version
+
+    target = os.path.join(f"{sys.prefix}/share/pyrosar/gamma/{gammaVersion}/parse")
+    
     if not os.path.isdir(target):
         os.makedirs(target)
     for module in finder(home, ['[A-Z]*'], foldermode=2, recursive=False):

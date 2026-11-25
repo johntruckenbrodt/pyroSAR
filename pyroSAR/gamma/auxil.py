@@ -21,6 +21,7 @@ import codecs
 from copy import deepcopy
 import subprocess as sp
 from datetime import datetime, timedelta
+import shutil
 
 from pyroSAR.examine import ExamineGamma
 from spatialist.ancillary import parse_literal, run, list_intersection, dissolve
@@ -457,6 +458,24 @@ def process(
         log = logfile
     else:
         log = os.path.join(logpath, os.path.basename(cmd[0]) + '.log') if logpath else None
+    
+    # check if S-Bit is set for command and abort process if so 
+    # because S-Bit prevent usage of shares libs using LD_LIBRARY_PATH  
+    SBIT_SET_MASK = 3072
+
+    # get full pathname of executable if only programm name ist given
+    checkCMD = cmd[0]
+    
+    if not os.path.isabs(cmd[0]) :
+        checkCMD = shutil.which(cmd[0])
+    
+    mode = os.stat(checkCMD).st_mode
+    isset =  mode & SBIT_SET_MASK
+
+    if isset:
+        raise OSError(f'S-Bit set for command {checkCMD}\n\t'
+            ' S-Bit prevent usage of shared libraries managed by LD_LIBRARY_PATH and is therefore prohibited')
+    
     gamma_home = ExamineGamma().home
     if shellscript is not None:
         if not os.path.isfile(shellscript):
@@ -521,6 +540,7 @@ def slc_corners(parfile: str) -> EXT:
         an extent dictionary
     """
     out, err = process(cmd=['SLC_corners', parfile], void=False)
+    
     pts = {}
     pattern = r'-?[0-9]+\.[0-9]+'
     for line in out.split('\n'):

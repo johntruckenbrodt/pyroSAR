@@ -413,27 +413,18 @@ class ExamineGamma(object):
     
     def __init__(self):
         home_sys = os.environ.get('GAMMA_HOME')
-        if home_sys is not None and not os.path.isdir(home_sys):
-            warnings.warn('found GAMMA_HOME environment variable, but directory does not exist')
-            home_sys = None
+        if (home_sys is None) or (not os.path.isdir(home_sys)):
+            raise RuntimeError(f'could not read GAMMA installation directory {home_sys}')
         
         self.__read_config()
         
         if hasattr(self, 'home'):
-            if home_sys is not None and self.home != home_sys:
-                log.info('the value of GAMMA_HOME is different to that in the pyroSAR configuration;\n'
-                         '  was: {}\n'
-                         '  is : {}\n'
-                         'resetting the configuration and deleting parsed modules'
-                         .format(self.home, home_sys))
-                parsed = os.path.join(os.path.dirname(self.fname), 'gammaparse')
-                shutil.rmtree(parsed)
-                self.home = home_sys
-        if not hasattr(self, 'home'):
-            if home_sys is not None:
-                setattr(self, 'home', home_sys)
-            else:
-                raise RuntimeError('could not read GAMMA installation directory')
+            log.warn('pyroSAR configuration file contains gamma entries; Those are deprecated and deleted\n')
+            __config__.remove_section('GAMMA')
+        
+        setattr(self, 'home', home_sys)
+        
+        
         self.version = re.search('GAMMA_SOFTWARE[-/](?P<version>[0-9]{8})',
                                  getattr(self, 'home')).group('version')
         
@@ -461,7 +452,6 @@ class ExamineGamma(object):
             self.gdal_config = gdal_config
         except sp.CalledProcessError:
             raise RuntimeError('could not find command gdal-config.')
-        self.__update_config()
     
     def __read_config(self):
         self.fname = __config__.file

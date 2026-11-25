@@ -15,8 +15,11 @@ import os
 import sys
 from typing import Self
 
-from .parser import autoparse
+from pyroSAR.examine import ExamineGamma
 
+import logging
+
+log = logging.getLogger(__name__)
 
 # These placeholders allow pyroSAR.gamma modules to be imported when GAMMA
 # is unavailable. They are replaced by the generated modules when parsing
@@ -38,8 +41,15 @@ isp = _UnavailableGammaModule('isp')
 lat = _UnavailableGammaModule('lat')
 
 if 'GAMMA_HOME' in os.environ:
-    autoparse()
     
-    sys.path.insert(0, os.path.join(os.path.expanduser('~'), '.pyrosar'))
+    config = ExamineGamma()
+    gammaVersion = config.version
     
-    from gammaparse import *
+    refDir = f"{sys.prefix}/share/pyrosar/gamma/{gammaVersion}"
+    if not os.path.isdir(f"{refDir}/parse") : 
+        log.warning(f"Environment variable GAMMA_HOME is set but gamma helper dir {refDir}/parse not yet found." )
+    else :
+
+        sys.path.insert(0,refDir)
+
+        from  parse import *

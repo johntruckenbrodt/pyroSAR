@@ -88,7 +88,7 @@ def test_args_isp():
         assert set(args + default).issubset(getargs(getattr(isp, command)))
 
 
-@pytest.mark.skipif(not hasattr(api, 'lat'), reason='requires GAMMA installation with module LAT')
+@pytest.mark.skipif((not hasattr(api, 'lat')) or (hasattr(api.lat,"module")) , reason='requires GAMMA installation with module LAT')
 def test_args_lat():
     from pyroSAR.gamma.api import lat
     lookup = {
