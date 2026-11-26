@@ -284,18 +284,17 @@ class ExamineSnap(object):
             # log.info('  {0} -> {1}'.format(repr(config[section][attr]), repr(value)))
             __config__.set(section, key=attr, value=value, overwrite=True)
     
-    def get_suffix(self, operator):
+    def get_suffix(self, operator: str) -> str | None:
         """
-        get the file name suffix for an operator
+        Get the file name suffix for an operator.
         
         Parameters
         ----------
-        operator: str
+        operator
             the name of the operator
 
         Returns
         -------
-        str or None
             the file suffix or None if unknown
         
         Examples
@@ -303,7 +302,7 @@ class ExamineSnap(object):
         >>> from pyroSAR.examine import ExamineSnap
         >>> config = ExamineSnap()
         >>> print(config.get_suffix('Terrain-Flattening'))
-        'TF'
+        'RTC'
         """
         if operator in self.__suffices.keys():
             return self.__suffices[operator]
