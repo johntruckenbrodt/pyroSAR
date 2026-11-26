@@ -300,6 +300,8 @@ def dem_create(
         resampleAlg: str | None = None,
         dtype: str | None = None,
         pbar: bool = False,
+        dem_type: str | None = None,
+        product: str | None = None,
         **kwargs
 ) -> None:
     """
@@ -311,6 +313,12 @@ def dem_create(
     ----------
     src
         The input dataset(s) as returned by :func:`dem_autoload`.
+    dem_type
+        The DEM type. Only required if ``src`` is an empty list, because the type
+        cannot then be inferred from the file names. See :func:`dem_autoload`.
+    product
+        The DEM sub-product. Only used together with ``dem_type`` if ``src`` is empty.
+        Default: ``'dem'``.
     dst
         The output GeoTIFF file name.
     vectorobject
@@ -391,6 +399,8 @@ def dem_create(
             resampleAlg=resampleAlg,
             dtype=dtype,
             pbar=pbar,
+            dem_type=dem_type,
+            product=product,
             **kwargs
         )
 
@@ -1204,6 +1214,8 @@ class DEMHandler:
             resampleAlg: str | None = None,
             dtype: str | None = None,
             pbar: bool = False,
+            dem_type: str | None = None,
+            product: str | None = None,
             **kwargs
     ) -> None:
         """
@@ -1299,13 +1311,30 @@ class DEMHandler:
         if isinstance(src, list):
             src = src.copy()
         
+        # empty input list, e.g. an AOI that is completely over ocean;
+        # also needed below to validate the 'tr' argument
+        src_is_empty = isinstance(src, list) and len(src) == 0
+        
         if isinstance(src, str):
             if not src.endswith('.vrt'):
                 raise RuntimeError("If 'src' is a string, it must be a VRT file.")
             sources = vrt_check_sources(src)
             dem_type, product = self.info_from_filenames(sources)
+        elif src_is_empty:
+            # no input tiles: the DEM type cannot be inferred from file names
+            if dem_type is None:
+                raise ValueError(
+                    "cannot determine the DEM type: 'src' is empty. "
+                    "Please pass argument 'dem_type' (and optionally 'product').")
+            product = product or 'dem'
         else:
             dem_type, product = self.info_from_filenames(src)
+        
+        if dem_type not in self.config:
+            raise RuntimeError(f"unknown DEM type: {dem_type}")
+        if product not in self.config[dem_type]['pattern']:
+            raise RuntimeError(f"unknown product '{product}' "
+                               f"for DEM type '{dem_type}'")
         
         src_nodata = self.config[dem_type]['nodata'][product]
         src_dtype = self.config[dem_type]['datatype'][product]
@@ -1366,6 +1395,10 @@ class DEMHandler:
                 # use the extent defined via DEMHandler argument vectorobject
                 if self.extent_is_user_defined:
                     extent_4326 = self.extent
+                elif src_is_empty:
+                    raise ValueError(
+                        "cannot determine the output extent: 'src' is empty and "
+                        "neither 'vectorobject' nor 'outputBounds' was given")
                 else:
                     # use the bounding box of all input DEM tiles as extent
                     boxes = [Raster(x).bbox() for x in src]
@@ -1414,6 +1447,10 @@ class DEMHandler:
             if nodata is None:
                 nodata = ras.nodata
             if tr is None:
+                if src_is_empty:
+                    raise ValueError(
+                        "'tr' must be provided when 'src' is empty: the dummy "
+                        "DEM has only one pixel and cannot define a resolution")
                 tr = ras.res
             epsg_in = ras.epsg
         
@@ -1713,6 +1750,9 @@ class DEMHandler:
                 product=product
             )
         else:
+            if len(tiles) == 0:
+                log.warning(f"no DEM tiles found for DEM type '{dem_type}' and "
+                            "the given extent (AOI may be fully over ocean)")
             return tiles if return_fname else locals
     
     def remote_ids(
@@ -1954,6 +1994,10 @@ class DEMHandler:
             re.escape(x)
             for x in sorted(self.config, key=len, reverse=True)
         )
+        if len(filenames) == 0:
+            raise ValueError("cannot derive the DEM type and product "
+                             "from an empty file list")
+        
         dem_types = set()
         products = set()
         for filename in filenames:
