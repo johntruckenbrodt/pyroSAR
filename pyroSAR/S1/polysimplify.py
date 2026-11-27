@@ -290,7 +290,6 @@ else:
             filtering with arrays of floats returned instead of
             geometry objects.
             """
-            global p
             self.return_GDAL = return_GDAL
             if isinstance(geom, OGRGeometry):
                 name = geom.geom_name
