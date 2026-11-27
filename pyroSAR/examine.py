@@ -574,8 +574,12 @@ class SnapProperties(object):
     ) -> None:
         if not (isinstance(value, (int, float, str, list)) or value is None):
             raise TypeError(f'invalid type for key {key}: {type(value)}')
-        if value == self[key] and isinstance(value, type(self[key])):
-            return
+        try:
+            current_value = self[key]
+            if value == current_value and isinstance(value, type(current_value)):
+                return
+        except KeyError:
+            pass
         if key in self.properties:
             self.properties[key] = value
         elif key in self.auxdata_properties:

@@ -287,8 +287,8 @@ def test_dem_create_forwards_arguments(monkeypatch):
         def __exit__(self, exc_type, exc_val, exc_tb):
             return None
         
-        def create(self, **kwargs):
-            captured['create'] = kwargs
+        def create(self, dem_type=None, product=None, **kwargs):
+            captured['create'] = {'dem_type': dem_type, 'product': product, **kwargs}
     
     monkeypatch.setattr(auxdata, 'DEMHandler', FakeHandler)
     
@@ -305,11 +305,15 @@ def test_dem_create_forwards_arguments(monkeypatch):
         resampleAlg='cubic',
         dtype='Float32',
         pbar=True,
+        dem_type='test_type',
+        product='test_prod',
         creationOptions=['COMPRESS=LZW'],
     )
     
     assert captured['init'] == (geometry, 0.25)
     assert captured['create'] == {
+        'dem_type': 'test_type',
+        'product': 'test_prod',
         'src': 'test.vrt',
         'dst': 'test.tif',
         't_srs': 32632,
